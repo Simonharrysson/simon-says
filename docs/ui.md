@@ -2,7 +2,7 @@
 
 The design system, page structure and live-meeting components. Swedish UI, English code.
 Preview everything with fake data at **`/design`** (dev only; production needs `DESIGN_PREVIEW=1`).
-Screenshots: `docs/ui/` (`<state>-<width>-<scheme>.png`, fake data; the round "N" is the Next dev indicator). The design review and its captures are in `docs/ui/review/`.
+Screenshots: `docs/ui/` (`<state>-<width>-<scheme>.png`, fake data, Next dev badge hidden). The design review and its captures are in `docs/ui/review/`.
 
 ## Direction: the meeting-room whiteboard, made exact
 

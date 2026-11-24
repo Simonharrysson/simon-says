@@ -117,7 +117,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
   return (
     <div className={`live live--${status.kind}`}>
-      <BackLink href={p.orgHref} label="Tillbaka" confirm={!ending} onLeave={leave} />
+      <BackLink href={p.orgHref} label="Tillbaka" confirm={!ending} onLeave={leave} listening={status.kind === "live" || status.kind === "reconnecting"} />
       <header className={`livebar livebar--${status.kind}`}>
         <div className="livebar__who">
           <StatusHeadline status={status} />
@@ -188,7 +188,20 @@ function StatusHeadline({ status }: { status: LiveStatus }) {
 }
 
 /** "← Tillbaka". While the meeting runs it asks first, since leaving stops the listening. */
-function BackLink({ href, label, confirm, onLeave }: { href: string; label: string; confirm?: boolean; onLeave?: () => void }) {
+function BackLink({
+  href,
+  label,
+  confirm,
+  onLeave,
+  listening,
+}: {
+  href: string;
+  label: string;
+  confirm?: boolean;
+  onLeave?: () => void;
+  /** Sound is (meant to be) going out right now: leaving stops it. */
+  listening?: boolean;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   return (
     <>
@@ -208,13 +221,15 @@ function BackLink({ href, label, confirm, onLeave }: { href: string; label: stri
         <LiveDialog
           ref={dialog}
           id="leave"
-          title="Mötet pågår — lämna sidan?"
+          title={listening ? "Mötet pågår — lämna sidan?" : "Mötet är inte avslutat — lämna sidan?"}
           stayLabel="Stanna kvar"
           confirmLabel="Lämna sidan"
           confirmVariant="secondary"
           onConfirm={() => onLeave?.()}
         >
-          Lämnar du sidan slutar laptopen lyssna, men mötet avslutas inte. Du kan fortsätta det från föreningens sida.
+          {listening
+            ? "Lämnar du sidan slutar laptopen lyssna, men mötet avslutas inte. Du kan fortsätta det från föreningens sida."
+            : "Mötet avslutas inte när du lämnar sidan. Du kan fortsätta det, eller avsluta det, från föreningens sida."}
         </LiveDialog>
       )}
     </>
