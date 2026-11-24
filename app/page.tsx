@@ -1,4 +1,6 @@
-import { signOut } from "@/app/login/actions";
+import { signInWithGoogle } from "@/app/login/actions";
+import { LandingView } from "@/components/views/LandingView";
+import { PublicShell } from "@/components/views/PublicShell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -10,26 +12,8 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   return (
-    <main>
-      <h1>Simon Says</h1>
-      <p>Livenoteringar från möten, direkt i Google Docs. Under uppbyggnad.</p>
-      {user ? (
-        <>
-          <p>
-            Inloggad som {user.email}. Ditt användar-id: <code>{user.id}</code>
-          </p>
-          <p>
-            <a href="/orgs">Dina organisationer</a>
-          </p>
-          <form action={signOut}>
-            <button type="submit">Logga ut</button>
-          </form>
-        </>
-      ) : (
-        <p>
-          <a href="/login">Logga in</a>
-        </p>
-      )}
-    </main>
+    <PublicShell signedIn={Boolean(user)} flush>
+      <LandingView user={user ? { email: user.email ?? "", id: user.id } : null} signIn={signInWithGoogle} />
+    </PublicShell>
   );
 }

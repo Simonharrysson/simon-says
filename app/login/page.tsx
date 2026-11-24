@@ -1,34 +1,18 @@
+import type { Metadata } from "next";
+import { LoginView } from "@/components/views/LoginView";
+import { PublicShell } from "@/components/views/PublicShell";
 import { safeNextPath } from "@/lib/next-path";
 import { signInWithGoogle } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-const messages: Record<string, string> = {
-  drive: "Du behöver ge Simon Says tillgång till filer den skapar.",
-  refresh: "Google gav oss ingen nyckel för att skriva i dina dokument. Försök igen.",
-  avbrutet: "Inloggningen avbröts.",
-  start: "Det gick inte att starta inloggningen. Försök igen.",
-  kod: "Inloggningen gick inte att slutföra. Försök igen.",
-};
+export const metadata: Metadata = { title: "Logga in" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ fel?: string; next?: string }> }) {
   const { fel, next } = await searchParams;
-  const message = fel ? (messages[fel] ?? messages.kod) : null;
-
+  const safeNext = safeNextPath(next);
   return (
-    <main>
-      <h1>Logga in på Simon Says</h1>
-      {message && <p role="alert">{message}</p>}
-      {fel === "drive" && (
-        <p>
-          När Google frågar: kryssa i rutan för att Simon Says får se, redigera och skapa de filer den själv skapar.
-          Vi kommer inte åt några andra filer i din Drive.
-        </p>
-      )}
-      <form action={signInWithGoogle}>
-        <input type="hidden" name="next" value={safeNextPath(next)} />
-        <button type="submit">{message ? "Försök igen" : "Logga in med Google"}</button>
-      </form>
-    </main>
+    <PublicShell signedIn={false}>
+      <LoginView error={fel} next={safeNext} signIn={signInWithGoogle} joining={safeNext.startsWith("/join/")} />
+    </PublicShell>
   );
 }
