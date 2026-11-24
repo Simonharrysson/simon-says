@@ -19,7 +19,7 @@ import {
 } from "../actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Organisation" };
+export const metadata: Metadata = { title: "Förening" };
 
 /** Member emails for the members panel. Service role, so only called after RLS let us read the org. */
 async function safeMemberEmails(orgId: string): Promise<string[] | undefined> {

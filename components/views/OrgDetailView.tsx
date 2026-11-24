@@ -3,12 +3,12 @@ import { ButtonLink } from "@/components/ui/Button";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { IconExternal, IconMic, IconPlus, IconRefresh, IconTrash } from "@/components/ui/icons";
+import { IconArrowRight, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconTrash } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { MeetingStatus } from "@/lib/db/types";
-import { formatDateTime, formatDuration, plural } from "@/lib/format";
+import { formatDateTime, formatDuration, formatMeetingDate, plural } from "@/lib/format";
 import { docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
 import type { Notice } from "@/lib/ui/messages";
 import { NoticeBanner } from "./NoticeBanner";
@@ -36,6 +36,8 @@ export interface OrgDetailViewProps {
   notice: Notice | null;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
+  /** Link into a running meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Hidden when absent. */
+  liveMeetingHref?: (meetingId: string) => string;
   actions: {
     rotateInvite: FormAction;
     addPerson: FormAction;
@@ -55,13 +57,14 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, actions } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, liveMeetingHref, actions } = props;
+  const running = liveMeetingHref && meetings.find((m) => m.status === "live" || m.status === "ending");
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
 
   return (
-    <div className="page stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
+    <div className="page stack stack--5">
       <PageHeader
-        back={{ href: "/orgs", label: "Organisationer" }}
+        back={{ href: "/orgs", label: "Föreningar" }}
         title={org.name}
         meta={
           <div className="cluster" style={{ ["--cluster-gap" as string]: "0.75rem" }}>
@@ -72,24 +75,37 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </div>
         }
         actions={
-          startMeetingHref && (
-            <ButtonLink href={startMeetingHref} variant="primary" size="lg" icon={<IconMic />}>
-              Starta ett möte
+          running ? (
+            <ButtonLink href={liveMeetingHref(running.id)} variant="primary" size="lg" icon={<IconPlay size={18} />}>
+              Fortsätt mötet
             </ButtonLink>
+          ) : (
+            startMeetingHref && (
+              <ButtonLink href={startMeetingHref} variant="primary" size="lg" icon={<IconMic />}>
+                Starta ett möte
+              </ButtonLink>
+            )
           )
         }
       />
       <NoticeBanner notice={notice} />
 
       <div className="org-grid">
-        <div className="stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
-          <MeetingsPanel meetings={meetings} orgId={org.id} isAdmin={isAdmin} userId={userId} deleteMeeting={actions.deleteMeeting} />
+        <div className="stack stack--5">
+          <MeetingsPanel
+            meetings={meetings}
+            orgId={org.id}
+            isAdmin={isAdmin}
+            userId={userId}
+            deleteMeeting={actions.deleteMeeting}
+            liveMeetingHref={liveMeetingHref}
+          />
           <PeoplePanel orgId={org.id} people={people} actions={actions} />
         </div>
 
-        <div className="stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
+        <div className="stack stack--5">
           <Panel title="Bjud in" titleId="invite-title">
-            <div className="stack" style={{ ["--stack-gap" as string]: "0.75rem" }}>
+            <div className="stack stack--3">
               <p className="subtle">
                 Den som öppnar länken och loggar in med Google blir medlem och kan starta möten.
               </p>
@@ -138,16 +154,16 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
           </Panel>
 
-          <Panel title="Radera organisationen" titleId="danger-title" className="panel--danger">
+          <Panel title="Radera föreningen" titleId="danger-title" className="panel--danger">
             <div className="danger-zone">
               <p className="subtle measure">
-                Tar bort organisationen med alla möten, transkriptioner, anteckningar och personer här. Det går
+                Tar bort föreningen med alla möten, transkriptioner, anteckningar och personer här. Det går
                 inte att ångra. Google-dokumenten ligger kvar i Drive.
               </p>
               <ConfirmAction
                 action={actions.deleteOrg}
                 hidden={{ orgId: org.id }}
-                trigger="Radera organisationen"
+                trigger="Radera föreningen"
                 triggerVariant="danger"
                 triggerSize="md"
                 triggerIcon={<IconTrash size={18} />}
@@ -179,12 +195,14 @@ function MeetingsPanel({
   isAdmin,
   userId,
   deleteMeeting,
+  liveMeetingHref,
 }: {
   meetings: OrgDetailMeeting[];
   orgId: string;
   isAdmin: boolean;
   userId: string | null;
   deleteMeeting: FormAction;
+  liveMeetingHref?: (meetingId: string) => string;
 }) {
   return (
     <Panel flush title="Möten" titleId="meetings-title">
@@ -209,7 +227,7 @@ function MeetingsPanel({
                 <li key={meeting.id}>
                   <div className="row meeting-row">
                     <span className="row__main">
-                      <span className="row__title">{formatDateTime(meeting.started_at)}</span>
+                      <span className="row__title">{formatMeetingDate(meeting.started_at)}</span>
                       <span className="row__meta cluster" style={{ ["--cluster-gap" as string]: "0.5rem" }}>
                         <Badge tone={statusTone[meeting.status]}>{meetingStatusLabel[meeting.status]}</Badge>
                         {duration && <span>{duration}</span>}
@@ -217,6 +235,11 @@ function MeetingsPanel({
                       </span>
                     </span>
                     <span className="row__actions">
+                      {state === "active" && liveMeetingHref && (
+                        <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
+                          Till mötet
+                        </ButtonLink>
+                      )}
                       <a
                         className="btn btn--sm"
                         href={docUrl(meeting.doc_id)}
@@ -234,6 +257,7 @@ function MeetingsPanel({
                           trigger={`Radera mötet ${formatDateTime(meeting.started_at)}`}
                           triggerIcon={<IconTrash size={18} />}
                           triggerIconOnly
+                          triggerVariant="danger-ghost"
                           title="Radera mötet?"
                           description="Transkriptionen, anteckningarna och loggen här tas bort. Google-dokumentet ligger kvar i Drive."
                           confirmLabel="Radera mötet"

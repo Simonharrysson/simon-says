@@ -25,8 +25,7 @@ export function OrgSettingsForm({
 
   return (
     <form
-      className="stack settings-form"
-      style={{ ["--stack-gap" as string]: "1.25rem" }}
+      className="stack stack--5 settings-form"
       action={async (form) => {
         setSaved(false);
         await updateOrg(form);

@@ -24,10 +24,10 @@ export function loginError(code: string | undefined) {
 }
 
 const orgsNotices: Record<string, Notice> = {
-  limit: { tone: "danger", text: "Du kan skapa högst två organisationer. Be någon annan skapa den, eller radera en du inte använder." },
+  limit: { tone: "danger", text: "Du kan skapa högst två föreningar. Be någon annan skapa den, eller radera en du inte använder." },
   invalid: { tone: "danger", text: "Ange ett namn (högst 100 tecken)." },
   inbjudan: { tone: "danger", title: "Inbjudningslänken gäller inte längre", text: "Be den som bjöd in dig om en ny länk." },
-  raderad: { tone: "success", text: "Organisationen är raderad. Google-dokumenten ligger kvar i Drive." },
+  raderad: { tone: "success", text: "Föreningen är raderad. Google-dokumenten ligger kvar i Drive." },
 };
 
 const orgNotices: Record<string, Notice> = {
@@ -35,13 +35,13 @@ const orgNotices: Record<string, Notice> = {
   "mote-forbidden": { tone: "danger", text: "Bara den som startade mötet eller en admin kan radera det." },
   "mote-not_found": { tone: "danger", text: "Mötet finns inte längre." },
   "mote-active": { tone: "danger", text: "Avsluta mötet innan du raderar det." },
-  "org-active": { tone: "danger", text: "Ett möte pågår. Avsluta det innan du raderar organisationen." },
+  "org-active": { tone: "danger", text: "Ett möte pågår. Avsluta det innan du raderar föreningen." },
   "org-name_mismatch": {
     tone: "danger",
-    text: "Namnet stämde inte. Skriv organisationens namn exakt för att radera den.",
+    text: "Namnet stämde inte. Skriv föreningens namn exakt för att radera den.",
   },
-  "org-forbidden": { tone: "danger", text: "Bara admins kan radera organisationen." },
-  "org-not_found": { tone: "danger", text: "Organisationen finns inte längre." },
+  "org-forbidden": { tone: "danger", text: "Bara admins kan radera föreningen." },
+  "org-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
   mote: { tone: "success", text: "Mötet är raderat. Google-dokumentet ligger kvar i Drive." },
 };
 

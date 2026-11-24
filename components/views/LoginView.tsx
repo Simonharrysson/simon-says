@@ -18,12 +18,12 @@ export function LoginView({ error, next, signIn, joining }: LoginViewProps) {
   const message = loginError(error);
   return (
     <div className="page page--narrow auth">
-      <div className="auth__sheet stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
-        <div className="stack" style={{ ["--stack-gap" as string]: "0.5rem" }}>
+      <div className="auth__sheet stack stack--5">
+        <div className="stack stack--2">
           <h1 className="auth__title">{message ? "Försök en gång till" : "Logga in"}</h1>
           <p className="muted">
             {joining
-              ? "Logga in för att gå med i organisationen. Du kommer tillbaka till inbjudan direkt efteråt."
+              ? "Logga in för att gå med i föreningen. Du kommer tillbaka till inbjudan direkt efteråt."
               : "Du loggar in med ditt Google-konto. Mötesanteckningarna sparas i din egen Google Drive."}
           </p>
         </div>

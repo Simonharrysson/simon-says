@@ -18,8 +18,8 @@ const processors: [string, string, string][] = [
 export default function PrivacyPage() {
   return (
     <PublicShell signedIn={false}>
-      <article className="page page--read stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
-        <div className="stack" style={{ ["--stack-gap" as string]: "0.75rem" }}>
+      <article className="page page--read stack stack--5">
+        <div className="stack stack--3">
           <span className="draft-flag">Utkast · inte slutlig text</span>
           <h1 className="page-header__title">Integritet</h1>
           <p className="lead">

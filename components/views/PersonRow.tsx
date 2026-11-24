@@ -96,6 +96,7 @@ export function PersonRow({
             trigger={`Ta bort ${person.name}`}
             triggerIcon={<IconTrash size={18} />}
             triggerIconOnly
+            triggerVariant="danger-ghost"
             title={`Ta bort ${person.name}?`}
             description="Namnet försvinner ur personlistan. Det som redan står i mötesdokumenten ändras inte."
             confirmLabel="Ta bort"

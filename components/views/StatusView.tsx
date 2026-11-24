@@ -31,8 +31,8 @@ const healthCopy: Record<StatusData["health"], { title: string; text: string; ma
 export function StatusView({ data }: { data: StatusData | null }) {
   const health = data ? healthCopy[data.health] : null;
   return (
-    <div className="page page--read stack" style={{ ["--stack-gap" as string]: "2rem" }}>
-      <div className="stack" style={{ ["--stack-gap" as string]: "0.75rem" }}>
+    <div className="page page--read stack stack--6">
+      <div className="stack stack--3">
         <h1 className="page-header__title">Status</h1>
         <p className="muted measure">
           Simon Says skriver mötesanteckningar live i Google Docs åt föreningar i Linköping. Här syns vad som händer just

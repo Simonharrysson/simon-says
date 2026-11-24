@@ -79,6 +79,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --board: #101214;
+    --board-glass: #070809; /* the landing's black glass board, a shade under --board */
     --surface: #181b1e;
     --surface-sunk: #0b0d0e;
     --rail: #464c52;
@@ -251,6 +252,13 @@ select {
   gap: var(--stack-gap, var(--s-4));
 }
 
+/* Stack gaps on the space scale (--s-2 … --s-6). */
+.stack--2 { --stack-gap: var(--s-2); }
+.stack--3 { --stack-gap: var(--s-3); }
+.stack--4 { --stack-gap: var(--s-4); }
+.stack--5 { --stack-gap: var(--s-5); }
+.stack--6 { --stack-gap: var(--s-6); }
+
 .cluster {
   display: flex;
   flex-wrap: wrap;
@@ -308,7 +316,7 @@ select {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  min-height: 2.5rem;
+  min-height: 2.75rem;
   padding: 0 var(--s-3);
   border-radius: var(--r-control);
   color: var(--ink-2);
@@ -337,9 +345,15 @@ select {
   white-space: nowrap;
 }
 
-@media (max-width: 40rem) {
+@media (max-width: 48rem) {
   .nav-email,
   .nav-link__label--wide {
+    display: none;
+  }
+}
+
+@media (max-width: 30rem) {
+  .nav-signout {
     display: none;
   }
 }
@@ -355,6 +369,7 @@ select {
   font-size: 1.125rem;
   letter-spacing: -0.02em;
   white-space: nowrap;
+  min-height: 2.75rem;
 }
 
 .wordmark:hover {
@@ -535,6 +550,16 @@ select {
 
 .btn--icon.btn--sm {
   width: 2.25rem;
+}
+
+/* Phones: every control is a 44px target. */
+@media (max-width: 48rem) {
+  .btn--sm {
+    min-height: 2.75rem;
+  }
+  .btn--icon.btn--sm {
+    width: 2.75rem;
+  }
 }
 
 .btn--block {

@@ -20,22 +20,22 @@ export interface OrgsViewProps {
 
 export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) {
   return (
-    <div className="page page--narrow stack" style={{ ["--stack-gap" as string]: "2rem" }}>
+    <div className="page page--narrow stack stack--6">
       <PageHeader
-        title="Organisationer"
+        title="Föreningar"
         meta={<p className="muted">Varje förening har sin egen personlista, sina möten och sin inbjudningslänk.</p>}
       />
       <NoticeBanner notice={notice} />
 
       {orgs.length === 0 ? (
-        <EmptyState title="Du är inte med i någon organisation än">
+        <EmptyState title="Du är inte med i någon förening än">
           <p>
             Har någon skickat en inbjudningslänk? Öppna den så hamnar du rätt. Annars skapar du föreningen här
             nedanför — du blir admin och kan bjuda in resten.
           </p>
         </EmptyState>
       ) : (
-        <Panel flush title="Dina organisationer" titleId="orgs-title">
+        <Panel flush title="Dina föreningar" titleId="orgs-title">
           <ul className="list" aria-labelledby="orgs-title">
             {orgs.map((org) => (
               <ListRow
@@ -55,7 +55,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
         </Panel>
       )}
 
-      <Panel title="Skapa en organisation" titleId="create-title">
+      <Panel title="Skapa en förening" titleId="create-title">
         <form action={createOrg} className="stack">
           <div className="inline-form inline-form--stack-sm">
             <Field
@@ -72,7 +72,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
               Skapa
             </SubmitButton>
           </div>
-          <p className="hint">Du kan skapa högst två organisationer. Att gå med i andras räknas inte.</p>
+          <p className="hint">Du kan skapa högst två föreningar. Att gå med i andras räknas inte.</p>
         </form>
       </Panel>
     </div>

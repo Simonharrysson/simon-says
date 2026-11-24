@@ -14,13 +14,13 @@ export type JoinViewProps =
 export function JoinView(props: JoinViewProps) {
   return (
     <div className="page page--narrow auth">
-      <div className="auth__sheet stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
+      <div className="auth__sheet stack stack--5">
         <span className="auth__icon" aria-hidden="true">
           <IconUsers size={28} />
         </span>
         {props.state === "signed-out" && (
           <>
-            <div className="stack" style={{ ["--stack-gap" as string]: "0.5rem" }}>
+            <div className="stack stack--2">
               <h1 className="auth__title">Du är inbjuden</h1>
               <p className="muted">
                 Logga in med Google för att se vilken förening som bjudit in dig och gå med. Det tar en halv minut.
@@ -37,14 +37,14 @@ export function JoinView(props: JoinViewProps) {
               En admin har troligen skapat en ny länk. Be den som bjöd in dig att skicka den nya.
             </Banner>
             <ButtonLink href="/orgs" icon={<IconArrowRight />}>
-              Till dina organisationer
+              Till dina föreningar
             </ButtonLink>
           </>
         )}
 
         {props.state === "ready" && (
           <>
-            <div className="stack" style={{ ["--stack-gap" as string]: "0.5rem" }}>
+            <div className="stack stack--2">
               <p className="muted">Du är inbjuden till</p>
               <h1 className="auth__title join__org">{props.orgName}</h1>
               <p className="muted">

@@ -16,6 +16,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 import { SiteHeader } from "@/components/ui/SiteHeader";
 import { AccountView } from "@/components/views/AccountView";
+import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
 import { LoginView } from "@/components/views/LoginView";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
@@ -139,37 +140,23 @@ function MicCheckDemo() {
 function AppChrome({ children }: { children: ReactNode }) {
   return (
     <>
-      <SiteHeader
-        homeHref="#"
-        nav={
-          <>
-            <a className="nav-link" href="#" aria-current="page">
-              Organisationer
-            </a>
-            <a className="nav-link" href="#">
-              Konto
-            </a>
-            <span className="nav-email">anna.berg@example.com</span>
-            <Button variant="ghost" size="sm">
-              Logga ut
-            </Button>
-          </>
-        }
-      />
+      <SiteHeader homeHref="#" nav={<AppNav email="anna.berg@example.com" signOut={noopAction} />} />
       <div className="main">{children}</div>
     </>
   );
 }
 
-function PublicChrome({ children }: { children: ReactNode }) {
+function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginLink?: boolean }) {
   return (
     <>
       <SiteHeader
         homeHref="#"
         nav={
-          <a className="nav-link" href="#">
-            Logga in
-          </a>
+          noLoginLink ? undefined : (
+            <a className="nav-link" href="#">
+              Logga in
+            </a>
+          )
         }
       />
       <div className="main">{children}</div>
@@ -188,17 +175,17 @@ const render: Record<string, () => ReactNode> = {
   tokens: () => <Tokens />,
   primitives: () => <Primitives />,
   login: () => (
-    <PublicChrome>
+    <PublicChrome noLoginLink>
       <LoginView next="/" signIn={noopAction} />
     </PublicChrome>
   ),
   "login-drive": () => (
-    <PublicChrome>
+    <PublicChrome noLoginLink>
       <LoginView next="/" error="drive" signIn={noopAction} />
     </PublicChrome>
   ),
   "login-kod": () => (
-    <PublicChrome>
+    <PublicChrome noLoginLink>
       <LoginView next="/join/abc" error="kod" signIn={noopAction} joining />
     </PublicChrome>
   ),
@@ -231,6 +218,7 @@ const render: Record<string, () => ReactNode> = {
         meetings={meetings}
         notice={orgNotice("mote-active")}
         startMeetingHref="#"
+        liveMeetingHref={() => "/design?vy=live"}
         actions={actions}
       />
     </AppChrome>
@@ -331,8 +319,8 @@ export function DesignGallery({ view }: { view: string | null }) {
     <>
       <SiteHeader homeHref="/" />
       <main id="innehall" className="main">
-        <div className="page stack" style={{ ["--stack-gap" as string]: "1rem" }}>
-          <div className="stack" style={{ ["--stack-gap" as string]: "0.5rem" }}>
+        <div className="page stack stack--4">
+          <div className="stack stack--2">
             <h1 className="page-header__title">Designsystem</h1>
             <p className="muted measure">
               Alla komponenter och alla lägen i appen, med påhittad data. Bara i utveckling (eller med DESIGN_PREVIEW=1).
@@ -391,7 +379,7 @@ function Tokens() {
     ["--red-wash", "Röd tvätt"],
   ];
   return (
-    <div className="page stack" style={{ padding: "1.5rem", ["--stack-gap" as string]: "2rem" }}>
+    <div className="page stack stack--6" style={{ padding: "1.5rem" }}>
       <div className="design-swatches">
         {colors.map(([token, name]) => (
           <div key={token} className="swatch">
@@ -401,7 +389,7 @@ function Tokens() {
           </div>
         ))}
       </div>
-      <div className="stack" style={{ ["--stack-gap" as string]: "0.75rem" }}>
+      <div className="stack stack--3">
         <p className="hero__title" style={{ fontSize: "var(--text-display)" }}>
           Display 64
         </p>
@@ -422,7 +410,7 @@ function Tokens() {
 function Primitives() {
   const [loading, setLoading] = useState(false);
   return (
-    <div className="stack" style={{ padding: "1.5rem", ["--stack-gap" as string]: "2rem" }}>
+    <div className="stack stack--6" style={{ padding: "1.5rem" }}>
       <div className="cluster">
         <Button variant="primary" icon={<IconMic />}>
           Starta mötet
@@ -474,7 +462,7 @@ function Primitives() {
           <Banner tone="info" title="Info">
             Första anteckningarna kommer inom en minut.
           </Banner>
-          <Banner tone="success">Organisationen är raderad.</Banner>
+          <Banner tone="success">Föreningen är raderad.</Banner>
           <Banner tone="warning" title="Ansluter igen…">
             Ljudet sparas under tiden.
           </Banner>

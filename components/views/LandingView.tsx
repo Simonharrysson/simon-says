@@ -27,7 +27,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
             <div className="hero__actions">
               {user ? (
                 <ButtonLink href="/orgs" variant="primary" size="lg" icon={<IconArrowRight />}>
-                  Till dina organisationer
+                  Till dina föreningar
                 </ButtonLink>
               ) : (
                 <form action={signIn}>
@@ -92,7 +92,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
 
       <section className="band band--sunk" aria-labelledby="edits-title">
         <div className="page split">
-          <div className="stack" style={{ ["--stack-gap" as string]: "1rem" }}>
+          <div className="stack stack--4">
             <h2 id="edits-title" className="band__title">
               Det ni skriver själva rör vi aldrig.
             </h2>
@@ -161,7 +161,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
           <p className="muted">Skapa föreningen, bjud in styrelsen och lägg laptopen på bordet.</p>
           {user ? (
             <ButtonLink href="/orgs" variant="primary" size="lg" icon={<IconArrowRight />}>
-              Till dina organisationer
+              Till dina föreningar
             </ButtonLink>
           ) : (
             <form action={signIn}>

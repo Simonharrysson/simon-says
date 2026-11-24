@@ -11,7 +11,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { fel, next } = await searchParams;
   const safeNext = safeNextPath(next);
   return (
-    <PublicShell signedIn={false}>
+    <PublicShell signedIn={false} noLoginLink>
       <LoginView error={fel} next={safeNext} signIn={signInWithGoogle} joining={safeNext.startsWith("/join/")} />
     </PublicShell>
   );

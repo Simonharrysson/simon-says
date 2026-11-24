@@ -7,7 +7,7 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 
 export function AccountView({ email, userId, signOut }: { email: string; userId: string; signOut: FormAction }) {
   return (
-    <div className="page page--narrow stack" style={{ ["--stack-gap" as string]: "1.5rem" }}>
+    <div className="page page--narrow stack stack--5">
       <PageHeader title="Ditt konto" />
       <Panel title="Inloggad som" titleId="account-title">
         <dl className="facts">
@@ -24,14 +24,14 @@ export function AccountView({ email, userId, signOut }: { email: string; userId:
           </div>
         </dl>
       </Panel>
-      <Panel title="Organisationer och möten" titleId="orgs-link-title">
-        <div className="stack" style={{ ["--stack-gap" as string]: "1rem" }}>
+      <Panel title="Föreningar och möten" titleId="orgs-link-title">
+        <div className="stack stack--4">
           <p className="muted">
-            Personlistor, inbjudningslänkar och inställningar för transkriptionen finns under varje organisation.
+            Personlistor, inbjudningslänkar och inställningar för transkriptionen finns under varje förening.
           </p>
           <div>
             <ButtonLink href="/orgs" icon={<IconArrowRight />}>
-              Dina organisationer
+              Dina föreningar
             </ButtonLink>
           </div>
         </div>
@@ -39,7 +39,7 @@ export function AccountView({ email, userId, signOut }: { email: string; userId:
       <Panel title="Integritet" titleId="privacy-title">
         <p className="muted measure">
           Mötesdokumenten ligger i din egen Google Drive och raderas aldrig av oss. Transkriptioner och anteckningar hos
-          oss raderas när du raderar mötet eller organisationen. Läs mer i{" "}
+          oss raderas när du raderar mötet eller föreningen. Läs mer i{" "}
           <a href="/integritet">integritetsinformationen</a>.
         </p>
       </Panel>

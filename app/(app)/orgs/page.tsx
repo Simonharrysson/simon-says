@@ -6,7 +6,7 @@ import { orgsNotice } from "@/lib/ui/messages";
 import { createOrgAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Organisationer" };
+export const metadata: Metadata = { title: "Föreningar" };
 
 export default async function OrgsPage({ searchParams }: { searchParams: Promise<{ fel?: string; klart?: string }> }) {
   const { fel, klart } = await searchParams;
