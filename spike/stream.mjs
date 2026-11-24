@@ -85,7 +85,7 @@ let ws = await connect();
 let didReconnect = false;
 const start = Date.now();
 while (sent < totalChunks) {
-  if (ws.readyState !== WebSocket.OPEN) { console.error('socket not open; stopping'); break; }
+  if (ws.readyState !== WebSocket.OPEN) { console.error('socket not open; stopping'); await new Promise(r => setTimeout(r, 1500)); break; } // let onclose log the code
   if (reconnectAt && !didReconnect && sent * CHUNK_MS / 1000 >= reconnectAt) {
     didReconnect = true;
     log({ k: 'forced_close', conn, t: Date.now() - t0, sent_s: sent / 10 });
