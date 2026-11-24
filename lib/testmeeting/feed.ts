@@ -10,10 +10,16 @@ import { FIXTURE_LINES, FIXTURE_SPEAKER_NAMES, toSegments, type FixtureLine } fr
 // Everything after the segments is the real path: ingestSegments (the same function the
 // /segments route calls), maybeTick (45 s floor in real time), endMeeting (final pass).
 
-export const SPEED = 3;
+export const SPEED = 4;
 export const BATCH_INTERVAL_MS = 5000;
-/** The route's maxDuration is 300 s; the end must have started its work well before that. */
-export const END_DEADLINE_MS = 285_000;
+/** The route's maxDuration is 300 s; every budget below is counted from the invocation start. */
+export const END_DEADLINE_MS = 290_000;
+/** Mid-feed ticks must finish (Claude/Docs calls give up) by this. */
+export const TICK_DEADLINE_MS = 230_000;
+/** Stop waiting for pending ticks here, so the end always gets its time. */
+export const TICK_WAIT_MS = 235_000;
+/** Pause before resending a batch after a non-ingest error. */
+export const RETRY_PAUSE_MS = 1500;
 /** The stand-in session is long enough for the whole fixture (10 min) plus slack. */
 export const TEST_SESSION_SECONDS = 900;
 
@@ -75,7 +81,7 @@ export interface FeedDeps {
   sleep: (ms: number) => Promise<void>;
   ingest: (meetingId: string, segments: SegmentIn[]) => Promise<unknown>;
   heartbeat: (meetingId: string) => Promise<void>;
-  tick: (meetingId: string) => Promise<void>;
+  tick: (meetingId: string, deadlineAt: Date) => Promise<void>;
   end: (meetingId: string, opts: { deadlineAt: Date }) => Promise<EndResult>;
 }
 
@@ -90,14 +96,14 @@ export const realDeps: FeedDeps = {
       .eq("id", id);
     if (error) console.error(`test meeting ${id}: heartbeat: ${error.message}`);
   },
-  tick: (id) => maybeTick(id),
+  tick: (id, deadlineAt) => maybeTick(id, {}, { deadlineAt }),
   end: (id, opts) => endMeeting(id, opts),
 };
 
 /**
  * Replay the batches in real time, then end the meeting. `startedAt` is the invocation start
  * (the end deadline is counted from it). Ticks run in the background (never awaited inline, so
- * the replay keeps its pace) and are all awaited before the end, so nothing is cut. A failed
+ * the replay keeps its pace) and are awaited before the end (up to TICK_WAIT_MS), so nothing is cut. A failed
  * batch is retried once; a meeting that is no longer live stops the replay. Never throws.
  */
 export async function runFeed(
@@ -117,6 +123,7 @@ export async function runFeed(
           await deps.ingest(meetingId, batch.segments);
         } catch (e) {
           if (e instanceof IngestError) throw e;
+          await deps.sleep(RETRY_PAUSE_MS);
           await deps.ingest(meetingId, batch.segments); // idempotent: safe to resend
         }
       } catch (e) {
@@ -125,12 +132,13 @@ export async function runFeed(
         continue;
       }
       await deps.heartbeat(meetingId);
-      ticks.push(deps.tick(meetingId));
+      ticks.push(deps.tick(meetingId, new Date(startedAt + TICK_DEADLINE_MS)));
     }
   } catch (e) {
     console.error(`test meeting ${meetingId}: feed: ${(e as Error).message}`);
   }
-  await Promise.allSettled(ticks);
+  // Wait for running ticks, but never past TICK_WAIT_MS: the end needs its own time.
+  await Promise.race([Promise.allSettled(ticks), deps.sleep(startedAt + TICK_WAIT_MS - deps.now())]);
   try {
     return await deps.end(meetingId, { deadlineAt: new Date(startedAt + END_DEADLINE_MS) });
   } catch (e) {

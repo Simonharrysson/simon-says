@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { IngestError } from "@/lib/segments/ingest";
-import { dueMs, END_DEADLINE_MS, planBatches, runFeed, SPEED, type FeedDeps } from "./feed";
+import { dueMs, END_DEADLINE_MS, planBatches, runFeed, SPEED, TICK_DEADLINE_MS, TICK_WAIT_MS, type FeedDeps } from "./feed";
 import { FIXTURE_LINES, FIXTURE_SPEAKER_NAMES, stripSessionPrefix, toSegments } from "./fixture";
 
 const jsonl = () =>
@@ -34,10 +34,10 @@ describe("fixture module", () => {
   });
 });
 
-describe("timing (3x)", () => {
-  it("a line is due at startMs / 3", () => {
-    expect(SPEED).toBe(3);
-    expect(dueMs({ startMs: 30_000 })).toBe(10_000);
+describe("timing (4x)", () => {
+  it("a line is due at startMs / 4", () => {
+    expect(SPEED).toBe(4);
+    expect(dueMs({ startMs: 40_000 })).toBe(10_000);
   });
 
   it("every line is posted once, never before it is due, and within one interval after", () => {
@@ -52,13 +52,13 @@ describe("timing (3x)", () => {
     }
   });
 
-  it("the replay (~200 s) leaves the 300 s function budget plenty of room", () => {
+  it("the replay (~150 s) leaves the 300 s function budget plenty of room", () => {
     const last = planBatches(FIXTURE_LINES, "s").at(-1)!;
-    expect(last.atMs).toBeLessThanOrEqual(205_000);
+    expect(last.atMs).toBeLessThanOrEqual(155_000);
     expect(last.atMs).toBeLessThan(END_DEADLINE_MS - 60_000);
   });
 
-  it("stays under the ingest caps in any real minute (120 runs, 20 000 chars)", () => {
+  it("stays under the ingest caps in any real minute (120 runs, 20 000 chars; ~28 runs/min)", () => {
     const batches = planBatches(FIXTURE_LINES, "s");
     for (const start of batches.map((b) => b.atMs)) {
       const inWindow = batches.filter((b) => b.atMs >= start && b.atMs < start + 60_000).flatMap((b) => b.segments);
@@ -68,13 +68,16 @@ describe("timing (3x)", () => {
   });
 });
 
-function fakeDeps(over: Partial<FeedDeps> = {}) {
+function fakeDeps(over: Partial<FeedDeps> = {}, opts: { longSleepsResolve?: boolean } = {}) {
   let now = 1_000_000;
   const calls: string[] = [];
   const deps: FeedDeps = {
     now: () => now,
-    sleep: async (ms) => {
+    // Long sleeps are the "stop waiting for ticks" timer: they only fire when a test says so.
+    sleep: (ms) => {
+      if (ms > 10_000 && !opts.longSleepsResolve) return new Promise<void>(() => {});
       now += Math.max(0, ms);
+      return Promise.resolve();
     },
     ingest: vi.fn(async () => {
       calls.push("ingest");
@@ -98,18 +101,18 @@ describe("runFeed", () => {
   it("posts every batch with a heartbeat and a tick, then ends the meeting with the deadline", async () => {
     const { deps, calls } = fakeDeps();
     const n = planBatches(FIXTURE_LINES, "s").length;
-    const res = await runFeed("m1", "s", 5_000_000, deps);
+    const res = await runFeed("m1", "s", 1_000_000, deps);
     expect(res).toBe("ended");
     expect(deps.ingest).toHaveBeenCalledTimes(n);
     expect(deps.heartbeat).toHaveBeenCalledTimes(n);
     expect(deps.tick).toHaveBeenCalledTimes(n);
     expect(calls.at(-1)).toBe("end");
-    expect(deps.end).toHaveBeenCalledWith("m1", { deadlineAt: new Date(5_000_000 + END_DEADLINE_MS) });
+    expect(deps.end).toHaveBeenCalledWith("m1", { deadlineAt: new Date(1_000_000 + END_DEADLINE_MS) });
   });
 
-  it("replays in real time: the last batch is posted ~200 s after the start", async () => {
+  it("replays in real time: the last batch is posted ~150 s after the start", async () => {
     const { deps, clock } = fakeDeps();
-    await runFeed("m1", "s", 0, deps);
+    await runFeed("m1", "s", 1_000_000, deps);
     expect(clock() - 1_000_000).toBe(planBatches(FIXTURE_LINES, "s").at(-1)!.atMs);
   });
 
@@ -125,13 +128,26 @@ describe("runFeed", () => {
         return "ended" as const;
       }),
     });
-    const run = runFeed("m1", "s", 0, deps);
+    const run = runFeed("m1", "s", 1_000_000, deps);
     await vi.waitFor(() => expect(order.filter((o) => o === "ingest").length).toBe(planBatches(FIXTURE_LINES, "s").length));
     expect(order).not.toContain("end"); // ticks still running
     release();
     await run;
     expect(order.at(-1)).toBe("end");
     expect(order.indexOf("tick-done")).toBeLessThan(order.indexOf("end"));
+  });
+
+  it("gives every mid-feed tick a deadline (invocation start + 230 s)", async () => {
+    const { deps } = fakeDeps();
+    await runFeed("m1", "s", 1_000_000, deps);
+    for (const call of vi.mocked(deps.tick).mock.calls) expect(call[1]).toEqual(new Date(1_000_000 + TICK_DEADLINE_MS));
+  });
+
+  it("stops waiting for a hung tick at invocation start + 235 s and still ends", async () => {
+    const { deps, clock } = fakeDeps({ tick: vi.fn(() => new Promise<void>(() => {})) }, { longSleepsResolve: true });
+    expect(await runFeed("m1", "s", 1_000_000, deps)).toBe("ended");
+    expect(deps.end).toHaveBeenCalledTimes(1);
+    expect(clock()).toBeGreaterThanOrEqual(1_000_000 + TICK_WAIT_MS);
   });
 
   it("retries a failed batch once, stops when the meeting is no longer live, and still ends", async () => {
@@ -141,7 +157,7 @@ describe("runFeed", () => {
         if (fails-- > 0) throw new Error("db blip");
       }),
     });
-    await runFeed("m1", "s", 0, a.deps);
+    await runFeed("m1", "s", 1_000_000, a.deps);
     expect(a.deps.ingest).toHaveBeenCalledTimes(planBatches(FIXTURE_LINES, "s").length + 1);
 
     const b = fakeDeps({
@@ -149,7 +165,7 @@ describe("runFeed", () => {
         throw new IngestError("meeting_not_live");
       }),
     });
-    expect(await runFeed("m1", "s", 0, b.deps)).toBe("ended");
+    expect(await runFeed("m1", "s", 1_000_000, b.deps)).toBe("ended");
     expect(b.deps.ingest).toHaveBeenCalledTimes(1);
     expect(b.deps.end).toHaveBeenCalledTimes(1);
   });
@@ -160,6 +176,6 @@ describe("runFeed", () => {
         throw new Error("boom");
       }),
     });
-    expect(await runFeed("m1", "s", 0, deps)).toBe("error");
+    expect(await runFeed("m1", "s", 1_000_000, deps)).toBe("error");
   });
 });

@@ -95,7 +95,7 @@ export function StartMeetingForm({
             </Button>
           </div>
           <p className="hint">
-            Spelar upp ett påhittat 10-minutersmöte i ett nytt dokument — ca 4–8 min. Du kan stänga fliken.
+            Spelar upp ett påhittat 10-minutersmöte i ett nytt dokument — ca 3–8 min. Du kan stänga fliken.
           </p>
         </div>
       )}

@@ -96,11 +96,14 @@ describe("POST /api/meetings/test", () => {
     expect(m.runFeed).toHaveBeenCalledWith("m1", "test-s1", expect.any(Number));
   });
 
-  it("abandons the meeting if the session cannot be seeded", async () => {
+  it("answers 500 at once if the session cannot be seeded, and abandons the meeting after the response", async () => {
     m.seed.mockRejectedValue(new Error("db"));
     const res = await call({ orgId: ORG });
     expect(res.status).toBe(500);
+    expect(m.endMeeting).not.toHaveBeenCalled(); // not inline
+    expect(m.after).toHaveBeenCalledTimes(1);
+    await m.after.mock.calls[0][0]();
     expect(m.endMeeting).toHaveBeenCalledWith("m1", { abandon: true });
-    expect(m.after).not.toHaveBeenCalled();
+    expect(m.runFeed).not.toHaveBeenCalled();
   });
 });
