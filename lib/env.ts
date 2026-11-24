@@ -28,7 +28,8 @@ const schema = z.object({
   GOOGLE_CLIENT_SECRET: required,
   TOKEN_ENC_KEY: tokenEncKey,
   ELEVENLABS_API_KEY: required,
-  ELEVENLABS_COMMIT_STRATEGY: z.enum(["manual", "vad"]),
+  // Provisional default until the Task 0 spike (2026-11-28) picks the strategy.
+  ELEVENLABS_COMMIT_STRATEGY: z.enum(["manual", "vad", "turn_prediction"]).default("vad"),
   ANTHROPIC_API_KEY: required,
   RESEND_API_KEY: optional,
   ALARM_EMAIL: z.email(),

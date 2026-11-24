@@ -12,7 +12,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check-google": "tsx --conditions=react-server scripts/check-google.ts"
+    "check-google": "tsx --conditions=react-server scripts/check-google.ts",
+    "check-elevenlabs-token": "tsx --conditions=react-server scripts/check-elevenlabs-token.ts"
   },
   "dependencies": {
     "@googleapis/docs": "14.1.1",

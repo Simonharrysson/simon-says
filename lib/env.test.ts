@@ -30,6 +30,15 @@ describe("parseEnv", () => {
     expect(parseEnv(valid).GLOBAL_DAILY_HOURS).toBe(30);
   });
 
+  it("defaults ELEVENLABS_COMMIT_STRATEGY to vad and accepts turn_prediction", () => {
+    const { ELEVENLABS_COMMIT_STRATEGY: _, ...rest } = valid;
+    expect(parseEnv(rest).ELEVENLABS_COMMIT_STRATEGY).toBe("vad");
+    expect(parseEnv({ ...valid, ELEVENLABS_COMMIT_STRATEGY: "turn_prediction" }).ELEVENLABS_COMMIT_STRATEGY).toBe(
+      "turn_prediction",
+    );
+    expect(() => parseEnv({ ...valid, ELEVENLABS_COMMIT_STRATEGY: "on" })).toThrow(/ELEVENLABS_COMMIT_STRATEGY/);
+  });
+
   it("parses KILL_SWITCH=1 as on", () => {
     expect(parseEnv({ ...valid, KILL_SWITCH: "1" }).KILL_SWITCH).toBe(true);
   });
