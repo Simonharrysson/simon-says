@@ -9,11 +9,12 @@ import { adminClient, createTestUser, hasLocalSupabase } from "@/test/local-supa
 describe.skipIf(!hasLocalSupabase)("test sessions (el_sessions.kind)", () => {
   let orgId: string;
   let userId: string;
-  let userDb: Awaited<ReturnType<typeof createTestUser>>["db"];
 
-  /** A fresh org, so other tests' open sessions never count against it. */
+  /** A fresh org (own user: orgs per user are limited), so other tests' open sessions never count against it. */
   async function newOrg(): Promise<string> {
-    const r = await createOrg(userDb, `Testmöte-${randomUUID().slice(0, 8)}`);
+    const u = await createTestUser("t");
+    userId = u.id;
+    const r = await createOrg(u.db, `Testmöte-${randomUUID().slice(0, 8)}`);
     if (!r.ok) throw new Error("org");
     return r.id;
   }
@@ -51,9 +52,6 @@ describe.skipIf(!hasLocalSupabase)("test sessions (el_sessions.kind)", () => {
   };
 
   beforeAll(async () => {
-    const u = await createTestUser("t");
-    userId = u.id;
-    userDb = u.db;
     orgId = await newOrg();
   });
 
