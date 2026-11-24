@@ -1,7 +1,7 @@
 import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/Button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
-import { IconArrowRight, IconUsers } from "@/components/ui/icons";
+import { IconArrowRight } from "@/components/ui/icons";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { GoogleSignIn } from "./GoogleButton";
 
@@ -15,9 +15,7 @@ export function JoinView(props: JoinViewProps) {
   return (
     <div className="page page--narrow auth">
       <div className="auth__sheet stack stack--5">
-        <span className="auth__icon" aria-hidden="true">
-          <IconUsers size={28} />
-        </span>
+        <span className="magnet magnet--blue join__magnet" aria-hidden="true" />
         {props.state === "signed-out" && (
           <>
             <div className="stack stack--2">

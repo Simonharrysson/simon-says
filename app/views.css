@@ -172,6 +172,11 @@ a.row:hover .row__chevron {
   overflow-wrap: anywhere;
 }
 
+.join__magnet {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
 .auth__icon {
   display: grid;
   place-items: center;
@@ -282,7 +287,7 @@ a.row:hover .row__chevron {
 /* ---------- Landing ---------- */
 
 .hero {
-  padding-block: clamp(2rem, 6vw, 5rem) clamp(3rem, 7vw, 6rem);
+  padding-block: clamp(2rem, 6vw, 5rem) clamp(2rem, 4vw, var(--s-7));
 }
 
 .hero__grid {
@@ -411,7 +416,8 @@ a.row:hover .row__chevron {
 
 .doc__dot {
   display: inline-block;
-  animation: doc-blink 2s steps(2, jump-none) infinite;
+  /* Blinks a few times after the notes have written themselves, then stays lit. */
+  animation: doc-blink 2s steps(2, jump-none) 3;
 }
 
 @keyframes doc-blink {
@@ -714,8 +720,13 @@ a.row:hover .row__chevron {
 .facts-grid {
   margin: var(--s-7) 0 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s-6) var(--s-6);
+}
+
+.facts-line {
+  margin-top: var(--s-6);
+  max-width: 48rem;
 }
 
 .facts-grid > div {

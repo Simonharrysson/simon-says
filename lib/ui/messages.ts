@@ -6,7 +6,7 @@ export type Notice = { tone: "danger" | "success"; title?: string; text: string 
 
 export const loginErrors: Record<string, { title: string; text: string }> = {
   drive: {
-    title: "Simon Says behöver få skriva i sina egna dokument",
+    title: "Kryssa i rutan för Google Drive",
     text: "Rutan för Google Drive var inte ikryssad. Utan den kan vi inte skapa mötesdokumentet åt dig.",
   },
   refresh: {

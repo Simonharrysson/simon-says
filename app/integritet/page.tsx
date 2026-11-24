@@ -119,8 +119,8 @@ export default function PrivacyPage() {
 
           <h2 id="kontakt">Kontakt</h2>
           <p>
-            Frågor, eller vill du veta vad vi har sparat om dig? Skriv till Harrysson &amp; Company AB. (Kontaktadress
-            fylls i innan texten blir slutlig.)
+            Frågor, eller vill du veta vad vi har sparat om dig? Skriv till Harrysson &amp; Company AB på{" "}
+            <a href="mailto:simon@harrysson.co">simon@harrysson.co</a>.
           </p>
         </div>
       </article>

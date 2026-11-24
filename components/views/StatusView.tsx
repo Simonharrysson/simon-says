@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ListRow } from "@/components/ui/ListRow";
 import { Panel } from "@/components/ui/Panel";
-import { formatClock, formatElapsed } from "@/lib/format";
+import { formatClock, formatCount, formatElapsed } from "@/lib/format";
 
 export interface StatusData {
   /** Overall health, from the kill switch / failed ticks. */
@@ -61,11 +61,11 @@ export function StatusView({ data }: { data: StatusData | null }) {
             </div>
             <div>
               <dt>Möten i veckan</dt>
-              <dd>{data.meetingsThisWeek}</dd>
+              <dd>{formatCount(data.meetingsThisWeek)}</dd>
             </div>
             <div>
               <dt>Minuter i veckan</dt>
-              <dd>{data.minutesThisWeek.toLocaleString("sv-SE")}</dd>
+              <dd>{formatCount(data.minutesThisWeek)}</dd>
             </div>
           </dl>
 

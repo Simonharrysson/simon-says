@@ -22,7 +22,8 @@ export function LandingView({ user, signIn }: LandingViewProps) {
             </h1>
             <p className="lead">
               Öppna Simon Says på en laptop vid mötesbordet och tryck Starta. Medan ni pratar fylls ert eget
-              Google-dokument med beslut, vem som gör vad och vad ni pratar om just nu.
+              Google-dokument med beslut, vem som gör vad och vad ni pratar om just nu. Det ni skriver själva rör vi
+              aldrig.
             </p>
             <div className="hero__actions">
               {user ? (
@@ -71,7 +72,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
               </p>
             </li>
             <li className="step">
-              <span className="step__magnet magnet" aria-hidden="true" />
+              <span className="step__magnet magnet magnet--blue" aria-hidden="true" />
               <h3 className="step__title">Starta och prata som vanligt</h3>
               <p className="muted">
                 Laptopens egen mikrofon räcker. En kort namnrunda först, så står det Anna och Erik i stället för Talare
@@ -139,17 +140,11 @@ export function LandingView({ user, signIn }: LandingViewProps) {
               <dt>Ert dokument, er Drive</dt>
               <dd>Dokumentet skapas i Google Drive hos den som startar mötet och delas med föreningens medlemmar.</dd>
             </div>
-            <div>
-              <dt>Gratis</dt>
-              <dd>Upp till 20 timmar i månaden per förening och 4 timmar per möte.</dd>
-            </div>
-            <div>
-              <dt>Öppen källkod</dt>
-              <dd>
-                All kod ligger på <a href={REPO}>GitHub</a>. Hur det går just nu syns på <a href="/status">statussidan</a>.
-              </dd>
-            </div>
           </dl>
+          <p className="facts-line muted">
+            Gratis: upp till 20 timmar i månaden per förening och 4 timmar per möte. Öppen källkod på{" "}
+            <a href={REPO}>GitHub</a>, och hur det går just nu syns på <a href="/status">statussidan</a>.
+          </p>
         </div>
       </section>
 
