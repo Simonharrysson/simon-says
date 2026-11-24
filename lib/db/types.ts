@@ -68,6 +68,14 @@ export interface MeetingRow {
   notes_next_id?: string | null;
   /** Highest transcript tick_no already sent to Claude (migration 0010). */
   notes_sent_tick?: number;
+  /** Owner of the current tick lease (migration 0010). */
+  tick_lease_id?: string | null;
+  /** Status the meeting gets once its final pass went through (Ruling 27). */
+  end_status?: "done" | "abandoned" | null;
+  /** End attempts so far (the cron retries up to 3). */
+  end_attempts?: number;
+  /** A running end attempt's lock. */
+  end_lease_until?: string | null;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

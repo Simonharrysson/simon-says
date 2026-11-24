@@ -267,8 +267,17 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
 
   /** Fake Google + Claude, with the Doc state derived from note_items (+ human overrides). */
   function fakes(
-    opts: { conflicts?: number; gate?: Promise<void>; authLost?: () => boolean; readFails?: () => boolean; claudeError?: boolean } = {},
+    opts: {
+      conflicts?: number;
+      gate?: Promise<void>;
+      authLost?: () => boolean;
+      readFails?: () => boolean;
+      claudeError?: boolean;
+      onUpdate?: (input: UpdateNotesInput) => Promise<void>;
+    } = {},
   ) {
+    // A clock that fake sleeps move forward (deadline loops end without real waiting).
+    let offset = 0;
     const calls: UpdateNotesInput[] = [];
     const headers: (string | undefined)[] = [];
     const appended: TranscriptLine[][] = [];
@@ -305,6 +314,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
       updateNotes: async (input): Promise<UpdateNotesResult> => {
         calls.push(input);
         if (opts.gate) await opts.gate;
+        if (opts.onUpdate) await opts.onUpdate(input);
         if (opts.claudeError) {
           return {
             ops: [],
@@ -332,7 +342,10 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
           return false;
         },
       },
-      sleep: async () => {},
+      sleep: async (ms) => {
+        offset += ms;
+      },
+      now: () => new Date(Date.now() + offset),
     };
     return { deps, calls, headers, appended, mails, renders: () => renders };
   }
@@ -531,6 +544,8 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     const endCall = (mid: string) =>
       postEnd(new NextRequest(`https://x.test/api/meetings/${mid}/end`, { method: "POST" }), { params: Promise.resolve({ id: mid }) });
     const outsider = await createTestUser("outsider");
+    // No stored Google token → the real final tick pauses the Doc (no network) and the end completes.
+    await adminClient().from("google_tokens").delete().eq("user_id", starter.id);
     current.db = (await import("@/test/local-supabase")).anonClient();
     expect((await endCall(id)).status).toBe(401);
     current.db = outsider.db;
@@ -544,16 +559,88 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await (await endCall(id)).json()).toEqual({ result: "noop" });
   });
 
-  it("end with a failing Claude: still done, header Avslutat, transcript written", async () => {
+  it("end with a failing Claude: stays ending (header Avslutat, transcript written); cron retries, after 3 attempts done + alarm", async () => {
     const { id, sessionId } = await meeting();
     await say(id, sessionId, "hej", 1000);
     const f = fakes({ claudeError: true });
-    expect(await tick.endMeeting(id, { deps: f.deps })).toBe("ended");
-    const m = await read(id);
-    expect(m.status).toBe("done");
+    expect(await tick.endMeeting(id, { deps: f.deps })).toBe("ending");
+    let m = await read(id);
+    expect(m.status).toBe("ending");
+    expect(m.end_attempts).toBe(1);
+    expect(m.end_lease_until).toBeNull();
     expect(m.header_rendered).toMatch(/^Avslutat \d\d:\d\d$/);
-    expect(f.calls.filter((c) => c.final)).toHaveLength(2); // one retry
+    expect(f.calls.filter((c) => c.final)).toHaveLength(2);
     expect(f.appended.flat().map((l) => l.text)).toEqual(["hej"]);
-    expect(await events(id, "ended")).toHaveLength(1);
+    expect(await tick.endMeeting(id, { deps: f.deps })).toBe("noop");
+
+    await tick.finalizeSweep({ deps: f.deps, orgId });
+    expect((await read(id)).status).toBe("ending");
+    await tick.finalizeSweep({ deps: f.deps, orgId });
+    m = await read(id);
+    expect(m.status).toBe("done");
+    expect(m.end_attempts).toBe(3);
+    expect(await events(id, "ended")).toEqual([expect.objectContaining({ detail: expect.objectContaining({ gaveUp: true }) })]);
+    expect((await events(id, "alarm")).map((e) => (e.detail as { reason?: string }).reason)).toContain("no_final_pass");
+    expect(f.mails).toContain("Simon Says: mötet avslutades utan slutpass");
+  });
+
+  it("a tick holding the lease past the end's deadline: stays ending, the cron's next run finishes it", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "hej", 1000);
+    const foreign = randomUUID();
+    await adminClient()
+      .from("meetings")
+      .update({ tick_lease_until: new Date(Date.now() + 120_000).toISOString(), tick_lease_id: foreign })
+      .eq("id", id);
+    const f = fakes();
+    expect(await tick.endMeeting(id, { deps: f.deps, deadlineAt: new Date(Date.now() + 30_000) })).toBe("ending");
+    expect(f.calls).toHaveLength(0);
+    const m = await read(id);
+    expect(m.status).toBe("ending");
+    expect(m.tick_lease_id).toBe(foreign); // not ours: left alone
+    await adminClient().from("meetings").update({ tick_lease_until: null, tick_lease_id: null }).eq("id", id);
+    await tick.finalizeSweep({ deps: f.deps, orgId });
+    expect((await read(id)).status).toBe("done");
+    expect(f.calls.filter((c) => c.final)).toHaveLength(1);
+  });
+
+  it("segments arriving during the final pass get a second final pass", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "först", 1000);
+    let late = true;
+    const f = fakes({
+      onUpdate: async (input) => {
+        if (input.final && late) {
+          late = false;
+          await say(id, sessionId, "sist", 2000); // ingest still accepts `ending`
+        }
+      },
+    });
+    expect(await tick.endMeeting(id, { deps: f.deps })).toBe("ended");
+    expect(f.calls.filter((c) => c.final)).toHaveLength(2);
+    expect(f.calls[1].transcriptBlocks.at(-1)).toContain("sist");
+    expect(f.appended.flat().map((l) => l.text)).toEqual(["först", "sist"]);
+    const { data: segs } = await adminClient().from("segments").select("tick_no").eq("meeting_id", id).is("tick_no", null);
+    expect(segs).toEqual([]);
+  });
+
+  it("a tick releases only its own lease; not_found for a missing meeting", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "hej", 1000);
+    let open!: () => void;
+    const gate = new Promise<void>((r) => (open = r));
+    const f = fakes({ gate });
+    const running = tick.runTick(id, { final: false }, f.deps);
+    await vi.waitFor(() => expect(f.calls).toHaveLength(1));
+    // Our lease "expired" and another tick took it.
+    const other = randomUUID();
+    await adminClient().from("meetings").update({ tick_lease_id: other }).eq("id", id);
+    open();
+    expect(await running).toBe("ok");
+    const m = await read(id);
+    expect(m.tick_lease_id).toBe(other);
+    expect(m.tick_lease_until).not.toBeNull();
+    expect(await tick.runTick(randomUUID(), { final: true }, f.deps)).toBe("not_found");
+    expect(await tick.finishMeeting(randomUUID(), { deps: f.deps })).toBe("not_found");
   });
 });

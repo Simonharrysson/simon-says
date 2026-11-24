@@ -96,6 +96,20 @@ describe("appendTranscript", () => {
     expect(sentText().text.startsWith("Anna")).toBe(true);
   });
 
+  it("skips a batch already in the tab (append succeeded, marking it written did not)", async () => {
+    api.get.mockResolvedValue({
+      data: doc(["Anna 00:41:52: Vi tar det på torsdag.", "Erik 00:41:58: Passar bra.", "någon skriver"]),
+    });
+    await appendTranscript(auth, "doc1", TAB, lines);
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("still appends when only part of the batch is there", async () => {
+    api.get.mockResolvedValue({ data: doc(["Anna 00:41:52: Vi tar det på torsdag.", ""]) });
+    await appendTranscript(auth, "doc1", TAB, lines);
+    expect(sentText().text).toContain("Erik 00:41:58: Passar bra.");
+  });
+
   it("does nothing for no lines", async () => {
     await appendTranscript(auth, "doc1", TAB, []);
     expect(api.get).not.toHaveBeenCalled();

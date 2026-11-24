@@ -1,4 +1,5 @@
 import "server-only";
+import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
 import { logEvent } from "@/lib/db/events";
 import type { MeetingRow, MeetingStatus, NoteItemRow } from "@/lib/db/types";
@@ -18,7 +19,7 @@ import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { defaultMailer, type Mailer } from "@/lib/mail";
-import { updateNotes, type UpdateNotesInput, type UpdateNotesResult } from "@/lib/notes/engine";
+import { updateNotes, type NotesClient, type UpdateNotesInput, type UpdateNotesResult } from "@/lib/notes/engine";
 import type { NotesItem } from "@/lib/notes/schema";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -37,12 +38,23 @@ export const MAX_NEW_BLOCKS = 20;
 export const CONFLICT_RETRIES = 4;
 export const ALARM_AFTER_FAILED = 3;
 export const ABANDON_AFTER_SEC = 15 * 60;
-/** An `ending` meeting this old was left by a crashed end: the cron finishes it. */
-export const STUCK_ENDING_SEC = 10 * 60;
-/** How long an end waits for a running tick before ending without the final pass. */
-const END_WAIT_MS = 150_000;
+/** Default time an end may take (Ruling 27): a route has maxDuration 300 s. */
+export const END_BUDGET_MS = 240_000;
+/** End attempts (the end itself + cron retries) before ending without a final pass, with an alarm. */
+export const MAX_END_ATTEMPTS = 3;
+/** Final passes per end attempt: a second one only for segments that arrived during the first. */
+const MAX_FINAL_PASSES = 2;
+/** Don't start a final-tick attempt with less time than this before the deadline. */
+const MIN_ATTEMPT_MS = 20_000;
+/** Don't call Claude with less time than this before the deadline (the pass runs without it). */
+const MIN_CLAUDE_MS = 30_000;
+/** Claude timeout for a normal tick (the engine's default client: 90 s, 1 retry). */
+const CLAUDE_TIMEOUT_MS = 90_000;
+/** The cron stops starting work with less time than this left of its budget. */
+const SWEEP_MIN_LEFT_MS = 60_000;
 
-export type TickResult = "ok" | "busy" | "doc_paused" | "conflict" | "failed";
+/** `not_found`: no such meeting. `busy`: not run (lease held, too soon, or not live for a normal tick). */
+export type TickResult = "ok" | "busy" | "doc_paused" | "conflict" | "failed" | "not_found";
 
 /** Everything outside the database a tick talks to; tests replace these. */
 export interface TickDeps {
@@ -50,7 +62,8 @@ export interface TickDeps {
   readNotes(auth: OAuth2Client, meeting: MeetingRow): Promise<NotesTab>;
   render: typeof renderItems;
   appendTranscript: typeof appendTranscript;
-  updateNotes(input: UpdateNotesInput): Promise<UpdateNotesResult>;
+  /** `timeoutMs`: one attempt with that timeout (deadline-bound final passes); else the engine's client. */
+  updateNotes(input: UpdateNotesInput, opts?: { timeoutMs?: number }): Promise<UpdateNotesResult>;
   mailer: Mailer;
   now(): Date;
   sleep(ms: number): Promise<void>;
@@ -63,7 +76,13 @@ function defaultDeps(): TickDeps {
     readNotes: (auth, m) => readNotesTab(auth, m.doc_id, m.notes_tab_id),
     render: renderItems,
     appendTranscript,
-    updateNotes: (input) => updateNotes(input),
+    updateNotes: (input, opts) =>
+      updateNotes(
+        input,
+        opts?.timeoutMs
+          ? { client: new Anthropic({ apiKey: getEnv().ANTHROPIC_API_KEY, timeout: opts.timeoutMs, maxRetries: 0 }) as unknown as NotesClient }
+          : {},
+      ),
     mailer: defaultMailer(),
     now: () => new Date(),
     sleep,
@@ -364,27 +383,34 @@ const errorText = (e: unknown) => {
  * One notes tick under the meeting's lease. `final` (the end pass): no interval floor, Claude
  * may tidy up, header `Avslutat HH:mm` (from ended_at). A non-final tick needs a live meeting
  * and ≥ TICK_FLOOR_SEC since the last attempt, else 'busy' (not run). Claude is skipped under
- * KILL_SWITCH or the daily dollar cap (the Doc still gets the header and the transcript).
+ * KILL_SWITCH or the daily dollar cap (the Doc still gets the header and the transcript), and
+ * when less than MIN_CLAUDE_MS is left before `deadlineAt`; with a deadline the Claude call
+ * gets one attempt with a timeout that ends before it.
  */
 export async function runTick(
   meetingId: string,
-  opts: { final?: boolean } = {},
+  opts: { final?: boolean; deadlineAt?: Date } = {},
   overrides: Partial<TickDeps> = {},
 ): Promise<TickResult> {
   const deps = { ...defaultDeps(), ...overrides };
   const final = opts.final ?? false;
-  const claim = must(
-    "tick: lease",
-    await db().rpc("claim_tick_lease", { p_meeting_id: meetingId, p_min_interval_secs: final ? 0 : TICK_FLOOR_SEC }),
-  ) as string;
-  if (claim !== "ok") return "busy";
+  const claim = (
+    must(
+      "tick: lease",
+      await db().rpc("claim_tick_lease", { p_meeting_id: meetingId, p_min_interval_secs: final ? 0 : TICK_FLOOR_SEC }),
+    ) as { result: string; lease_id: string | null }[]
+  )[0];
+  if (claim?.result === "not_found") return "not_found";
+  if (claim?.result !== "ok" || !claim.lease_id) return "busy";
+  const leaseId = claim.lease_id;
 
   let meeting: MeetingRow | null = null;
   let assigned: number | null = null;
   let answered = false;
   try {
     meeting = await loadMeeting(meetingId);
-    if (!meeting || (!final && meeting.status !== "live")) return "busy";
+    if (!meeting) return "not_found";
+    if (!final && meeting.status !== "live") return "busy";
     if (!meeting.started_by) throw new GoogleAuthLostError("(deleted user)", "meeting has no starter");
     // Auth first: a lost grant leaves the segments untouched.
     const auth = await deps.getAuth(meeting.started_by);
@@ -393,7 +419,8 @@ export async function runTick(
     const ctx = await loadContext(meeting);
     const { blocks, speakerNames } = buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
     const env = getEnv();
-    const claudeAllowed = !env.KILL_SWITCH && (await dayUsd()) < env.GLOBAL_DAILY_USD;
+    const timeLeft = opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity;
+    const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && !env.KILL_SWITCH && (await dayUsd()) < env.GLOBAL_DAILY_USD;
     const sentTick = meeting.notes_sent_tick ?? 0;
     const header = final ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now()) : liveHeader(deps.now());
 
@@ -405,7 +432,8 @@ export async function runTick(
     const send = blocksForCall(blocks, sentTick);
     // Claude only with something new to read (or the final pass over a non-empty transcript).
     if (claudeAllowed && send.length > 0 && (final || send.length > sentTick)) {
-      out = await deps.updateNotes({
+      out = await deps.updateNotes(
+        {
         orgName: ctx.orgName,
         transcriptBlocks: send,
         speakerNames,
@@ -415,7 +443,9 @@ export async function runTick(
         deletedIds: first.diff.deletedIds,
         final,
         nextId: meeting.notes_next_id ?? undefined,
-      });
+        },
+        Number.isFinite(timeLeft) ? { timeoutMs: Math.min(CLAUDE_TIMEOUT_MS, timeLeft - 20_000) } : undefined,
+      );
       answered = out.stopReason !== "error";
       claudeFailed = !answered;
       // Spent tokens and handed-out ids count whatever happens to the write.
@@ -503,7 +533,12 @@ export async function runTick(
     }
     return "failed";
   } finally {
-    const { error } = await db().from("meetings").update({ tick_lease_until: null }).eq("id", meetingId);
+    // Only our own lease: one that expired and was claimed by another tick stays.
+    const { error } = await db()
+      .from("meetings")
+      .update({ tick_lease_until: null, tick_lease_id: null })
+      .eq("id", meetingId)
+      .eq("tick_lease_id", leaseId);
     if (error) console.error(`tick ${meetingId}: lease release: ${error.message}`);
   }
 }
@@ -512,7 +547,11 @@ export async function runTick(
  * Tick if one is due (live, not paused, ≥ 45 s since the last, KILL_SWITCH off, daily dollar
  * cap not reached). Never throws: safe inside `after()` in a route.
  */
-export async function maybeTick(meetingId: string, overrides: Partial<TickDeps> = {}): Promise<void> {
+export async function maybeTick(
+  meetingId: string,
+  overrides: Partial<TickDeps> = {},
+  opts: { deadlineAt?: Date } = {},
+): Promise<void> {
   try {
     const env = getEnv();
     if (env.KILL_SWITCH) return;
@@ -523,7 +562,7 @@ export async function maybeTick(meetingId: string, overrides: Partial<TickDeps> 
     if (!m || m.status !== "live" || m.doc_paused_at) return;
     if (!tickDue(m.last_tick_at, (overrides.now ?? (() => new Date()))())) return;
     if ((await dayUsd()) >= env.GLOBAL_DAILY_USD) return;
-    await runTick(meetingId, { final: false }, overrides);
+    await runTick(meetingId, { final: false, deadlineAt: opts.deadlineAt }, overrides);
   } catch (e) {
     console.error(`maybeTick ${meetingId}: ${errorText(e)}`);
   }
@@ -540,64 +579,149 @@ async function closeOpenSessions(meetingId: string): Promise<void> {
   for (const s of open) await closeElSession(s.id);
 }
 
+async function hasUnassigned(meetingId: string): Promise<boolean> {
+  const rows = must(
+    "end: unassigned",
+    await db().from("segments").select("segment_index").eq("meeting_id", meetingId).is("tick_no", null).limit(1),
+  ) as unknown[];
+  return rows.length > 0;
+}
+
+/** `done`: the meeting reached its final status. `pending`: still `ending`, the cron retries. */
+export type FinishResult = "done" | "pending" | "locked" | "not_found";
+
 /**
- * Finish a meeting already in `ending`: close its ElevenLabs sessions (books usage), run the
- * final tick (waiting a bounded time for a running one), then set the final status. Always
- * reaches the final status, whatever the tick returns.
+ * One end attempt for a meeting in `ending` (Ruling 27), all before `deadlineAt` (default
+ * now + END_BUDGET_MS): close its ElevenLabs sessions (books usage), then final passes —
+ * waiting while a running tick holds the lease, a second pass if segments arrived during the
+ * first. The status becomes `end_status` only after a final pass returned ok (or doc_paused:
+ * the cron's resume writes the final pass once Google works again). Otherwise it stays
+ * `ending` and the cron retries; after MAX_END_ATTEMPTS it ends anyway with an alarm.
+ * `locked`: another end attempt is running. Never throws once the attempt is claimed.
  */
 export async function finishMeeting(
   meetingId: string,
-  finalStatus: Extract<MeetingStatus, "done" | "abandoned">,
-  overrides: Partial<TickDeps> = {},
-): Promise<TickResult> {
-  const deps = { ...defaultDeps(), ...overrides };
-  await closeOpenSessions(meetingId);
+  opts: { deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
+): Promise<FinishResult> {
+  const deps = { ...defaultDeps(), ...opts.deps };
+  const deadline = opts.deadlineAt ?? new Date(deps.now().getTime() + END_BUDGET_MS);
+  const left = () => deadline.getTime() - deps.now().getTime();
+
+  const row = must(
+    "end: read",
+    await db().from("meetings").select("status, end_status, end_attempts, end_lease_until").eq("id", meetingId).maybeSingle(),
+  ) as { status: MeetingStatus; end_status: "done" | "abandoned" | null; end_attempts: number; end_lease_until: string | null } | null;
+  if (!row) return "not_found";
+  if (row.status !== "ending") return "done";
+  if (row.end_lease_until && new Date(row.end_lease_until).getTime() > Date.now()) return "locked";
+  // Optimistic claim on the attempt counter: of two concurrent attempts only one matches.
+  const attempt = row.end_attempts + 1;
+  const claimed = must(
+    "end: claim attempt",
+    await db()
+      .from("meetings")
+      .update({ end_attempts: attempt, end_lease_until: new Date(deadline.getTime() + 30_000).toISOString() })
+      .eq("id", meetingId)
+      .eq("status", "ending")
+      .eq("end_attempts", row.end_attempts)
+      .select("id"),
+  ) as unknown[];
+  if (!claimed.length) return "locked";
+
+  const finalStatus = row.end_status ?? "done";
   let result: TickResult = "busy";
-  const start = Date.now();
-  let retried = false;
-  for (;;) {
-    try {
-      result = await runTick(meetingId, { final: true }, overrides);
-    } catch (e) {
-      console.error(`end ${meetingId}: final tick: ${errorText(e)}`);
-      result = "failed";
+  let passes = 0;
+  let success = false;
+  try {
+    await closeOpenSessions(meetingId);
+    let failures = 0;
+    while (left() > MIN_ATTEMPT_MS) {
+      try {
+        result = await runTick(meetingId, { final: true, deadlineAt: deadline }, opts.deps);
+      } catch (e) {
+        console.error(`end ${meetingId}: final tick: ${errorText(e)}`);
+        result = "failed";
+      }
+      if (result === "not_found") return "not_found";
+      if (result === "busy") {
+        await deps.sleep(2000);
+        continue;
+      }
+      if (result === "ok") {
+        passes++;
+        if (passes < MAX_FINAL_PASSES && (await hasUnassigned(meetingId))) continue;
+        success = true;
+        break;
+      }
+      if (result === "doc_paused") {
+        success = true;
+        break;
+      }
+      if (++failures >= 2) break; // conflict / failed twice: let the cron retry later
     }
-    if (result === "busy" && Date.now() - start < END_WAIT_MS) {
-      await deps.sleep(2000);
-      continue;
+
+    if (!success && attempt < MAX_END_ATTEMPTS) {
+      console.warn(`end ${meetingId}: attempt ${attempt} without a final pass (${result}); the cron retries`);
+      return "pending";
     }
-    // One more try after a conflict or failure.
-    if ((result === "conflict" || result === "failed") && !retried) {
-      retried = true;
-      continue;
+    must(
+      "end: status",
+      await db().from("meetings").update({ status: finalStatus }).eq("id", meetingId).eq("status", "ending"),
+    );
+    await closeOpenSessions(meetingId);
+    await logEvent(meetingId, finalStatus === "done" ? "ended" : "abandoned", {
+      finalTick: result,
+      passes,
+      attempts: attempt,
+      ...(success ? {} : { gaveUp: true }),
+    });
+    if (!success) {
+      let sent = false;
+      try {
+        sent = await deps.mailer.send({
+          to: getEnv().ALARM_EMAIL,
+          subject: "Simon Says: mötet avslutades utan slutpass",
+          text: `Mötet ${meetingId} avslutades efter ${attempt} försök utan slutpass (${result}).`,
+        });
+      } catch (e) {
+        console.error(`end ${meetingId}: alarm mail failed: ${(e as Error).message}`);
+      }
+      await logEvent(meetingId, "alarm", { reason: "no_final_pass", attempts: attempt, finalTick: result, sent });
     }
-    break;
+    return "done";
+  } catch (e) {
+    console.error(`end ${meetingId}: attempt ${attempt}: ${errorText(e)}`);
+    return "pending";
+  } finally {
+    await db().from("meetings").update({ end_lease_until: null }).eq("id", meetingId);
   }
-  must(
-    "end: status",
-    await db().from("meetings").update({ status: finalStatus }).eq("id", meetingId).eq("status", "ending"),
-  );
-  await closeOpenSessions(meetingId);
-  await logEvent(meetingId, finalStatus === "done" ? "ended" : "abandoned", { finalTick: result });
-  return result;
 }
 
-export type EndResult = "ended" | "noop" | "not_found";
+/** `ending`: the final pass didn't go through yet; the meeting stays `ending` and the cron retries. */
+export type EndResult = "ended" | "ending" | "noop" | "not_found";
 
 /**
  * End a meeting (the end route, the abandon sweep, Task T's test feeder). Atomically live →
- * ending (so ending twice is a no-op and no new tick starts), then finishMeeting.
+ * ending (so ending twice is a no-op and no new tick starts), then one finishMeeting attempt
+ * within `deadlineAt` (default now + END_BUDGET_MS). Safe inside `after()` in a
+ * maxDuration-300 route with the default deadline; only a failing database read throws.
  */
 export async function endMeeting(
   meetingId: string,
-  opts: { abandon?: boolean; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
 ): Promise<EndResult> {
   const now = (opts.deps?.now ?? (() => new Date()))();
   const claimed = must(
     "end: claim",
     await db()
       .from("meetings")
-      .update({ status: "ending", ended_at: now.toISOString() })
+      .update({
+        status: "ending",
+        ended_at: now.toISOString(),
+        end_status: opts.abandon ? "abandoned" : "done",
+        end_attempts: 0,
+        end_lease_until: null,
+      })
       .eq("id", meetingId)
       .eq("status", "live")
       .select("id"),
@@ -606,8 +730,8 @@ export async function endMeeting(
     const exists = must("end: read", await db().from("meetings").select("id").eq("id", meetingId).maybeSingle());
     return exists ? "noop" : "not_found";
   }
-  await finishMeeting(meetingId, opts.abandon ? "abandoned" : "done", opts.deps);
-  return "ended";
+  const result = await finishMeeting(meetingId, { deadlineAt: opts.deadlineAt, deps: opts.deps });
+  return result === "done" ? "ended" : result === "not_found" ? "not_found" : "ending";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -622,17 +746,19 @@ export interface SweepSummary {
 }
 
 /**
- * The cron (every 5 min): close expired ElevenLabs sessions; abandon live meetings without a heartbeat
- * (or, never having had one, a start) for 15 min; finish meetings stuck in `ending`; resume
- * paused Docs whose owner signed in again; tick live meetings with segments left unticked.
- * `orgId` limits the meeting steps to one org (tests). Stops starting new work after `budgetMs`.
+ * The cron (every 5 min): close expired ElevenLabs sessions; retry the end of meetings still
+ * `ending` (Ruling 27); abandon live meetings without a heartbeat (or, never having had one, a
+ * start) for 15 min; resume paused Docs whose owner signed in again; tick live meetings with
+ * segments left unticked. Every step runs within one deadline (`budgetMs`, default 250 s of the
+ * route's 300 s) and no new work starts with less than a minute left. `orgId` limits the
+ * meeting steps to one org (tests).
  */
 export async function finalizeSweep(
   opts: { deps?: Partial<TickDeps>; orgId?: string; budgetMs?: number } = {},
 ): Promise<SweepSummary> {
   const deps = { ...defaultDeps(), ...opts.deps };
-  const start = Date.now();
-  const left = () => Date.now() - start < (opts.budgetMs ?? 200_000);
+  const deadlineAt = new Date(deps.now().getTime() + (opts.budgetMs ?? 250_000));
+  const left = () => deadlineAt.getTime() - deps.now().getTime() > SWEEP_MIN_LEFT_MS;
   const env = getEnv();
   const summary: SweepSummary = { sessionsClosed: 0, abandoned: 0, finished: 0, resumed: 0, caughtUp: 0 };
   const scoped = <T extends { org_id: string }>(rows: T[]) => (opts.orgId ? rows.filter((r) => r.org_id === opts.orgId) : rows);
@@ -645,6 +771,14 @@ export async function finalizeSweep(
     console.error(`sweep: close sessions: ${errorText(e)}`);
   }
 
+  // Ends that did not get their final pass yet (taken before this run abandons more).
+  const ending = scoped(
+    must("sweep: ending", await db().from("meetings").select("id, org_id").eq("status", "ending")) as {
+      id: string;
+      org_id: string;
+    }[],
+  );
+
   const now = deps.now().getTime();
   const live = scoped(
     must(
@@ -654,32 +788,21 @@ export async function finalizeSweep(
   );
   const stale = (m: (typeof live)[number]) =>
     now - new Date(m.last_heartbeat_at ?? m.started_at).getTime() > ABANDON_AFTER_SEC * 1000;
-  for (const m of live.filter(stale)) {
+  for (const m of ending) {
     if (!left()) break;
     try {
-      if ((await endMeeting(m.id, { abandon: true, deps: opts.deps })) === "ended") summary.abandoned++;
+      if ((await finishMeeting(m.id, { deadlineAt, deps: opts.deps })) === "done") summary.finished++;
     } catch (e) {
-      console.error(`sweep: abandon ${m.id}: ${errorText(e)}`);
+      console.error(`sweep: finish ${m.id}: ${errorText(e)}`);
     }
   }
 
-  const stuck = scoped(
-    must(
-      "sweep: stuck",
-      await db()
-        .from("meetings")
-        .select("id, org_id")
-        .eq("status", "ending")
-        .lt("ended_at", new Date(now - STUCK_ENDING_SEC * 1000).toISOString()),
-    ) as { id: string; org_id: string }[],
-  );
-  for (const m of stuck) {
+  for (const m of live.filter(stale)) {
     if (!left()) break;
     try {
-      await finishMeeting(m.id, "done", opts.deps);
-      summary.finished++;
+      if ((await endMeeting(m.id, { abandon: true, deadlineAt, deps: opts.deps })) !== "noop") summary.abandoned++;
     } catch (e) {
-      console.error(`sweep: finish ${m.id}: ${errorText(e)}`);
+      console.error(`sweep: abandon ${m.id}: ${errorText(e)}`);
     }
   }
 
@@ -692,14 +815,15 @@ export async function finalizeSweep(
     ) as Pick<MeetingRow, "id" | "org_id" | "started_by" | "doc_paused_at" | "status">[],
   );
   for (const m of paused) {
-    if (!left() || !m.started_by) continue;
+    // `ending` meetings are retried above (their final pass resumes the Doc).
+    if (!left() || !m.started_by || m.status === "ending") continue;
     try {
       const token = must(
         "sweep: token",
         await db().from("google_tokens").select("updated_at").eq("user_id", m.started_by).maybeSingle(),
       ) as { updated_at: string } | null;
       if (!token || new Date(token.updated_at) <= new Date(m.doc_paused_at!)) continue;
-      const result = await runTick(m.id, { final: m.status !== "live" }, opts.deps);
+      const result = await runTick(m.id, { final: m.status !== "live", deadlineAt }, opts.deps);
       if (result !== "doc_paused" && result !== "busy") {
         await logEvent(m.id, "resumed", { result });
         summary.resumed++;
@@ -720,7 +844,7 @@ export async function finalizeSweep(
   for (const m of live) {
     if (!left()) break;
     if (!pendingIds.has(m.id) || !candidates.includes(m.id)) continue;
-    await maybeTick(m.id, opts.deps);
+    await maybeTick(m.id, opts.deps, { deadlineAt });
     summary.caughtUp++;
   }
   return summary;

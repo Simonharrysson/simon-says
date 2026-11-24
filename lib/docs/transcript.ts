@@ -36,7 +36,11 @@ export async function appendTranscript(
   // The tab text always ends with the final paragraph's newline; the last paragraph is empty
   // when the text is just that newline or ends with a blank line.
   const { text: existing } = readTab(doc, tabId);
+  // Idempotent per batch: a crash between this append and the caller marking the lines written
+  // would otherwise write them twice on the next try. Timestamped lines make a false match unlikely.
+  const body = lines.map(formatLine).join("\n");
+  if (existing.includes(body)) return;
   const lastParagraphEmpty = existing === "" || existing === "\n" || existing.endsWith("\n\n");
-  const text = (lastParagraphEmpty ? "" : "\n") + lines.map(formatLine).join("\n") + "\n";
+  const text = (lastParagraphEmpty ? "" : "\n") + body + "\n";
   await docs.documents.batchUpdate({ documentId: docId, requestBody: { requests: [appendToTab(tabId, text)] } });
 }

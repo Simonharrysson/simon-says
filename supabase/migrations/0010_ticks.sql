@@ -5,7 +5,7 @@
 --   never reissued, even after the service removed its own item.
 -- * meetings.notes_sent_tick: the highest transcript tick_no included in a Claude call; at most
 --   20 new transcript blocks go into one call (cache lookback window).
--- * claim_tick_lease: the per-meeting tick lease (4 min), taken with the database clock. Also
+-- * claim_tick_lease: the per-meeting tick lease (4 min, owner id), database clock. Also
 --   stamps last_tick_at on every attempt, so a failing tick cannot re-fire on every segments
 --   POST; p_min_interval_secs is the hard floor between ticks (0 for the final tick).
 -- * record_claude_usage: add one Claude call's tokens and dollars to usage_daily atomically.
@@ -16,6 +16,14 @@
 
 alter table public.meetings add column if not exists notes_next_id text;
 alter table public.meetings add column if not exists notes_sent_tick int not null default 0;
+-- The tick lease's owner: a tick releases the lease only while it still holds it.
+alter table public.meetings add column if not exists tick_lease_id uuid;
+-- Ending (Ruling 27): the status the meeting gets once a final pass went through, how many
+-- end attempts ran (the cron retries; after 3 it ends anyway with an alarm), and a short
+-- per-attempt lock so the cron never runs a second end next to a running one.
+alter table public.meetings add column if not exists end_status text check (end_status in ('done', 'abandoned'));
+alter table public.meetings add column if not exists end_attempts int not null default 0;
+alter table public.meetings add column if not exists end_lease_until timestamptz;
 
 alter table public.meeting_events drop constraint if exists meeting_events_kind_check;
 alter table public.meeting_events add constraint meeting_events_kind_check check (
@@ -25,29 +33,34 @@ alter table public.meeting_events add constraint meeting_events_kind_check check
   )
 );
 
--- Returns 'ok' | 'busy' (lease held) | 'too_soon' (last tick < p_min_interval_secs ago) | 'not_found'.
+-- Returns one row: result 'ok' | 'busy' (lease held) | 'too_soon' (last tick < p_min_interval_secs
+-- ago) | 'not_found', and on 'ok' the lease id to release with.
 create function public.claim_tick_lease(p_meeting_id uuid, p_min_interval_secs int)
-returns text
+returns table (result text, lease_id uuid)
 language plpgsql volatile security definer set search_path = ''
 as $$
 declare
   v_row public.meetings%rowtype;
+  v_lease uuid := gen_random_uuid();
 begin
   select * into v_row from public.meetings where id = p_meeting_id for update;
   if not found then
-    return 'not_found';
+    return query select 'not_found'::text, null::uuid;
+    return;
   end if;
   if v_row.tick_lease_until is not null and v_row.tick_lease_until >= now() then
-    return 'busy';
+    return query select 'busy'::text, null::uuid;
+    return;
   end if;
   if p_min_interval_secs > 0 and v_row.last_tick_at is not null
      and v_row.last_tick_at > now() - make_interval(secs => p_min_interval_secs) then
-    return 'too_soon';
+    return query select 'too_soon'::text, null::uuid;
+    return;
   end if;
   update public.meetings
-  set tick_lease_until = now() + interval '4 minutes', last_tick_at = now()
+  set tick_lease_until = now() + interval '4 minutes', tick_lease_id = v_lease, last_tick_at = now()
   where id = p_meeting_id;
-  return 'ok';
+  return query select 'ok'::text, v_lease;
 end;
 $$;
 
