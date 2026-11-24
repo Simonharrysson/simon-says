@@ -131,3 +131,20 @@ Run with `npm run check-start-meeting` on simon.harrysson@gmail.com, member simo
 - `meeting_events.kind` needed `'started'` (migration 0007, widening only).
 - No DB unique index for "one live meeting per org": existing DB tests seed several live meetings per
   org. The route checks first (409); two simultaneous starts could both pass (Doc orphaned, two rows).
+
+## 2026-11-24 · Goal "Starta möte end to end" · first Testmöte on prod
+
+Hook & Look Golf → "Testmöte" on simonsays.harrysson.co (deploy 6b87e51): the fictional 10-min board meeting
+(`fixtures/notes/synthetic.jsonl`) replayed at 4× through the real ingest → tick → Doc path.
+
+- **Timeline:** started 22:32:30, ticks ok at ~22:33, 22:34, 22:34:50, status `ending` 22:35:30, `done` by 22:35:59 —
+  **≈ 3.5 min** end to end, inside one 300 s function (no cron rescue needed). 70/70 segments written to the
+  Transkript tab, 17 notes items, events `test_started, tick_ok ×4, ended`.
+- **Doc:** header `Avslutat 22:35`; Närvarande 4 names (seeded speaker_map → names, not labels); 5 decisions (✓),
+  8 to-dos with owner and due; transcript lines `Karin Ek 00:00:06: …`.
+- **Quality:** the fixture's trap "Daniel watches the grant — no promises" became a to-do ("Bevaka när kommunens
+  ansökan om bidrag för bryggor öppnar"). Prompt tuning item (Task 8 real-data gate / AMI tuning).
+- **Ticks are sparse at 4×:** the 45 s real-time tick floor means ~3 ticks for 10 min of meeting; in a real-time
+  meeting there are ~13. Fine for the test; not representative of churn.
+- **UI:** the "Ett möte pågår" banner on the org page wraps the Doc link onto its own line with the trailing "."
+  orphaned on the next line (inline link rendered as a block).
