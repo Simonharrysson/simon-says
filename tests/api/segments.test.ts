@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminClient, anonClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import { createOrg } from "@/lib/db/orgs";
+import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 
 const current = vi.hoisted(() => ({ db: null as SupabaseClient | null }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current.db }));
@@ -48,6 +49,21 @@ const run = (sessionId: string, segmentIndex: number, runIndex = 0, over: Record
   startMs: 1000 * segmentIndex,
   endMs: 1000 * segmentIndex + 500,
   ...over,
+});
+
+describe("resolveSpeaker", () => {
+  const rows: SpeakerMapRow[] = [
+    { speaker_label: "A", display_name: "A", merged_into_label: "B" },
+    { speaker_label: "B", display_name: "B", merged_into_label: "C" },
+    { speaker_label: "C", display_name: "Anna", person_id: "p1" },
+    { speaker_label: "X", display_name: "X", merged_into_label: "Y" },
+    { speaker_label: "Y", display_name: "Y", merged_into_label: "X" },
+  ];
+  it("follows chains, falls back to the label, survives cycles", () => {
+    expect(resolveSpeaker(rows, "A")).toEqual({ label: "C", displayName: "Anna", personId: "p1" });
+    expect(resolveSpeaker(rows, "Z")).toEqual({ label: "Z", displayName: "Z", personId: null });
+    expect(resolveSpeaker(rows, "X").label).toBeTruthy();
+  });
 });
 
 // Validation happens before any database access, so these run without the local stack.
@@ -192,13 +208,86 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
     expect(b.end_ms - b.start_ms).toBe(1000);
   });
 
-  it("applies merges to speaker_map", async () => {
+  it("resend of stored keys does not count against the cap", async () => {
     const m = await meeting();
     const s = await session(m);
-    await adminClient().from("speaker_map").insert({ meeting_id: m, el_session_id: s, speaker_label: "speaker_0", display_name: "Anna" });
-    await ingestSegments(m, [], [{ elSessionId: s, from: ["speaker_1", "speaker_2"], into: "speaker_0" }]);
-    const { data } = await adminClient().from("speaker_map").select("speaker_label, display_name").eq("meeting_id", m);
-    expect(data!.filter((r) => r.display_name === "Anna")).toHaveLength(3);
+    const batch = Array.from({ length: 120 }, (_, i) => run(s, i));
+    expect((await ingestSegments(m, batch)).stored).toBe(120);
+    expect(await ingestSegments(m, batch)).toEqual({ stored: 0, received: 120 });
+  });
+
+  it("parallel requests cannot exceed 120 runs/min", async () => {
+    const m = await meeting();
+    const s = await session(m);
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, (_, k) =>
+        ingestSegments(m, Array.from({ length: 30 }, (_, i) => run(s, k * 30 + i))),
+      ),
+    );
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(4);
+    expect(await rows(m)).toHaveLength(120);
+  });
+
+  it("429 above 20 000 chars per minute", async () => {
+    const m = await meeting();
+    const s = await session(m);
+    const big = (i: number) => run(s, i, 0, { text: "x".repeat(2000) });
+    expect((await ingestSegments(m, Array.from({ length: 10 }, (_, i) => big(i)))).stored).toBe(10);
+    await expect(ingestSegments(m, [big(10)])).rejects.toMatchObject({ code: "chars_per_min", status: 429 });
+  });
+
+  it("413 above 600 000 chars per meeting", async () => {
+    const m = await meeting();
+    const s = await session(m);
+    const old = new Date(Date.now() - 3600_000).toISOString();
+    const seed = Array.from({ length: 300 }, (_, i) => ({
+      meeting_id: m, el_session_id: s, segment_index: 1000 + i, run_index: 0, speaker: "a",
+      text: "x".repeat(2000), start_ms: 0, end_ms: 1, created_at: old,
+    }));
+    expect((await adminClient().from("segments").insert(seed)).error).toBeNull();
+    await expect(ingestSegments(m, [run(s, 0)])).rejects.toMatchObject({ code: "chars_total", status: 413 });
+  });
+
+  it("rejects times beyond the session's length", async () => {
+    const m = await meeting();
+    const s = await session(m); // max_seconds 3600
+    await expect(ingestSegments(m, [run(s, 0, 0, { startMs: 0, endMs: 3_660_001 })])).rejects.toMatchObject({ status: 400 });
+    expect((await ingestSegments(m, [run(s, 0, 0, { startMs: 0, endMs: 3_660_000 })])).stored).toBe(1);
+  });
+
+  const labelsOf = async (m: string, s: string) =>
+    ((await adminClient().from("speaker_map").select("*").eq("meeting_id", m).eq("el_session_id", s)).data ?? []) as SpeakerMapRow[];
+
+  it("merge before the target is identified resolves to its name later; chains A->B->C", async () => {
+    const m = await meeting();
+    const s = await session(m);
+    await ingestSegments(m, [
+      run(s, 0, 0, { speaker: "A" }), run(s, 1, 0, { speaker: "B" }), run(s, 2, 0, { speaker: "C" }),
+    ]);
+    await ingestSegments(m, [], [{ elSessionId: s, from: ["A"], into: "B" }]);
+    await ingestSegments(m, [], [{ elSessionId: s, from: ["B"], into: "C" }]);
+    expect(resolveSpeaker(await labelsOf(m, s), "A")).toMatchObject({ label: "C", displayName: "C" });
+    await adminClient().from("speaker_map").insert({ meeting_id: m, el_session_id: s, speaker_label: "C", display_name: "Anna" });
+    expect(resolveSpeaker(await labelsOf(m, s), "A").displayName).toBe("Anna");
+    expect(resolveSpeaker(await labelsOf(m, s), "B").displayName).toBe("Anna");
+  });
+
+  it("merge: unknown from-label, cycles, and the run budget", async () => {
+    const m = await meeting();
+    const s = await session(m);
+    await ingestSegments(m, [run(s, 0, 0, { speaker: "A" }), run(s, 1, 0, { speaker: "B" })]);
+    await expect(ingestSegments(m, [], [{ elSessionId: s, from: ["ghost"], into: "A" }])).rejects.toMatchObject({
+      code: "unknown_speaker",
+    });
+    await ingestSegments(m, [], [{ elSessionId: s, from: ["A"], into: "B" }]);
+    await expect(ingestSegments(m, [], [{ elSessionId: s, from: ["B"], into: "A" }])).rejects.toMatchObject({
+      code: "merge_cycle",
+    });
+    // merged labels count as runs: 2 runs stored, so 119 labels would exceed 120
+    const many = Array.from({ length: 119 }, (_, i) => `L${i}`);
+    await expect(ingestSegments(m, [], [{ elSessionId: s, from: many, into: "B" }])).rejects.toMatchObject({
+      code: "rate_limited",
+    });
   });
 
   describe("routes", () => {
