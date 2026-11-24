@@ -43,6 +43,17 @@ jobs:
       - name: supabase db reset
         run: supabase db reset
 
+      # Local stack URL/keys for the DB tests (test/local-supabase.ts). They're the CLI's
+      # local demo values, never committed; only the variable names are printed.
+      - name: local Supabase env
+        run: |
+          supabase status -o env \
+            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
+          cut -d= -f1 local.env
+          test "$(wc -l < local.env)" -eq 3
+          cat local.env >> "$GITHUB_ENV"
+          rm local.env
+
       - run: npx tsc --noEmit
 
       - run: npx vitest run

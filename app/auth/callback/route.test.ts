@@ -69,8 +69,12 @@ beforeEach(() => {
 
 const { GET } = await import("./route");
 
-const call = () =>
-  GET(new NextRequest("https://simonsays.example/auth/callback?code=abc", { headers: { host: "simonsays.example" } }));
+const call = (query = "") =>
+  GET(
+    new NextRequest(`https://simonsays.example/auth/callback?code=abc${query}`, {
+      headers: { host: "simonsays.example" },
+    }),
+  );
 
 const decode = (v: string) => (v.startsWith("base64-") ? Buffer.from(v.slice(7), "base64url").toString() : v);
 const sessionCookies = () => [...jar].filter(([name]) => /^sb-example-auth-token(\.\d+)?$/.test(name));
@@ -95,6 +99,14 @@ describe("auth callback", () => {
       expect(decode(value)).not.toContain("provider_");
       expect(decode(value)).not.toContain("google-refresh");
     }
+  });
+
+  it("returns to a safe next path (invite link) and ignores an unsafe one", async () => {
+    let res = await call("&next=%2Fjoin%2FAbc-1_x");
+    expect(res.headers.get("location")).toBe("https://simonsays.example/join/Abc-1_x");
+    jar.set("sb-example-auth-token-code-verifier", { value: JSON.stringify("verifier") });
+    res = await call("&next=%2F%2Fevil.com");
+    expect(res.headers.get("location")).toBe("https://simonsays.example/");
   });
 
   it("redirects to /login?fel=kod and signs out when storing the token throws", async () => {

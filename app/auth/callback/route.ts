@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasGoogleToken, storeGoogleToken } from "@/lib/google/client";
 import { fetchGrantedScope, hasDriveFile } from "@/lib/google/scopes";
+import { safeNextPath } from "@/lib/next-path";
 import { originFrom } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -68,5 +69,5 @@ export async function GET(request: NextRequest) {
     return to("/login?fel=kod");
   }
 
-  return to("/");
+  return to(safeNextPath(request.nextUrl.searchParams.get("next")));
 }

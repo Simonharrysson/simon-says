@@ -16,7 +16,7 @@ export default async function Home() {
       {user ? (
         <>
           <p>
-            Inloggad som {user.email}. Ditt användar-id: <code>{user.id}</code>
+            Inloggad som {user.email}. <a href="/orgs">Dina organisationer</a>
           </p>
           <form action={signOut}>
             <button type="submit">Logga ut</button>

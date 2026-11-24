@@ -3,17 +3,23 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { GOOGLE_SCOPES } from "@/lib/google/scopes";
+import { safeNextPath } from "@/lib/next-path";
 import { originFrom } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-/** Start Google sign-in. The PKCE verifier lands in a cookie; /auth/callback finishes it. */
-export async function signInWithGoogle(): Promise<void> {
+/**
+ * Start Google sign-in. The PKCE verifier lands in a cookie; /auth/callback finishes it and
+ * returns to the form's `next` path (e.g. an invite link) when it is a safe same-site path.
+ */
+export async function signInWithGoogle(formData?: FormData): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const origin = originFrom(await headers());
+  const next = safeNextPath(formData?.get("next")?.toString());
+  const callback = next === "/" ? `${origin}/auth/callback` : `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${origin}/auth/callback`,
+      redirectTo: callback,
       scopes: GOOGLE_SCOPES.join(" "),
       // offline + consent: Google returns a refresh token on every sign-in.
       queryParams: { access_type: "offline", prompt: "consent" },

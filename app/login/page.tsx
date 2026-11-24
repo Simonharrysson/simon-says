@@ -1,3 +1,4 @@
+import { safeNextPath } from "@/lib/next-path";
 import { signInWithGoogle } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +11,8 @@ const messages: Record<string, string> = {
   kod: "Inloggningen gick inte att slutföra. Försök igen.",
 };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ fel?: string }> }) {
-  const { fel } = await searchParams;
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ fel?: string; next?: string }> }) {
+  const { fel, next } = await searchParams;
   const message = fel ? (messages[fel] ?? messages.kod) : null;
 
   return (
@@ -25,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </p>
       )}
       <form action={signInWithGoogle}>
+        <input type="hidden" name="next" value={safeNextPath(next)} />
         <button type="submit">{message ? "Försök igen" : "Logga in med Google"}</button>
       </form>
     </main>
