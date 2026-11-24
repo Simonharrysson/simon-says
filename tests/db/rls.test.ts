@@ -8,7 +8,20 @@ import {
   seedMeeting,
   type TestUser,
 } from "@/test/local-supabase";
-import { createOrg, joinOrg, inviteOrgName, listMyOrgs, myRole } from "@/lib/db/orgs";
+import {
+  addPerson,
+  createOrg,
+  deletePerson,
+  getOrg,
+  inviteOrgName,
+  joinOrg,
+  listMyOrgs,
+  listPeople,
+  myRole,
+  renamePerson,
+  rotateInviteCode,
+  updateOrgSettings,
+} from "@/lib/db/orgs";
 
 // `segments` is not tested yet: the table waits for the Task 0 spike (Ruling 10).
 
@@ -153,6 +166,38 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
     expect(updated).toEqual([]);
     const { error: rotateError } = await joiner.db.rpc("rotate_invite_code", { p_org_id: orgA });
     expect(rotateError).not.toBeNull();
+  });
+
+  it("an admin changes settings and rotates the invite code; the old code stops working", async () => {
+    const owner = await createTestUser("owner");
+    const r = await createOrg(owner.db, "Före");
+    if (!r.ok) throw new Error("org");
+    expect(await updateOrgSettings(owner.db, r.id, { name: "Efter", share_transcript: false, show_on_status: true })).toBe(
+      true,
+    );
+    const org = await getOrg(owner.db, r.id);
+    expect(org).toMatchObject({ name: "Efter", share_transcript: false, show_on_status: true });
+
+    const oldCode = org!.invite_code;
+    const newCode = await rotateInviteCode(owner.db, r.id);
+    expect(newCode).not.toBe(oldCode);
+    const joiner = await createTestUser("late");
+    expect(await joinOrg(joiner.db, oldCode)).toBeNull();
+    expect(await joinOrg(joiner.db, newCode)).toBe(r.id);
+  });
+
+  it("members add, rename and delete people; outsiders can't", async () => {
+    expect(await addPerson(a.db, orgA, "  Kalle  ")).toBe(true);
+    const [kalle] = (await listPeople(a.db, orgA)).filter((p) => p.name === "Kalle");
+    expect(kalle).toBeDefined();
+    expect(await renamePerson(b.db, kalle.id, "Kapad")).toBe(false);
+    expect(await deletePerson(b.db, kalle.id)).toBe(false);
+    const { error } = await b.db.from("people").insert({ org_id: orgA, name: "Smyg" });
+    expect(error).not.toBeNull();
+    expect(await renamePerson(a.db, kalle.id, "Karl")).toBe(true);
+    expect((await listPeople(a.db, orgA)).map((p) => p.name)).toContain("Karl");
+    expect(await deletePerson(a.db, kalle.id)).toBe(true);
+    expect((await listPeople(a.db, orgA)).map((p) => p.id)).not.toContain(kalle.id);
   });
 
   it("anon cannot join or look up invite codes", async () => {
