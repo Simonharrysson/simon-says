@@ -39,6 +39,12 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ ...valid, ELEVENLABS_COMMIT_STRATEGY: "on" })).toThrow(/ELEVENLABS_COMMIT_STRATEGY/);
   });
 
+  it("defaults ELEVENLABS_USD_PER_HOUR to 0.22 and rejects a negative rate", () => {
+    expect(parseEnv(valid).ELEVENLABS_USD_PER_HOUR).toBe(0.22);
+    expect(parseEnv({ ...valid, ELEVENLABS_USD_PER_HOUR: "0.48" }).ELEVENLABS_USD_PER_HOUR).toBe(0.48);
+    expect(() => parseEnv({ ...valid, ELEVENLABS_USD_PER_HOUR: "-1" })).toThrow(/ELEVENLABS_USD_PER_HOUR/);
+  });
+
   it("parses KILL_SWITCH=1 as on", () => {
     expect(parseEnv({ ...valid, KILL_SWITCH: "1" }).KILL_SWITCH).toBe(true);
   });

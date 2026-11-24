@@ -37,6 +37,8 @@ const schema = z.object({
   APP_URL: z.url(),
   GLOBAL_DAILY_HOURS: z.coerce.number().positive().default(30),
   GLOBAL_DAILY_USD: z.coerce.number().positive().default(25),
+  // Booked on every closed ElevenLabs session (Ruling 14). Creator overage rate.
+  ELEVENLABS_USD_PER_HOUR: z.coerce.number().nonnegative().default(0.22),
   KILL_SWITCH: z
     .enum(["0", "1"])
     .default("0")

@@ -10,8 +10,18 @@ export const ORG_MONTH_SECONDS = 20 * 3600;
 export const MEETING_SECONDS = 4 * 3600;
 /** Warn this long before any cap stops the meeting (meeting: at 3 h 45). */
 export const WARN_BEFORE_SECONDS = 15 * 60;
+/** Mint rate limit per meeting (Ruling 15). */
+export const MAX_MINTS_PER_MEETING = 30;
+export const MIN_MINT_INTERVAL_SECONDS = 5;
 
-export type LimitReason = "org_month" | "meeting_length" | "global_day" | "global_usd" | "kill_switch" | "no_consent";
+export type LimitReason =
+  | "org_month"
+  | "meeting_length"
+  | "global_day"
+  | "global_usd"
+  | "kill_switch"
+  | "no_consent"
+  | "reconnect_limit";
 
 export interface LimitResult {
   ok: boolean;
@@ -61,7 +71,11 @@ export function decideLimits(i: LimitInput): LimitResult {
   };
 }
 
-/** Current limits for a meeting (also used by the heartbeat). */
+/**
+ * Current limits for a meeting, from used time (open sessions by elapsed time): for the
+ * heartbeat's warn/stop. The token endpoint does NOT use this to size a session; it decides
+ * under a lock in claim_el_session, which also counts what other open sessions may still use.
+ */
 export async function checkLimits(orgId: string, meetingId: string): Promise<LimitResult> {
   const env = getEnv();
   if (env.KILL_SWITCH) {
