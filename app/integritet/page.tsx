@@ -3,16 +3,16 @@ import { PublicShell } from "@/components/views/PublicShell";
 
 export const metadata: Metadata = { title: "Integritet" };
 
-// DRAFT. Structure and plain-language copy; Task 13 / Simon finalise the legal text and
-// the contact address before this is relied on.
+// Plain-language privacy text for a free service. Update UPDATED when the content changes.
+const UPDATED = "24 november 2026";
 
 const processors: [string, string, string][] = [
-  ["ElevenLabs", "Gör om ljudet till text under mötet.", "Loggar förfrågningar som standard. Ljudet skickas direkt från laptopen."],
-  ["Anthropic", "Skriver anteckningarna utifrån transkriptionen.", "Får texten, inte ljudet."],
-  ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat."],
+  ["ElevenLabs", "Gör om ljudet till text under mötet.", "Loggar förfrågningar som standard; noll lagring finns bara i deras dyraste avtal. Behandlingen kan ske utanför EU. Ljudet skickas direkt från laptopen."],
+  ["Anthropic", "Skriver anteckningarna utifrån transkriptionen.", "Får texten, inte ljudet. Behandlingen kan ske utanför EU."],
+  ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat. Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
-  ["Vercel", "Kör webbplatsen och servern.", ""],
-  ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss.", "Innehåller inga transkriptioner."],
+  ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm."],
+  ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss, och bara till oss.", "Innehåller inga transkriptioner."],
 ];
 
 export default function PrivacyPage() {
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
     <PublicShell signedIn={false}>
       <article className="page page--read stack stack--5">
         <div className="stack stack--3">
-          <span className="draft-flag">Utkast · inte slutlig text</span>
+          <span className="draft-flag">Utkast · uppdaterad {UPDATED}</span>
           <h1 className="page-header__title">Integritet</h1>
           <p className="lead">
             Simon Says lyssnar på era möten. Här står vad det betyder: vad som skickas vart, vad som sparas, och hur ni
@@ -69,12 +69,21 @@ export default function PrivacyPage() {
           <ul>
             <li>Namn, medlemmar, inbjudningslänk och personlistan (bara namn).</li>
             <li>Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.</li>
-            <li>Hur många minuter föreningen använt, för att hålla gränsen på 20 timmar i månaden.</li>
+            <li>
+              Användningsposter: hur många sekunder ljud, hur mycket text till Claude och vad det kostade, per förening och
+              dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.
+            </li>
+            <li>En logg över vilket konto som skapat vilka föreningar (för gränsen på två per person).</li>
           </ul>
+          <p>
+            <strong>Användningsposterna och loggen över skapade föreningar finns kvar även när föreningen raderas.</strong>{" "}
+            De innehåller inga mötesinnehåll, bara siffror och id:n.
+          </p>
           <h3>Det som inte sparas</h3>
           <ul>
             <li>Ljudet från mötet.</li>
             <li>Något annat i din Google Drive.</li>
+            <li>Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först.</li>
           </ul>
 
           <h2 id="vem">Vilka som behandlar data</h2>
@@ -104,7 +113,7 @@ export default function PrivacyPage() {
               anteckningar och logg försvinner hos oss.
             </li>
             <li>
-              <strong>En förening:</strong> en admin raderar den längst ner på föreningens sida. Allt under den försvinner.
+              <strong>En förening:</strong> en admin raderar den längst ner på föreningens sida. Allt under den försvinner, utom användningsposterna som beskrivs ovan.
             </li>
             <li>
               <strong>Google-dokumenten</strong> ligger kvar i Drive. De är era, och ni tar bort dem i Drive som vanligt.

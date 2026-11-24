@@ -27,7 +27,7 @@ const healthCopy: Record<StatusData["health"], { title: string; text: string; ma
   },
 };
 
-/** Public status page. `data` is null until Task 13 wires the numbers. */
+/** Public status page. `data` is null when the numbers could not be loaded. */
 export function StatusView({ data }: { data: StatusData | null }) {
   const health = data ? healthCopy[data.health] : null;
   return (
@@ -41,8 +41,8 @@ export function StatusView({ data }: { data: StatusData | null }) {
       </div>
 
       {!data || !health ? (
-        <EmptyState title="Siffrorna kommer snart">
-          <p>Statussidan är ett utkast. När den är kopplad visas pågående möten och veckans minuter här.</p>
+        <EmptyState title="Siffrorna kan inte hämtas just nu">
+          <p>Försök igen om en stund. Det påverkar inte pågående möten.</p>
         </EmptyState>
       ) : (
         <>
