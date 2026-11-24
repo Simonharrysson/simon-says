@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import { joinOrgAction } from "@/app/(app)/orgs/actions";
+import { signInWithGoogle } from "@/app/login/actions";
+import { JoinView } from "@/components/views/JoinView";
+import { PublicShell } from "@/components/views/PublicShell";
 import { inviteOrgName } from "@/lib/db/orgs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Inbjudan" };
 
 const CODE = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -16,33 +21,16 @@ export default async function JoinPage({ params }: { params: Promise<{ code: str
 
   if (!user) {
     return (
-      <main>
-        <h1>Inbjudan till Simon Says</h1>
-        <p>Logga in för att gå med i organisationen.</p>
-        <p>
-          <a href={`/login?next=${encodeURIComponent(`/join/${code}`)}`}>Logga in med Google</a>
-        </p>
-      </main>
+      <PublicShell signedIn={false}>
+        <JoinView state="signed-out" code={CODE.test(code) ? code : ""} signIn={signInWithGoogle} />
+      </PublicShell>
     );
   }
 
   const name = CODE.test(code) ? await inviteOrgName(db, code) : null;
-  if (!name) {
-    return (
-      <main>
-        <h1>Inbjudan till Simon Says</h1>
-        <p role="alert">Inbjudningslänken gäller inte längre. Be om en ny.</p>
-      </main>
-    );
-  }
-
   return (
-    <main>
-      <h1>Gå med i {name}</h1>
-      <form action={joinOrgAction}>
-        <input type="hidden" name="code" value={code} />
-        <button type="submit">Gå med</button>
-      </form>
-    </main>
+    <PublicShell signedIn>
+      {name ? <JoinView state="ready" code={code} orgName={name} join={joinOrgAction} /> : <JoinView state="invalid" />}
+    </PublicShell>
   );
 }

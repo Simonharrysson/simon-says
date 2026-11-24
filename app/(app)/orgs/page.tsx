@@ -1,45 +1,25 @@
+import type { Metadata } from "next";
+import { OrgsView } from "@/components/views/OrgsView";
 import { listMyOrgs } from "@/lib/db/orgs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { orgsNotice } from "@/lib/ui/messages";
 import { createOrgAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-const messages: Record<string, string> = {
-  limit: "Du kan skapa högst två organisationer.",
-  invalid: "Ange ett namn (högst 100 tecken).",
-  inbjudan: "Inbjudningslänken gäller inte längre.",
-  raderad: "Organisationen är raderad.",
-};
+export const metadata: Metadata = { title: "Föreningar" };
 
 export default async function OrgsPage({ searchParams }: { searchParams: Promise<{ fel?: string; klart?: string }> }) {
   const { fel, klart } = await searchParams;
   const db = await createSupabaseServerClient();
   const orgs = await listMyOrgs(db);
-  const message = (fel && messages[fel]) || (klart && messages[klart]) || null;
+  const notice = orgsNotice(fel, klart);
 
   return (
-    <main>
-      <h1>Organisationer</h1>
-      {message && <p role={fel ? "alert" : "status"}>{message}</p>}
-      {orgs.length === 0 ? (
-        <p>Du är inte med i någon organisation än.</p>
-      ) : (
-        <ul>
-          {orgs.map((org) => (
-            <li key={org.id}>
-              <a href={`/orgs/${org.id}`}>{org.name}</a> {org.role === "admin" && "(admin)"}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <h2>Skapa organisation</h2>
-      <form action={createOrgAction}>
-        <label>
-          Namn <input name="name" required maxLength={100} />
-        </label>{" "}
-        <button type="submit">Skapa</button>
-      </form>
-    </main>
+    <OrgsView
+      orgs={orgs.map(({ id, name, role }) => ({ id, name, role }))}
+      notice={fel === "invalid" ? null : notice}
+      nameError={fel === "invalid" ? notice?.text : undefined}
+      createOrg={createOrgAction}
+    />
   );
 }
