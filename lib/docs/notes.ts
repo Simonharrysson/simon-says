@@ -225,11 +225,16 @@ function sectionAnchor(meeting: MeetingRow, section: NoteSection): string | null
   return typeof v === "string" ? v : null;
 }
 
-/** An item's span when we may write to it: present, unique, and its paragraph(s) exactly what we rendered. */
+/**
+ * An item's span when we may write to it: present, unique, its range covering its whole
+ * paragraph(s), and (except "now") those paragraphs exactly what we rendered. A range that no
+ * longer covers its paragraph (e.g. an edge character deleted and retyped, which lands outside
+ * the range) would make a replace leave that character behind, so it is not written either.
+ */
 function ownedSpan(tab: NotesTab, row: NoteItemRow): ItemSpan | null {
   if (!row.range_name || row.locked || row.deleted_by_human) return null;
   const span = itemSpan(tab, row.range_name);
-  if (!span || span.ambiguous) return null;
+  if (!span || span.ambiguous || span.rangeText !== span.paraText) return null;
   if (row.section !== "now" && span.paraText !== row.last_rendered_text) return null;
   return span;
 }
@@ -285,6 +290,8 @@ export function planRender(
     const row = byId.get(item.id);
     if (row?.locked || row?.deleted_by_human) continue;
     if (!row?.range_name) {
+      // Already in the Doc (a render whose rows were not saved): never insert a second copy.
+      if (tab.ranges.has(itemRangeName(meeting.id, item.id))) continue;
       const list = pending.get(item.section) ?? [];
       list.push(item);
       pending.set(item.section, list);

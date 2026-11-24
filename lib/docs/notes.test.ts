@@ -355,6 +355,23 @@ describe("renderItems", () => {
     expect(api.batchUpdate).not.toHaveBeenCalled();
   });
 
+  it("an edge character deleted and retyped (range one short, paragraph unchanged) → no write", async () => {
+    const shrunk = tabText({ 5: "{ss-m1-n2}☐ Simon: boka lokal (fre{/ss-m1-n2})" });
+    const same = await tick(shrunk, desiredFrom);
+    expect(same.result).toBe("ok");
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+    const changed = await tick(shrunk, (rs) => desiredFrom(rs).map((d) => (d.id === "n2" ? { ...d, text: "boka sal" } : d)));
+    expect(changed.result).toBe("ok");
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("a new item whose range is already in the Doc (rows not saved after a render) is not inserted again", async () => {
+    const text = tabText({ 3: `${R("n1", "✓ Hackathon 14 feb")}\n${R("n5", "✓ X")}` });
+    const { result } = await tick(text, (rs) => [...desiredFrom(rs), { id: "n5", section: "decision", text: "X" }]);
+    expect(result).toBe("ok");
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+  });
+
   it("a deleted item is never re-added", async () => {
     const { result } = await tick(tabText({ 6: "" }), () => desiredFrom(rows()));
     expect(result).toBe("ok");

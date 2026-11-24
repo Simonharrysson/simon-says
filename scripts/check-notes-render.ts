@@ -223,6 +223,7 @@ async function inflight(auth: OAuth2Client, n: Notes, g: G, s: State, secs: numb
     beforeWrite: async () => {
       console.log(`\n>>> SKRIV NU i dokumentet (${secs} s) <<<\n`);
       await sleep(secs * 1000);
+      console.log(`\n>>> SLUTA SKRIVA nu <<<\n`);
     },
   });
   console.log(`inflight tick ${s.ticks}: ${res} (expected: first attempt 'conflict', then ok)`);
@@ -304,6 +305,27 @@ async function auto(auth: OAuth2Client, n: Notes, g: G) {
   const last = t.paragraphs.at(-1)?.text;
   const beforeLast = t.paragraphs.at(-2)?.text;
   check(last === "Nästa ämne: lokalbokning\n" && beforeLast === "Pågår nu\n", "tab ends with heading + new item", JSON.stringify([beforeLast, last]));
+  const styleOf = async (prefix: string) =>
+    ((await getDoc(auth, g, m.doc_id)).tabs?.[0]?.documentTab?.body?.content ?? []).find((c) =>
+      c.paragraph?.elements?.[0]?.textRun?.content?.startsWith(prefix),
+    )?.paragraph?.paragraphStyle?.namedStyleType;
+  const headingStyle = await styleOf("Pågår nu");
+  check(headingStyle === "HEADING_3", "'Pågår nu' keeps HEADING_3 after the last-paragraph delete", String(headingStyle));
+  const itemStyle = await styleOf("Nästa ämne");
+  check(itemStyle === "NORMAL_TEXT", "new 'now' item is NORMAL_TEXT", String(itemStyle));
+
+  // 5b. Remove the last paragraph when it follows another item (the merge case for a human line above).
+  check(
+    (await guardedRender(auth, n, g, s, (rows) => [
+      ...rows.map(n.toNotesItem),
+      { id: "n9", section: "now", text: "Sista raden" },
+    ])) === "ok",
+    "add n9 after n7",
+  );
+  check((await guardedRender(auth, n, g, s, (rows) => rows.filter((r) => r.id !== "n9").map(n.toNotesItem))) === "ok", "remove n9 (last paragraph)");
+  t = await tab();
+  check(n.itemSpan(t, name("n7"))?.paraText === "Nästa ämne: lokalbokning" && t.paragraphs.at(-1)?.text === "Nästa ämne: lokalbokning\n", "n7 intact and last after removing n9");
+  check((await styleOf("Nästa ämne")) === "NORMAL_TEXT", "n7 keeps its style");
   d = n.diffHumanEdits(s.rows, n.currentItems(t, s.rows));
   check(!d.locked.length && !d.deletedIds.length, "no false locks or deletes after removals");
 

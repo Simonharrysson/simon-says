@@ -73,7 +73,7 @@ Changed in later tasks (docs/plan.md updated):
 
 ## 2026-11-24 · Task 9 · Rendering notes items (automatic part)
 
-Run with `scripts/check-notes-render.ts … auto` on simon.harrysson@gmail.com, 21/21 checks passed. The human part
+Run with `scripts/check-notes-render.ts … auto` on simon.harrysson@gmail.com, 27/27 checks passed. The human part
 (Simon edits, deletes and types during a render) is pending.
 
 - Item lines with `☐`, `✓`, å/ä/ö and an emoji read back exactly as rendered (paragraph text = range text =
@@ -85,5 +85,5 @@ Run with `scripts/check-notes-render.ts … auto` on simon.harrysson@gmail.com, 
   (`NORMAL_TEXT`) on the new paragraphs fixes it. After an item they inherit the item's style.
 - Deleting a paragraph plus `deleteNamedRange` leaves no range behind. The tab's last paragraph is removed
   by deleting from the newline before it; a delete and an insert at that same index work in one batch
-  when the delete runs first.
+  when the delete runs first; the heading above keeps `HEADING_3` and the new item is `NORMAL_TEXT`.
 - A render with a stale revision returns `'conflict'` and writes nothing.
