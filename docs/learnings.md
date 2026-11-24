@@ -12,3 +12,19 @@ Findings from early checks and spikes. Each entry: date, task, what we learned, 
 - Supabase `simonsays-prod` still issues legacy `anon`/`service_role` JWT keys alongside the new
   `sb_publishable_…`/`sb_secret_…` keys; we use the legacy pair for `SUPABASE_ANON_KEY` /
   `SUPABASE_SERVICE_ROLE_KEY` for now.
+
+## 2026-11-24 · Task 2 · Google sign-in (setup; real-login results pending)
+
+- Supabase's session reports no granted scopes: it carries `provider_token` and
+  `provider_refresh_token` only. The callback asks Google instead
+  (`POST https://oauth2.googleapis.com/tokeninfo` with the access token → `scope`) and checks
+  `drive.file` there. Changed: `fetchGrantedScope` in `lib/google/scopes.ts`.
+- Supabase's Google authorize URL always adds `email profile` itself; with our `scopes` it sends
+  `email profile openid email profile …/drive.file` (duplicates are harmless), plus
+  `access_type=offline` and `prompt=consent` from `queryParams`.
+- Supabase project config: Site URL `https://simonsays.harrysson.co`; redirect allow-list =
+  that domain, `simon-says-simonharryssons-projects.vercel.app`, `simon-says-five-kappa.vercel.app`,
+  `localhost:3000` (each `/**`). OAuth starts in a server action, so no `NEXT_PUBLIC_` vars; the
+  callback URL comes from the request's forwarded host.
+- `google_tokens` was applied to simonsays-prod by hand (Management API SQL) because migrations
+  only reach prod from `main`; the migration is idempotent so the GitHub integration can re-run it.
