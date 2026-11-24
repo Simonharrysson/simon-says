@@ -7,7 +7,10 @@ import { formatClock, formatCount, formatElapsed } from "@/lib/format";
 export interface StatusData {
   /** Overall health, from the kill switch / failed ticks. */
   health: "ok" | "degraded" | "paused";
-  liveMeetings: { id: string; startedAt: string; elapsedMs: number; orgName: string | null }[];
+  /** All live meetings, named or not. */
+  liveCount: number;
+  /** Only meetings of orgs that opted in to being shown. */
+  liveMeetings: { id: string; startedAt: string; elapsedMs: number; orgName: string }[];
   minutesThisWeek: number;
   meetingsThisWeek: number;
   updatedAt: string;
@@ -57,7 +60,7 @@ export function StatusView({ data }: { data: StatusData | null }) {
           <dl className="status-counts">
             <div>
               <dt>Möten just nu</dt>
-              <dd>{data.liveMeetings.length}</dd>
+              <dd>{data.liveCount}</dd>
             </div>
             <div>
               <dt>Möten i veckan</dt>
@@ -70,14 +73,19 @@ export function StatusView({ data }: { data: StatusData | null }) {
           </dl>
 
           <Panel flush title="Pågår just nu" titleId="live-now">
-            {data.liveMeetings.length === 0 ? (
+            {data.liveCount === 0 ? (
               <p className="subtle panel-pad">Inga möten pågår just nu.</p>
+            ) : data.liveMeetings.length === 0 ? (
+              <p className="subtle panel-pad">
+                {data.liveCount === 1 ? "Ett möte pågår" : `${data.liveCount} möten pågår`}. Föreningarna har inte valt att
+                visas.
+              </p>
             ) : (
               <ul className="list" aria-labelledby="live-now">
                 {data.liveMeetings.map((m) => (
                   <ListRow
                     key={m.id}
-                    title={m.orgName ?? "En förening"}
+                    title={m.orgName}
                     meta={`Startade ${formatClock(m.startedAt)}`}
                     actions={
                       <>
@@ -88,6 +96,9 @@ export function StatusView({ data }: { data: StatusData | null }) {
                   />
                 ))}
               </ul>
+            )}
+            {data.liveCount > data.liveMeetings.length && data.liveMeetings.length > 0 && (
+              <p className="subtle panel-pad">Och {data.liveCount - data.liveMeetings.length} till som inte visas med namn.</p>
             )}
           </Panel>
           <p className="subtle">Uppdaterad {formatClock(data.updatedAt)}.</p>

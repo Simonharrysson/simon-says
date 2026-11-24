@@ -264,9 +264,9 @@ const render: Record<string, () => ReactNode> = {
       <StatusView
         data={{
           health: "ok",
+          liveCount: 2,
           liveMeetings: [
             { id: "l1", startedAt: ago(42), elapsedMs: 42 * 60_000, orgName: "Exempelföreningen" },
-            { id: "l2", startedAt: ago(12), elapsedMs: 12 * 60_000, orgName: null },
           ],
           meetingsThisWeek: 7,
           minutesThisWeek: 1284,

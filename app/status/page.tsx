@@ -11,12 +11,9 @@ export const metadata: Metadata = { title: "Status" };
 export const revalidate = 60;
 
 export default async function StatusPage() {
-  let data: StatusData | null = null;
-  try {
-    data = await loadStatus(supabaseAdmin(), getEnv().KILL_SWITCH);
-  } catch (error) {
-    console.error("status: load failed", error instanceof Error ? error.message : error);
-  }
+  // A failed load throws (error page) instead of rendering an empty state: a thrown render is
+  // not cached, so a failure can't stick for the 60 s revalidate window.
+  const data: StatusData = await loadStatus(supabaseAdmin(), getEnv().KILL_SWITCH);
   return (
     <PublicShell signedIn={false}>
       <StatusView data={data} />

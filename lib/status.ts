@@ -40,12 +40,16 @@ export async function loadStatus(db: SupabaseClient, killSwitch: boolean, now = 
 
   return {
     health,
-    liveMeetings: meetings.map((m) => ({
-      id: m.id as string,
-      startedAt: m.started_at as string,
-      elapsedMs: Math.max(0, now.getTime() - new Date(m.started_at as string).getTime()),
-      orgName: names.get(m.org_id as string) ?? null,
-    })),
+    liveCount: meetings.length,
+    // Per-meeting details only for opted-in orgs; everyone else is counted, nothing more.
+    liveMeetings: meetings
+      .filter((m) => names.has(m.org_id as string))
+      .map((m) => ({
+        id: m.id as string,
+        startedAt: m.started_at as string,
+        elapsedMs: Math.max(0, now.getTime() - new Date(m.started_at as string).getTime()),
+        orgName: names.get(m.org_id as string) as string,
+      })),
     minutesThisWeek: Math.round(seconds / 60),
     meetingsThisWeek: started.count ?? 0,
     updatedAt: now.toISOString(),

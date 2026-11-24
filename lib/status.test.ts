@@ -39,7 +39,10 @@ const tables = {
 describe("loadStatus", () => {
   it("returns names only for opted-in orgs and aggregates", async () => {
     const data = await loadStatus(fakeDb(tables), false, NOW);
-    expect(data.liveMeetings.map((m) => m.orgName)).toEqual(["Synliga Föreningen", null]);
+    expect(data.liveCount).toBe(2);
+    expect(data.liveMeetings.map((m) => m.orgName)).toEqual(["Synliga Föreningen"]);
+    expect(data.liveMeetings).toHaveLength(1);
+    expect(JSON.stringify(data)).not.toContain("11:30");
     expect(data.minutesThisWeek).toBe(91);
     expect(data.meetingsThisWeek).toBe(4);
     expect(data.health).toBe("ok");
@@ -56,7 +59,7 @@ describe("loadStatus", () => {
     const data = await loadStatus(fakeDb(tables), false, NOW);
     const html = renderToStaticMarkup(createElement(StatusView, { data }));
     expect(html).toContain("Synliga Föreningen");
-    expect(html).toContain("En förening");
+    expect(html).toContain("1 till som inte visas");
     expect(html).not.toContain("Hemliga Klubben");
   });
 });
