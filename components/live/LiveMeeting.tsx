@@ -73,7 +73,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
   if (p.phase === "consent" || p.phase === "starting") {
     return (
       <div className="live live--centered">
-        <BackLink href={p.orgHref} label={`Tillbaka till ${p.orgName}`} />
+        <BackLink href={p.orgHref} label={p.orgName} />
         <ConsentStep
           orgName={p.orgName}
           shareTranscript={p.shareTranscript}
@@ -91,7 +91,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
   if (p.phase === "resume") {
     return (
       <div className="live live--centered">
-        <BackLink href={p.orgHref} label={`Tillbaka till ${p.orgName}`} />
+        <BackLink href={p.orgHref} label={p.orgName} />
         <ResumeMeeting
           startedAt={p.startedAt ?? new Date().toISOString()}
           orgName={p.orgName}
@@ -117,7 +117,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
   return (
     <div className={`live live--${status.kind}`}>
-      <BackLink href={p.orgHref} label="Tillbaka" confirm={!ending} onLeave={leave} listening={status.kind === "live" || status.kind === "reconnecting"} />
+      <BackLink href={p.orgHref} label={p.orgName} confirm={!ending} onLeave={leave} listening={status.kind === "live" || status.kind === "reconnecting"} />
       <header className={`livebar livebar--${status.kind}`}>
         <div className="livebar__who">
           <StatusHeadline status={status} />
@@ -176,12 +176,14 @@ export function LiveMeeting(p: LiveMeetingProps) {
 function StatusHeadline({ status }: { status: LiveStatus }) {
   return (
     <p className={`status-line status-line--${status.tone}`} role="status">
-      {status.tone === "paused" ? (
-        <IconPause size={20} className="status-line__icon" aria-hidden="true" />
-      ) : (
-        <span className="magnet status-line__magnet" aria-hidden="true" />
-      )}
-      <span className="status-line__label">{status.label}</span>
+      <span className="status-line__main">
+        {status.tone === "paused" ? (
+          <IconPause size={20} className="status-line__icon" aria-hidden="true" />
+        ) : (
+          <span className="magnet status-line__magnet" aria-hidden="true" />
+        )}
+        <span className="status-line__label">{status.label}</span>
+      </span>
       {status.detail && <span className="status-line__detail">— {status.detail}</span>}
     </p>
   );
@@ -215,6 +217,7 @@ function BackLink({
         }}
       >
         <IconArrowLeft size={18} aria-hidden="true" />
+        <span className="visually-hidden">Tillbaka till </span>
         {label}
       </a>
       {confirm && (
@@ -225,6 +228,7 @@ function BackLink({
           stayLabel="Stanna kvar"
           confirmLabel="Lämna sidan"
           confirmVariant="secondary"
+          stayVariant="primary"
           onConfirm={() => onLeave?.()}
         >
           {listening

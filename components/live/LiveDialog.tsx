@@ -16,10 +16,12 @@ export const LiveDialog = forwardRef<
     stayLabel: string;
     confirmLabel: string;
     confirmVariant?: ButtonVariant;
+    /** The safe choice; `primary` when leaving is the risky one (leave dialog). */
+    stayVariant?: ButtonVariant;
     confirmIcon?: ReactNode;
     onConfirm: () => void;
   }
->(function LiveDialog({ id, title, children, stayLabel, confirmLabel, confirmVariant = "danger", confirmIcon, onConfirm }, ref) {
+>(function LiveDialog({ id, title, children, stayLabel, confirmLabel, confirmVariant = "danger", stayVariant = "ghost", confirmIcon, onConfirm }, ref) {
   const dialog = () => (typeof ref === "object" ? ref?.current : null);
   return (
     <dialog ref={ref} className="dialog" aria-labelledby={`${id}-title`} onClick={(e) => e.target === dialog() && dialog()?.close()}>
@@ -30,7 +32,7 @@ export const LiveDialog = forwardRef<
         <p className="dialog__text">{children}</p>
       </div>
       <div className="dialog__actions">
-        <Button variant="ghost" autoFocus onClick={() => dialog()?.close()}>
+        <Button variant={stayVariant} autoFocus onClick={() => dialog()?.close()}>
           {stayLabel}
         </Button>
         <Button

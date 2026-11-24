@@ -67,7 +67,6 @@ export function SpeakerList({
                   <span className="speaker__actions">
                     {speaker.displayName && speaker.needsConfirm && (
                       <Button
-                        variant="primary"
                         icon={<IconCheck size={16} />}
                         className="speaker__confirm"
                         onClick={() =>

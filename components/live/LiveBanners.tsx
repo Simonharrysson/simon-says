@@ -1,6 +1,6 @@
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
-import { IconClock, IconDoc, IconRefresh, IconWifiOff } from "@/components/ui/icons";
+import { IconChevronDown, IconClock, IconDoc, IconRefresh, IconWifiOff } from "@/components/ui/icons";
 import type { LiveBannerKind } from "@/lib/ui/live-status";
 import type { ConnectionState } from "./types";
 
@@ -15,8 +15,9 @@ export interface LiveBannersProps {
 }
 
 /**
- * One banner at a time, the most urgent. Red only when the user must act (stopped, Doc paused,
- * time running out); things that fix themselves are ink. Anything else waits behind "+N till".
+ * Every red banner (user must act), most urgent first; a self-fixing one is shown alone or
+ * waits behind "Visa 1 varning till". Red only when the user must act (stopped, Doc paused,
+ * time running out); things that fix themselves are ink.
  */
 export function LiveBanners({ banners, connection, minutesLeft, onReLogin, onRetry }: LiveBannersProps) {
   if (banners.length === 0) return null;
@@ -71,7 +72,7 @@ export function LiveBanners({ banners, connection, minutesLeft, onReLogin, onRet
         );
       case "connection":
         return (
-          <Banner key="conn" tone="warning" icon={<IconWifiOff />} title="Ansluter igen…">
+          <Banner key="conn" tone="warning" icon={<IconWifiOff />} title="Ljudet väntar i webbläsaren">
             {connection === "offline"
               ? "Ingen internetanslutning. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när nätet är tillbaka. Inget sparas på datorn."
               : "Anslutningen bröts. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när vi är tillbaka. Du behöver inte göra något."}
@@ -80,13 +81,20 @@ export function LiveBanners({ banners, connection, minutesLeft, onReLogin, onRet
     }
   };
 
-  const [first, ...rest] = banners;
+  // Red banners (the user must act) are always shown. Self-fixing ones wait behind a
+  // disclosure when something red is already on screen.
+  const red = banners.filter((b) => b !== "connection");
+  const shown = red.length > 0 ? red : banners.slice(0, 1);
+  const rest = banners.filter((b) => !shown.includes(b));
   return (
     <div className="live-banners">
-      {render(first)}
+      {shown.map(render)}
       {rest.length > 0 && (
         <details className="live-banners__more">
-          <summary>+{rest.length} till</summary>
+          <summary>
+            Visa {rest.length === 1 ? "1 varning" : `${rest.length} varningar`} till
+            <IconChevronDown size={16} className="live-banners__chevron" />
+          </summary>
           <div className="live-banners__rest">{rest.map(render)}</div>
         </details>
       )}

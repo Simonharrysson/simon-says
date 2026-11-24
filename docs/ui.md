@@ -108,7 +108,8 @@ Plain props and callbacks; no fetching. Task 7 owns the state machine (LiveStrea
 wake lock) and maps it onto these. Types in `components/live/types.ts`.
 
 **Full-screen focus mode.** The live route must sit **outside** the `(app)` layout: no app header,
-no footer. `LiveMeeting` renders its own "← Tillbaka", which asks "Mötet pågår — lämna sidan?"
+no footer. `LiveMeeting` renders its own "← {förening}" back link (same on consent, resume and
+live), which asks "Mötet pågår — lämna sidan?"
 while the meeting runs (Task 7 should also add a `beforeunload` guard).
 
 **One status.** `liveStatus()` in `lib/ui/live-status.ts` (tested) turns
@@ -119,13 +120,14 @@ banner list. Every live component reads from it, so the page can't contradict it
 | Situation | Headline | Ring | Partial strip | Banner |
 |---|---|---|---|---|
 | live / name round | ● Transkriberar (red, pulsing) | on | live words | — |
-| connection down | ● Ansluter igen… (grey) | off | last words, grey, "(senaste vi hörde)" | Ansluter igen (ink) |
+| connection down | ● Ansluter igen… (grey) | off | last words, grey, "(senaste vi hörde)" | Ljudet väntar i webbläsaren (ink) |
 | paused | ❚❚ Pausat — inget ljud skickas; bar tinted | off | "Pausat. Inget ljud skickas." | — |
 | error | ● Stannat — behöver dig (red, static); bar outlined red; Paus hidden | off | "Inget ljud skickas just nu." | loud red, Försök igen |
 | ending | Avslutar… | off | — | — |
 
-Banner priority: error > Doc paused > time limit > connection. Only the first shows; the rest sit
-behind "+N till". Stale notes are not a banner: the Doc card shows them (green "Uppdaterat för
+Banner priority: error > Doc paused > time limit > connection. Every red banner (user must act)
+is always visible; the self-fixing connection banner ("Ljudet väntar i webbläsaren") shows alone,
+or behind "Visa 1 varning till ▾" when something red is already on screen. Stale notes are not a banner: the Doc card shows them (green "Uppdaterat för
 2 min sedan" · grey "Senast uppdaterat 19:38 · vi försöker igen automatiskt" · red "Pausat — logga in igen").
 
 **`LiveMeeting`** — the whole page; renders the right layout for `phase`:
@@ -169,7 +171,12 @@ Building blocks (usable on their own):
   "Någon annan". Pickers are closed by default. Speakers are keyed by `(elSessionId, speakerLabel)`
   since labels restart on a new ElevenLabs session.
 - `ResumeMeeting {startedAt, orgName, onResume, onEnd?, resuming?}` — "Fortsätt mötet"; "Avsluta mötet" asks first.
-- `LiveDialog` — the shared confirm dialog (safe choice first and focused).
+- `LiveDialog` — the shared confirm dialog (safe choice first and focused; `stayVariant="primary"`
+  in the leave dialog, where leaving is the risky choice).
+
+Weight order on the live page: Paus/Fortsätt (lg) is the strongest control; Stämmer and Välj are
+outlined secondary. The timer's allowance rail has an aluminium track and an ink fill, as wide as
+the digits.
 - `MeetingEnded {docUrl, durationSeconds, finalizing?, orgHref, autoStopped?}`
 
 ## Org page hooks for Task 7
