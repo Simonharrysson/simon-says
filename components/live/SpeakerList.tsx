@@ -7,8 +7,9 @@ import { speakerKeyString, type PersonOption, type Speaker, type SpeakerChoice, 
 
 /**
  * Who is talking. Each diarized label is a name plate: "Talare 2 → Anna". Unsure names show
- * "Anna?" with a one-tap confirm; unknown ones (e.g. after a reconnect) ask "Vem är detta?"
- * with the meeting's names as one-tap choices. Renames apply from the next lines onwards.
+ * "Anna?" with a one-tap Stämmer; unknown ones (e.g. after a reconnect) ask "Vem är detta?"
+ * with a Välj button that opens the meeting's names. Pickers stay closed until asked for,
+ * so the list stays calm. Renames apply from the next lines onwards.
  */
 export function SpeakerList({
   speakers,
@@ -29,7 +30,12 @@ export function SpeakerList({
         <h2 id="speakers-title" className="panel__title">
           Talare
         </h2>
-        {unknown > 0 && <span className="badge badge--live">{unknown} att bekräfta</span>}
+        {unknown > 0 && (
+          <span className="badge badge--info">
+            <span className="magnet magnet--blue" aria-hidden="true" />
+            {unknown} att bekräfta
+          </span>
+        )}
       </div>
       {speakers.length === 0 ? (
         <p className="subtle speakers__empty">Talarna dyker upp här när de börjar prata.</p>
@@ -37,30 +43,33 @@ export function SpeakerList({
         <ul className="speakers__list">
           {speakers.map((speaker) => {
             const key = speakerKeyString(speaker);
-            const open = editing === key || !speaker.displayName;
+            const open = editing === key;
+            const toggle = () => setEditing(open ? null : key);
             return (
-              <li key={key} className={`speaker${!speaker.displayName ? " speaker--unknown" : ""}${speaker.needsConfirm ? " speaker--unsure" : ""}`}>
+              <li
+                key={key}
+                className={`speaker${!speaker.displayName ? " speaker--unknown" : ""}${speaker.needsConfirm ? " speaker--unsure" : ""}`}
+              >
                 <div className="speaker__row">
-                  <span className="speaker__label">{speaker.label}</span>
-                  <span className="speaker__arrow" aria-hidden="true">
-                    →
-                  </span>
-                  <span className="speaker__name">
-                    {speaker.displayName ? (
-                      <>
-                        {speaker.displayName}
-                        {speaker.needsConfirm && "?"}
-                      </>
-                    ) : (
-                      <span className="speaker__ask">Vem är detta?</span>
-                    )}
+                  <span className="speaker__who">
+                    <span className="speaker__label">{speaker.label}</span>
+                    <span className="speaker__name">
+                      {speaker.displayName ? (
+                        <>
+                          {speaker.displayName}
+                          {speaker.needsConfirm && "?"}
+                        </>
+                      ) : (
+                        "Vem är detta?"
+                      )}
+                    </span>
                   </span>
                   <span className="speaker__actions">
                     {speaker.displayName && speaker.needsConfirm && (
                       <Button
-                        size="sm"
                         variant="primary"
                         icon={<IconCheck size={16} />}
+                        className="speaker__confirm"
                         onClick={() =>
                           onAssign(speaker, {
                             personId: people.find((p) => p.name === speaker.displayName)?.id ?? null,
@@ -71,16 +80,13 @@ export function SpeakerList({
                         Stämmer
                       </Button>
                     )}
-                    {speaker.displayName && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        iconOnly
-                        icon={<IconPencil size={16} />}
-                        onClick={() => setEditing(editing === key ? null : key)}
-                        aria-expanded={editing === key}
-                      >
+                    {speaker.displayName ? (
+                      <Button variant="ghost" iconOnly icon={<IconPencil size={16} />} onClick={toggle} aria-expanded={open}>
                         {`Byt namn på ${speaker.label}`}
+                      </Button>
+                    ) : (
+                      <Button onClick={toggle} aria-expanded={open}>
+                        {open ? "Stäng" : "Välj"}
                       </Button>
                     )}
                   </span>
@@ -159,7 +165,7 @@ function SpeakerPicker({
               autoComplete="off"
             />
           </div>
-          <Button type="submit" size="sm" variant="primary" disabled={!name.trim()}>
+          <Button type="submit" variant="primary" disabled={!name.trim()}>
             Spara
           </Button>
         </form>

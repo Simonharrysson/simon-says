@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClock, formatDateTime, formatDuration, formatElapsed, minutesBetween, plural, tailText } from "./format";
+import { formatAgo, formatClock, formatCount, formatDateTime, formatDuration, formatElapsed, formatMeetingDate, minutesBetween, plural, tailText } from "./format";
 
 describe("formatElapsed", () => {
   it("shows mm:ss under an hour", () => {
@@ -56,5 +56,22 @@ describe("tailText", () => {
     expect(out.endsWith("sju åtta")).toBe(true);
     expect(out).toBe("…sex sju åtta");
     expect(out.length).toBeLessThanOrEqual(17);
+  });
+});
+
+describe("live and list helpers", () => {
+  it("formatAgo", () => {
+    expect(formatAgo(0)).toBe("nyss");
+    expect(formatAgo(1.7)).toBe("för 1 min sedan");
+    expect(formatAgo(12)).toBe("för 12 min sedan");
+  });
+  it("formatMeetingDate drops the current year", () => {
+    const now = new Date("2026-11-30T12:00:00Z");
+    expect(formatMeetingDate("2026-11-24T18:00:00Z", now)).toBe("tis 24 nov · 19:00");
+    expect(formatMeetingDate("2025-11-24T18:00:00Z", now)).toBe("mån 24 nov 2025 · 19:00");
+  });
+  it("formatCount uses a narrow no-break space", () => {
+    expect(formatCount(1284)).toBe("1 284");
+    expect(formatCount(7)).toBe("7");
   });
 });

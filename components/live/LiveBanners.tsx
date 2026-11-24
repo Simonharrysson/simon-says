@@ -1,67 +1,95 @@
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
-import { IconClock, IconDoc, IconWifiOff } from "@/components/ui/icons";
+import { IconClock, IconDoc, IconRefresh, IconWifiOff } from "@/components/ui/icons";
+import type { LiveBannerKind } from "@/lib/ui/live-status";
 import type { ConnectionState } from "./types";
 
 export interface LiveBannersProps {
+  /** From `liveStatus()`: most urgent first. Only the first is shown in full. */
+  banners: LiveBannerKind[];
   connection: ConnectionState;
-  /** Google token revoked: transcription goes on, the Doc waits for a new login. */
-  docPaused?: boolean;
-  /** Minutes since the notes were last written, when over the 3-minute threshold. */
-  staleMinutes?: number | null;
   /** Minutes left before the 4 h automatic stop, from 3 h 45 on. */
   minutesLeft?: number | null;
   onReLogin?: () => void;
+  onRetry?: () => void;
 }
 
 /**
- * The meeting's health, most serious first. Each is one short sentence about what is
- * happening and what (if anything) to do. Nothing shows when all is well.
+ * One banner at a time, the most urgent. Red only when the user must act (stopped, Doc paused,
+ * time running out); things that fix themselves are ink. Anything else waits behind "+N till".
  */
-export function LiveBanners({ connection, docPaused, staleMinutes, minutesLeft, onReLogin }: LiveBannersProps) {
-  const items = [];
-  if (docPaused) {
-    items.push(
-      <Banner
-        key="doc"
-        tone="danger"
-        icon={<IconDoc />}
-        title="Dokumentet pausat — logga in igen"
-        action={
-          onReLogin && (
-            <Button variant="primary" size="sm" onClick={onReLogin}>
-              Logga in igen
-            </Button>
-          )
-        }
-      >
-        Google tog tillbaka behörigheten. Transkriptionen fortsätter, och allt skrivs in i dokumentet när du loggat in.
-      </Banner>,
-    );
-  }
-  if (connection !== "ok") {
-    items.push(
-      <Banner key="conn" tone="warning" icon={<IconWifiOff />} title="Ansluter igen…">
-        {connection === "offline"
-          ? "Ingen internetanslutning. Ljudet sparas på datorn i upp till en minut och skickas när nätet är tillbaka."
-          : "Anslutningen bröts. Ljudet sparas under tiden och skickas så fort vi är tillbaka."}
-      </Banner>,
-    );
-  }
-  if (minutesLeft != null) {
-    items.push(
-      <Banner key="time" tone="warning" icon={<IconClock />} title={`Mötet avslutas automatiskt om ${minutesLeft} min`}>
-        Ett möte kan vara högst 4 timmar. Behöver ni mer tid, avsluta och starta ett nytt möte.
-      </Banner>,
-    );
-  }
-  if (staleMinutes != null && !docPaused) {
-    items.push(
-      <Banner key="stale" tone="neutral" icon={<IconClock />} title={`Anteckningarna har inte uppdaterats på ${staleMinutes} min`}>
-        Transkriptionen fungerar. Vi försöker igen automatiskt, du behöver inte göra något.
-      </Banner>,
-    );
-  }
-  if (items.length === 0) return null;
-  return <div className="live-banners">{items}</div>;
+export function LiveBanners({ banners, connection, minutesLeft, onReLogin, onRetry }: LiveBannersProps) {
+  if (banners.length === 0) return null;
+  const connected = connection === "ok";
+
+  const render = (kind: LiveBannerKind) => {
+    switch (kind) {
+      case "error":
+        return (
+          <Banner
+            key="error"
+            tone="danger"
+            className="banner--loud"
+            title="Transkriptionen har stannat"
+            action={
+              onRetry && (
+                <Button variant="primary" icon={<IconRefresh size={18} />} onClick={onRetry}>
+                  Försök igen
+                </Button>
+              )
+            }
+          >
+            Vi fick ingen kontakt med transkriberingen efter tre försök. Inget ljud skickas just nu. Det som redan sagts finns
+            kvar i dokumentet.
+          </Banner>
+        );
+      case "doc":
+        return (
+          <Banner
+            key="doc"
+            tone="danger"
+            icon={<IconDoc />}
+            title="Dokumentet pausat — logga in igen"
+            action={
+              onReLogin && (
+                <Button variant="primary" onClick={onReLogin}>
+                  Logga in igen
+                </Button>
+              )
+            }
+          >
+            {connected
+              ? "Google tog tillbaka behörigheten. Transkriptionen fortsätter, och allt skrivs in i dokumentet när du loggat in."
+              : "Google tog tillbaka behörigheten. Allt skrivs in i dokumentet när du loggat in."}
+          </Banner>
+        );
+      case "time":
+        return (
+          <Banner key="time" tone="danger" icon={<IconClock />} title={`Mötet avslutas automatiskt om ${minutesLeft} min`}>
+            Ett möte kan vara högst 4 timmar. Behöver ni mer tid, avsluta och starta ett nytt möte.
+          </Banner>
+        );
+      case "connection":
+        return (
+          <Banner key="conn" tone="warning" icon={<IconWifiOff />} title="Ansluter igen…">
+            {connection === "offline"
+              ? "Ingen internetanslutning. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när nätet är tillbaka. Inget sparas på datorn."
+              : "Anslutningen bröts. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när vi är tillbaka. Du behöver inte göra något."}
+          </Banner>
+        );
+    }
+  };
+
+  const [first, ...rest] = banners;
+  return (
+    <div className="live-banners">
+      {render(first)}
+      {rest.length > 0 && (
+        <details className="live-banners__more">
+          <summary>+{rest.length} till</summary>
+          <div className="live-banners__rest">{rest.map(render)}</div>
+        </details>
+      )}
+    </div>
+  );
 }

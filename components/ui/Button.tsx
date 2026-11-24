@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
 import { cx } from "./cx";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-quiet";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-quiet" | "danger-ghost";
 export type ButtonSize = "sm" | "md" | "lg";
 
 interface Common {

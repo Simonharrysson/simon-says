@@ -55,3 +55,25 @@ export function tailText(text: string, max = 160): string {
   const space = tail.indexOf(" ");
   return `…${space > 0 && space < 30 ? tail.slice(space + 1) : tail}`;
 }
+
+/** "nyss", "för 1 min sedan", "för 12 min sedan" — how long ago the notes were written. */
+export function formatAgo(minutes: number): string {
+  const m = Math.max(0, Math.floor(minutes));
+  return m === 0 ? "nyss" : `för ${m} min sedan`;
+}
+
+/** "tis 24 nov · 19:00", with the year only when it isn't `now`'s year. For meeting lists. */
+export function formatMeetingDate(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso);
+  const year = (d: Date) => d.toLocaleDateString("sv-SE", { timeZone: TZ, year: "numeric" });
+  const sameYear = year(date) === year(now);
+  const day = date
+    .toLocaleDateString("sv-SE", { timeZone: TZ, weekday: "short", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) })
+    .replace(/\./g, "");
+  return `${day} · ${formatClock(iso)}`;
+}
+
+/** Big counts with a narrow no-break space as thousands separator: "1 284". */
+export function formatCount(n: number): string {
+  return new Intl.NumberFormat("sv-SE").format(n).replace(/[\s  ]/g, " ");
+}

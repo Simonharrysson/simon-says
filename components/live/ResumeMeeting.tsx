@@ -1,6 +1,10 @@
+"use client";
+
+import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
-import { IconPlay } from "@/components/ui/icons";
+import { IconPlay, IconStop } from "@/components/ui/icons";
 import { formatClock } from "@/lib/format";
+import { LiveDialog, stopCopy } from "./LiveDialog";
 
 /** Shown when the page finds an unfinished meeting (live, or abandoned < 2 h ago). */
 export function ResumeMeeting({
@@ -16,10 +20,11 @@ export function ResumeMeeting({
   onEnd?: () => void;
   resuming?: boolean;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
   return (
     <section className="resume" aria-labelledby="resume-title">
-      <span className="magnet resume__magnet" aria-hidden="true" />
-      <div className="stack" style={{ ["--stack-gap" as string]: "0.5rem" }}>
+      <span className="magnet magnet--ink resume__magnet" aria-hidden="true" />
+      <div className="stack stack--2">
         <h1 id="resume-title" className="consent__title">
           Mötet är inte avslutat
         </h1>
@@ -33,11 +38,24 @@ export function ResumeMeeting({
           Fortsätt mötet
         </Button>
         {onEnd && (
-          <Button variant="ghost" size="lg" onClick={onEnd} disabled={resuming}>
-            Avsluta det i stället
+          <Button variant="ghost" size="lg" onClick={() => dialog.current?.showModal()} disabled={resuming}>
+            Avsluta mötet
           </Button>
         )}
       </div>
+      {onEnd && (
+        <LiveDialog
+          ref={dialog}
+          id="resume-stop"
+          title="Avsluta mötet?"
+          stayLabel="Avbryt"
+          confirmLabel="Avsluta mötet"
+          confirmIcon={<IconStop size={16} />}
+          onConfirm={onEnd}
+        >
+          {stopCopy}
+        </LiveDialog>
+      )}
     </section>
   );
 }

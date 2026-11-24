@@ -23,9 +23,13 @@ const startErrors: Record<Exclude<StartError, null>, { title: string; text: stri
   },
 };
 
+/** Input level above this counts as "we hear you". */
+const HEARD = 0.08;
+
 /**
  * Before Start. The runner confirms everyone in the room knows the meeting is transcribed
- * (logged per meeting); Start stays disabled until then.
+ * (logged per meeting); Start stays disabled until then. An optional mic check shows a level
+ * meter, so a dead mic is found before Start, not in front of everyone.
  */
 export function ConsentStep({
   orgName,
@@ -33,6 +37,8 @@ export function ConsentStep({
   onStart,
   starting,
   error,
+  micLevel,
+  onMicCheck,
 }: {
   orgName: string;
   /** Whether the transcript gets its own tab in the Doc (org setting). */
@@ -40,10 +46,17 @@ export function ConsentStep({
   onStart: () => void;
   starting?: boolean;
   error?: StartError;
+  /** Mic input level 0–1 while the check runs; null/undefined before it has started. */
+  micLevel?: number | null;
+  /** Ask for the mic and start reporting `micLevel`. Without it, no mic check is shown. */
+  onMicCheck?: () => void;
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
   const problem = error ? startErrors[error] : null;
+  const testing = micLevel != null;
+  const heard = testing && micLevel >= HEARD;
+  const bars = testing ? Math.min(5, Math.ceil(micLevel * 5)) : 0;
   return (
     <section className="consent" aria-labelledby={`${id}-title`}>
       <div className="consent__head">
@@ -59,8 +72,28 @@ export function ConsentStep({
           Anteckningarna skrivs i ett nytt Google-dokument i din Drive och delas med föreningens medlemmar
           {shareTranscript ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
         </li>
-        <li>Paus stoppar ljudet direkt. Ingen ljudinspelning sparas.</li>
+        <li>Paus stoppar ljudet direkt.</li>
       </ul>
+
+      {(onMicCheck || testing) && (
+        <div className="miccheck" aria-live="polite">
+          <span className="miccheck__label">Mikrofon</span>
+          {testing ? (
+            <>
+              <span className="miccheck__meter" role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={bars} aria-label="Ljudnivå">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <span key={n} className={`miccheck__bar${n <= bars ? " is-on" : ""}`} />
+                ))}
+              </span>
+              <span className={`miccheck__state${heard ? " is-heard" : ""}`}>{heard ? "Hör dig" : "Hör inget än. Säg något."}</span>
+            </>
+          ) : (
+            <Button icon={<IconMic size={18} />} onClick={onMicCheck}>
+              Testa mikrofonen
+            </Button>
+          )}
+        </div>
+      )}
 
       {problem && (
         <Banner tone="danger" icon={error?.startsWith("mic") ? <IconMicOff /> : undefined} title={problem.title}>

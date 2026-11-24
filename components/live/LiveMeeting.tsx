@@ -1,12 +1,12 @@
 "use client";
 
-import { Badge } from "@/components/ui/Badge";
-import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/Button";
-import { IconRefresh } from "@/components/ui/icons";
+import { useRef } from "react";
+import { IconArrowLeft, IconPause } from "@/components/ui/icons";
+import { liveStatus, type LiveStatus } from "@/lib/ui/live-status";
 import { ConsentStep, type StartError } from "./ConsentStep";
 import { DocLink } from "./DocLink";
 import { LiveBanners } from "./LiveBanners";
+import { LiveDialog } from "./LiveDialog";
 import { MeetingControls } from "./MeetingControls";
 import { MeetingEnded } from "./MeetingEnded";
 import { MeetingTimer } from "./MeetingTimer";
@@ -19,6 +19,7 @@ import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, 
 export interface LiveMeetingProps {
   phase: LivePhase;
   orgName: string;
+  /** Where "← Tillbaka" leads: the förening's page. */
   orgHref: string;
   /** Doc title, e.g. "Styrelsemöte, 24 nov". */
   title: string;
@@ -28,6 +29,8 @@ export interface LiveMeetingProps {
   elapsedMs: number;
   docUrl: string | null;
   lastUpdatedAt?: string | null;
+  /** Whole minutes since `lastUpdatedAt` (the caller ticks it): "Uppdaterat för 2 min sedan". */
+  updatedMinutesAgo?: number | null;
   partialText: string;
   partialSpeaker?: string | null;
   connection: ConnectionState;
@@ -38,6 +41,9 @@ export interface LiveMeetingProps {
   people: PersonOption[];
   nameRound: NameRoundEntry[];
   startError?: StartError;
+  /** Consent step mic check: input level 0–1 while it runs (see ConsentStep). */
+  micLevel?: number | null;
+  onMicCheck?: () => void;
   /** A control request is in flight. */
   busy?: boolean;
   autoStopped?: boolean;
@@ -52,22 +58,30 @@ export interface LiveMeetingProps {
   onResumeMeeting: () => void;
   onEndUnfinished?: () => void;
   onRetry: () => void;
+  /** Leave the page (after confirming while running). Defaults to navigating to `orgHref`. */
+  onLeave?: () => void;
 }
 
 /**
  * The whole live page as one presentational component: every phase and warning is a prop.
- * Task 7 owns the state machine (LiveStream, heartbeat, timers) and passes it in.
+ * Task 7 owns the state machine (LiveStream, heartbeat, timers) and passes it in. The page is
+ * full-screen focus mode: no app navigation, only "← Tillbaka".
  */
 export function LiveMeeting(p: LiveMeetingProps) {
+  const leave = p.onLeave ?? (() => window.location.assign(p.orgHref));
+
   if (p.phase === "consent" || p.phase === "starting") {
     return (
       <div className="live live--centered">
+        <BackLink href={p.orgHref} label={`Tillbaka till ${p.orgName}`} />
         <ConsentStep
           orgName={p.orgName}
           shareTranscript={p.shareTranscript}
           onStart={p.onStart}
           starting={p.phase === "starting"}
           error={p.startError}
+          micLevel={p.micLevel}
+          onMicCheck={p.onMicCheck}
         />
         <PrivacyNote />
       </div>
@@ -77,6 +91,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
   if (p.phase === "resume") {
     return (
       <div className="live live--centered">
+        <BackLink href={p.orgHref} label={`Tillbaka till ${p.orgName}`} />
         <ResumeMeeting
           startedAt={p.startedAt ?? new Date().toISOString()}
           orgName={p.orgName}
@@ -96,74 +111,113 @@ export function LiveMeeting(p: LiveMeetingProps) {
     );
   }
 
-  const paused = p.phase === "paused";
-  const ending = p.phase === "ending";
-  const status = ending ? "ending" : paused ? "paused" : "live";
+  const status = liveStatus(p);
+  const ending = status.kind === "ending";
+  const nameRound = p.phase === "name-round";
 
   return (
-    <div className="live">
-      <header className="livebar">
+    <div className={`live live--${status.kind}`}>
+      <BackLink href={p.orgHref} label="Tillbaka" confirm={!ending} onLeave={leave} />
+      <header className={`livebar livebar--${status.kind}`}>
         <div className="livebar__who">
-          {paused ? (
-            <Badge>Pausat</Badge>
-          ) : ending ? (
-            <Badge>Avslutar</Badge>
-          ) : p.phase === "error" ? (
-            <Badge>Stannat</Badge>
-          ) : (
-            <Badge tone="live">Transkriberar</Badge>
-          )}
+          <StatusHeadline status={status} />
           <div className="livebar__titles">
             <h1 className="livebar__title">{p.title}</h1>
             <span className="subtle">{p.orgName}</span>
           </div>
         </div>
-        <MeetingTimer elapsedMs={p.elapsedMs} paused={paused || p.phase === "error"} />
-        <MeetingControls status={status} onPause={p.onPause} onResume={p.onResume} onStop={p.onStop} busy={p.busy} />
+        <MeetingTimer elapsedMs={p.elapsedMs} paused={status.kind !== "live"} size="md" />
+        <MeetingControls
+          status={ending ? "ending" : p.phase === "paused" ? "paused" : "live"}
+          canPause={status.canPause}
+          onPause={p.onPause}
+          onResume={p.onResume}
+          onStop={p.onStop}
+          busy={p.busy}
+        />
       </header>
 
-      {p.phase === "error" && (
-        <Banner
-          tone="danger"
-          title="Transkriptionen har stannat"
-          action={
-            <Button variant="primary" size="sm" icon={<IconRefresh size={16} />} onClick={p.onRetry}>
-              Försök igen
-            </Button>
-          }
-        >
-          Vi fick ingen kontakt med transkriberingen efter tre försök. Det som redan sagts finns kvar i dokumentet.
-        </Banner>
-      )}
-
       <LiveBanners
+        banners={status.banners}
         connection={p.connection}
-        docPaused={p.docPaused}
-        staleMinutes={p.staleMinutes}
         minutesLeft={p.minutesLeft}
         onReLogin={p.onReLogin}
+        onRetry={p.onRetry}
       />
 
-      {ending && (
+      {ending ? (
         <MeetingEnded docUrl={p.docUrl} durationSeconds={p.elapsedMs / 1000} orgHref={p.orgHref} finalizing autoStopped={p.autoStopped} />
-      )}
-
-      {!ending && (
-        <div className="live__grid">
+      ) : (
+        <div className={`live__grid${nameRound ? " live__grid--single" : ""}`}>
           <div className="live__main">
-            {p.phase === "name-round" && (
-              <NameRound entries={p.nameRound} onDone={p.onNameRoundDone} onSkip={p.onNameRoundSkip} />
-            )}
-            <PartialStrip text={p.partialText} speaker={p.partialSpeaker} paused={paused} listening={p.phase !== "error"} />
-            <DocLink url={p.docUrl} title={p.title} lastUpdatedAt={p.lastUpdatedAt} />
+            {nameRound && <NameRound entries={p.nameRound} onDone={p.onNameRoundDone} onSkip={p.onNameRoundSkip} />}
+            <DocLink
+              url={p.docUrl}
+              title={p.title}
+              lastUpdatedAt={p.lastUpdatedAt}
+              updatedMinutesAgo={p.updatedMinutesAgo}
+              health={status.doc}
+            />
+            <PartialStrip text={p.partialText} speaker={p.partialSpeaker} mode={status.partial} />
           </div>
-          <aside className="live__aside">
-            <SpeakerList speakers={p.speakers} people={p.people} onAssign={p.onAssignSpeaker} />
-          </aside>
+          {!nameRound && (
+            <aside className="live__aside">
+              <SpeakerList speakers={p.speakers} people={p.people} onAssign={p.onAssignSpeaker} />
+            </aside>
+          )}
         </div>
       )}
       <PrivacyNote />
     </div>
+  );
+}
+
+/** The header's headline: is it recording? Readable from across the table. */
+function StatusHeadline({ status }: { status: LiveStatus }) {
+  return (
+    <p className={`status-line status-line--${status.tone}`} role="status">
+      {status.tone === "paused" ? (
+        <IconPause size={20} className="status-line__icon" aria-hidden="true" />
+      ) : (
+        <span className="magnet status-line__magnet" aria-hidden="true" />
+      )}
+      <span className="status-line__label">{status.label}</span>
+      {status.detail && <span className="status-line__detail">— {status.detail}</span>}
+    </p>
+  );
+}
+
+/** "← Tillbaka". While the meeting runs it asks first, since leaving stops the listening. */
+function BackLink({ href, label, confirm, onLeave }: { href: string; label: string; confirm?: boolean; onLeave?: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  return (
+    <>
+      <a
+        className="live__back"
+        href={href}
+        onClick={(event) => {
+          if (!confirm) return;
+          event.preventDefault();
+          dialog.current?.showModal();
+        }}
+      >
+        <IconArrowLeft size={18} aria-hidden="true" />
+        {label}
+      </a>
+      {confirm && (
+        <LiveDialog
+          ref={dialog}
+          id="leave"
+          title="Mötet pågår — lämna sidan?"
+          stayLabel="Stanna kvar"
+          confirmLabel="Lämna sidan"
+          confirmVariant="secondary"
+          onConfirm={() => onLeave?.()}
+        >
+          Lämnar du sidan slutar laptopen lyssna, men mötet avslutas inte. Du kan fortsätta det från föreningens sida.
+        </LiveDialog>
+      )}
+    </>
   );
 }
 

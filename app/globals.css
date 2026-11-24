@@ -384,6 +384,9 @@ select {
 .magnet--rail {
   --magnet: var(--rail);
 }
+.magnet--red {
+  --magnet: var(--red);
+}
 
 /* ---------- Footer ---------- */
 
@@ -498,6 +501,19 @@ select {
 
 .btn--danger-quiet:hover {
   background: var(--red-wash);
+}
+
+/* Rare destructive actions in lists (trash icons): quiet ink at rest, red only on hover/focus. */
+.btn--danger-ghost {
+  --btn-bg: transparent;
+  --btn-border: transparent;
+  --btn-fg: var(--ink-3);
+}
+
+.btn--danger-ghost:hover,
+.btn--danger-ghost:focus-visible {
+  background: var(--red-wash);
+  color: var(--red);
 }
 
 .btn--sm {
@@ -784,10 +800,16 @@ select {
   --tone-wash: var(--green-wash);
 }
 
-.banner--warning,
+/* Red only when the user must act. Warnings fix themselves: ink, with an aluminium edge. */
 .banner--danger {
   --tone: var(--red);
   --tone-wash: var(--red-wash);
+}
+
+.banner--warning {
+  --tone: var(--ink);
+  --tone-wash: var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--rail);
 }
 
 .banner--neutral {
@@ -833,6 +855,12 @@ select {
 
 .badge--live .magnet {
   animation: live-pulse 2.4s var(--ease-out) infinite;
+}
+
+/* Static red: needs you (not live). */
+.badge--alert {
+  background: var(--red-wash);
+  color: var(--red);
 }
 
 .badge--success {

@@ -24,7 +24,7 @@ export function MeetingTimer({
         {formatElapsed(elapsedMs)}
       </span>
       <span className="timer__rail" aria-hidden="true">
-        <span className="timer__fill" style={{ width: `${share * 100}%` }} />
+        <span className="timer__fill" style={{ transform: `scaleX(${share})` }} />
       </span>
     </div>
   );

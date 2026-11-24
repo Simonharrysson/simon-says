@@ -70,6 +70,7 @@ const liveBase: LiveMeetingProps = {
   elapsedMs: 42 * 60_000 + 10_000,
   docUrl: "https://docs.google.com/document/d/exempel/edit",
   lastUpdatedAt: ago(1),
+  updatedMinutesAgo: 1,
   partialText: "och om vi tar femtio kronor i inträde så täcker det pizzan och lite till, men då måste vi fråga kåren först",
   partialSpeaker: "Erik Lund",
   connection: "ok",
@@ -116,6 +117,21 @@ function InteractiveLive(props: LiveMeetingProps) {
           ),
         )
       }
+    />
+  );
+}
+
+/** Consent step with a mic check that "hears" something a moment after it is started. */
+function MicCheckDemo() {
+  const [level, setLevel] = useState<number | null>(null);
+  return (
+    <LiveDemo
+      phase="consent"
+      micLevel={level}
+      onMicCheck={() => {
+        setLevel(0);
+        setTimeout(() => setLevel(0.62), 900);
+      }}
     />
   );
 }
@@ -271,7 +287,7 @@ const render: Record<string, () => ReactNode> = {
       />
     </PublicChrome>
   ),
-  "live-consent": () => <LiveDemo phase="consent" />,
+  "live-consent": () => <MicCheckDemo />,
   "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (
@@ -290,8 +306,11 @@ const render: Record<string, () => ReactNode> = {
     />
   ),
   live: () => <LiveDemo />,
-  "live-reconnecting": () => <LiveDemo connection="reconnecting" staleMinutes={4} lastUpdatedAt={ago(4)} />,
-  "live-doc-paused": () => <LiveDemo docPaused lastUpdatedAt={ago(6)} />,
+  "live-reconnecting": () => <LiveDemo connection="reconnecting" staleMinutes={4} lastUpdatedAt={ago(4)} updatedMinutesAgo={4} />,
+  "live-doc-paused": () => <LiveDemo docPaused lastUpdatedAt={ago(6)} updatedMinutesAgo={6} />,
+  "live-many-warnings": () => (
+    <LiveDemo docPaused connection="offline" staleMinutes={5} minutesLeft={12} elapsedMs={(3 * 60 + 48) * 60_000} lastUpdatedAt={ago(5)} />
+  ),
   "live-time-warning": () => <LiveDemo elapsedMs={(3 * 60 + 46) * 60_000} minutesLeft={14} />,
   "live-paused": () => <LiveDemo phase="paused" />,
   "live-error": () => <LiveDemo phase="error" connection="offline" />,

@@ -13,6 +13,7 @@ export interface NameRoundEntry {
 /**
  * Right after Start: everyone says "Jag heter …" in turn. Names pop in as they're heard;
  * "Klar" ends the round (or "Hoppa över" for a meeting where everyone is already known).
+ * While it runs, this is the only list of names on the page (the speaker list waits).
  */
 export function NameRound({
   entries,
@@ -48,6 +49,9 @@ export function NameRound({
           </li>
         ))}
       </ol>
+      {heard.some((e) => e.needsConfirm) && (
+        <p className="subtle">Namn med frågetecken kan du rätta i talarlistan när rundan är klar.</p>
+      )}
       <div className="cluster">
         <Button variant="primary" icon={<IconCheck />} onClick={onDone} disabled={heard.length === 0}>
           Klar, alla har sagt sitt namn

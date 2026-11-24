@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { cx } from "./cx";
 
-export type BadgeTone = "neutral" | "live" | "success" | "info";
+export type BadgeTone = "neutral" | "live" | "alert" | "success" | "info";
 
 const magnet: Record<BadgeTone, string> = {
   neutral: "magnet magnet--rail",
   live: "magnet",
+  alert: "magnet magnet--red",
   success: "magnet magnet--green",
   info: "magnet magnet--blue",
 };
