@@ -186,6 +186,11 @@ function readCurrent(tab: NotesTab, rows: NoteItemRow[]) {
 const snapshots = new Map<string, NotesTab>();
 const snapshotKey = (docId: string, tabId: string, revisionId: string) => `${docId}\u0000${tabId}\u0000${revisionId}`;
 
+/** documents.get of the notes tab (suggestions inline), remembered so renderItems at that revision needs no second read. */
+export async function readNotesTab(auth: OAuth2Client, docId: string, tabId: string): Promise<NotesTab> {
+  return fetchTab(auth, docId, tabId);
+}
+
 async function fetchTab(auth: OAuth2Client, docId: string, tabId: string): Promise<NotesTab> {
   // Suggestions inline, so a human's pending suggestion is visible (and locks the item).
   const doc = (

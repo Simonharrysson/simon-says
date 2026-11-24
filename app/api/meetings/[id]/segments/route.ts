@@ -1,9 +1,12 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
+import { maybeTick } from "@/lib/meetings/tick";
 import { IngestError, ingestSegments } from "@/lib/segments/ingest";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+// A notes tick (Claude + Docs) may run after the response, in after().
+export const maxDuration = 300;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status, headers: noStore });
@@ -35,7 +38,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const result = await ingestSegments(meeting.id, body.segments, body.merges);
-    // Task 10: after(() => maybeTick(meeting.id)) goes here.
+    // Due notes tick after the response; maybeTick never throws.
+    after(() => maybeTick(meeting.id));
     return NextResponse.json(result, { headers: noStore });
   } catch (e) {
     if (e instanceof IngestError) return fail(e.code, e.status);

@@ -8,6 +8,16 @@ import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 
 const current = vi.hoisted(() => ({ db: null as SupabaseClient | null }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current.db }));
+// after() needs a Next request scope; record the scheduled tasks instead (the tick is tested in tests/meetings).
+const scheduled = vi.hoisted(() => [] as (() => unknown)[]);
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (task: () => unknown) => {
+    scheduled.push(task);
+  },
+}));
+const ticked = vi.hoisted(() => [] as string[]);
+vi.mock("@/lib/meetings/tick", () => ({ maybeTick: async (id: string) => void ticked.push(id) }));
 
 type EnvOverride = { KILL_SWITCH?: boolean; GLOBAL_DAILY_HOURS?: number; GLOBAL_DAILY_USD?: number };
 const envOverride = vi.hoisted(() => ({}) as EnvOverride);
@@ -305,9 +315,14 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
       as(starter);
       expect((await call(postSegments, "nope", { segments: [] })).status).toBe(404);
       expect((await call(postSegments, m, "x")).status).toBe(400);
+      scheduled.length = 0;
       const res = await call(postSegments, m, { segments: [run(s, 0)] });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ stored: 1, received: 1 });
+      // A notes tick is scheduled after the response.
+      expect(scheduled).toHaveLength(1);
+      await scheduled[0]();
+      expect(ticked).toContain(m);
     });
 
     it("segments: maps ingest errors to status codes", async () => {

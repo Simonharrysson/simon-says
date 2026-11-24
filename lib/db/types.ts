@@ -13,7 +13,10 @@ export type MeetingEventKind =
   | "reconnect"
   | "consent"
   | "alarm"
-  | "started";
+  | "started"
+  | "ended"
+  | "abandoned"
+  | "resumed";
 
 export interface OrgRow {
   id: string;
@@ -61,6 +64,10 @@ export interface MeetingRow {
   tick_lease_until: string | null;
   doc_paused_at: string | null;
   current_el_session_id: string | null;
+  /** The notes id counter (`n<k>`) for the next new item (migration 0010, Ruling 19). */
+  notes_next_id?: string | null;
+  /** Highest transcript tick_no already sent to Claude (migration 0010). */
+  notes_sent_tick?: number;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */
