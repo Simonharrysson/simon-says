@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v1]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz -C /usr/local/bin gitleaks
+          gitleaks git --config .gitleaks.toml --redact --verbose .
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.65.5
+
+      # Local stack only. Migrations reach simonsays-prod through Supabase's GitHub
+      # integration on push to main; CI never runs `supabase db push`.
+      - name: supabase start
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      - name: supabase db reset
+        run: supabase db reset
+
+      - run: npx tsc --noEmit
+
+      - run: npx vitest run

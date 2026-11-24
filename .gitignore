@@ -8,3 +8,8 @@ node_modules/
 *.jsonl
 !fixtures/**/*.wav
 !fixtures/**/*.jsonl
+.vercel/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.vercel

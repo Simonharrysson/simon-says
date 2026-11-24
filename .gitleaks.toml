@@ -1,0 +1,13 @@
+# gitleaks config: default ruleset plus project allowlist.
+# Runs in CI over the full git history (fetch-depth: 0).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-secret files"
+paths = [
+  '''(^|/)package-lock\.json$''',
+  '''^\.env\.example$''',
+  # Supabase local-dev demo keys are public, fixed values documented by Supabase.
+  '''^supabase/config\.toml$''',
+]
