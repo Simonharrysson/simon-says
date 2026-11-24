@@ -285,7 +285,11 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
     });
     // merged labels count as runs: 2 runs stored, so 119 labels would exceed 120
     const many = Array.from({ length: 119 }, (_, i) => `L${i}`);
-    await expect(ingestSegments(m, [], [{ elSessionId: s, from: many, into: "B" }])).rejects.toMatchObject({
+    await expect(ingestSegments(m, [], [
+      { elSessionId: s, from: many.slice(0, 50), into: "B" },
+      { elSessionId: s, from: many.slice(50, 100), into: "B" },
+      { elSessionId: s, from: many.slice(100), into: "B" },
+    ])).rejects.toMatchObject({
       code: "rate_limited",
     });
   });
