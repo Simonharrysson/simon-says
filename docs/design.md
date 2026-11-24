@@ -28,8 +28,11 @@ himself ("it's fun"), GDPR handled lightly for now, a single visible queue.
 2. Replay + tuning harness (AMI Meeting Corpus first, then the orgs' own
    recordings paired with the minutes their secretaries write). Later spec.
 3. Public showcase: README, live queue page. Small; after 1 works.
-4. Jetson Orin Nano 8 GB worker (post-meeting high-quality pass; Nano photo
-   added to the showcase). Last. This design only leaves the slot.
+4. **Everything on the Jetson** (long-term goal, Simon 2026-11-24): the whole
+   pipeline — transcription, speakers, voices and the notes LLM — runs on the
+   Jetson Orin Nano 8 GB, with jobs queued; a cloud **turbo mode** stays for
+   when notes are needed instantly. Last. Nano photo added to the showcase.
+   See "Long-term: everything on the Jetson" below. This design only leaves the slot.
 
 **Step 0, before building 1:** a throwaway spike. Record one real table meeting
 on one laptop mic, run it through ElevenLabs `scribe_v3_live` (diarize +
@@ -257,13 +260,32 @@ but he wants the CUDA/edge learning ("i want the fiddle"). Implication for
 project 4: transcription and diarization run one after the other on 8 GB.
 
 **Quality rule (Simon worried transcription and LLM quality might drop):**
-- Notes stay on Claude in the cloud. No local LLM on the Nano — 8 GB-class
-  models are clearly worse at structured notes, the core feature.
-- Live transcription stays on ElevenLabs. The Nano does the post-meeting pass
-  (KB-Whisper / Whisper large-v3-turbo + pyannote) and later voiceprints.
-- The Nano takes over a job only when project 2's harness shows it is at least
-  as good as ElevenLabs on the orgs' own meetings (WER + speaker errors).
-  Until then it runs in shadow mode as a test bench; users never see worse output.
+- In v1–v1.x notes are written by Claude in the cloud, and live transcription
+  by ElevenLabs.
+- Each stage (transcription, speakers, voices, notes) moves to the Nano only
+  when project 2's harness shows it is at least as good as the cloud on the
+  orgs' own meetings (WER + speaker errors for audio; recall of decisions and
+  actions, churn and readability for notes). Until then it runs in shadow mode
+  as a test bench; users never see worse output.
+
+### Long-term: everything on the Jetson (Simon, 2026-11-24)
+
+Mark 1 (Pocket AI) ran entirely in the cloud. Simon's challenge for Simon Says
+is to run **all of it on the Jetson**. Speed is not a goal — jobs are queued —
+except for a **turbo mode** (cloud: ElevenLabs + Claude) when notes are needed
+instantly. Approach (estimates, to be measured in project 4):
+
+| Stage | On the Jetson | Expectation |
+|---|---|---|
+| Transcription | KB-Whisper / Whisper large-v3-turbo | Feasible |
+| Speakers, voiceprints | pyannote, run after transcription | Feasible on 8 GB, sequentially |
+| Live notes (every ~45 s) | Small open model (e.g. Qwen3 4B–8B, 4-bit) fully in memory | Speed OK; quality for Swedish/English notes is the open question |
+| Final notes after the meeting | Larger model run **layer by layer**, weights streamed from NVMe per layer (AirLLM-style), or an **MoE** model (e.g. Qwen3-30B-A3B) loading only active experts | Prefill of the whole transcript batches well; decoding reads the weights once per token (~6 s/token for a dense ~18 GB model at ~3 GB/s → ~1 h per meeting). MoE is expected to be far faster and is the first thing to try |
+
+Consequences: layer streaming can't serve live notes (only the post-meeting
+pass); NVMe read speed matters → buy a fast SSD. Project 2's harness is the
+referee between Claude and the open models. Model choice, quantisation and
+streaming are Simon's calls, measured teach-style.
 - Project 4 is run teach-style: Simon makes the calls and does the measuring
   (memory budget, INT8 vs FP16, tegrastats, cost per hour); Claude writes the code.
 
