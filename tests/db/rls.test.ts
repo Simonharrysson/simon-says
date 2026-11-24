@@ -278,9 +278,11 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
       const r = await createOrg(user.db, "Usd");
       if (!r.ok) throw new Error("org");
       const today = new Date().toISOString().slice(0, 10);
-      const { error } = await adminClient().from("usage_daily").insert({ org_id: r.id, day: today, usd: 1.25 });
+      const { error } = await adminClient().from("usage_daily").insert({ org_id: r.id, day: today, usd: 1000.25 });
       expect(error).toBeNull();
-      expect(await dayUsd()).toBeCloseTo(before + 1.25, 6);
+      // Other test files book small usd amounts in parallel, so seed a large
+      // amount and allow < 1 of drift.
+      expect(Math.abs((await dayUsd()) - before - 1000.25)).toBeLessThan(1);
     });
 
     it("dayUsd and the deleted org's usage: still counted after the org is deleted", async () => {
@@ -291,13 +293,13 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
       const today = new Date().toISOString().slice(0, 10);
       const { error } = await adminClient()
         .from("usage_daily")
-        .insert({ org_id: r.id, day: today, seconds: 600, usd: 2.5 });
+        .insert({ org_id: r.id, day: today, seconds: 600, usd: 1000.5 });
       expect(error).toBeNull();
       const before = await dayUsd();
       expect(await deleteOrg(user.db, r.id, "Borta")).toBe("deleted");
-      expect(await dayUsd()).toBeCloseTo(before, 6);
+      expect(Math.abs((await dayUsd()) - before)).toBeLessThan(1);
       const { data } = await adminClient().from("usage_daily").select("seconds, usd").eq("org_id", r.id);
-      expect(data).toEqual([{ seconds: 600, usd: 2.5 }]);
+      expect(data).toEqual([{ seconds: 600, usd: 1000.5 }]);
     });
 
     it("memberEmails lists the org's members", async () => {
