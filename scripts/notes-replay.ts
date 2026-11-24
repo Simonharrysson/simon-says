@@ -24,7 +24,7 @@ import { basename, join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { formatItem } from "@/lib/docs/notes";
-import { churn, updateNotes, type NotesClient } from "@/lib/notes/engine";
+import { churn, churnStrict, updateNotes, type NotesClient } from "@/lib/notes/engine";
 import type { NotesItem, NotesOp, NotesSection } from "@/lib/notes/schema";
 
 interface Line {
@@ -144,6 +144,8 @@ async function main() {
   };
 
   let items: NotesItem[] = [];
+  let nextId: string | undefined;
+  const strictChurns: number[] = [];
   const log: unknown[] = [];
   const churns: number[] = [];
   let totalUsd = 0;
@@ -166,28 +168,33 @@ async function main() {
         locked: [],
         deletedIds: [],
         final: step.final,
+        nextId,
       },
       { client },
     );
     const ms = Date.now() - t0;
     items = out.items;
+    nextId = out.nextId;
     const u = out.usage;
     const prompt = u.input + u.cacheRead + u.cacheWrite;
     const hit = prompt ? u.cacheRead / prompt : 0;
-    const eligible = prev.filter((i) => i.section !== "now").length;
+    const eligible = prev.length;
     const c = churn(prev, items, []);
+    const strictEligible = prev.filter((i) => i.section !== "now").length;
+    const cs = churnStrict(prev, items, []);
     if (!step.final && eligible > 0) churns.push(c);
+    if (!step.final && strictEligible > 0) strictChurns.push(cs);
     totalUsd += u.usd;
     const thinking = last?.usage.output_tokens_details?.thinking_tokens ?? null;
     console.log(
       `\n── tick ${step.n}${step.final ? " (FINAL)" : ""} @ ${mmss(Math.min(step.n, tickCount) * tickMs)}  ` +
         `in=${u.input} cacheRead=${u.cacheRead} cacheWrite=${u.cacheWrite} out=${u.output} (thinking ${thinking ?? "?"})  ` +
-        `hit=${(hit * 100).toFixed(0)}%  $${u.usd.toFixed(4)}  churn=${eligible ? `${(c * 100).toFixed(0)}% of ${eligible}` : "–"}  ` +
+        `hit=${(hit * 100).toFixed(0)}%  $${u.usd.toFixed(4)}  churn=${eligible ? `${(c * 100).toFixed(0)}% of ${eligible}` : "–"} strict=${strictEligible ? `${(cs * 100).toFixed(0)}%` : "–"}  ` +
         `${ms} ms  stop=${out.stopReason}${out.dropped ? ` dropped=${out.dropped}` : ""}${last && last.model !== "claude-opus-5-5" ? ` served-by=${last.model}` : ""}`,
     );
     for (const op of out.ops) console.log(`   ${opLine(op)}`);
     if (!out.ops.length) console.log("   (no ops)");
-    log.push({ tick: step.n, final: step.final, ops: out.ops, usage: u, thinking, hit, churn: eligible ? c : null, ms, stop: out.stopReason, dropped: out.dropped, items });
+    log.push({ tick: step.n, final: step.final, ops: out.ops, usage: u, thinking, hit, churn: eligible ? c : null, churnStrict: strictEligible ? cs : null, ms, stop: out.stopReason, dropped: out.dropped, items });
   }
 
   console.log("\n══ final notes\n" + tabText(items));
@@ -197,7 +204,8 @@ async function main() {
   const med = median(churns);
   console.log(`\n══ results`);
   console.log(`cost: $${totalUsd.toFixed(4)} over ${(meetingHours * 60).toFixed(1)} min → $${perHour.toFixed(2)} per meeting-hour`);
-  console.log(`churn per tick: ${churns.map((c) => `${(c * 100).toFixed(0)}%`).join(" ")}  median ${(med * 100).toFixed(1)}%`);
+  console.log(`churn per tick (plan metric, text, 'now' incl.): ${churns.map((c) => `${(c * 100).toFixed(0)}%`).join(" ")}  median ${(med * 100).toFixed(1)}%`);
+  console.log(`strict churn per tick (text/owner/due/removals, 'now' excl.): ${strictChurns.map((c) => `${(c * 100).toFixed(0)}%`).join(" ")}  median ${(median(strictChurns) * 100).toFixed(1)}%`);
   const hits = (log as { hit: number }[]).map((l) => `${(l.hit * 100).toFixed(0)}%`);
   console.log(`cache hit rate per tick: ${hits.join(" ")}`);
   const tick2 = (log as { usage: { cacheRead: number } }[])[1];
@@ -234,7 +242,7 @@ async function main() {
 
   mkdirSync(".notes-replay", { recursive: true });
   const outFile = join(".notes-replay", `${basename(file, ".jsonl")}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  writeFileSync(outFile, JSON.stringify({ file, tickMs, totalUsd, perHour, medianChurn: med, churns, found, total, log }, null, 2));
+  writeFileSync(outFile, JSON.stringify({ file, tickMs, totalUsd, perHour, medianChurn: med, churns, medianStrictChurn: median(strictChurns), strictChurns, found, total, log }, null, 2));
   console.log(`\nlog: ${outFile}`);
 }
 
