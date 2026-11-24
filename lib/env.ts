@@ -59,12 +59,11 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
 
 let cached: Env | undefined;
 
-/** Lazily validated process env, so `next build` and CI don't need secrets. */
+/**
+ * Lazily validated process env (so `next build` and CI don't need secrets).
+ * Always call `getEnv()`; there is deliberately no `env` object export.
+ */
 export function getEnv(): Env {
   cached ??= parseEnv(process.env);
   return cached;
 }
-
-export const env: Env = new Proxy({} as Env, {
-  get: (_, key) => getEnv()[key as keyof Env],
-});

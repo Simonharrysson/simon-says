@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { parseEnv } from "./env";
+import * as envModule from "./env";
+import { getEnv, parseEnv } from "./env";
 
 const valid = {
   SUPABASE_URL: "https://example.supabase.co",
@@ -47,5 +48,20 @@ describe("parseEnv", () => {
     const env = parseEnv({ ...valid, GOOGLE_CLIENT_ID: "", RESEND_API_KEY: "" });
     expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
     expect(env.RESEND_API_KEY).toBeUndefined();
+  });
+});
+
+describe("getEnv", () => {
+  it("validates process.env and returns a plain object (spread/keys/in work)", () => {
+    Object.assign(process.env, valid);
+    const env = getEnv();
+    expect(Object.keys(env)).toContain("CRON_SECRET");
+    expect("APP_URL" in env).toBe(true);
+    expect({ ...env }.GLOBAL_DAILY_HOURS).toBe(30);
+    expect(getEnv()).toBe(env); // cached
+  });
+
+  it("exports no Proxy-based `env` object", () => {
+    expect("env" in envModule).toBe(false);
   });
 });
