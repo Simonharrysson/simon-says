@@ -8,6 +8,8 @@ export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
   const env = getEnv();
   return createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    // No browser Supabase client exists, so JS never needs to read the session cookie.
+    cookieOptions: { httpOnly: true },
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (toSet) => {

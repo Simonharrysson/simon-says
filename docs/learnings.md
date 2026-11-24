@@ -51,8 +51,9 @@ Run with `scripts/check-google.ts` on simon.harrysson@gmail.com (signed in on th
 - **Revision guard under continuous typing** (2 min, a read→write every 10 s, 4 immediate retries):
   12 ticks, 8 first try, 3 after retries, **1 failed after 4 retries** (tick 1, 5 conflicts),
   9 conflicts in total. Simon's text fully intact.
-- **Share** as writer with `sendNotificationEmail=false` to simon@harrysson.co: permission created.
-  Whether any email arrived: **pending** (Simon to check the inbox).
+- **Share** as writer with `sendNotificationEmail=false` to simon@harrysson.co: permission created,
+  **no email arrived** (checked in the inbox), and the Doc showed up in that account's Drive
+  "Shared with me", shared by simon.harrysson@gmail.com.
 
 Changed in later tasks (docs/plan.md updated):
 - **Task 9:** human-edit detection compares the **whole paragraph(s)** containing an item's range with
@@ -61,3 +62,11 @@ Changed in later tasks (docs/plan.md updated):
 - **Task 6:** `appendTranscript` prefixes `\n` when the transcript tab's last paragraph is non-empty.
 - **Task 10 / Global Constraints:** a random 150–600 ms backoff before each read→write retry, rather
   than immediate retries.
+
+## 2026-11-24 · Task 2 · Session cookie must not carry Google tokens
+
+- `exchangeCodeForSession` returns a session with `provider_token` / `provider_refresh_token`, and
+  `@supabase/ssr` saves the whole session in the `sb-…-auth-token` cookie (JS-readable by default,
+  400-day max age). Changed: the callback re-saves the session with
+  `setSession({access_token, refresh_token})` after storing the Google token (drops the provider
+  fields), and the server client sets `cookieOptions: { httpOnly: true }` (we have no browser client).

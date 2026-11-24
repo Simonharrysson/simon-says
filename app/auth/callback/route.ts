@@ -46,12 +46,26 @@ export async function GET(request: NextRequest) {
     return to("/login?fel=drive");
   }
 
-  if (session.provider_refresh_token) {
-    await storeGoogleToken(session.user.id, session.provider_refresh_token, scope);
-  } else if (!(await hasGoogleToken(session.user.id))) {
-    // Never overwrite a stored token with nothing; without any token we can't write Docs.
+  try {
+    if (session.provider_refresh_token) {
+      await storeGoogleToken(session.user.id, session.provider_refresh_token, scope);
+    } else if (!(await hasGoogleToken(session.user.id))) {
+      // Never overwrite a stored token with nothing; without any token we can't write Docs.
+      await supabase.auth.signOut();
+      return to("/login?fel=refresh");
+    }
+    // The exchanged session carries provider_token/provider_refresh_token and would be saved
+    // as-is in the session cookie. Re-save it without them: Google tokens live only in
+    // google_tokens, encrypted.
+    const { error: resaveError } = await supabase.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+    if (resaveError) throw resaveError;
+  } catch (err) {
+    console.error("auth callback: storing Google token failed", (err as Error)?.message);
     await supabase.auth.signOut();
-    return to("/login?fel=refresh");
+    return to("/login?fel=kod");
   }
 
   return to("/");
