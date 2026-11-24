@@ -176,21 +176,24 @@ describe("cron route", () => {
 });
 
 describe("immediate 50 % email", () => {
-  /** In-memory twin of claim_spend_alarm: true once per day. */
+  /** In-memory twin of claim_spend_alarm/mark_spend_alarm_sent: once per day, retry pacing. */
   function deps(spent: number, mailOk = true) {
     const sentMails: string[] = [];
-    let claimed = false;
+    let sentAt = false;
+    let nextAt = 0;
+    const clock = { now: 0 };
     return {
       sentMails,
+      clock,
       deps: {
         dayUsd: async () => spent,
-        claim: async (t: number) => {
-          if (spent < t || claimed) return false;
-          claimed = true;
+        claim: async (t: number, retry: number) => {
+          if (spent <= t || sentAt || nextAt > clock.now) return false;
+          nextAt = clock.now + retry * 1000;
           return true;
         },
-        release: async () => {
-          claimed = false;
+        markSent: async () => {
+          sentAt = true;
         },
         mailer: {
           send: async (m: { subject: string }) => {
@@ -202,34 +205,51 @@ describe("immediate 50 % email", () => {
     };
   }
 
-  it("sends once when the day passes 50 % of GLOBAL_DAILY_USD, not before, not again", async () => {
+  it("sends once when the day passes (strictly over) 50 % of GLOBAL_DAILY_USD, not before, not again", async () => {
     envState.over = { GLOBAL_DAILY_USD: 10 };
-    const below = deps(4.99);
-    expect(await alarm.checkSpendAlarm(below.deps)).toBe(false);
-    expect(below.sentMails).toEqual([]);
-
-    const over = deps(5);
-    expect(await alarm.checkSpendAlarm(over.deps)).toBe(true);
-    expect(await alarm.checkSpendAlarm(over.deps)).toBe(false);
-    expect(await alarm.checkSpendAlarm(over.deps)).toBe(false);
+    for (const spent of [4.99, 5]) {
+      const d = deps(spent);
+      expect(await alarm.checkSpendAlarm(() => d.deps)).toBe(false);
+      expect(d.sentMails).toEqual([]);
+    }
+    const over = deps(5.01);
+    expect(await alarm.checkSpendAlarm(() => over.deps)).toBe(true);
+    expect(await alarm.checkSpendAlarm(() => over.deps)).toBe(false);
+    expect(await alarm.checkSpendAlarm(() => over.deps)).toBe(false);
     expect(over.sentMails).toHaveLength(1);
     expect(over.sentMails[0]).toMatch(/^⚠️/);
   });
 
-  it("a failed send gives the day back so the next update retries", async () => {
+  it("a failed send is retried only after the backoff, not on every update", async () => {
     envState.over = { GLOBAL_DAILY_USD: 10 };
     const d = deps(6, false);
-    expect(await alarm.checkSpendAlarm(d.deps)).toBe(false);
-    expect(await alarm.checkSpendAlarm(d.deps)).toBe(false);
+    expect(await alarm.checkSpendAlarm(() => d.deps)).toBe(false);
+    expect(await alarm.checkSpendAlarm(() => d.deps)).toBe(false);
+    expect(d.sentMails).toHaveLength(1);
+    d.clock.now += alarm.ALARM_RETRY_SECONDS * 1000;
+    await alarm.checkSpendAlarm(() => d.deps);
     expect(d.sentMails).toHaveLength(2);
   });
 
-  it("never throws", async () => {
+  it("never throws, also when building its dependencies fails", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(
+      await alarm.checkSpendAlarm(() => {
+        throw new Error("env invalid");
+      }),
+    ).toBe(false);
     const d = deps(99);
     d.deps.dayUsd = async () => {
       throw new Error("db down");
     };
-    expect(await alarm.checkSpendAlarm(d.deps)).toBe(false);
+    expect(await alarm.checkSpendAlarm(() => d.deps)).toBe(false);
+    spy.mockRestore();
+  });
+
+  it("spendAlarmInBackground defers the check (after) and never throws", () => {
+    afterQueue.fns = [];
+    expect(() => alarm.spendAlarmInBackground()).not.toThrow();
+    expect(afterQueue.fns).toHaveLength(1);
   });
 });
 

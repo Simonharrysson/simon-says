@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 import { dayUsd } from "@/lib/db/usage";
 import { getEnv } from "@/lib/env";
 import { defaultMailer, type Mailer, type MailMessage } from "@/lib/mail";
@@ -127,12 +128,15 @@ export async function sendDailySummary(
   return { summary, sent };
 }
 
+/** A failed send is retried at most this often. */
+export const ALARM_RETRY_SECONDS = 15 * 60;
+
 export interface SpendAlarmDeps {
   mailer: Mailer;
-  /** True exactly once per UTC day, when today's spend is at/over the threshold (DB lock). */
-  claim(thresholdUsd: number): Promise<boolean>;
-  /** Give today's claim back (sending failed), so the next usage update retries. */
-  release(): Promise<void>;
+  /** True when today's spend is strictly over the threshold, the mail is unsent and no retry is pending (DB lock). */
+  claim(thresholdUsd: number, retrySecs: number): Promise<boolean>;
+  /** Mark today's email sent. */
+  markSent(): Promise<void>;
   /** Today's recorded spend. */
   dayUsd(): Promise<number>;
 }
@@ -141,32 +145,35 @@ function defaultSpendDeps(): SpendAlarmDeps {
   return {
     mailer: defaultMailer(),
     dayUsd,
-    async claim(threshold) {
-      const { data, error } = await supabaseAdmin().rpc("claim_spend_alarm", { p_threshold_usd: threshold });
+    async claim(threshold, retrySecs) {
+      const { data, error } = await supabaseAdmin().rpc("claim_spend_alarm", {
+        p_threshold_usd: threshold,
+        p_retry_secs: retrySecs,
+      });
       if (error) throw new Error(`claim_spend_alarm: ${error.message}`);
       return data === true;
     },
-    async release() {
-      const today = new Date().toISOString().slice(0, 10);
-      const { error } = await supabaseAdmin().from("spend_alarms").delete().eq("day", today);
-      if (error) throw new Error(`release spend alarm: ${error.message}`);
+    async markSent() {
+      const { error } = await supabaseAdmin().rpc("mark_spend_alarm_sent");
+      if (error) throw new Error(`mark_spend_alarm_sent: ${error.message}`);
     },
   };
 }
 
 /**
- * Call after anything that adds to usage_daily. Sends the "50 % of the dollar cap" email the
- * first time the day passes it (once per day, marker in spend_alarms). Never throws: it must not
- * break a tick or a session close. Returns true when it sent.
+ * Sends the "day passed 50 % of the dollar cap" email once per UTC day (marker in spend_alarms;
+ * a failed send is retried after ALARM_RETRY_SECONDS). Never throws, including while building
+ * its dependencies. Returns true when it sent.
  */
-export async function checkSpendAlarm(deps: SpendAlarmDeps = defaultSpendDeps()): Promise<boolean> {
+export async function checkSpendAlarm(makeDeps: () => SpendAlarmDeps = defaultSpendDeps): Promise<boolean> {
   try {
+    const deps = makeDeps();
     const env = getEnv();
     const threshold = env.GLOBAL_DAILY_USD * ALARM_FRACTION;
-    // Cheap read first: the lock-taking claim only runs once the day is near the threshold.
+    // Cheap read first: the lock-taking claim only runs once the day is over the threshold.
     const spent = await deps.dayUsd();
-    if (spent < threshold) return false;
-    if (!(await deps.claim(threshold))) return false;
+    if (spent <= threshold) return false;
+    if (!(await deps.claim(threshold, ALARM_RETRY_SECONDS))) return false;
     const message: MailMessage = {
       to: env.ALARM_EMAIL,
       subject: `⚠️ Simon Says: dagens kostnad har passerat ${Math.round(ALARM_FRACTION * 100)} % av taket`,
@@ -181,10 +188,22 @@ export async function checkSpendAlarm(deps: SpendAlarmDeps = defaultSpendDeps())
     } catch (e) {
       console.error(`spend alarm: mail failed: ${(e as Error).message}`);
     }
-    if (!sent) await deps.release();
+    if (sent) await deps.markSent();
     return sent;
   } catch (e) {
     console.error(`spend alarm: ${(e as Error).message}`);
     return false;
+  }
+}
+
+/**
+ * Run checkSpendAlarm off the usage path: after the response when inside a request (after()),
+ * else fire-and-forget. The caller never waits for the database or the mail provider.
+ */
+export function spendAlarmInBackground(): void {
+  try {
+    after(() => checkSpendAlarm());
+  } catch {
+    void checkSpendAlarm();
   }
 }

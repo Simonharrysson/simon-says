@@ -49,8 +49,11 @@ export async function closeElSession(sessionId: string): Promise<number> {
   const seconds = Number(data ?? 0);
   if (seconds > 0) {
     // Booked spend: may pass 50 % of the day's dollar cap (lazy import: alarm.ts imports this file).
-    const { checkSpendAlarm } = await import("@/lib/alarm");
-    await checkSpendAlarm();
+    try {
+      (await import("@/lib/alarm")).spendAlarmInBackground();
+    } catch (e) {
+      console.error(`closeElSession: spend alarm: ${(e as Error).message}`);
+    }
   }
   return seconds;
 }
