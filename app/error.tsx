@@ -5,7 +5,7 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { IconRefresh } from "@/components/ui/icons";
 
 /** Catches errors thrown while rendering a page (e.g. a database read failing). */
-export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function ErrorPage({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -19,7 +19,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
           Det är vårt fel, inte ditt. Försök igen om en stund.
         </p>
         <div className="cluster">
-          <Button variant="primary" icon={<IconRefresh />} onClick={reset}>
+          <Button variant="primary" icon={<IconRefresh />} onClick={() => retry()}>
             Försök igen
           </Button>
           <ButtonLink href="/" variant="ghost">

@@ -140,7 +140,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
           <Panel title="Radera organisationen" titleId="danger-title" className="panel--danger">
             <div className="danger-zone">
-              <p className="muted measure">
+              <p className="subtle measure">
                 Tar bort organisationen med alla möten, transkriptioner, anteckningar och personer här. Det går
                 inte att ångra. Google-dokumenten ligger kvar i Drive.
               </p>

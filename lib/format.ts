@@ -43,3 +43,15 @@ export function minutesBetween(fromIso: string, to: Date = new Date()): number {
 export function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
+/**
+ * The newest end of a growing text: the last `max` characters, cut at a word boundary and
+ * prefixed with "…". Live partials grow at the end, so the end is what matters.
+ */
+export function tailText(text: string, max = 160): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const tail = clean.slice(-max);
+  const space = tail.indexOf(" ");
+  return `…${space > 0 && space < 30 ? tail.slice(space + 1) : tail}`;
+}

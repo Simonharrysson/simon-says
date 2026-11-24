@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClock, formatDateTime, formatDuration, formatElapsed, minutesBetween, plural } from "./format";
+import { formatClock, formatDateTime, formatDuration, formatElapsed, minutesBetween, plural, tailText } from "./format";
 
 describe("formatElapsed", () => {
   it("shows mm:ss under an hour", () => {
@@ -43,5 +43,18 @@ describe("minutesBetween / plural", () => {
   it("picks the form", () => {
     expect(plural(1, "person", "personer")).toBe("1 person");
     expect(plural(3, "person", "personer")).toBe("3 personer");
+  });
+});
+
+describe("tailText", () => {
+  it("keeps short text as is", () => {
+    expect(tailText("  hej på er  ", 50)).toBe("hej på er");
+  });
+  it("keeps the newest words and cuts at a word boundary", () => {
+    const out = tailText("ett två tre fyra fem sex sju åtta", 16);
+    expect(out.startsWith("…")).toBe(true);
+    expect(out.endsWith("sju åtta")).toBe(true);
+    expect(out).toBe("…sex sju åtta");
+    expect(out.length).toBeLessThanOrEqual(17);
   });
 });
