@@ -12,3 +12,6 @@ node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# scripts/check-google.ts state (doc ids)
+/.check-google/

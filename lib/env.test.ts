@@ -1,20 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { testEnv } from "@/test/env";
 import { describe, expect, it } from "vitest";
 import * as envModule from "./env";
 import { getEnv, parseEnv } from "./env";
 
-const valid = {
-  SUPABASE_URL: "https://example.supabase.co",
-  SUPABASE_ANON_KEY: "anon",
-  SUPABASE_SERVICE_ROLE_KEY: "service",
-  TOKEN_ENC_KEY: randomBytes(32).toString("base64"),
-  ELEVENLABS_API_KEY: "el",
-  ELEVENLABS_COMMIT_STRATEGY: "vad",
-  ANTHROPIC_API_KEY: "ant",
-  ALARM_EMAIL: "alarm@example.com",
-  CRON_SECRET: "cron",
-  APP_URL: "https://example.com",
-};
+const valid: Record<string, string> = { ...testEnv };
 
 describe("parseEnv", () => {
   it("accepts a valid env and applies defaults", () => {
@@ -45,9 +35,14 @@ describe("parseEnv", () => {
   });
 
   it("treats empty optional keys as missing", () => {
-    const env = parseEnv({ ...valid, GOOGLE_CLIENT_ID: "", RESEND_API_KEY: "" });
-    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
+    const env = parseEnv({ ...valid, RESEND_API_KEY: "" });
     expect(env.RESEND_API_KEY).toBeUndefined();
+  });
+
+  it("requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", () => {
+    expect(() => parseEnv({ ...valid, GOOGLE_CLIENT_ID: "" })).toThrow(/GOOGLE_CLIENT_ID/);
+    const { GOOGLE_CLIENT_SECRET: _, ...rest } = valid;
+    expect(() => parseEnv(rest)).toThrow(/GOOGLE_CLIENT_SECRET/);
   });
 });
 

@@ -4,8 +4,7 @@ import { z } from "zod";
 // Server-only environment, validated with zod.
 //
 // Optional until their task lands (the deploy must work without them):
-//   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET  -> required from Task 2 (Google OAuth)
-//   RESEND_API_KEY                          -> required from Task 12 (alarm/summary email)
+//   RESEND_API_KEY  -> required from Task 12 (alarm/summary email)
 // When those tasks land, drop `.optional()` on the key and set it in Vercel first.
 
 const required = z.string().min(1);
@@ -25,8 +24,8 @@ const schema = z.object({
   SUPABASE_URL: z.url(),
   SUPABASE_ANON_KEY: required,
   SUPABASE_SERVICE_ROLE_KEY: required,
-  GOOGLE_CLIENT_ID: optional,
-  GOOGLE_CLIENT_SECRET: optional,
+  GOOGLE_CLIENT_ID: required,
+  GOOGLE_CLIENT_SECRET: required,
   TOKEN_ENC_KEY: tokenEncKey,
   ELEVENLABS_API_KEY: required,
   ELEVENLABS_COMMIT_STRATEGY: z.enum(["manual", "vad"]),

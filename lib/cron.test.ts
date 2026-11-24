@@ -1,20 +1,9 @@
-import { randomBytes } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
+import { testEnv } from "@/test/env";
 import { verifyCron } from "./cron";
 
 beforeAll(() => {
-  Object.assign(process.env, {
-    SUPABASE_URL: "https://example.supabase.co",
-    SUPABASE_ANON_KEY: "anon",
-    SUPABASE_SERVICE_ROLE_KEY: "service",
-    TOKEN_ENC_KEY: randomBytes(32).toString("base64"),
-    ELEVENLABS_API_KEY: "el",
-    ELEVENLABS_COMMIT_STRATEGY: "vad",
-    ANTHROPIC_API_KEY: "ant",
-    ALARM_EMAIL: "alarm@example.com",
-    CRON_SECRET: "s3cret",
-    APP_URL: "https://example.com",
-  });
+  Object.assign(process.env, { ...testEnv, CRON_SECRET: "s3cret" });
 });
 
 const req = (authorization?: string) =>
