@@ -20,6 +20,8 @@ const messages: Record<string, string> = {
   namn: "Ange ett namn (högst 100 tecken).",
   "mote-forbidden": "Bara den som startade mötet eller en admin kan radera det.",
   "mote-not_found": "Mötet finns inte.",
+  "mote-active": "Avsluta mötet innan du raderar det.",
+  "org-active": "Ett möte pågår. Avsluta det innan du raderar organisationen.",
   "org-name_mismatch": "Namnet stämde inte. Skriv organisationens namn exakt för att radera den.",
   "org-forbidden": "Bara admins kan radera organisationen.",
   mote: "Mötet är raderat.",

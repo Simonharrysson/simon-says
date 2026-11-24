@@ -11,6 +11,7 @@ import {
 import {
   addPerson,
   createOrg,
+  deleteOrg,
   deletePerson,
   getOrg,
   inviteOrgName,
@@ -36,6 +37,7 @@ const TABLES = [
   "note_items",
   "usage_daily",
   "google_tokens",
+  "org_creations",
 ] as const;
 
 const MEETING_TABLES = ["el_sessions", "meeting_events", "speaker_map", "note_items"] as const;
@@ -102,6 +104,21 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
     expect((await createOrg(user.db, "Två")).ok).toBe(true);
     expect(await createOrg(user.db, "Tre")).toEqual({ ok: false, reason: "limit" });
     expect(await listMyOrgs(user.db)).toHaveLength(2);
+  });
+
+  it("counts orgs ever created: create 2, delete 1, a third is still rejected", async () => {
+    const user = await createTestUser("recreate");
+    const first = await createOrg(user.db, "Ett");
+    expect((await createOrg(user.db, "Två")).ok).toBe(true);
+    if (!first.ok) throw new Error("org");
+    expect(await deleteOrg(user.db, first.id, "Ett")).toBe("deleted");
+    expect(await listMyOrgs(user.db)).toHaveLength(1);
+    expect(await createOrg(user.db, "Tre")).toEqual({ ok: false, reason: "limit" });
+  });
+
+  it("org_creations is server-only", async () => {
+    const { error } = await a.db.from("org_creations").select("*");
+    expect(isPermissionDenied(error)).toBe(true);
   });
 
   it("cannot create an org in someone else's name", async () => {
@@ -263,6 +280,23 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
       const { error } = await adminClient().from("usage_daily").insert({ org_id: r.id, day: today, usd: 1.25 });
       expect(error).toBeNull();
       expect(await dayUsd()).toBeCloseTo(before + 1.25, 6);
+    });
+
+    it("dayUsd and the deleted org's usage: still counted after the org is deleted", async () => {
+      const { dayUsd } = await import("@/lib/db/usage");
+      const user = await createTestUser("gone");
+      const r = await createOrg(user.db, "Borta");
+      if (!r.ok) throw new Error("org");
+      const today = new Date().toISOString().slice(0, 10);
+      const { error } = await adminClient()
+        .from("usage_daily")
+        .insert({ org_id: r.id, day: today, seconds: 600, usd: 2.5 });
+      expect(error).toBeNull();
+      const before = await dayUsd();
+      expect(await deleteOrg(user.db, r.id, "Borta")).toBe("deleted");
+      expect(await dayUsd()).toBeCloseTo(before, 6);
+      const { data } = await adminClient().from("usage_daily").select("seconds, usd").eq("org_id", r.id);
+      expect(data).toEqual([{ seconds: 600, usd: 2.5 }]);
     });
 
     it("memberEmails lists the org's members", async () => {

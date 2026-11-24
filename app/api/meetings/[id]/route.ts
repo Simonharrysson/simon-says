@@ -5,9 +5,12 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const status = { deleted: 200, not_found: 404, forbidden: 403, name_mismatch: 400 } as const;
+const status = { deleted: 200, not_found: 404, forbidden: 403, name_mismatch: 400, active: 409 } as const;
 
-/** Delete a meeting with its transcript data and notes. Starter or org admin. Doc stays in Drive. */
+/**
+ * Delete a meeting with its transcript data and notes. Starter or org admin; 409 while it is
+ * live or ending. Doc stays in Drive.
+ */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createSupabaseServerClient();

@@ -8,7 +8,10 @@ import type { MeetingRow, OrgMemberRow, OrgRow, PersonRow } from "./types";
 
 type Db = SupabaseClient;
 
-export type DeleteResult = "deleted" | "not_found" | "forbidden" | "name_mismatch";
+/** `active`: a meeting is live or ending; it must be ended first (its sessions settle usage). */
+export type DeleteResult = "deleted" | "not_found" | "forbidden" | "name_mismatch" | "active";
+
+const ACTIVE = ["live", "ending"];
 export type CreateOrgResult = { ok: true; id: string } | { ok: false; reason: "limit" | "invalid" };
 
 function fail(what: string, error: { message: string }): never {
@@ -141,13 +144,22 @@ export async function listMeetings(
 }
 
 /**
- * Delete an org and everything under it (cascade). Admins only; the caller must type the
- * org's exact name. The Google Docs stay in their owners' Drive.
+ * Delete an org and everything under it (cascade). Admins only, no live meeting; the caller
+ * must type the org's exact name. The Google Docs stay in their owners' Drive. Its usage rows
+ * and its entry in org_creations stay (caps and the 2-org limit).
  */
 export async function deleteOrg(db: Db, orgId: string, confirmName: string): Promise<DeleteResult> {
   const org = await getOrg(db, orgId);
   if (!org) return "not_found";
   if (confirmName.trim() !== org.name) return "name_mismatch";
+  const { data: active, error: activeError } = await db
+    .from("meetings")
+    .select("id")
+    .eq("org_id", orgId)
+    .in("status", ACTIVE)
+    .limit(1);
+  if (activeError) fail("deleteOrg", activeError);
+  if ((active ?? []).length > 0) return "active";
   const { data, error } = await db.from("orgs").delete().eq("id", orgId).select("id");
   if (error) fail("deleteOrg", error);
   return (data ?? []).length > 0 ? "deleted" : "forbidden";
@@ -155,16 +167,18 @@ export async function deleteOrg(db: Db, orgId: string, confirmName: string): Pro
 
 /**
  * Delete a meeting with its sessions, speaker map, notes and events (cascade). Allowed for
- * the person who started it and org admins. The Google Doc stays in Drive.
+ * the person who started it and org admins, once it is done or abandoned. The Google Doc
+ * stays in Drive.
  */
 export async function deleteMeeting(db: Db, meetingId: string): Promise<DeleteResult> {
   const { data: meeting, error: readError } = await db
     .from("meetings")
-    .select("id")
+    .select("id, status")
     .eq("id", meetingId)
     .maybeSingle();
   if (readError) fail("deleteMeeting", readError);
   if (!meeting) return "not_found";
+  if (ACTIVE.includes(meeting.status)) return "active";
   const { data, error } = await db.from("meetings").delete().eq("id", meetingId).select("id");
   if (error) fail("deleteMeeting", error);
   return (data ?? []).length > 0 ? "deleted" : "forbidden";

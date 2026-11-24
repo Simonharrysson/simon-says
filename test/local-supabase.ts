@@ -42,13 +42,20 @@ export async function createTestUser(label: string): Promise<TestUser> {
   return { id: data.user.id, email, db };
 }
 
-/** A meeting with one session, a speaker, a note and an event, written as the server would. */
-export async function seedMeeting(orgId: string, startedBy: string): Promise<{ meetingId: string; sessionId: string }> {
+/**
+ * A meeting with one session, a speaker, a note and an event, written as the server would.
+ * Status `done` by default (deletable); pass "live" for a running meeting.
+ */
+export async function seedMeeting(
+  orgId: string,
+  startedBy: string,
+  status: "live" | "ending" | "done" | "abandoned" = "done",
+): Promise<{ meetingId: string; sessionId: string }> {
   const admin = adminClient();
   const sessionId = `el-${randomUUID()}`;
   const { data: meeting, error } = await admin
     .from("meetings")
-    .insert({ org_id: orgId, started_by: startedBy, doc_id: "doc", notes_tab_id: "t.notes" })
+    .insert({ org_id: orgId, started_by: startedBy, doc_id: "doc", notes_tab_id: "t.notes", status })
     .select("id")
     .single();
   if (error) throw new Error(`seed meeting: ${error.message}`);

@@ -91,6 +91,22 @@ describe.skipIf(!hasLocalSupabase)("deletion", () => {
       expect(await countRows("meetings", "id", meetingId)).toBe(1);
     });
 
+    it("refuses deleting a live or ending meeting (409), even directly through the API", async () => {
+      for (const status of ["live", "ending"] as const) {
+        const { meetingId, sessionId } = await seedMeeting(orgId, admin.id, status);
+        as(admin);
+        const res = await callDeleteMeeting(meetingId);
+        expect(res.status).toBe(409);
+        expect(await res.json()).toEqual({ error: "active" });
+        // RLS itself refuses too, not only the route.
+        const { data } = await admin.db.from("meetings").delete().eq("id", meetingId).select("id");
+        expect(data).toEqual([]);
+        expect(await countRows("meetings", "id", meetingId)).toBe(1);
+        expect(await countRows("el_sessions", "id", sessionId)).toBe(1);
+        await adminClient().from("meetings").update({ status: "done" }).eq("id", meetingId);
+      }
+    });
+
     it("401 without a session, 404 for a malformed id", async () => {
       as(null);
       expect((await callDeleteMeeting("00000000-0000-0000-0000-000000000000")).status).toBe(401);
@@ -111,7 +127,17 @@ describe.skipIf(!hasLocalSupabase)("deletion", () => {
       expect(await countRows("orgs", "id", orgId)).toBe(1);
     });
 
-    it("removes everything under the org", async () => {
+    it("refuses deleting an org while one of its meetings is live (409)", async () => {
+      const { meetingId } = await seedMeeting(orgId, member.id, "live");
+      as(admin);
+      expect((await callDeleteOrg(orgId, "Styrelsen")).status).toBe(409);
+      const { data } = await admin.db.from("orgs").delete().eq("id", orgId).select("id");
+      expect(data).toEqual([]);
+      expect(await countRows("orgs", "id", orgId)).toBe(1);
+      await adminClient().from("meetings").update({ status: "abandoned" }).eq("id", meetingId);
+    });
+
+    it("removes everything under the org, but keeps its usage and creation record", async () => {
       const { meetingId, sessionId } = await seedMeeting(orgId, member.id);
       as(admin);
       expect(await addPerson(admin.db, orgId, "Kalle")).toBe(true);
@@ -124,9 +150,12 @@ describe.skipIf(!hasLocalSupabase)("deletion", () => {
       expect(res.status).toBe(200);
 
       expect(await countRows("orgs", "id", orgId)).toBe(0);
-      for (const table of ["org_members", "people", "meetings", "usage_daily"]) {
+      for (const table of ["org_members", "people", "meetings"]) {
         expect(await countRows(table, "org_id", orgId), table).toBe(0);
       }
+      // Spend and the 2-org limit outlive the org.
+      expect(await countRows("usage_daily", "org_id", orgId)).toBe(1);
+      expect(await countRows("org_creations", "org_id", orgId)).toBe(1);
       expect(await countRows("el_sessions", "id", sessionId)).toBe(0);
       for (const table of ["speaker_map", "note_items", "meeting_events"]) {
         expect(await countRows(table, "meeting_id", meetingId), table).toBe(0);

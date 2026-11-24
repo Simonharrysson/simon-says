@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const status = { deleted: 200, not_found: 404, forbidden: 403, name_mismatch: 400 } as const;
+const status = { deleted: 200, not_found: 404, forbidden: 403, name_mismatch: 400, active: 409 } as const;
 
 /**
  * Delete an org and everything under it. Body: `{ "confirmName": "<the org's exact name>" }`.
