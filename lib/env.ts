@@ -4,8 +4,7 @@ import { z } from "zod";
 // Server-only environment, validated with zod.
 //
 // Optional until their task lands (the deploy must work without them):
-//   RESEND_API_KEY  -> required from Task 12 (alarm/summary email)
-// When those tasks land, drop `.optional()` on the key and set it in Vercel first.
+//   RESEND_API_KEY  -> without it lib/mail.ts only logs (no email leaves); set it in Vercel to send
 
 const required = z.string().min(1);
 // Treat "" as missing, so an empty Vercel value doesn't count as configured.
@@ -32,6 +31,7 @@ const schema = z.object({
   ELEVENLABS_COMMIT_STRATEGY: z.enum(["manual", "vad", "turn_prediction"]).default("vad"),
   ANTHROPIC_API_KEY: required,
   RESEND_API_KEY: optional,
+  MAIL_FROM: optional,
   ALARM_EMAIL: z.email(),
   // Comma list of emails allowed to run Testmöte; falls back to ALARM_EMAIL (see lib/testmeeting/admin.ts).
   ADMIN_EMAILS: optional,

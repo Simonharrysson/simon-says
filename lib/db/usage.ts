@@ -46,7 +46,13 @@ export async function closeElSession(sessionId: string): Promise<number> {
     p_usd_per_hour: getEnv().ELEVENLABS_USD_PER_HOUR,
   });
   if (error) throw new Error(`closeElSession: ${error.message}`);
-  return Number(data ?? 0);
+  const seconds = Number(data ?? 0);
+  if (seconds > 0) {
+    // Booked spend: may pass 50 % of the day's dollar cap (lazy import: alarm.ts imports this file).
+    const { checkSpendAlarm } = await import("@/lib/alarm");
+    await checkSpendAlarm();
+  }
+  return seconds;
 }
 
 export type ClaimStatus =

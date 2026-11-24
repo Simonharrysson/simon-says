@@ -1,10 +1,13 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
 import { checkLimits } from "@/lib/limits";
+import { endMeeting } from "@/lib/meetings/tick";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+// The automatic end (final notes pass) runs after the response.
+export const maxDuration = 300;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status, headers: noStore });
@@ -12,6 +15,11 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 /**
  * Starter's browser pings this; it only sets last_heartbeat_at. Answers `{ warn, stop }` from
  * checkLimits (also under the kill switch, where stop is true).
+ *
+ * Stop = the meeting must end now (4 h per meeting, org month, global day/dollar cap, kill
+ * switch). The server does not rely on the browser: on stop it ends the meeting itself, after
+ * the response (endMeeting is atomic live → ending, so the client's own end call and repeated
+ * heartbeats are no-ops). `no_consent` is excluded: that meeting never started recording.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,5 +47,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   if (ue) throw new Error(`heartbeat: update: ${ue.message}`);
 
   const limits = await checkLimits(meeting.org_id, meeting.id);
+  if (limits.stop && limits.reason !== "no_consent") {
+    after(() => endMeeting(meeting.id).catch((e) => console.error(`heartbeat: auto end failed: ${(e as Error).message}`)));
+  }
   return NextResponse.json({ warn: limits.warn, stop: limits.stop }, { headers: noStore });
 }

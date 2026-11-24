@@ -15,6 +15,7 @@ import {
   type NotesTab,
 } from "@/lib/docs/notes";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
+import { checkSpendAlarm } from "@/lib/alarm";
 import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
@@ -350,6 +351,7 @@ async function recordUsage(orgId: string, u: UpdateNotesResult["usage"]): Promis
       p_usd: u.usd,
     }),
   );
+  await checkSpendAlarm(); // best effort, never throws
 }
 
 async function alarmIfNeeded(meeting: MeetingRow, failed: number, deps: TickDeps): Promise<void> {
