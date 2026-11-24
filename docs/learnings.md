@@ -28,3 +28,36 @@ Findings from early checks and spikes. Each entry: date, task, what we learned, 
   callback URL comes from the request's forwarded host.
 - `google_tokens` was applied to simonsays-prod by hand (Management API SQL) because migrations
   only reach prod from `main`; the migration is idempotent so the GitHub integration can re-run it.
+
+## 2026-11-24 · Task 2 · Real Google login and the Doc model
+
+Run with `scripts/check-google.ts` on simon.harrysson@gmail.com (signed in on the vercel.app alias).
+
+- **Refresh token arrives** via Supabase (`provider_refresh_token`) with `access_type=offline` +
+  `prompt=consent`. No separate "Koppla Google Drive" flow needed. Google's tokeninfo reports
+  `email profile …/drive.file …/userinfo.email …/userinfo.profile openid`; `drive.file: true`.
+- **Named ranges do not grow at their edges.** Typing at the very start of a range or right after
+  its last character lands **outside** the range (range text unchanged); typing in the middle lands
+  inside.
+- **Enter inside a range does not split it:** the range stays one part spanning two paragraphs
+  (`"Punkt två: vem\n bYokar lokalen"`).
+- **`replaceNamedRangeContent`** changes only the target: neighbour ranges untouched, a human
+  character just outside the target (the "X" at its start) kept, target still a named range.
+- **Stale `requiredRevisionId`** → HTTP 400 `The required revision ID '…' does not match the latest
+  revision.`; `isRevisionConflict` matches it.
+- **Appends with `endOfSegmentLocation`** while Simon typed in the transcript tab: 25/25 OK, his text
+  intact, but the first line was glued onto his paragraph (`…prata om [16:29:54] Talare 2: rad 1`)
+  because he was typing on the last line.
+- **Revision guard under continuous typing** (2 min, a read→write every 10 s, 4 immediate retries):
+  12 ticks, 8 first try, 3 after retries, **1 failed after 4 retries** (tick 1, 5 conflicts),
+  9 conflicts in total. Simon's text fully intact.
+- **Share** as writer with `sendNotificationEmail=false` to simon@harrysson.co: permission created.
+  Whether any email arrived: **pending** (Simon to check the inbox).
+
+Changed in later tasks (docs/plan.md updated):
+- **Task 9:** human-edit detection compares the **whole paragraph(s)** containing an item's range with
+  what we last rendered, not only the range text (edge inserts fall outside the range); a range may
+  span several paragraphs after Enter, and the locked text is all of them.
+- **Task 6:** `appendTranscript` prefixes `\n` when the transcript tab's last paragraph is non-empty.
+- **Task 10 / Global Constraints:** a random 150–600 ms backoff before each read→write retry, rather
+  than immediate retries.
