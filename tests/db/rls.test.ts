@@ -236,7 +236,7 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
       });
     });
 
-    it("orgMonthSeconds = this month's closed seconds + open sessions' capped elapsed time", async () => {
+    it("orgMonthSeconds = this month's closed seconds + open sessions' elapsed time, capped at max + 900 s", async () => {
       const { orgMonthSeconds } = await import("@/lib/db/usage");
       const user = await createTestUser("usage");
       const r = await createOrg(user.db, "Usage");
@@ -255,8 +255,9 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
         // Seeded session (open, max 3600 s, started just now) → ~0 s. Replace with known ones:
         await admin.from("el_sessions").update({ closed_at: iso(0) }).eq("meeting_id", meetingId),
         await admin.from("el_sessions").insert([
-          // open, started 10 min ago, capped at 300 s → 300
-          { id: `cap-${r.id}`, meeting_id: meetingId, started_at: iso(600_000), max_seconds: 300 },
+          // open, started 25 min ago, max 300 s: capped at its window end, 300 + 900 s token
+          // use window (migration 0005) → 1200
+          { id: `cap-${r.id}`, meeting_id: meetingId, started_at: iso(1_500_000), max_seconds: 300 },
           // open, started 60 s ago, max 1 h → ~60
           { id: `run-${r.id}`, meeting_id: meetingId, started_at: iso(60_000), max_seconds: 3600 },
           // closed: counted via usage_daily only
@@ -266,8 +267,8 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
         expect(error).toBeNull();
       }
       const seconds = await orgMonthSeconds(r.id);
-      expect(seconds).toBeGreaterThanOrEqual(100 + 300 + 59);
-      expect(seconds).toBeLessThanOrEqual(100 + 300 + 70);
+      expect(seconds).toBeGreaterThanOrEqual(100 + 1200 + 59);
+      expect(seconds).toBeLessThanOrEqual(100 + 1200 + 70);
     });
 
     it("dayUsd sums today's usd across orgs", async () => {
