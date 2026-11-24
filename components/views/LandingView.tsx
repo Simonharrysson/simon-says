@@ -225,7 +225,7 @@ function BoardDemo() {
         <span className="board__rec">
           <span className="magnet" /> 42:10
         </span>
-        <span className="board__partial">…om vi tar femtio kronor i inträde täcker det pizzan</span>
+        <span className="board__partial">…då täcker inträdet pizzan</span>
         <span className="board__ctrl">
           <IconPause size={16} />
         </span>

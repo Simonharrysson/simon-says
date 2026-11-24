@@ -28,7 +28,7 @@ export function PartialStrip({
         ) : text ? (
           <>
             {speaker && <span className="partial__speaker">{speaker}: </span>}
-            <span>{tailText(text)}</span>
+            <span>{tailText(text, 100)}</span>
           </>
         ) : (
           <span className="partial__placeholder">Lyssnar…</span>
