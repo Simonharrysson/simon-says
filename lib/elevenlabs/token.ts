@@ -3,6 +3,8 @@ import { getEnv } from "@/lib/env";
 
 const MINT_URL = "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe";
 const WS_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
+/** A hung mint must fail (and release the claimed session) well inside the function limit. */
+const MINT_TIMEOUT_MS = 10_000;
 
 /**
  * Mint a single-use realtime Scribe token. `maxSessionSeconds` closes the session it opens
@@ -15,7 +17,11 @@ export async function mintToken(maxSessionSeconds: number): Promise<string> {
   }
   const url = new URL(MINT_URL);
   url.searchParams.set("max_session_duration_seconds", String(maxSessionSeconds));
-  const res = await fetch(url, { method: "POST", headers: { "xi-api-key": getEnv().ELEVENLABS_API_KEY } });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "xi-api-key": getEnv().ELEVENLABS_API_KEY },
+    signal: AbortSignal.timeout(MINT_TIMEOUT_MS),
+  });
   if (!res.ok) {
     const body = (await res.text()).slice(0, 300);
     throw new Error(`mintToken: ElevenLabs ${res.status}: ${body}`);

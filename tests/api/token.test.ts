@@ -7,11 +7,12 @@ import { createOrg, joinOrg } from "@/lib/db/orgs";
 
 // The token route against the local stack as a real signed-in user. ElevenLabs is mocked
 // (mintToken only; the wsUrl builder is real). The env points the service-role client at the
-// local stack; tests flip KILL_SWITCH through `envOverride`.
+// local stack; tests flip KILL_SWITCH and lower the global caps through `envOverride` (so no
+// test writes global usage big enough to trip other test files sharing the database).
 const current = vi.hoisted(() => ({ db: null as SupabaseClient | null }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current.db }));
 
-const envOverride = vi.hoisted(() => ({}) as { KILL_SWITCH?: boolean });
+const envOverride = vi.hoisted(() => ({}) as { KILL_SWITCH?: boolean; GLOBAL_DAILY_HOURS?: number; GLOBAL_DAILY_USD?: number });
 vi.mock("@/lib/env", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/lib/env")>();
   const { testEnv } = await import("@/test/env");
@@ -97,7 +98,7 @@ async function age(meetingId: string, sessionId: string, seconds: number, heartb
   await adminClient().from("meetings").update({ last_heartbeat_at: past(heartbeatAgo) }).eq("id", meetingId);
 }
 
-/** A usage row for a made-up (e.g. deleted) org, so global caps see it. Removed in `finally`. */
+/** A small usage row for a made-up (e.g. deleted) org, so global sums see it. Removed in `finally`. */
 async function withGlobalUsage(row: { seconds?: number; usd?: number }, fn: () => Promise<void>) {
   const orgId = randomUUID();
   const { error } = await adminClient().from("usage_daily").insert({ org_id: orgId, day: today(), ...row });
@@ -135,7 +136,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
 
   beforeEach(() => {
     mint.fn.mockClear();
-    delete envOverride.KILL_SWITCH;
+    for (const k of Object.keys(envOverride)) delete envOverride[k as keyof typeof envOverride];
   });
 
   afterAll(async () => {
@@ -263,6 +264,21 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect((await callToken(id, { closingSessionId: first.sessionId })).status).toBe(409);
   });
 
+  it("two concurrent reconnects with the same closingSessionId: exactly one wins", async () => {
+    const id = await live(orgId, starter.id);
+    as(starter);
+    const first = await (await callToken(id)).json();
+    const results = await Promise.all([
+      callToken(id, { closingSessionId: first.sessionId }),
+      callToken(id, { closingSessionId: first.sessionId }),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+    const winner = await results.find((r) => r.status === 200)!.json();
+    expect((await meetingRow(id)).current_el_session_id).toBe(winner.sessionId);
+    const { data: open } = await adminClient().from("el_sessions").select("id").eq("meeting_id", id).is("closed_at", null);
+    expect(open).toEqual([{ id: winner.sessionId }]);
+  });
+
   it("a session past started_at + max_seconds is counted only up to max_seconds and can be replaced", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
@@ -326,20 +342,26 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect(await res.json()).toEqual({ error: "meeting_length" });
   });
 
-  it("429 at the global daily hours cap", async () => {
+  it("429 at the global daily hours cap (counted across orgs, incl. deleted ones)", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
-    await withGlobalUsage({ seconds: 30 * 3600 }, async () => {
+    const { data: used } = await adminClient().rpc("global_day_seconds");
+    // Cap = what's used today + 60 s; another org's 60 s today reaches it.
+    envOverride.GLOBAL_DAILY_HOURS = (Number(used) + 60) / 3600;
+    await withGlobalUsage({ seconds: 60 }, async () => {
       const res = await callToken(id);
       expect(res.status).toBe(429);
       expect(await res.json()).toEqual({ error: "global_day" });
     });
   });
 
-  it("429 at the global daily dollar cap", async () => {
+  it("429 at the global daily dollar cap (counted across orgs, incl. deleted ones)", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
-    await withGlobalUsage({ usd: 25 }, async () => {
+    const { data: rows } = await adminClient().from("usage_daily").select("usd").eq("day", today());
+    const spent = (rows ?? []).reduce((s, r) => s + Number(r.usd), 0);
+    envOverride.GLOBAL_DAILY_USD = spent + 0.5;
+    await withGlobalUsage({ usd: 0.5 }, async () => {
       const res = await callToken(id);
       expect(res.status).toBe(429);
       expect(await res.json()).toEqual({ error: "global_usd" });

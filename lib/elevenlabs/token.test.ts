@@ -17,6 +17,7 @@ describe("mintToken", () => {
     );
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>)["xi-api-key"]).toBe("el");
+    expect(init.signal).toBeInstanceOf(AbortSignal); // a hung mint times out
   });
 
   it("throws with ElevenLabs' status and message on an error response", async () => {
