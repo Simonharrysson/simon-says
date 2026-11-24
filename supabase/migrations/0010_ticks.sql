@@ -11,7 +11,8 @@
 -- * record_claude_usage: add one Claude call's tokens and dollars to usage_daily atomically.
 -- * close_expired_el_sessions: close every open session past its window end
 --   (started_at + max_seconds + 900 s, see 0005) and book it.
--- Lock order (0005): these take only the meetings row (claim) or el_sessions → usage_daily.
+-- Lock order (0005): claim_tick_lease takes only the meetings row; close_expired_el_sessions
+-- locks every expired el_sessions row first, then books each (usage_daily), so 4 → 5 holds.
 
 alter table public.meetings add column if not exists notes_next_id text;
 alter table public.meetings add column if not exists notes_sent_tick int not null default 0;
@@ -86,10 +87,17 @@ declare
   v_id text;
   v_count int := 0;
 begin
+  -- Lock all expired rows before touching usage_daily (lock order 4 → 5).
+  perform 1 from public.el_sessions s
+  where s.closed_at is null
+    and s.started_at + make_interval(secs => s.max_seconds + 900) < now()
+  order by s.id
+  for update;
   for v_id in
     select s.id from public.el_sessions s
     where s.closed_at is null
       and s.started_at + make_interval(secs => s.max_seconds + 900) < now()
+    order by s.id
   loop
     perform public.close_el_session(v_id, p_usd_per_hour);
     v_count := v_count + 1;

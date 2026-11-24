@@ -428,8 +428,9 @@ export async function runTick(
     }
 
     // read + diff again right before writing; on a revision conflict wait, re-read, retry.
+    // After a Claude error only the final pass still writes (unchanged items, `Avslutat` header).
     let notes: "ok" | "conflict" | "skipped" = "skipped";
-    if (!claudeFailed) {
+    if (!claudeFailed || final) {
       const target: MeetingRow = { ...meeting };
       for (let attempt = 0; attempt <= CONFLICT_RETRIES; attempt++) {
         if (attempt > 0) await deps.sleep(retryDelayMs(deps.random));
@@ -553,7 +554,8 @@ export async function finishMeeting(
   await closeOpenSessions(meetingId);
   let result: TickResult = "busy";
   const start = Date.now();
-  for (let tries = 0; ; tries++) {
+  let retried = false;
+  for (;;) {
     try {
       result = await runTick(meetingId, { final: true }, overrides);
     } catch (e) {
@@ -565,7 +567,10 @@ export async function finishMeeting(
       continue;
     }
     // One more try after a conflict or failure.
-    if ((result === "conflict" || result === "failed") && tries === 0) continue;
+    if ((result === "conflict" || result === "failed") && !retried) {
+      retried = true;
+      continue;
+    }
     break;
   }
   must(
@@ -632,9 +637,13 @@ export async function finalizeSweep(
   const summary: SweepSummary = { sessionsClosed: 0, abandoned: 0, finished: 0, resumed: 0, caughtUp: 0 };
   const scoped = <T extends { org_id: string }>(rows: T[]) => (opts.orgId ? rows.filter((r) => r.org_id === opts.orgId) : rows);
 
-  summary.sessionsClosed = Number(
-    must("sweep: close sessions", await db().rpc("close_expired_el_sessions", { p_usd_per_hour: env.ELEVENLABS_USD_PER_HOUR })) ?? 0,
-  );
+  try {
+    summary.sessionsClosed = Number(
+      must("sweep: close sessions", await db().rpc("close_expired_el_sessions", { p_usd_per_hour: env.ELEVENLABS_USD_PER_HOUR })) ?? 0,
+    );
+  } catch (e) {
+    console.error(`sweep: close sessions: ${errorText(e)}`);
+  }
 
   const now = deps.now().getTime();
   const live = scoped(
@@ -700,14 +709,17 @@ export async function finalizeSweep(
     }
   }
 
+  // Only live, unpaused, fresh meetings (paused ones keep their segments unassigned by design).
+  const candidates = live.filter((m) => !stale(m) && !m.doc_paused_at).map((m) => m.id);
+  if (!candidates.length) return summary;
   const pending = must(
-    "sweep: untickled",
-    await db().from("segments").select("meeting_id").is("tick_no", null).limit(1000),
+    "sweep: unticked",
+    await db().from("segments").select("meeting_id").in("meeting_id", candidates).is("tick_no", null).limit(1000),
   ) as { meeting_id: string }[];
   const pendingIds = new Set(pending.map((p) => p.meeting_id));
   for (const m of live) {
     if (!left()) break;
-    if (!pendingIds.has(m.id) || stale(m) || m.doc_paused_at) continue;
+    if (!pendingIds.has(m.id) || !candidates.includes(m.id)) continue;
     await maybeTick(m.id, opts.deps);
     summary.caughtUp++;
   }

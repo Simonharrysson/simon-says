@@ -266,7 +266,9 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     ]);
 
   /** Fake Google + Claude, with the Doc state derived from note_items (+ human overrides). */
-  function fakes(opts: { conflicts?: number; gate?: Promise<void>; authLost?: () => boolean; readFails?: () => boolean } = {}) {
+  function fakes(
+    opts: { conflicts?: number; gate?: Promise<void>; authLost?: () => boolean; readFails?: () => boolean; claudeError?: boolean } = {},
+  ) {
     const calls: UpdateNotesInput[] = [];
     const headers: (string | undefined)[] = [];
     const appended: TranscriptLine[][] = [];
@@ -303,6 +305,16 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
       updateNotes: async (input): Promise<UpdateNotesResult> => {
         calls.push(input);
         if (opts.gate) await opts.gate;
+        if (opts.claudeError) {
+          return {
+            ops: [],
+            items: input.items,
+            usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, estimated: true },
+            stopReason: "error",
+            dropped: 0,
+            nextId: input.nextId ?? "n1",
+          };
+        }
         const n = Number((input.nextId ?? "n1").slice(1));
         const add: NotesItem = { id: `n${n}`, section: "decision", text: `Beslut ${n}` };
         return {
@@ -530,5 +542,18 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await res.json()).toEqual({ result: "ended" });
     expect((await read(id)).status).toBe("done");
     expect(await (await endCall(id)).json()).toEqual({ result: "noop" });
+  });
+
+  it("end with a failing Claude: still done, header Avslutat, transcript written", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "hej", 1000);
+    const f = fakes({ claudeError: true });
+    expect(await tick.endMeeting(id, { deps: f.deps })).toBe("ended");
+    const m = await read(id);
+    expect(m.status).toBe("done");
+    expect(m.header_rendered).toMatch(/^Avslutat \d\d:\d\d$/);
+    expect(f.calls.filter((c) => c.final)).toHaveLength(2); // one retry
+    expect(f.appended.flat().map((l) => l.text)).toEqual(["hej"]);
+    expect(await events(id, "ended")).toHaveLength(1);
   });
 });
