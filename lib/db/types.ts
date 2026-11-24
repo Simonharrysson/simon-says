@@ -46,6 +46,8 @@ export interface MeetingRow {
   notes_tab_id: string;
   transcript_tab_id: string | null;
   header_range: string | null;
+  /** The header line the service last wrote (migration 0006); null = unknown. */
+  header_rendered: string | null;
   section_ranges: Record<string, unknown>;
   status: MeetingStatus;
   consent_confirmed_at: string | null;

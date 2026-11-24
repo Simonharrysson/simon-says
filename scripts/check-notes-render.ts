@@ -139,6 +139,7 @@ async function createDoc(auth: OAuth2Client, g: G, title: string): Promise<State
       notes_tab_id: tabId,
       transcript_tab_id: null,
       header_range: header,
+      header_rendered: lines[0].text,
       section_ranges: sectionRanges,
       status: "live",
       consent_confirmed_at: null,
@@ -171,14 +172,15 @@ async function guardedRender(
   const m = s.meeting;
   for (let attempt = 0; attempt <= 4; attempt++) {
     if (attempt > 0) await sleep(g.retryDelayMs());
-    const { revisionId, current } = await n.readItems(auth, m.doc_id, m.notes_tab_id, s.rows);
-    const d = n.diffHumanEdits(s.rows, current);
+    const { revisionId, current, suggested } = await n.readItems(auth, m.doc_id, m.notes_tab_id, s.rows);
+    const d = n.diffHumanEdits(s.rows, current, suggested);
     const want = desired(d.rows);
     if (attempt === 0 && opts.beforeWrite) await opts.beforeWrite();
     const res = await n.renderItems(auth, m, d.rows, want, revisionId, headerText);
-    console.log(`[${now()}] attempt ${attempt + 1}: ${res} (locked ${JSON.stringify(d.locked.map((l) => l.id))}, deleted ${JSON.stringify(d.deletedIds)})`);
-    if (res === "ok") {
-      s.rows = n.renderedRows(m.id, d.rows, want);
+    console.log(`[${now()}] attempt ${attempt + 1}: ${res.status} (locked ${JSON.stringify(d.locked.map((l) => l.id))}, deleted ${JSON.stringify(d.deletedIds)})`);
+    if (res.status === "ok") {
+      s.rows = res.rows;
+      if (res.headerRendered !== null) m.header_rendered = res.headerRendered;
       return attempt === 0 ? "ok" : `ok after ${attempt} conflict(s)`;
     }
   }
@@ -326,6 +328,14 @@ async function auto(auth: OAuth2Client, n: Notes, g: G) {
   t = await tab();
   check(n.itemSpan(t, name("n7"))?.paraText === "Nästa ämne: lokalbokning" && t.paragraphs.at(-1)?.text === "Nästa ämne: lokalbokning\n", "n7 intact and last after removing n9");
   check((await styleOf("Nästa ämne")) === "NORMAL_TEXT", "n7 keeps its style");
+
+  // 5c. Remove the last two adjacent items in one batch (one merged delete; overlapping deletes would 400).
+  check((await guardedRender(auth, n, g, s, (rows) => [...rows.map(n.toNotesItem), { id: "n10", section: "now", text: "Ännu en rad" }])) === "ok", "add n10 after n7");
+  check((await guardedRender(auth, n, g, s, (rows) => rows.filter((r) => r.id !== "n7" && r.id !== "n10").map(n.toNotesItem))) === "ok", "remove n7 + n10 (last two) in one batch");
+  t = await tab();
+  check(t.paragraphs.at(-1)?.text === "Pågår nu\n" && !t.ranges.has(name("n7")) && !t.ranges.has(name("n10")), "tab ends with 'Pågår nu', both ranges gone", JSON.stringify(t.paragraphs.at(-1)?.text));
+  check((await guardedRender(auth, n, g, s, (rows) => [...rows.map(n.toNotesItem), { id: "n11", section: "now", text: "Tillbaka" }])) === "ok", "add a 'now' item again");
+  t = await tab();
   d = n.diffHumanEdits(s.rows, n.currentItems(t, s.rows));
   check(!d.locked.length && !d.deletedIds.length, "no false locks or deletes after removals");
 
@@ -337,7 +347,7 @@ async function auto(auth: OAuth2Client, n: Notes, g: G) {
   });
   try {
     const res = await n.renderItems(auth, m, s.rows, [...s.rows.map(n.toNotesItem), { id: "n8", section: "decision", text: "ska inte skrivas" }], revisionId);
-    check(res === "conflict", "stale revision → 'conflict'", res);
+    check(res.status === "conflict", "stale revision → 'conflict'", res.status);
   } catch (err) {
     check(false, "stale revision → 'conflict'", JSON.stringify(errInfo(err)));
   }

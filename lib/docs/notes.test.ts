@@ -89,6 +89,7 @@ const meeting: MeetingRow = {
   notes_tab_id: TAB,
   transcript_tab_id: null,
   header_range: `ss-${M}-header`,
+  header_rendered: "● LIVE · uppdaterad 10:00",
   section_ranges: {
     attendees: `ss-${M}-sec-attendees`,
     decision: `ss-${M}-sec-decision`,
@@ -190,7 +191,7 @@ describe("readItems", () => {
         ["n4", "Diskussion om sponsorer"],
       ]),
     );
-    expect(api.get).toHaveBeenCalledWith({ documentId: "doc1", includeTabsContent: true });
+    expect(api.get).toHaveBeenCalledWith({ documentId: "doc1", includeTabsContent: true, suggestionsViewMode: "SUGGESTIONS_INLINE" });
   });
 
   it("reads the whole paragraph, including text typed just outside the range", async () => {
@@ -290,13 +291,27 @@ describe("diffHumanEdits", () => {
 });
 
 /** Read, diff and render like a tick does; returns the batchUpdate request body (or null). */
-async function tick(text: string, desired: (rs: NoteItemRow[]) => NotesItem[], headerText?: string) {
-  const { revisionId, current } = await read(text);
-  const d = diffHumanEdits(rows(), current);
+async function tick(
+  text: string | docs_v1.Schema$Document,
+  desired: (rs: NoteItemRow[]) => NotesItem[],
+  headerText?: string,
+  opts: { rows?: NoteItemRow[]; meeting?: MeetingRow; diff?: boolean } = {},
+) {
+  const base = opts.rows ?? rows();
+  api.get.mockResolvedValueOnce({ data: typeof text === "string" ? docJson(text) : text });
+  const { revisionId, current, suggested } = await readItems(auth, "doc1", TAB, base);
+  const rs = opts.diff === false ? base : diffHumanEdits(base, current, suggested).rows;
   api.batchUpdate.mockResolvedValueOnce({ data: {} });
-  const result = await renderItems(auth, meeting, d.rows, desired(d.rows), revisionId, headerText);
+  const res = await renderItems(auth, opts.meeting ?? meeting, rs, desired(rs), revisionId, headerText);
   const body = api.batchUpdate.mock.calls[0]?.[0]?.requestBody ?? null;
-  return { result, body, requests: (body?.requests ?? []) as docs_v1.Schema$Request[] };
+  return { res, result: res.status, body, requests: (body?.requests ?? []) as docs_v1.Schema$Request[] };
+}
+
+/** Mark the first paragraph starting with `prefix` as carrying a pending suggestion. */
+function withSuggestion(doc: docs_v1.Schema$Document, prefix: string, kind: "suggestedInsertionIds" | "suggestedDeletionIds") {
+  const para = doc.tabs![0].documentTab!.body!.content!.find((c) => c.paragraph?.elements?.[0].textRun?.content?.startsWith(prefix))!;
+  para.paragraph!.elements![0].textRun![kind] = ["suggest.abc"];
+  return doc;
 }
 
 const tabIdsOf = (r: docs_v1.Schema$Request): string[] => {
@@ -351,7 +366,7 @@ describe("renderItems", () => {
     api.get.mockResolvedValueOnce({ data: docJson(tabText({ 3: `OBS ${R("n1", "✓ Hackathon 14 feb")}` })) });
     const { revisionId } = await readItems(auth, "doc1", TAB, rows());
     const result = await renderItems(auth, meeting, rows(), desiredFrom(rows()).map((d) => (d.id === "n1" ? { ...d, text: "x" } : d)), revisionId);
-    expect(result).toBe("ok");
+    expect(result.status).toBe("ok");
     expect(api.batchUpdate).not.toHaveBeenCalled();
   });
 
@@ -498,7 +513,7 @@ describe("renderItems", () => {
     const { revisionId } = await read(tabText());
     api.batchUpdate.mockRejectedValueOnce(conflict());
     const result = await renderItems(auth, meeting, rows(), [...desiredFrom(rows()), { id: "n5", section: "decision", text: "X" }], revisionId);
-    expect(result).toBe("conflict");
+    expect(result).toEqual({ status: "conflict" });
   });
 
   it("other errors are thrown", async () => {
@@ -512,7 +527,7 @@ describe("renderItems", () => {
   it("a revision it has not read: fetches, and on mismatch → 'conflict' without writing", async () => {
     api.get.mockResolvedValueOnce({ data: docJson(tabText(), "rev2") });
     const result = await renderItems(auth, meeting, rows(), [{ id: "n5", section: "decision", text: "X" }], "rev-unknown");
-    expect(result).toBe("conflict");
+    expect(result).toEqual({ status: "conflict" });
     expect(api.batchUpdate).not.toHaveBeenCalled();
   });
 });
@@ -521,11 +536,12 @@ describe("renderedRows", () => {
   it("records what was rendered: new items get ranges and positions, removed unlocked rows go, locked stay", () => {
     const rs = rows();
     rs[0] = { ...rs[0], locked: true };
-    const next = renderedRows(M, rs, [
-      toNotesItem(rs[1]),
-      { id: "n5", section: "action", text: "maila", owner: "Erik" },
-      { id: "n4", section: "now", text: "Nytt ämne" },
-    ]);
+    const next = renderedRows(
+      M,
+      rs,
+      [toNotesItem(rs[1]), { id: "n5", section: "action", text: "maila", owner: "Erik" }, { id: "n4", section: "now", text: "Nytt ämne" }],
+      { applied: new Set(["n2", "n5", "n4"]), removed: new Set(["n3"]) },
+    );
     expect(next.map((r) => r.id)).toEqual(["n1", "n2", "n4", "n5"]);
     expect(next.find((r) => r.id === "n1")).toEqual(rs[0]);
     expect(next.find((r) => r.id === "n5")).toMatchObject({
@@ -538,9 +554,160 @@ describe("renderedRows", () => {
   });
 });
 
+describe("fix round 1", () => {
+  const replaceOf = (reqs: docs_v1.Schema$Request[], name: string) =>
+    reqs.filter((r) => r.replaceNamedRangeContent?.namedRangeName === name);
+
+  describe("header ownership", () => {
+    const HDR = "ss-m1-header";
+    it("replaced while it is the single line we last wrote", async () => {
+      const { requests, res } = await tick(tabText(), desiredFrom, "● LIVE · uppdaterad 10:05");
+      expect(replaceOf(requests, HDR)).toHaveLength(1);
+      expect(res).toMatchObject({ status: "ok", headerRendered: "● LIVE · uppdaterad 10:05" });
+    });
+
+    it("a human typed inside the header range → not replaced", async () => {
+      const { requests, res } = await tick(tabText({ 0: "{ss-m1-header}● LIVE · uppdaterad 10:00 Simons rad{/ss-m1-header}" }), desiredFrom, "● LIVE · uppdaterad 10:05");
+      expect(requests).toEqual([]);
+      expect(res).toMatchObject({ status: "ok", headerRendered: null });
+    });
+
+    it("Enter inside the header range (a second paragraph) → not replaced", async () => {
+      const { requests } = await tick(tabText({ 0: "{ss-m1-header}● LIVE · uppdaterad\n10:00{/ss-m1-header}" }), desiredFrom, "● LIVE · uppdaterad 10:05");
+      expect(requests).toEqual([]);
+    });
+
+    it("text typed just outside the header range → not replaced", async () => {
+      const { requests } = await tick(tabText({ 0: `${H} – Styrelsemöte` }), desiredFrom, "● LIVE · uppdaterad 10:05");
+      expect(requests).toEqual([]);
+    });
+
+    it("no recorded header yet: the coverage check alone decides", async () => {
+      const m = { ...meeting, header_rendered: null };
+      const ok = await tick(tabText(), desiredFrom, "● LIVE · uppdaterad 10:05", { meeting: m });
+      expect(replaceOf(ok.requests, HDR)).toHaveLength(1);
+      api.batchUpdate.mockReset();
+      const edited = await tick(tabText({ 0: `X${H}` }), desiredFrom, "● LIVE · uppdaterad 10:05", { meeting: m });
+      expect(edited.requests).toEqual([]);
+    });
+  });
+
+  describe("adjacent removals", () => {
+    const withN5 = () => [...rows(), row("n5", "now", "Mer om sponsorer", { position: 1 })];
+    const text5 = () => `${tabText()}\n${R("n5", "Mer om sponsorer")}`;
+    const deletes = (reqs: docs_v1.Schema$Request[]) => reqs.filter((r) => r.deleteContentRange).map((r) => r.deleteContentRange!.range);
+    const paras = (text: string) => docJson(text).tabs![0].documentTab!.body!.content!.filter((c) => c.paragraph);
+    const para = (text: string, prefix: string) => paras(text).find((c) => c.paragraph!.elements![0].textRun!.content!.startsWith(prefix))!;
+
+    it("the last two items at the end of the tab → one delete from the newline before them, no overlap", async () => {
+      const { requests } = await tick(text5(), (rs) => desiredFrom(rs).filter((d) => d.id !== "n4" && d.id !== "n5"), undefined, { rows: withN5() });
+      const lastEnd = paras(text5()).at(-1)!.endIndex!;
+      expect(deletes(requests)).toEqual([{ tabId: TAB, startIndex: para(text5(), "Diskussion").startIndex! - 1, endIndex: lastEnd - 1 }]);
+      expect(requests.filter((r) => r.deleteNamedRange).map((r) => r.deleteNamedRange!.name).sort()).toEqual(["ss-m1-n4", "ss-m1-n5"]);
+    });
+
+    it("two adjacent items in the middle → one delete over both paragraphs", async () => {
+      const { requests } = await tick(tabText(), (rs) => desiredFrom(rs).filter((d) => d.id !== "n2" && d.id !== "n3"));
+      expect(deletes(requests)).toEqual([
+        { tabId: TAB, startIndex: para(tabText(), "☐ Simon").startIndex!, endIndex: para(tabText(), "☐ Anna").endIndex! },
+      ]);
+    });
+
+    it("all deletes in a batch are disjoint", async () => {
+      const { requests } = await tick(text5(), (rs) => desiredFrom(rs).filter((d) => !["n1", "n3", "n4", "n5"].includes(d.id)), undefined, { rows: withN5() });
+      const ds = deletes(requests).sort((a, b) => a!.startIndex! - b!.startIndex!);
+      for (let i = 1; i < ds.length; i++) expect(ds[i]!.startIndex!).toBeGreaterThanOrEqual(ds[i - 1]!.endIndex!);
+      expect(ds).toHaveLength(3);
+    });
+  });
+
+  describe("rows reflect only what was written", () => {
+    it("a skipped removal keeps its row (stale rows, human text in the paragraph)", async () => {
+      const { res, requests } = await tick(
+        tabText({ 6: `${R("n3", "☐ Anna: budget")} och lite till` }),
+        (rs) => desiredFrom(rs).filter((d) => d.id !== "n3"),
+        undefined,
+        { diff: false },
+      );
+      expect(requests).toEqual([]);
+      expect(res.status === "ok" && res.rows.find((r) => r.id === "n3")).toEqual(rows()[2]);
+    });
+
+    it("a skipped change keeps the old last_rendered_text (so the next diff does not lock our own line)", async () => {
+      const { res, requests } = await tick(
+        tabText({ 3: `OBS ${R("n1", "✓ Hackathon 14 feb")}` }),
+        (rs) => desiredFrom(rs).map((d) => (d.id === "n1" ? { ...d, text: "Hackathon 20 feb" } : d)),
+        undefined,
+        { diff: false },
+      );
+      expect(requests).toEqual([]);
+      expect(res.status === "ok" && res.rows.find((r) => r.id === "n1")).toEqual(rows()[0]);
+    });
+
+    it("written changes, inserts and removals are recorded", async () => {
+      const { res } = await tick(tabText(), (rs) => [
+        ...desiredFrom(rs).filter((d) => d.id !== "n3").map((d) => (d.id === "n1" ? { ...d, text: "Hackathon 20 feb" } : d)),
+        { id: "n5", section: "decision", text: "Ny" },
+      ]);
+      if (res.status !== "ok") throw new Error("expected ok");
+      expect(res.rows.map((r) => r.id)).toEqual(["n1", "n2", "n4", "n5"]);
+      expect(res.rows.find((r) => r.id === "n1")?.last_rendered_text).toBe("✓ Hackathon 20 feb");
+      expect(res.rows.find((r) => r.id === "n5")).toMatchObject({ range_name: "ss-m1-n5", last_rendered_text: "✓ Ny" });
+    });
+  });
+
+  describe("pending suggestions", () => {
+    it("readItems reports them; the diff locks the item", async () => {
+      api.get.mockResolvedValueOnce({ data: withSuggestion(docJson(tabText()), "✓ Hackathon", "suggestedDeletionIds") });
+      const { current, suggested } = await readItems(auth, "doc1", TAB, rows());
+      expect(current.get("n1")).toBe("✓ Hackathon 14 feb"); // a suggested deletion still shows as text
+      expect([...suggested]).toEqual(["n1"]);
+      expect(diffHumanEdits(rows(), current, suggested).locked.map((l) => l.id)).toEqual(["n1"]);
+    });
+
+    it("an item with a suggestion is never replaced or removed, even with stale rows", async () => {
+      const doc = () => withSuggestion(docJson(tabText()), "☐ Simon", "suggestedInsertionIds");
+      const changed = await tick(doc(), (rs) => desiredFrom(rs).map((d) => (d.id === "n2" ? { ...d, text: "ny" } : d)), undefined, { diff: false });
+      expect(changed.requests).toEqual([]);
+      const removed = await tick(doc(), (rs) => desiredFrom(rs).filter((d) => d.id !== "n2"), undefined, { diff: false });
+      expect(removed.requests).toEqual([]);
+    });
+
+    it("the 'now' item is not rewritten while a suggestion is on it", async () => {
+      const { requests } = await tick(withSuggestion(docJson(tabText()), "Diskussion", "suggestedInsertionIds"), (rs) =>
+        desiredFrom(rs).map((d) => (d.id === "n4" ? { ...d, text: "Nytt ämne" } : d)),
+      );
+      expect(requests).toEqual([]);
+    });
+
+    it("a paragraph-style suggestion counts too", async () => {
+      const doc = docJson(tabText());
+      const para = doc.tabs![0].documentTab!.body!.content!.find((c) => c.paragraph?.elements?.[0].textRun?.content?.startsWith("☐ Anna"))!;
+      para.paragraph!.suggestedParagraphStyleChanges = { "suggest.x": { paragraphStyle: {} } };
+      api.get.mockResolvedValueOnce({ data: doc });
+      const { suggested } = await readItems(auth, "doc1", TAB, rows());
+      expect([...suggested]).toEqual(["n3"]);
+    });
+  });
+
+  describe("empty items", () => {
+    it("a new item with no text is not inserted (no zero-length range) and not recorded", async () => {
+      const { requests, res } = await tick(tabText(), (rs) => [...desiredFrom(rs), { id: "n5", section: "now", text: "  \n " }]);
+      expect(requests).toEqual([]);
+      expect(res.status === "ok" && res.rows.some((r) => r.id === "n5")).toBe(false);
+    });
+
+    it("a change to empty text does not empty the range", async () => {
+      const { requests, res } = await tick(tabText(), (rs) => desiredFrom(rs).map((d) => (d.id === "n4" ? { ...d, text: "" } : d)));
+      expect(requests).toEqual([]);
+      expect(res.status === "ok" && res.rows.find((r) => r.id === "n4")).toEqual(rows()[3]);
+    });
+  });
+});
+
 describe("planRender", () => {
   it("is pure over a parsed tab (Task 10 can preview a render)", () => {
     const tab = parseNotesTab(docJson(tabText()), TAB);
-    expect(planRender(meeting, tab, rows(), desiredFrom(rows()))).toEqual([]);
+    expect(planRender(meeting, tab, rows(), desiredFrom(rows())).requests).toEqual([]);
   });
 });

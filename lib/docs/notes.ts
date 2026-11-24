@@ -58,6 +58,8 @@ interface Paragraph {
   end: number;
   /** Text including the trailing "\n"; non-text elements appear as OBJECT. */
   text: string;
+  /** Holds a pending suggestion (suggested insertion, deletion or style change) by a human. */
+  suggested: boolean;
 }
 
 export interface NotesTab {
@@ -77,6 +79,15 @@ function findTab(tabs: docs_v1.Schema$Tab[] | undefined, tabId: string): docs_v1
   return undefined;
 }
 
+/** Any `suggested…` field with content (ids or change maps) on a Docs object. */
+function hasSuggestion(obj: object): boolean {
+  for (const [k, v] of Object.entries(obj)) {
+    if (!k.startsWith("suggested") || v == null) continue;
+    if (Array.isArray(v) ? v.length > 0 : typeof v === "object" ? Object.keys(v).length > 0 : true) return true;
+  }
+  return false;
+}
+
 /** Paragraphs and named ranges of one tab, from `documents.get` with includeTabsContent=true. */
 export function parseNotesTab(doc: docs_v1.Schema$Document, tabId: string): NotesTab {
   const tab = findTab(doc.tabs, tabId);
@@ -85,11 +96,15 @@ export function parseNotesTab(doc: docs_v1.Schema$Document, tabId: string): Note
   for (const el of tab.documentTab.body?.content ?? []) {
     if (!el.paragraph || el.startIndex == null || el.endIndex == null) continue;
     let text = "";
+    let suggested = hasSuggestion(el.paragraph);
     for (const pe of el.paragraph.elements ?? []) {
       if (pe.textRun?.content != null) text += pe.textRun.content;
       else text += OBJECT.repeat(Math.max(1, (pe.endIndex ?? 0) - (pe.startIndex ?? 0)));
+      const inner = pe.textRun ?? pe.inlineObjectElement ?? pe.autoText ?? pe.pageBreak ?? pe.footnoteReference ??
+        pe.horizontalRule ?? pe.equation ?? pe.person ?? pe.richLink ?? pe.columnBreak ?? null;
+      if (inner && hasSuggestion(inner)) suggested = true;
     }
-    paragraphs.push({ start: el.startIndex, end: el.endIndex, text });
+    paragraphs.push({ start: el.startIndex, end: el.endIndex, text, suggested });
   }
   const ranges = new Map<string, { start: number; end: number }[][]>();
   for (const [name, group] of Object.entries(tab.documentTab.namedRanges ?? {})) {
@@ -113,6 +128,8 @@ export interface ItemSpan {
   paraText: string;
   /** More than one named range carries this name (e.g. a copy-paste). */
   ambiguous: boolean;
+  /** A human's pending suggestion touches these paragraphs. */
+  suggested: boolean;
 }
 
 /** Where a named range sits, or null when it is gone or empty (deleted by a human). */
@@ -138,18 +155,30 @@ export function itemSpan(tab: NotesTab, name: string): ItemSpan | null {
     paraEnd,
     paraText: joined.endsWith("\n") ? joined.slice(0, -1) : joined,
     ambiguous: (entries?.length ?? 0) > 1,
+    suggested: paras.some((p) => p.suggested),
   };
 }
 
 /** Current text of each rendered item: its whole paragraph(s); null when the range is gone. */
 export function currentItems(tab: NotesTab, rows: NoteItemRow[]): Map<string, string | null> {
+  return readCurrent(tab, rows).current;
+}
+
+/** Ids of rendered items with a human's pending suggestion in their paragraph(s). */
+export function suggestedItems(tab: NotesTab, rows: NoteItemRow[]): Set<string> {
+  return readCurrent(tab, rows).suggested;
+}
+
+function readCurrent(tab: NotesTab, rows: NoteItemRow[]) {
   const current = new Map<string, string | null>();
+  const suggested = new Set<string>();
   for (const row of rows) {
     if (!row.range_name || row.deleted_by_human) continue;
     const span = itemSpan(tab, row.range_name);
     current.set(row.id, span ? span.paraText : null);
+    if (span?.suggested) suggested.add(row.id);
   }
-  return current;
+  return { current, suggested };
 }
 
 // The last read per Doc revision, so renderItems builds its indices from exactly the revision it
@@ -158,7 +187,14 @@ const snapshots = new Map<string, NotesTab>();
 const snapshotKey = (docId: string, tabId: string, revisionId: string) => `${docId}\u0000${tabId}\u0000${revisionId}`;
 
 async function fetchTab(auth: OAuth2Client, docId: string, tabId: string): Promise<NotesTab> {
-  const doc = (await docsApi(auth).documents.get({ documentId: docId, includeTabsContent: true })).data;
+  // Suggestions inline, so a human's pending suggestion is visible (and locks the item).
+  const doc = (
+    await docsApi(auth).documents.get({
+      documentId: docId,
+      includeTabsContent: true,
+      suggestionsViewMode: "SUGGESTIONS_INLINE",
+    })
+  ).data;
   const tab = parseNotesTab(doc, tabId);
   snapshots.set(snapshotKey(docId, tabId, tab.revisionId), tab);
   while (snapshots.size > 32) snapshots.delete(snapshots.keys().next().value as string);
@@ -170,9 +206,9 @@ export async function readItems(
   docId: string,
   tabId: string,
   rows: NoteItemRow[],
-): Promise<{ revisionId: string; current: Map<string, string | null> }> {
+): Promise<{ revisionId: string; current: Map<string, string | null>; suggested: Set<string> }> {
   const tab = await fetchTab(auth, docId, tabId);
-  return { revisionId: tab.revisionId, current: currentItems(tab, rows) };
+  return { revisionId: tab.revisionId, ...readCurrent(tab, rows) };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -183,10 +219,12 @@ export async function readItems(
  * with the human's text (kept verbatim from now on); range gone → deleted_by_human (never
  * re-added). Already-locked items stay locked with their text refreshed. The "now" item is
  * never locked. Rows never rendered (no range yet) and rows missing from `current` are unchanged.
+ * An item with a human's pending suggestion (`suggested`, from readItems) is locked too.
  */
 export function diffHumanEdits(
   rows: NoteItemRow[],
   current: Map<string, string | null>,
+  suggested: Set<string> = new Set(),
 ): { locked: NotesItem[]; deletedIds: string[]; rows: NoteItemRow[] } {
   const locked: NotesItem[] = [];
   const deletedIds: string[] = [];
@@ -202,7 +240,7 @@ export function diffHumanEdits(
       next = { ...row, deleted_by_human: true };
     } else if (row.section === "now") {
       // never locked: always reflects the current topic
-    } else if (row.locked || cur !== row.last_rendered_text) {
+    } else if (row.locked || cur !== row.last_rendered_text || suggested.has(row.id)) {
       next = { ...row, locked: true, text: cur, owner: null, due: null };
     }
     if (next.deleted_by_human) deletedIds.push(next.id);
@@ -234,10 +272,23 @@ function sectionAnchor(meeting: MeetingRow, section: NoteSection): string | null
 function ownedSpan(tab: NotesTab, row: NoteItemRow): ItemSpan | null {
   if (!row.range_name || row.locked || row.deleted_by_human) return null;
   const span = itemSpan(tab, row.range_name);
-  if (!span || span.ambiguous || span.rangeText !== span.paraText) return null;
+  if (!span || span.ambiguous || span.suggested || span.rangeText !== span.paraText) return null;
   if (row.section !== "now" && span.paraText !== row.last_rendered_text) return null;
   return span;
 }
+
+export interface RenderPlan {
+  requests: DocsRequest[];
+  /** Items whose line in the Doc is now `formatItem(item)`: replaced, inserted, or already equal. */
+  applied: Set<string>;
+  /** Unlocked items whose paragraph and range are deleted. */
+  removed: Set<string>;
+  /** The header line written, if the header is replaced. */
+  header: string | null;
+}
+
+/** An item we refuse to render: nothing visible left after cleaning. */
+const isEmptyItem = (item: NotesItem) => clean(item.text) === "";
 
 /**
  * The requests that take the notes tab from `rows` to `desired`, built from `tab` (the revision
@@ -245,8 +296,10 @@ function ownedSpan(tab: NotesTab, row: NoteItemRow): ItemSpan | null {
  * - changed unlocked items: replaceNamedRangeContent (only when the range text differs);
  * - new items: one insertText per section after the section's last item (or its anchor), plus
  *   a named range per item;
- * - unlocked items missing from `desired`: their paragraph and range deleted;
- * - locked and human-deleted items: never touched, never re-added.
+ * - unlocked items missing from `desired`: their paragraph and range deleted (adjacent ones as
+ *   one run);
+ * - locked, human-deleted, suggested-on and empty items: never touched, never (re-)added;
+ * - the header only when its range still covers exactly the line we last wrote.
  */
 export function planRender(
   meeting: MeetingRow,
@@ -254,41 +307,51 @@ export function planRender(
   rows: NoteItemRow[],
   desired: NotesItem[],
   headerText?: string,
-): DocsRequest[] {
+): RenderPlan {
   const tabId = meeting.notes_tab_id;
   const byId = new Map(rows.map((r) => [r.id, r]));
   const desiredIds = new Set(desired.map((d) => d.id));
   const groups: Group[] = [];
+  const applied = new Set<string>();
+  const removed = new Set<string>();
+  let header: string | null = null;
 
   // Removals first, so inserts never anchor on an item deleted in the same batch.
-  const removed = new Set<string>();
   const lastIndex = tab.paragraphs.length ? tab.paragraphs[tab.paragraphs.length - 1].end : 1;
+  const doomed: { start: number; end: number; name: string }[] = [];
   for (const row of rows) {
     if (desiredIds.has(row.id)) continue;
     const span = ownedSpan(tab, row);
     // Only remove a paragraph that holds nothing but our line.
     if (!span || span.paraText !== row.last_rendered_text) continue;
     removed.add(row.id);
-    // The tab's final newline cannot be deleted: for the last paragraph take the newline before it.
-    const isLast = span.paraEnd >= lastIndex;
-    const start = isLast ? Math.max(1, span.paraStart - 1) : span.paraStart;
-    const end = isLast ? span.paraEnd - 1 : span.paraEnd;
-    if (end <= start) continue;
-    groups.push({
-      index: start,
-      kind: DELETE,
-      requests: [
-        { deleteNamedRange: { name: row.range_name!, tabsCriteria: { tabIds: [tabId] } } },
-        { deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } },
-      ],
-    });
+    doomed.push({ start: span.paraStart, end: span.paraEnd, name: row.range_name! });
+  }
+  // Adjacent removed paragraphs become one run, so deletes never overlap.
+  doomed.sort((a, b) => a.start - b.start);
+  const runs: { start: number; end: number; names: string[] }[] = [];
+  for (const d of doomed) {
+    const run = runs.at(-1);
+    if (run && d.start <= run.end) {
+      run.end = Math.max(run.end, d.end);
+      run.names.push(d.name);
+    } else runs.push({ start: d.start, end: d.end, names: [d.name] });
+  }
+  for (const run of runs) {
+    // The tab's final newline cannot be deleted: a run reaching the end takes the newline before it.
+    const isLast = run.end >= lastIndex;
+    const start = isLast ? Math.max(1, run.start - 1) : run.start;
+    const end = isLast ? lastIndex - 1 : run.end;
+    const requests: DocsRequest[] = run.names.map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
+    if (end > start) requests.push({ deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } });
+    groups.push({ index: start, kind: DELETE, requests });
   }
 
   // Changes and new items.
   const pending = new Map<NoteSection, NotesItem[]>();
   for (const item of desired) {
     const row = byId.get(item.id);
-    if (row?.locked || row?.deleted_by_human) continue;
+    if (row?.locked || row?.deleted_by_human || isEmptyItem(item)) continue;
     if (!row?.range_name) {
       // Already in the Doc (a render whose rows were not saved): never insert a second copy.
       if (tab.ranges.has(itemRangeName(meeting.id, item.id))) continue;
@@ -300,6 +363,7 @@ export function planRender(
     const span = ownedSpan(tab, row);
     if (!span) continue;
     const text = formatItem({ ...item, section: row.section });
+    applied.add(item.id);
     if (span.rangeText === text) continue;
     groups.push({ index: span.rangeStart, kind: REPLACE, requests: [replaceRange(tabId, row.range_name, text)] });
   }
@@ -337,6 +401,7 @@ export function planRender(
           range: { tabId, startIndex: offset, endIndex: offset + lines[i].length },
         },
       });
+      applied.add(items[i].id);
       offset += lines[i].length + 1;
     }
     if (!afterItem) {
@@ -355,32 +420,44 @@ export function planRender(
   if (headerText !== undefined && meeting.header_range) {
     const span = itemSpan(tab, meeting.header_range);
     const text = clean(headerText);
-    if (span && !span.ambiguous && span.rangeText !== text) {
+    // Ours only while the range is the whole single paragraph and still the line we last wrote
+    // (null = not recorded yet: the coverage check alone).
+    const owned =
+      span &&
+      !span.ambiguous &&
+      !span.suggested &&
+      span.rangeText === span.paraText &&
+      !span.paraText.includes("\n") &&
+      (meeting.header_rendered == null || span.paraText === meeting.header_rendered);
+    if (owned && text !== "" && span.rangeText !== text) {
       groups.push({ index: span.rangeStart, kind: REPLACE, requests: [replaceRange(tabId, meeting.header_range, text)] });
+      header = text;
     }
   }
 
   // Highest index first; at the same index a delete runs before an insert.
   groups.sort((a, b) => b.index - a.index || a.kind - b.kind);
-  return groups.flatMap((g) => g.requests);
+  return { requests: groups.flatMap((g) => g.requests), applied, removed, header };
 }
 
 /**
- * Note rows after a successful render of `desired` (what Task 10 persists): text, owner, due,
- * last_rendered_text and range_name for written items, removed unlocked items dropped, locked
- * and human-deleted rows unchanged.
+ * Note rows after a successful render (what Task 10 persists). Only what the plan actually did
+ * changes: applied items get text, owner, due, last_rendered_text and range_name; removed items
+ * are dropped; every other row (locked, deleted, skipped) is kept exactly as it was.
  */
-export function renderedRows(meetingId: string, rows: NoteItemRow[], desired: NotesItem[]): NoteItemRow[] {
+export function renderedRows(
+  meetingId: string,
+  rows: NoteItemRow[],
+  desired: NotesItem[],
+  plan: Pick<RenderPlan, "applied" | "removed">,
+): NoteItemRow[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const desiredIds = new Set(desired.map((d) => d.id));
-  const out: NoteItemRow[] = rows.filter(
-    (r) => desiredIds.has(r.id) || r.locked || r.deleted_by_human || !r.range_name,
-  );
+  const out: NoteItemRow[] = rows.filter((r) => !plan.removed.has(r.id));
   const nextPos = new Map<NoteSection, number>();
-  for (const r of rows) nextPos.set(r.section, Math.max(nextPos.get(r.section) ?? -1, r.position) );
+  for (const r of rows) nextPos.set(r.section, Math.max(nextPos.get(r.section) ?? -1, r.position));
   for (const item of desired) {
+    if (!plan.applied.has(item.id)) continue;
     const row = byId.get(item.id);
-    if (row?.locked || row?.deleted_by_human) continue;
     const section = row?.section ?? item.section;
     const updated: NoteItemRow = {
       meeting_id: meetingId,
@@ -403,9 +480,15 @@ export function renderedRows(meetingId: string, rows: NoteItemRow[], desired: No
   return out;
 }
 
+export type RenderResult =
+  | { status: "ok"; rows: NoteItemRow[]; headerRendered: string | null }
+  | { status: "conflict" };
+
 /**
  * One batchUpdate guarded by `revisionId` (from readItems) that renders `desired` and, with
  * `headerText`, replaces the header range. 'conflict' when the Doc moved on since that read.
+ * On 'ok': `rows` to persist (see renderedRows) and the header line written (persist it as
+ * `meetings.header_rendered`), or null when the header was not written.
  */
 export async function renderItems(
   auth: OAuth2Client,
@@ -414,21 +497,22 @@ export async function renderItems(
   desired: NotesItem[],
   revisionId: string,
   headerText?: string,
-): Promise<"ok" | "conflict"> {
+): Promise<RenderResult> {
   const tab =
     snapshots.get(snapshotKey(meeting.doc_id, meeting.notes_tab_id, revisionId)) ??
     (await fetchTab(auth, meeting.doc_id, meeting.notes_tab_id));
-  if (tab.revisionId !== revisionId) return "conflict";
-  const requests = planRender(meeting, tab, rows, desired, headerText);
-  if (!requests.length) return "ok";
+  if (tab.revisionId !== revisionId) return { status: "conflict" };
+  const plan = planRender(meeting, tab, rows, desired, headerText);
+  const ok = (): RenderResult => ({ status: "ok", rows: renderedRows(meeting.id, rows, desired, plan), headerRendered: plan.header });
+  if (!plan.requests.length) return ok();
   try {
     await docsApi(auth).documents.batchUpdate({
       documentId: meeting.doc_id,
-      requestBody: { requests, writeControl: { requiredRevisionId: revisionId } },
+      requestBody: { requests: plan.requests, writeControl: { requiredRevisionId: revisionId } },
     });
-    return "ok";
+    return ok();
   } catch (err) {
-    if (isRevisionConflict(err)) return "conflict";
+    if (isRevisionConflict(err)) return { status: "conflict" };
     throw err;
   }
 }
