@@ -7,6 +7,7 @@ import { isUuid } from "@/lib/db/ids";
 import { memberEmails } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
 import { originFrom } from "@/lib/origin";
+import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgNotice } from "@/lib/ui/messages";
 import {
@@ -64,7 +65,11 @@ export default async function OrgPage({
       people={people}
       meetings={meetings}
       notice={orgNotice(fel, klart)}
-      startMeeting={<StartMeetingForm orgId={org.id} shareTranscript={org.share_transcript} />}
+      startMeeting={<StartMeetingForm
+          orgId={org.id}
+          shareTranscript={org.share_transcript}
+          showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
+        />}
       actions={{
         rotateInvite: rotateInviteAction,
         addPerson: addPersonAction,

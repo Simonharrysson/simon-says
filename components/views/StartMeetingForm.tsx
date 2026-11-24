@@ -11,21 +11,30 @@ import { IconMic } from "@/components/ui/icons";
  * creates the Doc and the meeting. The server's Swedish message is shown as is. On success the
  * page is refreshed, so the new meeting shows up in the list with its Doc link.
  */
-export function StartMeetingForm({ orgId, shareTranscript }: { orgId: string; shareTranscript: boolean }) {
+export function StartMeetingForm({
+  orgId,
+  shareTranscript,
+  showTestMeeting = false,
+}: {
+  orgId: string;
+  shareTranscript: boolean;
+  /** Admins of the service only (decided on the server): the quiet "Testmöte" button. */
+  showTestMeeting?: boolean;
+}) {
   const router = useRouter();
   const id = useId();
   const [confirmed, setConfirmed] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function start() {
+  async function start(test = false) {
     setStarting(true);
     setError(null);
     try {
-      const res = await fetch("/api/meetings", {
+      const res = await fetch(test ? "/api/meetings/test" : "/api/meetings", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId, consent: true }),
+        body: JSON.stringify(test ? { orgId } : { orgId, consent: true }),
       });
       if (res.ok) {
         router.refresh();
@@ -67,7 +76,7 @@ export function StartMeetingForm({ orgId, shareTranscript }: { orgId: string; sh
           icon={<IconMic />}
           disabled={!confirmed}
           loading={starting}
-          onClick={start}
+          onClick={() => start()}
           aria-describedby={!confirmed ? `${id}-why` : undefined}
         >
           {starting ? "Startar…" : "Starta möte"}
@@ -78,6 +87,18 @@ export function StartMeetingForm({ orgId, shareTranscript }: { orgId: string; sh
           </p>
         )}
       </div>
+      {showTestMeeting && (
+        <div className="stack stack--2">
+          <div>
+            <Button disabled={starting} onClick={() => start(true)}>
+              Testmöte
+            </Button>
+          </div>
+          <p className="hint">
+            Spelar upp ett påhittat 10-minutersmöte i ett nytt dokument — ca 4–8 min. Du kan stänga fliken.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

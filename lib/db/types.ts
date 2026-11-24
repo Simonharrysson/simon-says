@@ -16,7 +16,8 @@ export type MeetingEventKind =
   | "started"
   | "ended"
   | "abandoned"
-  | "resumed";
+  | "resumed"
+  | "test_started";
 
 export interface OrgRow {
   id: string;

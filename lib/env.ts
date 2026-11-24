@@ -33,6 +33,8 @@ const schema = z.object({
   ANTHROPIC_API_KEY: required,
   RESEND_API_KEY: optional,
   ALARM_EMAIL: z.email(),
+  // Comma list of emails allowed to run Testmöte; falls back to ALARM_EMAIL (see lib/testmeeting/admin.ts).
+  ADMIN_EMAILS: optional,
   CRON_SECRET: required,
   APP_URL: z.url(),
   GLOBAL_DAILY_HOURS: z.coerce.number().positive().default(30),

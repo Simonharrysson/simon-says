@@ -1,0 +1,352 @@
+[
+{
+"speaker": "S1-speaker_0",
+"startMs": 2000,
+"text": "Hej allihop, välkomna till styrelsemötet. Vi kör en snabb namnrunda först så att anteckningarna blir rätt. Jag heter Karin Ek och är ordförande."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 14500,
+"text": "Jonas Holm, kassör."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 18304,
+"text": "Leila Nasser, sekreterare. Jag sköter också medlemsregistret."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 23847,
+"text": "Hi, I'm Daniel Brooks. I joined the board this autumn, and I'll stick to English if that's fine with everyone."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 35042,
+"text": "Självklart, Daniel. Vi blandar som vanligt. Då har vi fyra punkter idag: vårstädningen, medlemsavgiften, motorn till räddningsbåten och sist nyhetsbrevet. Om vi hinner tar vi bryggan också."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 49281,
+"text": "Första punkten, vårstädningen. Förra året var den första lördagen i april och det var ganska kallt. Leila, du kollade datum?"
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 60476,
+"text": "Ja. Jag hade tänkt föreslå lördag den femte april. Kranbilen kan komma då, och de flesta båtar ska ju inte i sjön förrän i maj ändå."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 74280,
+"text": "Femte april är påskafton? Nej förresten, påsken är senare nästa år. Men femte krockar med seglarskolans uppstartshelg, det vet jag eftersom min dotter går där."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 87649,
+"text": "That's a good point. Half the volunteers are parents from the sailing school, so we would lose a lot of hands on the fifth."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 100583,
+"text": "Okej, då är nästa möjliga lördag den tolfte april. Kranbilen sa att de kan båda helgerna."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 110039,
+"text": "Låter det bra för alla med tolfte april?"
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 116017,
+"text": "Ja, tolfte funkar för mig."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 120690,
+"text": "Works for me."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 124494,
+"text": "Då bestämmer vi det: vårstädningen blir lördag den tolfte april, samling klockan nio vid klubbhuset."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 133515,
+"text": "Bra. Vi behöver en container till skräpet också, förra året var den full redan vid lunch."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 142971,
+"text": "Kan du ta det, Leila? Boka en större container den här gången."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 150688,
+"text": "Ja, jag bokar containern. Jag gör det före första mars, annars brukar de vara slut."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 159709,
+"text": "Perfekt. Och fikat ordnar vi som vanligt, det behöver vi inte bestämma något om."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 168295,
+"text": "Andra punkten, medlemsavgiften. Jonas, du har tittat på siffrorna."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 174708,
+"text": "Ja. Kort sagt: avgiften har legat på sjuhundrafemtio kronor i fem år, och kostnaderna för el och försäkring har gått upp ungefär tjugo procent. Vi gick back med ungefär arton tusen i år."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 191555,
+"text": "How many members do we have right now?"
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 197533,
+"text": "Hundrafyrtiotvå betalande medlemmar. Så om vi höjer med hundrafemtio kronor täcker vi underskottet och lite till."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 206989,
+"text": "Jag tycker hundrafemtio är okej, men vi borde ha kvar den reducerade avgiften för juniorer. Annars tappar vi ungdomarna."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 217749,
+"text": "I agree with Leila. Could we keep juniors at the current level?"
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 225466,
+"text": "Det går bra, juniorerna är bara tjugo stycken, det påverkar inte mycket."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 233183,
+"text": "Ska vi säga så här: vi föreslår för årsmötet att medlemsavgiften höjs till niohundra kronor från och med 2027, och att junioravgiften ligger kvar som idag. Är vi överens?"
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 248291,
+"text": "Ja."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 251225,
+"text": "Ja, absolut."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 254594,
+"text": "Yes, agreed."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 257963,
+"text": "Då är det beslutat att styrelsen föreslår niohundra kronor från 2027, juniorer oförändrat."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 266115,
+"text": "Då skickar jag ut fakturorna för nästa år som vanligt, men jag måste vänta tills årsmötet har klubbat det. Jag skickar dem senast trettioförsta januari."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 279484,
+"text": "Bra, Jonas tar fakturorna senast sista januari."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 285027,
+"text": "Tredje punkten. Motorn på räddningsbåten. Den gick knappt igång vid sista övningen i september."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 293613,
+"text": "I had a look at it with the mechanic. Honestly, it's twenty-two years old and the spare parts are getting hard to find. Repairing it would be around fifteen thousand kronor, and no guarantee it lasts."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 311765,
+"text": "Och en ny?"
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 315569,
+"text": "I got two quotes. Marinservice in town offered a new forty horsepower outboard for thirty-eight thousand five hundred, including installation. Båtmotorhuset quoted forty-four thousand, without installation."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 329373,
+"text": "Marinservice har vi använt förut och de var bra. Har vi råd, Jonas?"
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 337525,
+"text": "Vi har fyrtiofemtusen i underhållsfonden. Så trettioåtta och ett halvt går, men då är fonden nästan tom inför bryggan."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 348285,
+"text": "Bryggan kommer vi inte att hinna ta i år ändå, tror jag. Säkerheten går först, räddningsbåten måste fungera."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 358611,
+"text": "I agree. I'd rather not have the rescue boat fail during the sailing school."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 367197,
+"text": "Jag håller med."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 371001,
+"text": "Då beslutar vi att köpa en ny motor från Marinservice för högst fyrtiotusen kronor, inklusive installation, och att den tas från underhållsfonden."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 383066,
+"text": "Ja, det står jag bakom."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 387739,
+"text": "Agreed."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 390673,
+"text": "Jag kan ringa Marinservice och beställa."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 395781,
+"text": "Fast vänta, Jonas, du har redan fakturorna och bokslutet. Jag tar kontakten med Marinservice, jag känner ägaren. Jag ringer och beställer nästa vecka."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 408281,
+"text": "Okej, det är nog bättre. Tack Karin."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 413824,
+"text": "Just make sure they can install it before the boats go in the water in May."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 423280,
+"text": "Det tar jag upp med dem."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 428388,
+"text": "Fjärde punkten, nyhetsbrevet. Leila, hur ser det ut?"
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 434366,
+"text": "Utkastet är nästan klart på svenska. Det handlar om vårstädningen, avgiften och lite om motorn. Problemet är att vi har ganska många medlemmar som inte läser svenska, särskilt de som har båtplats via universitetet."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 451648,
+"text": "I can do the English version. Send me the Swedish draft when it's done and I'll translate it."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 461974,
+"text": "Toppen. Jag skickar det i helgen."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 467082,
+"text": "När kan du ha den engelska versionen klar, Daniel?"
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 473495,
+"text": "Next Friday, if I get the draft this weekend."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 479908,
+"text": "Bra, då har vi engelska versionen nästa fredag."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 485886,
+"text": "Ska vi skicka nyhetsbrevet före eller efter årsmötet? Avgiften är ju inte klubbad än."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 494472,
+"text": "Jag tänker att vi skriver att styrelsen föreslår höjningen, så är det tydligt att årsmötet bestämmer."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 503928,
+"text": "Det blir bra. Vi skickar det före årsmötet med den formuleringen."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 511210,
+"text": "Om bryggan då, vi har några minuter kvar. Daniel, du hade pratat med kommunen?"
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 519796,
+"text": "Yes, briefly. The municipality might have a grant for jetties used by youth activities, up to fifty percent of the cost. But the application window doesn't open until spring."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 534904,
+"text": "Med motorn köpt har vi i princip inget kvar i fonden, så utan bidrag blir det inget i år."
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 545664,
+"text": "Vi borde nog inte bestämma något förrän vi vet mer om bidraget."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 553381,
+"text": "Nej, jag håller med. Vi tar bryggan som en egen punkt på nästa möte när vi vet mer. Det är inget beslut idag."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 565881,
+"text": "Fine with me. I'll keep an eye on when the application opens, but no promises on timing."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 575772,
+"text": "Något övrigt?"
+},
+{
+"speaker": "S1-speaker_2",
+"startMs": 579141,
+"text": "Bara att nästa möte blir som vanligt andra tisdagen i månaden. Jag skickar kallelse."
+},
+{
+"speaker": "S1-speaker_1",
+"startMs": 587727,
+"text": "Jag har inget mer."
+},
+{
+"speaker": "S1-speaker_3",
+"startMs": 591966,
+"text": "Nothing from me."
+},
+{
+"speaker": "S1-speaker_0",
+"startMs": 595770,
+"text": "Då sammanfattar jag kort. Vårstädning tolfte april. Vi föreslår niohundra kronor i medlemsavgift från 2027. Ny motor från Marinservice, högst fyrtiotusen. Leila bokar containern före första mars, Jonas skickar fakturorna senast sista januari, jag ringer Marinservice nästa vecka och Daniel gör den engelska versionen av nyhetsbrevet till nästa fredag. Tack allihop, mötet är avslutat."
+}
+]
