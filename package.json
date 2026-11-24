@@ -16,6 +16,7 @@
     "check-notes-render": "tsx --conditions=react-server scripts/check-notes-render.ts",
     "check-elevenlabs-token": "tsx --conditions=react-server scripts/check-elevenlabs-token.ts",
     "notes-replay": "tsx --conditions=react-server scripts/notes-replay.ts",
+    "check-start-meeting": "tsx --conditions=react-server scripts/check-start-meeting.ts",
     "demo-live": "tsx --conditions=react-server scripts/demo-live.ts"
   },
   "dependencies": {

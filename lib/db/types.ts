@@ -12,7 +12,8 @@ export type MeetingEventKind =
   | "doc_paused"
   | "reconnect"
   | "consent"
-  | "alarm";
+  | "alarm"
+  | "started";
 
 export interface OrgRow {
   id: string;

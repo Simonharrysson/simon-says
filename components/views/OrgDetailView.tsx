@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/Button";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
@@ -34,6 +36,8 @@ export interface OrgDetailViewProps {
   people: { id: string; name: string }[];
   meetings: OrgDetailMeeting[];
   notice: Notice | null;
+  /** The "Starta möte" form, shown while no meeting is running. Omitted: no start panel. */
+  startMeeting?: ReactNode;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
   /** Link into a running meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Hidden when absent. */
@@ -57,8 +61,9 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, liveMeetingHref, actions } = props;
-  const running = liveMeetingHref && meetings.find((m) => m.status === "live" || m.status === "ending");
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, liveMeetingHref, actions } = props;
+  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  const running = liveMeetingHref && active;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
 
   return (
@@ -92,6 +97,21 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
       <div className="org-grid">
         <div className="stack stack--5">
+          {active ? (
+            <Banner tone="info" title="Ett möte pågår" live={false}>
+              Anteckningarna skrivs i{" "}
+              <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                mötesdokumentet
+              </a>
+              . Ett nytt möte kan startas när det är avslutat.
+            </Banner>
+          ) : (
+            startMeeting && (
+              <Panel title="Starta möte" titleId="start-title">
+                {startMeeting}
+              </Panel>
+            )
+          )}
           <MeetingsPanel
             meetings={meetings}
             orgId={org.id}
@@ -210,8 +230,8 @@ function MeetingsPanel({
         <div className="panel-pad">
           <EmptyState title="Inga möten än">
             <p>
-              När någon startar ett möte hamnar det här, med en länk till dokumentet. Anteckningarna skrivs i den
-              personens Google Drive och delas med alla medlemmar.
+              När någon startar ett möte skapas ett Google-dokument i startarens Drive och delas med
+              föreningens medlemmar. Mötet hamnar här, med en länk till dokumentet.
             </p>
           </EmptyState>
         </div>

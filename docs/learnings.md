@@ -114,3 +114,20 @@ followed by `inspect` → `tick` → `inflight 10` → `inspect`.
 
 /integritet says usage records (`usage_daily`) and the org-creations log (`org_creations`) are kept 24 months to prevent abuse.
 Nothing enforces that yet: a scheduled cleanup (e.g. in the daily cron) must delete rows older than 24 months, or the page must be changed.
+
+## 2026-11-24 · Task 6 · Starting a meeting (createMeetingDoc, appendTranscript)
+
+Run with `npm run check-start-meeting` on simon.harrysson@gmail.com, member simon@harrysson.co.
+
+- `drive.files.create` with the Doc mime type and `parents: [folder]` creates the Doc inside the org
+  folder in one call (no separate move). The folder lookup `name=… and 'me' in owners and trashed=false`
+  under drive.file finds the folder the app made earlier: a second run reused it (exactly one folder).
+- The new Doc's one tab is `t.0`; `addDocumentTab` as the last request of the same batchUpdate returns
+  its tab id in `replies.at(-1)`. Header range text equals `header_rendered` exactly; four HEADING_3.
+- Share as writer with `sendNotificationEmail=false`: permission list shows owner + writer, no email.
+- `appendTranscript` after a person typed on the last line (`jag skriver här`) puts our line on its own
+  line (the `\n` prefix); in an empty tab no prefix. Our own appends end in `\n`, so the tab's last
+  paragraph is empty for the next append.
+- `meeting_events.kind` needed `'started'` (migration 0007, widening only).
+- No DB unique index for "one live meeting per org": existing DB tests seed several live meetings per
+  org. The route checks first (409); two simultaneous starts could both pass (Doc orphaned, two rows).

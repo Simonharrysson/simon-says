@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import { OrgDetailView } from "@/components/views/OrgDetailView";
 import { isUuid } from "@/lib/db/ids";
 import { memberEmails } from "@/lib/db/members";
@@ -63,6 +64,7 @@ export default async function OrgPage({
       people={people}
       meetings={meetings}
       notice={orgNotice(fel, klart)}
+      startMeeting={<StartMeetingForm orgId={org.id} shareTranscript={org.share_transcript} />}
       actions={{
         rotateInvite: rotateInviteAction,
         addPerson: addPersonAction,

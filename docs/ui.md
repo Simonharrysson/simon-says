@@ -183,6 +183,8 @@ the digits.
 
 `OrgDetailView` takes `startMeetingHref?` and `liveMeetingHref?: (id) => string`. With the latter,
 running meetings get "Till mötet" in the list and the header action becomes "Fortsätt mötet".
+`startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`, which posts
+to `/api/meetings`); while a meeting is live/ending it is replaced by an info banner with the Doc link.
 
 ## Dependencies
 
