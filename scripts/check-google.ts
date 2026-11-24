@@ -18,10 +18,9 @@
  * State (doc id, tab ids) lives in .check-google/state.json (gitignored).
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { authFor, errInfo, prepareEnv } from "./lib/google-env";
 
-const PROJECT_REF = "orvdeynkpfcujocrjgud";
 const STATE_DIR = join(process.cwd(), ".check-google");
 const STATE_FILE = join(STATE_DIR, "state.json");
 const RANGES = ["ss-1", "ss-2", "ss-3"];
@@ -33,51 +32,9 @@ interface State {
   url: string;
 }
 
-function loadEnvFile(path: string): void {
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (!m || process.env[m[1]]) continue;
-    process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, "$2");
-  }
-}
-
-async function prepareEnv(): Promise<void> {
-  loadEnvFile(process.env.SIMON_SAYS_ENV ?? join(homedir(), "simon-says-private", ".env"));
-  process.env.SUPABASE_URL ??= `https://${PROJECT_REF}.supabase.co`;
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const token = process.env.SUPABASE_ACCESS_TOKEN;
-    if (!token) throw new Error("need SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ACCESS_TOKEN");
-    const res = await fetch(`https://api.supabase.com/v1/projects/${PROJECT_REF}/api-keys?reveal=true`, {
-      headers: { authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error(`fetching api keys: HTTP ${res.status}`);
-    const keys = (await res.json()) as { name: string; api_key: string }[];
-    const service = keys.find((k) => k.name === "service_role")?.api_key;
-    const anon = keys.find((k) => k.name === "anon")?.api_key;
-    if (!service) throw new Error("no service_role key in the api-keys response");
-    process.env.SUPABASE_SERVICE_ROLE_KEY = service;
-    process.env.SUPABASE_ANON_KEY ??= anon;
-  }
-  // Required by lib/env but unused here.
-  const unused: Record<string, string> = {
-    SUPABASE_ANON_KEY: "unused-by-check-google",
-    ELEVENLABS_API_KEY: "unused-by-check-google",
-    ELEVENLABS_COMMIT_STRATEGY: "vad",
-    ANTHROPIC_API_KEY: "unused-by-check-google",
-    ALARM_EMAIL: "unused@example.com",
-    CRON_SECRET: "unused-by-check-google",
-    APP_URL: "http://localhost:3000",
-  };
-  for (const [k, v] of Object.entries(unused)) process.env[k] ??= v;
-}
-
 const readState = (): State => JSON.parse(readFileSync(STATE_FILE, "utf8")) as State;
 const now = () => new Date().toISOString().slice(11, 19);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const errInfo = (err: unknown) => {
-  const e = err as { status?: number; code?: number; response?: { status?: number }; message?: string };
-  return { status: e.status ?? e.response?.status ?? e.code, message: e.message };
-};
 
 async function main(): Promise<void> {
   const [userArg, stage, ...args] = process.argv.slice(2);
@@ -87,22 +44,12 @@ async function main(): Promise<void> {
   }
   await prepareEnv();
 
-  const { supabaseAdmin } = await import("@/lib/supabase/admin");
-  const { getGoogleAuth } = await import("@/lib/google/client");
   const { fetchGrantedScope, hasDriveFile } = await import("@/lib/google/scopes");
   const g = await import("@/lib/google/docs");
 
-  let userId = userArg;
-  if (userArg.includes("@")) {
-    const { data, error } = await supabaseAdmin().auth.admin.listUsers({ perPage: 1000 });
-    if (error) throw error;
-    const user = data.users.find((u) => u.email?.toLowerCase() === userArg.toLowerCase());
-    if (!user) throw new Error(`no Supabase user with email ${userArg}`);
-    userId = user.id;
-  }
+  const { userId, auth } = await authFor(userArg);
   console.log(`user ${userId}`);
 
-  const auth = await getGoogleAuth(userId);
   const docs = g.docsApi(auth);
   const drive = g.driveApi(auth);
   const getDoc = async (documentId: string) =>

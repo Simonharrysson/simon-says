@@ -70,3 +70,20 @@ Changed in later tasks (docs/plan.md updated):
   400-day max age). Changed: the callback re-saves the session with
   `setSession({access_token, refresh_token})` after storing the Google token (drops the provider
   fields), and the server client sets `cookieOptions: { httpOnly: true }` (we have no browser client).
+
+## 2026-11-24 · Task 9 · Rendering notes items (automatic part)
+
+Run with `scripts/check-notes-render.ts … auto` on simon.harrysson@gmail.com, 21/21 checks passed. The human part
+(Simon edits, deletes and types during a render) is pending.
+
+- Item lines with `☐`, `✓`, å/ä/ö and an emoji read back exactly as rendered (paragraph text = range text =
+  `formatItem`), so a fresh render never looks like a human edit.
+- **An API insert right after an item does not grow that item's range**, even with a
+  `replaceNamedRangeContent` on the same item in the same batch (insert runs first, highest index first).
+  New items are inserted as `"\n<line>…"` just before the previous paragraph's newline.
+- Paragraphs split off a `HEADING_3` anchor inherit the heading style; one `updateParagraphStyle`
+  (`NORMAL_TEXT`) on the new paragraphs fixes it. After an item they inherit the item's style.
+- Deleting a paragraph plus `deleteNamedRange` leaves no range behind. The tab's last paragraph is removed
+  by deleting from the newline before it; a delete and an insert at that same index work in one batch
+  when the delete runs first.
+- A render with a stale revision returns `'conflict'` and writes nothing.

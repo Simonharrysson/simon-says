@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check-google": "tsx --conditions=react-server scripts/check-google.ts",
+    "check-notes-render": "tsx --conditions=react-server scripts/check-notes-render.ts",
     "check-elevenlabs-token": "tsx --conditions=react-server scripts/check-elevenlabs-token.ts"
   },
   "dependencies": {

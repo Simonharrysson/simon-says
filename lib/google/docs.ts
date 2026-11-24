@@ -130,16 +130,33 @@ export interface GuardResult<T> {
   conflicts: number;
 }
 
+/** Random wait before a read→write retry: 150–600 ms (Task 2: immediate retries lost to continuous typing). */
+export function retryDelayMs(random: () => number = Math.random): number {
+  return 150 + Math.floor(random() * 451);
+}
+
+export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export interface GuardOptions {
+  maxRetries?: number;
+  /** Injected in tests. */
+  sleep?: (ms: number) => Promise<void>;
+  random?: () => number;
+}
+
 /**
- * read → write with the read's revision; on a revision conflict, repeat read → write up to
- * `maxRetries` more times. Other errors, and the conflict after the last retry, are thrown.
+ * read → write with the read's revision; on a revision conflict, wait `retryDelayMs()` and
+ * repeat read → write up to `maxRetries` (default 4) more times. Other errors, and the
+ * conflict after the last retry, are thrown.
  */
 export async function writeWithRevisionGuard<S, T>(
   read: () => Promise<S>,
   write: (snapshot: S) => Promise<T>,
-  maxRetries = 4,
+  options: GuardOptions = {},
 ): Promise<GuardResult<T>> {
+  const { maxRetries = 4, sleep: wait = sleep, random = Math.random } = options;
   for (let conflicts = 0; ; conflicts++) {
+    if (conflicts > 0) await wait(retryDelayMs(random));
     const snapshot = await read();
     try {
       return { value: await write(snapshot), conflicts };

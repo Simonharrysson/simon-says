@@ -15,3 +15,5 @@ next-env.d.ts
 
 # scripts/check-google.ts state (doc ids)
 /.check-google/
+# scripts/check-notes-render.ts state (doc id, note rows)
+/.check-notes/

@@ -5,6 +5,7 @@ import {
   paragraphsWithRanges,
   readTab,
   replaceRange,
+  retryDelayMs,
   writeWithRevisionGuard,
 } from "./docs";
 
@@ -117,23 +118,50 @@ describe("isRevisionConflict", () => {
   });
 });
 
+describe("retryDelayMs", () => {
+  it("is 150–600 ms", () => {
+    expect(retryDelayMs(() => 0)).toBe(150);
+    expect(retryDelayMs(() => 0.999999)).toBe(600);
+    for (let i = 0; i < 200; i++) {
+      const d = retryDelayMs();
+      expect(d).toBeGreaterThanOrEqual(150);
+      expect(d).toBeLessThanOrEqual(600);
+    }
+  });
+});
+
 describe("writeWithRevisionGuard", () => {
-  it("re-reads and retries after a conflict", async () => {
+  const noWait = () => vi.fn(async (_ms: number) => {});
+
+  it("re-reads and retries after a conflict, waiting 150–600 ms first", async () => {
     const read = vi.fn(async () => "snap");
     const write = vi.fn().mockRejectedValueOnce(conflict()).mockResolvedValueOnce("ok");
-    await expect(writeWithRevisionGuard(read, write)).resolves.toEqual({ value: "ok", conflicts: 1 });
+    const sleep = noWait();
+    await expect(writeWithRevisionGuard(read, write, { sleep })).resolves.toEqual({ value: "ok", conflicts: 1 });
     expect(read).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    const ms = sleep.mock.calls[0][0];
+    expect(ms).toBeGreaterThanOrEqual(150);
+    expect(ms).toBeLessThanOrEqual(600);
   });
 
-  it("gives up after 4 retries (5 attempts)", async () => {
+  it("does not wait before the first attempt", async () => {
+    const sleep = noWait();
+    await writeWithRevisionGuard(async () => 0, async () => "ok", { sleep });
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("gives up after 4 retries (5 attempts, 4 waits)", async () => {
     const write = vi.fn().mockRejectedValue(conflict());
-    await expect(writeWithRevisionGuard(async () => 0, write)).rejects.toThrow(/revision/);
+    const sleep = noWait();
+    await expect(writeWithRevisionGuard(async () => 0, write, { sleep })).rejects.toThrow(/revision/);
     expect(write).toHaveBeenCalledTimes(5);
+    expect(sleep).toHaveBeenCalledTimes(4);
   });
 
   it("does not retry other errors", async () => {
     const write = vi.fn().mockRejectedValue(new Error("boom"));
-    await expect(writeWithRevisionGuard(async () => 0, write)).rejects.toThrow("boom");
+    await expect(writeWithRevisionGuard(async () => 0, write, { sleep: noWait() })).rejects.toThrow("boom");
     expect(write).toHaveBeenCalledTimes(1);
   });
 });
