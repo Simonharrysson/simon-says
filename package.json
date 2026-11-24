@@ -15,7 +15,8 @@
     "check-google": "tsx --conditions=react-server scripts/check-google.ts",
     "check-notes-render": "tsx --conditions=react-server scripts/check-notes-render.ts",
     "check-elevenlabs-token": "tsx --conditions=react-server scripts/check-elevenlabs-token.ts",
-    "notes-replay": "tsx --conditions=react-server scripts/notes-replay.ts"
+    "notes-replay": "tsx --conditions=react-server scripts/notes-replay.ts",
+    "demo-live": "tsx --conditions=react-server scripts/demo-live.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.13.0",
