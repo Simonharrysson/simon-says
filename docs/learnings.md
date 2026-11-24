@@ -87,3 +87,25 @@ Run with `scripts/check-notes-render.ts … auto` on simon.harrysson@gmail.com, 
   by deleting from the newline before it; a delete and an insert at that same index work in one batch
   when the delete runs first; the heading above keeps `HEADING_3` and the new item is `NORMAL_TEXT`.
 - A render with a stale revision returns `'conflict'` and writes nothing.
+
+## 2026-11-24 · Task 9 · Rendering notes items (human part)
+
+The edits were made in the Google Docs editor (in Simon's browser, at his request) on a `setup` Doc with 5 items,
+followed by `inspect` → `tick` → `inflight 10` → `inspect`.
+
+- **Edit in the middle** ("stora " in "☐ Simon: boka lokal (fre)"): the text landed inside the range, and the item was locked with the
+  human text.
+- **Text typed right after a line's end** (", i Kårallen"): the text landed outside the range (the range stayed `[48,88)` over the original text),
+  and the whole-paragraph diff locked the item. This confirms the Task 2 edge rule.
+- **Enter in the middle of a line**: one range spanned both paragraphs, and the item was locked with both
+  (`"☐ Åsa: beställa 😀-tröjor i alla \nstorlekar"`).
+- **Line deleted including its line break** (backspaces): the named range was **gone completely** (no entry left, not
+  an empty range), so the item went to `deleted`.
+- **`tick`** reworded every item it was allowed to touch: the locked items were kept verbatim (PASS ×3), and the deleted n2 was not re-added (PASS).
+- **`inflight 10`** (4 sentences typed on a new line at the end while a render was in flight): attempt 1 `conflict`, attempt 2 `ok` about 2 s
+  later. The typed paragraph was fully intact.
+- **An edge character deleted and retyped** (the final ")" of the "now" line): the range **shrank** to `[195,230)`, one character
+  short of its paragraph, and the ")" now sits outside the range. The diff did not lock the item (its paragraph is unchanged), and the shrunk-range guard
+  skipped it, so the "now" item is **frozen**: the ticks did not add their " · t1"/" · t2" to it. This is the
+  documented fail-safe. Consequence for Task 8/10: a frozen "now" item only updates if Claude makes a new "now" item.
+  Task 10 could detect `rangeText ≠ paraText` on the "now" item and, for example, retire it, so that Claude gets a new id.
