@@ -1,0 +1,64 @@
+{
+  "source": "Synthetic board meeting written for Task 8 (scripts/notes-replay.ts). Fictional club and fictional people; no real meeting.",
+  "orgName": "Solbacka Båtklubb",
+  "speakerNames": {
+    "S1-speaker_0": "Karin Ek",
+    "S1-speaker_1": "Jonas Holm",
+    "S1-speaker_2": "Leila Nasser",
+    "S1-speaker_3": "Daniel Brooks"
+  },
+  "languages": ["sv", "en"],
+  "traps": [
+    "Spring clean-up date proposed as 5 April, then changed to 12 April before it is decided.",
+    "Jonas volunteers to call Marinservice, then Karin takes that task instead.",
+    "The jetty (bryggan) is explicitly NOT decided; it goes to the next meeting.",
+    "Daniel watching the grant application is explicitly 'no promises' (not expected as an action)."
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Vårstädningen blir lördag 12 april, samling kl 9 vid klubbhuset.",
+      "match": [["12", "tolfte"], ["april"]]
+    },
+    {
+      "key": "D2",
+      "text": "Styrelsen föreslår årsmötet medlemsavgift 900 kr från 2027; junioravgiften oförändrad.",
+      "match": [["900", "niohundra"]]
+    },
+    {
+      "key": "D3",
+      "text": "Ny motor till räddningsbåten köps från Marinservice för högst 40 000 kr inkl. installation, från underhållsfonden.",
+      "match": [["marinservice"], ["40 000", "40000", "40 000", "fyrtiotusen", "40 tkr", "40 kkr"]]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Leila Nasser",
+      "text": "Boka (större) container till vårstädningen",
+      "due": "före 1 mars",
+      "match": [["container"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Jonas Holm",
+      "text": "Skicka ut fakturorna för medlemsavgiften",
+      "due": "senast 31 januari",
+      "match": [["faktur"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Karin Ek",
+      "text": "Ringa Marinservice och beställa motorn",
+      "due": "nästa vecka",
+      "match": [["marinservice"]]
+    },
+    {
+      "key": "A4",
+      "owner": "Daniel Brooks",
+      "text": "Engelsk version av nyhetsbrevet",
+      "due": "nästa fredag",
+      "match": [["engelsk", "english"]]
+    }
+  ]
+}

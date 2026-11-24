@@ -17,3 +17,5 @@ next-env.d.ts
 /.check-google/
 # scripts/check-notes-render.ts state (doc id, note rows)
 /.check-notes/
+# scripts/notes-replay.ts logs (may quote transcripts)
+/.notes-replay/
