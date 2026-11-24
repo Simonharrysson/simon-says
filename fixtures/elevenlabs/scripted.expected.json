@@ -1,0 +1,15 @@
+{
+  "source": "spike/fixture-script.json (fictional people, TTS voices; no real person's voice)",
+  "people": ["Anna Lindqvist", "Erik Johansson", "Maja Berg", "Tom Fletcher"],
+  "languages": ["sv", "en"],
+  "decisions": [
+    { "text": "Hackathonet hålls den 14 mars i Kårhuset.", "by": "Anna Lindqvist" },
+    { "text": "Vegetarisk mat som standard.", "by": "Maja Berg" }
+  ],
+  "action_items": [
+    { "owner": "Erik Johansson", "text": "Skicka sponsoravtalet till Anna för underskrift", "due": "fredag" },
+    { "owner": "Tom Fletcher", "text": "Första utkast till affischen, delas i gruppchatten", "due": "nästa onsdag" },
+    { "owner": "Anna Lindqvist", "text": "Boka lokalen i Kårhuset formellt", "due": "direkt efter mötet" }
+  ],
+  "facts": ["Matbudget max 5 000 kr", "Nästa möte om två veckor"]
+}

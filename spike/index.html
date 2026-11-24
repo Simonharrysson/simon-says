@@ -1,0 +1,68 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Simon Says spike</title>
+<style>body{font:14px system-ui;margin:16px}#log{white-space:pre-wrap;font:12px ui-monospace;max-height:60vh;overflow:auto;border:1px solid #ccc;padding:8px}</style>
+<h1>ElevenLabs realtime spike</h1>
+<p>Run <code>node spike/token-server.mjs</code> and open http://localhost:8787.</p>
+<label>commit_strategy <select id="cs"><option>vad</option><option>turn_prediction</option><option>manual</option></select></label>
+<label>manual commit every <input id="every" type="number" value="25" style="width:4em"> s</label>
+<label><input id="names" type="checkbox"> infer_speaker_names</label>
+<label>keyterms (comma) <input id="kt" size="30"></label>
+<label>max session s <input id="max" type="number" value="14400" style="width:6em"></label>
+<p><button id="start">Start</button> <button id="stop" disabled>Stop</button>
+<button id="dlLog">Download events.jsonl</button> <button id="dlPcm">Download audio.pcm</button></p>
+<div id="live"></div><div id="log"></div>
+<script>
+// AudioWorklet: downsample to 16 kHz mono PCM16, post 100 ms chunks.
+const worklet = `
+class P extends AudioWorkletProcessor {
+  constructor(){ super(); this.ratio = sampleRate / 16000; this.pos = 0; this.buf = []; }
+  process(inputs){
+    const ch = inputs[0][0]; if (!ch) return true;
+    for (; this.pos < ch.length; this.pos += this.ratio) {
+      const s = Math.max(-1, Math.min(1, ch[Math.floor(this.pos)]));
+      this.buf.push(s < 0 ? s * 0x8000 : s * 0x7fff);
+      if (this.buf.length === 1600) { this.port.postMessage(Int16Array.from(this.buf).buffer, []); this.buf = []; }
+    }
+    this.pos -= ch.length; return true;
+  }
+}
+registerProcessor('p', P);`;
+const $ = id => document.getElementById(id);
+const events = [], pcm = [];
+let ws, ctx, stream, t0, sent = 0;
+const log = o => { const line = JSON.stringify(o); events.push(line); $('log').textContent = line + '\n' + $('log').textContent.slice(0, 20000); };
+const b64 = buf => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); };
+
+$('start').onclick = async () => {
+  const { token } = await (await fetch('/token?max=' + $('max').value)).json();
+  const q = new URLSearchParams({ model_id: 'scribe_v3_live', audio_format: 'pcm_16000', diarize: 'true', multilang_mode: 'true',
+    include_timestamps: 'true', commit_strategy: $('cs').value });
+  if ($('names').checked) q.set('infer_speaker_names', 'true');
+  for (const k of $('kt').value.split(',').map(s => s.trim()).filter(Boolean)) q.append('keyterms', k);
+  log({ k: 'meta', params: q.toString() });
+  q.set('token', token);
+  ws = new WebSocket('wss://api.elevenlabs.io/v1/speech-to-text/realtime?' + q);
+  t0 = performance.now(); sent = 0;
+  ws.onmessage = e => { const msg = JSON.parse(e.data); log({ k: 'ev', t: Math.round(performance.now() - t0), sent_s: sent / 10, msg });
+    if (msg.message_type === 'partial_transcript') $('live').textContent = msg.text; };
+  ws.onclose = e => log({ k: 'close', code: e.code, reason: e.reason, sent_s: sent / 10 });
+  stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 } });
+  ctx = new AudioContext();
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([worklet], { type: 'text/javascript' })));
+  const node = new AudioWorkletNode(ctx, 'p');
+  ctx.createMediaStreamSource(stream).connect(node);
+  const every = $('cs').value === 'manual' ? Number($('every').value) * 10 : 0;
+  node.port.onmessage = ({ data }) => {
+    pcm.push(new Uint8Array(data));
+    if (ws.readyState !== 1) return;
+    sent++;
+    ws.send(JSON.stringify({ message_type: 'input_audio_chunk', audio_base_64: b64(data), commit: every > 0 && sent % every === 0, sample_rate: 16000 }));
+  };
+  $('start').disabled = true; $('stop').disabled = false;
+};
+$('stop').onclick = () => { stream.getTracks().forEach(t => t.stop()); ctx.close(); setTimeout(() => ws.close(1000, 'stop'), 5000); $('stop').disabled = true; };
+const dl = (parts, name) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(parts)); a.download = name; a.click(); };
+$('dlLog').onclick = () => dl([events.join('\n') + '\n'], 'events.jsonl');
+$('dlPcm').onclick = () => dl(pcm, 'audio-16k-s16le.pcm');
+</script>
