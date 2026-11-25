@@ -375,6 +375,7 @@ export function agendaContext(
     formatName: FORMAT_NAMES[profile.kind],
     decisionPrefix: profile.decisionPrefix,
     groupBy: profile.tasksSection?.groupBy ?? "person",
+    numbering: profile.numbering,
     anchors: placed.map(({ at: _at, ...a }) => a),
     people: people.map((p) => ({ name: p.name, role: p.role ?? null })),
   };

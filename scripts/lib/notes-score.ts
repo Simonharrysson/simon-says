@@ -49,8 +49,8 @@ export interface Expected {
     /** The label the format shows for the owner (their role). */
     ownerLabel?: string;
   }[];
-  /** Agenda mode (veckomote): the agenda Doc's items, as the tick's agenda context has them. */
-  agenda?: { profile: "veckomote"; items: { key: string; label: string; role: ItemRole; sub?: string[] }[] };
+  /** Agenda mode: the agenda Doc's items, as the tick's agenda context has them, and its standard format. */
+  agenda?: { profile: "veckomote" | "styrelseprotokoll"; items: { key: string; label: string; role: ItemRole; sub?: string[] }[] };
   people?: { name: string; role: string | null }[];
   /** Agenda mode: last meeting's open tasks, pre-filled as c1…; `done` is what the meeting reports. */
   carried?: { id: string; owner: string; text: string; done: boolean }[];

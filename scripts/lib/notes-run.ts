@@ -11,7 +11,7 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import type { CheckinWindow } from "@/lib/db/types";
 import { formatLine } from "@/lib/docs/format-render";
 import { formatItem } from "@/lib/docs/notes";
-import { FORMAT_NAMES, VECKOMOTE } from "@/lib/formats/standard";
+import { FORMAT_NAMES, STANDARD } from "@/lib/formats/standard";
 import { checkinSpan, endPassWindow, type SegmentRead } from "@/lib/meetings/tick";
 import type { AgendaContext } from "@/lib/notes/agenda-prompt";
 import { detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
@@ -124,6 +124,9 @@ export function agendaDocLines(expected: Expected): string[] {
   return (expected.agenda?.items ?? []).flatMap((a) => [a.label, ...(a.sub ?? [])]);
 }
 
+/** The fixture's standard format (Veckomöte unless the expected file names another). */
+const profileOf = (expected: Expected) => STANDARD[expected.agenda?.profile ?? "veckomote"];
+
 /** The notes tab in agenda mode: the agenda Doc's lines, then our items as the format renderer writes them, then human lines. */
 export function agendaTabText(
   expected: Expected,
@@ -132,16 +135,18 @@ export function agendaTabText(
 ): { text: string; ownLines: string[] } {
   const people = rolePeople(expected);
   const label = (owner: string) => ownerLabel(resolveOwner(owner, people), owner, "role");
-  const own = items.map((i) => formatLine(i, { profile: VECKOMOTE, ownerLabel: label }));
+  const own = items.map((i) => formatLine(i, { profile: profileOf(expected), ownerLabel: label }));
   return { text: [...agendaDocLines(expected), ...own, ...humanLines.map((h) => h.line)].join("\n"), ownLines: own };
 }
 
 /** What the notes engine is told about the agenda (the tick's agendaContext, from the fixture). */
 export function agendaContextOf(expected: Expected): AgendaContext {
+  const profile = profileOf(expected);
   return {
-    formatName: FORMAT_NAMES.veckomote,
-    decisionPrefix: VECKOMOTE.decisionPrefix,
+    formatName: FORMAT_NAMES[profile.kind],
+    decisionPrefix: profile.decisionPrefix,
     groupBy: "role",
+    numbering: profile.numbering,
     anchors: (expected.agenda?.items ?? []).map((a) => ({ key: a.key, label: a.label, role: a.role, humanText: (a.sub ?? []).join("\n") })),
     people: (expected.people ?? []).map((p) => ({ name: p.name, role: p.role })),
   };

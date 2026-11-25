@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, type AnchorResult } from "@/lib/agenda/anchor";
 import { carriedItems, openTasks, previousMeeting } from "@/lib/agenda/followup";
+import { missingRequired } from "@/lib/agenda/scan";
 import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle } from "@/lib/docs/create";
 import { planFormatRender } from "@/lib/docs/format-render";
 import { readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
@@ -53,6 +54,12 @@ export type StartResult =
       appended: string[];
       /** Open tasks of the previous meeting pre-filled under "Från förra veckan". */
       carried: number;
+      /**
+       * Agenda mode: the format's required items (stadgar) the agenda Doc lacks, in the profile's
+       * spelling. Only shown to the starter; never written into their Doc. Empty otherwise (a new
+       * Doc carries every required item in its skeleton).
+       */
+      warnings: string[];
     }
   | { ok: false; error: string; status: number; message: string };
 
@@ -306,6 +313,7 @@ export async function startMeeting(
     agenda: agendaMode,
     appended: anchor?.appended ?? [],
     carried,
+    warnings: agendaMode && anchor ? missingRequired(anchor.scan, format.profile) : [],
   };
 }
 

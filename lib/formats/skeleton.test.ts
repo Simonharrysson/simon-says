@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ENKEL, STYRELSEPROTOKOLL, VECKOMOTE } from "./standard";
-import { rolesFromSkeleton, skeletonBlocks, type SkeletonBlock } from "./skeleton";
+import { mergeRequiredItems, rolesFromSkeleton, skeletonBlocks, type SkeletonBlock } from "./skeleton";
 
 const texts = (blocks: SkeletonBlock[], type: string) =>
   blocks.filter((b): b is Extract<SkeletonBlock, { text: string }> => b.type === type).map((b) => b.text);
@@ -88,5 +88,71 @@ describe("rolesFromSkeleton", () => {
     expect(styrelse["ag-7"]).toBe("topic");
     expect(styrelse["ag-8"]).toBe("other");
     expect(styrelse["ag-9"]).toBe("procedural");
+  });
+});
+
+describe("mergeRequiredItems (stadgar, Phase C)", () => {
+  const withRequired = { ...STYRELSEPROTOKOLL, requiredItems: ["Val av justerare", "Fråga om mötets behöriga utlysande"] };
+
+  it("adds only the required item no fixed label names, as procedural, after the last non-last procedural item", () => {
+    const merged = mergeRequiredItems(withRequired);
+    expect(merged).toHaveLength(STYRELSEPROTOKOLL.fixedAgendaItems.length + 1);
+    const labels = merged.map((i) => i.label);
+    expect(labels.filter((l) => l === "Val av justerare")).toHaveLength(1);
+    const added = merged.find((i) => i.label === "Fråga om mötets behöriga utlysande")!;
+    expect(added).toEqual({ key: "req-1", label: "Fråga om mötets behöriga utlysande", role: "procedural" });
+    // After "Val av justerare" and the rest of the opening procedure, before the follow-up.
+    const at = labels.indexOf(added.label);
+    expect(at).toBeGreaterThan(labels.indexOf("Val av justerare"));
+    expect(labels[at - 1]).toBe("Godkännande av dagordning");
+    expect(labels[at + 1]).toBe("Föregående protokoll");
+  });
+
+  it("matches labels loosely (case, §, colon, whole-word containment) but never by synonym", () => {
+    const loose = { ...STYRELSEPROTOKOLL, requiredItems: ["§4 val av JUSTERARE:", "Val av justerare och rösträknare", "Val av kassör"] };
+    expect(mergeRequiredItems(loose).map((i) => i.label)).toContain("Val av kassör");
+    expect(mergeRequiredItems(loose)).toHaveLength(STYRELSEPROTOKOLL.fixedAgendaItems.length + 1);
+    // "Val av justerare" is not "Val av mötesordförande"; "mötets" alone is no match either.
+    const veck = { ...VECKOMOTE, requiredItems: ["Val av justerare", "Mötets öppnande"] };
+    expect(mergeRequiredItems(veck).map((i) => i.label)).toEqual([
+      "Godkänn dagordning",
+      "Val av justerare",
+      "Mötets öppnande",
+      "Må-runda",
+      "Från förra veckan",
+      "Övrigt",
+    ]);
+  });
+
+  it("no required items: the fixed items unchanged; a profile without procedural items gets them first", () => {
+    expect(mergeRequiredItems(STYRELSEPROTOKOLL)).toEqual(STYRELSEPROTOKOLL.fixedAgendaItems);
+    expect(mergeRequiredItems({ ...ENKEL, requiredItems: ["Val av justerare"] })).toEqual([
+      { key: "req-1", label: "Val av justerare", role: "procedural" },
+    ]);
+  });
+
+  it("skeletonBlocks numbers the merged items §1..§10, signatures last; rolesFromSkeleton shifts with them", () => {
+    const blocks = skeletonBlocks(withRequired);
+    const items = texts(blocks, "item");
+    expect(items).toEqual([
+      "§1 Mötets öppnande",
+      "§2 Val av mötesordförande",
+      "§3 Val av mötessekreterare",
+      "§4 Val av justerare",
+      "§5 Godkännande av dagordning",
+      "§6 Fråga om mötets behöriga utlysande",
+      "§7 Föregående protokoll",
+      "§8 Övriga punkter",
+      "§9 Övriga frågor",
+      "§10 Mötets avslutande",
+    ]);
+    expect(blocks.slice(-3).map((b) => b.type)).toEqual(["para", "para", "para"]);
+    expect(blocks.at(-1)).toEqual({ type: "para", text: "Justerare: ____________________" });
+    const roles = rolesFromSkeleton(withRequired);
+    expect(Object.keys(roles)).toHaveLength(10);
+    expect(roles["ag-6"]).toBe("procedural");
+    expect(roles["ag-7"]).toBe("followup");
+    expect(roles["ag-8"]).toBe("topic");
+    expect(roles["ag-10"]).toBe("procedural");
   });
 });

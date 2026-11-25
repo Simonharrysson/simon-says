@@ -74,6 +74,8 @@ export async function POST(request: NextRequest) {
       agenda: result.agenda,
       appended: result.appended,
       carried: result.carried,
+      // Required items (stadgar) the agenda Doc lacks: the page says so, nothing is added to the Doc.
+      warnings: result.warnings,
     },
     { headers: noStore },
   );

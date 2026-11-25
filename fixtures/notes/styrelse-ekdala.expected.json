@@ -1,0 +1,337 @@
+{
+  "source": "Fictional board meeting (styrelseprotokoll) written for Task C2. Invented förening, invented people and events; no line, name or event from any real förening's minutes or stadgar. The agenda is the Styrelseprotokoll skeleton with one required item from (fictional) stadgar, 'Fråga om mötets behöriga utlysande', plus two topics.",
+  "orgName": "Ekdala Padelklubb",
+  "speakerNames": {
+    "S1-speaker_0": "Maja Lindqvist",
+    "S1-speaker_1": "Oskar Berglund",
+    "S1-speaker_2": "Elin Sjöberg",
+    "S1-speaker_3": "Sam Carter",
+    "S1-speaker_4": "Fatima Rahimi"
+  },
+  "languages": [
+    "sv",
+    "en"
+  ],
+  "agenda": {
+    "profile": "styrelseprotokoll",
+    "items": [
+      {
+        "key": "ag-1",
+        "label": "Mötets öppnande",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-2",
+        "label": "Val av mötesordförande",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-3",
+        "label": "Val av mötessekreterare",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-4",
+        "label": "Val av justerare",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-5",
+        "label": "Godkännande av dagordning",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-6",
+        "label": "Fråga om mötets behöriga utlysande",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-7",
+        "label": "Föregående protokoll",
+        "role": "followup"
+      },
+      {
+        "key": "ag-8",
+        "label": "Ekonomisk rapport",
+        "role": "topic"
+      },
+      {
+        "key": "ag-9",
+        "label": "Banbokning och hallavtal",
+        "role": "topic",
+        "sub": [
+          "Nytt avtal med Ekdala Racketcenter för vårterminen"
+        ]
+      },
+      {
+        "key": "ag-10",
+        "label": "Övriga frågor",
+        "role": "other"
+      },
+      {
+        "key": "ag-11",
+        "label": "Mötets avslutande",
+        "role": "procedural"
+      }
+    ]
+  },
+  "people": [
+    {
+      "name": "Maja Lindqvist",
+      "role": "Ordförande"
+    },
+    {
+      "name": "Oskar Berglund",
+      "role": "Kassör"
+    },
+    {
+      "name": "Elin Sjöberg",
+      "role": "Sekreterare"
+    },
+    {
+      "name": "Sam Carter",
+      "role": "PR-ansvarig"
+    },
+    {
+      "name": "Fatima Rahimi",
+      "role": "Eventansvarig"
+    }
+  ],
+  "carried": [
+    {
+      "id": "c1",
+      "owner": "Oskar Berglund",
+      "text": "Begära offert på nya nät till bana 1–4",
+      "done": true
+    },
+    {
+      "id": "c2",
+      "owner": "Sam Carter",
+      "text": "Uppdatera kontaktsidan på hemsidan",
+      "done": false
+    }
+  ],
+  "traps": [
+    "Decisions are rendered 'Beslut: <sentence>': the sentence must not say 'Styrelsen beslutade att …' again (ledger F7).",
+    "Procedural items (ordförande, sekreterare, justerare, dagordning, behörigen utlyst, föregående protokoll) each get their own decision under their own §.",
+    "The hall first offered twelve hours a week; only the agreed fourteen hours is the decision.",
+    "Elin's payment reminders are hedged ('kanske', 'inga löften'): not a task.",
+    "Klubbtröjorna are explicitly postponed to the next meeting: not a decision, not a task.",
+    "Sam's contact page is last meeting's c2, not done: no new task, c2 stays open.",
+    "Elin's remark about the parking is a note under Övriga frågor, not a task.",
+    "Föregående protokoll is the followup item: nothing may be added there, so its approval has no expected decision (scored nowhere; see the C2 report)."
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "A decision stacked on the prefix ('Beslut: Styrelsen beslutade att …')",
+      "sections": [
+        "decision"
+      ],
+      "match": [
+        [
+          "beslutade*",
+          "beslutar*",
+          "beslutat*"
+        ]
+      ]
+    },
+    {
+      "key": "M2",
+      "text": "The hall's first offer (twelve hours) as the decision",
+      "sections": [
+        "decision"
+      ],
+      "match": [
+        [
+          "12",
+          "tolv*",
+          "twelve*"
+        ],
+        [
+          "timm*",
+          "hours*"
+        ]
+      ]
+    },
+    {
+      "key": "M3",
+      "text": "Payment reminders as a task (hedged offer)",
+      "sections": [
+        "action"
+      ],
+      "match": [
+        [
+          "påminn*",
+          "påminnelse*"
+        ]
+      ]
+    },
+    {
+      "key": "M4",
+      "text": "Klubbtröjorna as a decision or task (postponed)",
+      "sections": [
+        "decision",
+        "action"
+      ],
+      "match": [
+        [
+          "*tröj*"
+        ]
+      ],
+      "unless": [
+        [
+          "nästa möte",
+          "skjut*",
+          "senare",
+          "bordl*"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Maja Lindqvist väljs till mötesordförande.",
+      "anchor": "ag-2",
+      "match": [
+        [
+          "maja*",
+          "lindqvist*"
+        ],
+        [
+          "*ordförande*"
+        ]
+      ]
+    },
+    {
+      "key": "D2",
+      "text": "Elin Sjöberg väljs till mötessekreterare.",
+      "anchor": "ag-3",
+      "match": [
+        [
+          "elin*",
+          "sjöberg*"
+        ],
+        [
+          "*sekreterare*"
+        ]
+      ]
+    },
+    {
+      "key": "D3",
+      "text": "Oskar Berglund väljs till justerare.",
+      "anchor": "ag-4",
+      "match": [
+        [
+          "oskar*",
+          "berglund*"
+        ],
+        [
+          "juster*"
+        ]
+      ]
+    },
+    {
+      "key": "D4",
+      "text": "Dagordningen godkänns.",
+      "anchor": "ag-5",
+      "match": [
+        [
+          "dagordning*"
+        ]
+      ]
+    },
+    {
+      "key": "D5",
+      "text": "Mötet är behörigen utlyst.",
+      "anchor": "ag-6",
+      "match": [
+        [
+          "utlys*",
+          "utlyst*"
+        ]
+      ]
+    },
+    {
+      "key": "D7",
+      "text": "Den reviderade budgeten för 2027 antas.",
+      "anchor": "ag-8",
+      "match": [
+        [
+          "budget*"
+        ]
+      ]
+    },
+    {
+      "key": "D8",
+      "text": "Nytt hallavtal med Ekdala Racketcenter för vårterminen, 14 timmar i veckan.",
+      "anchor": "ag-9",
+      "match": [
+        [
+          "14",
+          "fjorton*"
+        ],
+        [
+          "timm*"
+        ]
+      ]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Oskar Berglund",
+      "ownerLabel": "Kassör",
+      "anchor": "ag-8",
+      "text": "Skicka den reviderade budgeten till revisorn",
+      "due": "senast den 15 december",
+      "match": [
+        [
+          "revisor*"
+        ]
+      ]
+    },
+    {
+      "key": "A2",
+      "owner": "Maja Lindqvist",
+      "ownerLabel": "Ordförande",
+      "anchor": "ag-9",
+      "text": "Skriva under hallavtalet och skicka tillbaka det till hallen",
+      "due": "senast fredag",
+      "match": [
+        [
+          "*avtal*"
+        ]
+      ]
+    },
+    {
+      "key": "A3",
+      "owner": "Sam Carter",
+      "ownerLabel": "PR-ansvarig",
+      "anchor": "ag-9",
+      "text": "Lägga ut de nya bantiderna på hemsidan och Instagram",
+      "due": "senast söndag",
+      "match": [
+        [
+          "instagram*",
+          "*hemsida*",
+          "website*",
+          "*webb*"
+        ]
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "key": "N1",
+      "text": "Hallens parkering stängs för renovering i januari; parkering vid skolan.",
+      "anchor": "ag-10",
+      "match": [
+        [
+          "parkering*"
+        ]
+      ]
+    }
+  ]
+}

@@ -19,7 +19,7 @@ import {
 import { formatItem } from "@/lib/docs/notes";
 import { SYSTEM_PROMPT, tailText } from "@/lib/notes/prompt";
 import { AGENDA_OPS_JSON_SCHEMA, OPS_JSON_SCHEMA, toAgendaOp, type NotesItem, type NotesOp } from "@/lib/notes/schema";
-import { AGENDA_SYSTEM_PROMPT, agendaTailText, type AgendaContext } from "@/lib/notes/agenda-prompt";
+import { AGENDA_SYSTEM_PROMPT, agendaTailText, PARAGRAPH_FORMAT_NOTE, type AgendaContext } from "@/lib/notes/agenda-prompt";
 
 const items: NotesItem[] = [
   { id: "n1", section: "decision", text: "Hackathon 14 mars i Kårhuset" },
@@ -573,6 +573,44 @@ describe("agenda mode: request", () => {
     });
     expect(tail).toContain("x".repeat(1500));
     expect(tail).not.toContain("x".repeat(1501));
+  });
+});
+
+describe("agenda mode: §-numbered board minutes (C2)", () => {
+  const tailOf = (ctx: AgendaContext) =>
+    agendaTailText({
+      orgName: "Ekdala Padelklubb",
+      speakerNames: {},
+      notesTabText: "",
+      items: [],
+      locked: [],
+      deletedIds: [],
+      nextId: "n1",
+      final: false,
+      agenda: ctx,
+    });
+  const formatBlock = (tail: string) => tail.slice(tail.indexOf("<format>"), tail.indexOf("</format>"));
+
+  it("the system prompt is untouched: the board-minutes rule lives in the tail only", () => {
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("00a1c66112970ec4b8dac74c03efb72abcacfd5cf9ecf7f9ae9918b2eb00caaf");
+    expect(AGENDA_SYSTEM_PROMPT).not.toContain("§-numbered");
+  });
+
+  it("numbering 'paragraph' adds one format line; decisions read 'Beslut: Att …', never a second 'decided'", () => {
+    const block = formatBlock(tailOf({ ...agenda, formatName: "Styrelseprotokoll", numbering: "paragraph" }));
+    expect(block).toContain(PARAGRAPH_FORMAT_NOTE);
+    expect(block.split("\n")).toHaveLength(formatBlock(tailOf(agenda)).split("\n").length + 1);
+    expect(PARAGRAPH_FORMAT_NOTE).toContain("starting with 'Att …'");
+    // Never asks for the stacked form "Beslut: Styrelsen beslutade att …".
+    expect(PARAGRAPH_FORMAT_NOTE).not.toMatch(/(as|like|write)[^.]*'Styrelsen beslutade att/);
+    expect(PARAGRAPH_FORMAT_NOTE).toContain("Never start it with 'Styrelsen beslutade att'");
+  });
+
+  it("any other numbering leaves the tail byte-identical", () => {
+    const base = tailOf(agenda);
+    expect(tailOf({ ...agenda, numbering: "numbered" })).toBe(base);
+    expect(tailOf({ ...agenda, numbering: "none" })).toBe(base);
+    expect(base).not.toContain("§-numbered");
   });
 });
 

@@ -5,7 +5,7 @@ import { VECKOMOTE } from "@/lib/formats/standard";
 import fixture from "@/fixtures/agenda/veckomote.doc.json";
 import fixtureH3 from "@/fixtures/agenda/veckomote-h3.doc.json";
 import { fuzzyRoles } from "./roles";
-import { itemAt, normLabel, scanAgenda } from "./scan";
+import { itemAt, labelsMatch, missingRequired, normLabel, scanAgenda } from "./scan";
 
 type Doc = docs_v1.Schema$Document;
 type El = docs_v1.Schema$StructuralElement;
@@ -391,5 +391,29 @@ describe("scanAgenda: real Doc shapes (R-A5)", () => {
     const s = scan(doc);
     expect(s.items.map((i) => i.label)).toEqual(["Ekonomi", "Sommarfest"]);
     expect(s.items[0].humanText).toBe("Budgeten ser bra ut.");
+  });
+});
+
+describe("missingRequired (stadgar, Phase C)", () => {
+  it("lists the required items the human agenda lacks, in the profile's spelling", () => {
+    const s = scan(clone(fixture));
+    expect(s.items.map((i) => i.label)).toEqual(LABELS);
+    expect(missingRequired(s, { ...VECKOMOTE, requiredItems: ["Val av justerare"] })).toEqual(["Val av justerare"]);
+    expect(missingRequired(s, VECKOMOTE)).toEqual([]);
+  });
+
+  it("an item that names the required one (case, §, colon, longer label) counts; a synonym does not", () => {
+    const s = scan(clone(fixture));
+    const profile = { ...VECKOMOTE, requiredItems: ["godkänn DAGORDNING:", "§5 Ekonomi", "Val av justerare", "Mötets öppnande"] };
+    expect(missingRequired(s, profile)).toEqual(["Val av justerare", "Mötets öppnande"]);
+  });
+
+  it("labelsMatch: equal after normLabel or whole-word containment, never a partial word", () => {
+    expect(labelsMatch("Val av justerare", "§4. val av justerare:")).toBe(true);
+    expect(labelsMatch("Val av justerare och rösträknare", "Val av justerare")).toBe(true);
+    expect(labelsMatch("Val av justerare", "Val av mötesordförande")).toBe(false);
+    expect(labelsMatch("Fråga om mötets behöriga utlysande", "Mötets öppnande")).toBe(false);
+    expect(labelsMatch("Ekonomirapport", "Ekonomi")).toBe(false);
+    expect(labelsMatch("", "Ekonomi")).toBe(false);
   });
 });

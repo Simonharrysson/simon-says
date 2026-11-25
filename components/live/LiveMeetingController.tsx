@@ -6,7 +6,7 @@ import { MicCapture } from "@/lib/audio/capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import { runEndFlow } from "@/lib/live/end-flow";
 import { stopParam } from "@/lib/ui/limit-copy";
-import { AgendaStep, type AgendaChoice, type AgendaFormatOption } from "./AgendaStep";
+import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption } from "./AgendaStep";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
@@ -117,6 +117,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** The cap behind a warning or an automatic stop. */
   const [limitReason, setLimitReason] = useState<string | null>(props.stopReason ?? null);
   const [shareFailed, setShareFailed] = useState<number | null>(props.shareFailed ?? null);
+  /** Required items (stadgar) the agenda Doc lacks, from the start response (C2); dismissable. */
+  const [missingItems, setMissingItems] = useState<string | null>(null);
   /** After Avsluta: lines still waiting for the net, and whether POST /end failed. */
   const [pendingRuns, setPendingRuns] = useState(0);
   const [endFailed, setEndFailed] = useState(false);
@@ -366,7 +368,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         setPhase("consent");
         return;
       }
-      let created: { meetingId: string; docUrl: string; title: string; shareFailed?: number };
+      let created: { meetingId: string; docUrl: string; title: string; shareFailed?: number; warnings?: string[] };
       try {
         const res = await fetch("/api/meetings", {
           method: "POST",
@@ -410,6 +412,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       };
       setMeeting(m);
       setShareFailed(typeof created.shareFailed === "number" ? created.shareFailed : null);
+      setMissingItems(missingItemsText(Array.isArray(created.warnings) ? created.warnings : null));
       // The address becomes the meeting's own, so a reload offers "Fortsätt mötet".
       window.history.replaceState(null, "", `/meetings/${m.id}`);
       nameRoundOpen.current = true;
@@ -649,7 +652,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
                   title: `${shareFailed === 1 ? "En medlem" : `${shareFailed} medlemmar`} fick inte åtkomst – dela dokumentet manuellt`,
                   text: "Google lät oss inte dela mötesdokumentet med alla i föreningen. Öppna dokumentet och dela det med dem via Dela-knappen.",
                 }
-              : null;
+              : missingItems
+                ? {
+                    tone: "warning",
+                    title: "Punkter som stadgarna kräver saknas",
+                    text: missingItems,
+                    action: { label: "Okej", onClick: () => setMissingItems(null) },
+                  }
+                : null;
 
   if (superseded) {
     return (

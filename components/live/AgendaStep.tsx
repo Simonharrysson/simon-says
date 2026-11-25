@@ -33,6 +33,15 @@ export type AgendaViewState =
   | { state: "folder-unreachable" }
   | { state: "picker-off" };
 
+/**
+ * The start's `warnings` (C2): required items (stadgar) the agenda Doc lacks, as the page says
+ * them. Null when nothing is missing. Simon Says never adds the items to a human's agenda.
+ */
+export function missingItemsText(warnings: string[] | null | undefined): string | null {
+  const items = (warnings ?? []).map((w) => w.trim()).filter(Boolean);
+  return items.length ? `Dagordningen saknar: ${items.join(", ")}. Simon Says lägger inte till punkter i ert dokument.` : null;
+}
+
 const optionValue = (f: AgendaFormatOption) => (f.id ? `id:${f.id}` : `kind:${f.kind}`);
 const defaultValue = (formats: AgendaFormatOption[]) => {
   const def = formats.find((f) => f.isDefault) ?? formats[0];

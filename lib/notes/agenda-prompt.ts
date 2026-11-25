@@ -14,6 +14,8 @@ export interface AgendaContext {
   formatName: string;
   decisionPrefix: string;
   groupBy: "role" | "person";
+  /** The format's item numbering; "paragraph" (§-numbered board minutes) adds a decision note to the tail. */
+  numbering?: "numbered" | "paragraph" | "none";
   anchors: { key: string; label: string; role: ItemRole; humanText: string; gone?: boolean }[];
   people: { name: string; role: string | null }[];
 }
@@ -83,6 +85,14 @@ function agendaItemLine(item: NotesItem): string {
   });
 }
 
+/**
+ * The tail's extra format line for §-numbered board minutes (Styrelseprotokoll, ledger F7). The
+ * decision prefix ("Beslut:") is added when rendered, so the sentence must not say "decided" again:
+ * the line reads "Beslut: Att …", never "Beslut: Styrelsen beslutade att …".
+ */
+export const PARAGRAPH_FORMAT_NOTE =
+  "§-numbered board minutes (styrelseprotokoll): write each decision as one full sentence starting with 'Att …' (e.g. 'Att godkänna dagordningen.') or 'Styrelsen …' (e.g. 'Styrelsen godkänner budgeten för 2027.'). Never start it with 'Styrelsen beslutade att', 'Styrelsen beslutar att' or the decision prefix: the prefix already says it is a decision.";
+
 /** The volatile last block in agenda mode: format, agenda (with human text), people, then v1's tail. */
 export function agendaTailText(t: TailInput & { agenda: AgendaContext }): string {
   const a = t.agenda;
@@ -96,6 +106,7 @@ export function agendaTailText(t: TailInput & { agenda: AgendaContext }): string
     `Format: ${defuse(oneLine(a.formatName))}`,
     `Decision prefix (added when rendered): ${defuse(oneLine(a.decisionPrefix))}`,
     `Tasks grouped by: ${a.groupBy}`,
+    ...(a.numbering === "paragraph" ? [PARAGRAPH_FORMAT_NOTE] : []),
     "</format>",
     "",
     "<agenda>",

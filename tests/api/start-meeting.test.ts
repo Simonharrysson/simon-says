@@ -804,3 +804,58 @@ describe("startMeeting options", () => {
     expect((m.noteInsert.mock.calls[0][0] as Record<string, unknown>[]).find((x) => x.id === "c1")?.owner_person_id).toBe("pk");
   });
 });
+
+describe("POST /api/meetings: required items (stadgar, C2)", () => {
+  const LABELS = ["Godkänn dagordning", "Må-runda", "Från förra veckan", "Kommande event", "Ekonomi", "Övrigt"];
+  const withScan = (labels: string[]) =>
+    m.anchorAgenda.mockImplementation(async (_a: unknown, input: { meetingId: string; tabId?: string }) => ({
+      ...anchored(input.meetingId, input.tabId ?? "t.0"),
+      scan: { items: labels.map((label, i) => ({ key: `ag-${i + 1}`, label })) },
+    }));
+  const requiring = (requiredItems: string[], base = VECKOMOTE) => {
+    m.profiles = [{ id: PROFILE_ID, org_id: ORG, kind: base.kind, profile: { ...base, requiredItems }, is_default: true }];
+  };
+
+  it("agenda mode: a required item the agenda Doc lacks is a warning; nothing is added to the Doc", async () => {
+    requiring(["Val av justerare"]);
+    withScan(LABELS);
+    const res = await call({ orgId: ORG, consent: true, agendaDocId: AGENDA_DOC, formatProfileId: PROFILE_ID });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.warnings).toEqual(["Val av justerare"]);
+    // The Doc is only anchored (ranges over what is there): no new Doc, no agenda item written.
+    expect(m.anchorAgenda).toHaveBeenCalledTimes(1);
+    expect(m.anchorAgenda.mock.calls[0][1].roles).toBeUndefined();
+    expect(m.createFormatDoc).not.toHaveBeenCalled();
+    expect(m.createMeetingDoc).not.toHaveBeenCalled();
+    expect(m.renderItems).not.toHaveBeenCalled();
+    const saved = (m.noteInsert.mock.calls[0]?.[0] ?? []) as Record<string, unknown>[];
+    expect(saved.map((r) => r.id)).toEqual(["info-tid"]);
+    expect(Object.keys(insertedRow().section_ranges).filter((k) => k.startsWith("ag-"))).toHaveLength(LABELS.length);
+    // The warning is the profile's label, never logged with Doc text.
+    expect(JSON.stringify(m.logEvent.mock.calls)).not.toContain("Val av justerare");
+  });
+
+  it("no warning when the agenda names the required item; none without required items", async () => {
+    requiring(["Val av justerare"]);
+    withScan([...LABELS.slice(0, 1), "§2 Val av justerare:", ...LABELS.slice(1)]);
+    expect((await (await call({ orgId: ORG, consent: true, agendaDocId: AGENDA_DOC })).json()).warnings).toEqual([]);
+    m.profiles = [];
+    m.insert.mockClear();
+    withScan(LABELS);
+    expect((await (await call({ orgId: ORG, consent: true, agendaDocId: AGENDA_DOC })).json()).warnings).toEqual([]);
+  });
+
+  it("fallback Styrelseprotokoll: the new Doc carries the required item (§6), anchored with the merged roles; no warning", async () => {
+    requiring(["Val av justerare", "Fråga om mötets behöriga utlysande"], STYRELSEPROTOKOLL);
+    const res = await call({ orgId: ORG, consent: true });
+    expect(res.status).toBe(200);
+    expect((await res.json()).warnings).toEqual([]);
+    const profile = m.createFormatDoc.mock.calls[0][1].profile;
+    expect(profile.requiredItems).toEqual(["Val av justerare", "Fråga om mötets behöriga utlysande"]);
+    const roles = m.anchorAgenda.mock.calls[0][1].roles;
+    expect(roles).toEqual(rolesFromSkeleton(profile));
+    expect(Object.keys(roles)).toHaveLength(10);
+    expect(roles["ag-7"]).toBe("followup");
+  });
+});

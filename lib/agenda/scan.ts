@@ -69,6 +69,18 @@ export function normLabel(s: string): string {
   return collapse(s).toLowerCase().replace(LEADING_NUMBER, "").replace(/[\s:?]+$/, "").trim();
 }
 
+/**
+ * Two agenda labels name the same item: equal after `normLabel`, or one holds the other as whole
+ * words ("Val av justerare" ⊂ "Val av justerare och rösträknare"). No synonyms: "Val av
+ * justerare" never matches "Val av mötesordförande".
+ */
+export function labelsMatch(a: string, b: string): boolean {
+  const x = normLabel(a);
+  const y = normLabel(b);
+  if (!x || !y) return false;
+  return x === y || ` ${x} `.includes(` ${y} `) || ` ${y} `.includes(` ${x} `);
+}
+
 /** Label for display: typed leading number dropped, spaces collapsed. */
 const itemLabel = (s: string) => collapse(s).replace(LEADING_NUMBER, "").trim();
 
@@ -286,4 +298,13 @@ export function adoptedAgendaRanges(tab: NotesTab, sectionRanges: Record<string,
     out[key] = name;
   }
   return out;
+}
+
+/**
+ * The profile's required items (stadgar, Phase C) that no agenda item of the human's Doc names
+ * (`labelsMatch`), in the profile's order and spelling. Only a warning at the start: Simon Says
+ * never writes an item into a human's agenda.
+ */
+export function missingRequired(scan: AgendaScan, profile: FormatProfile): string[] {
+  return profile.requiredItems.filter((req) => !scan.items.some((item) => labelsMatch(item.label, req)));
 }

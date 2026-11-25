@@ -87,3 +87,24 @@ describe("agendaTabText", () => {
     expect(text).toContain("Prova-på-kväll för nybörjare");
   });
 });
+
+describe("styrelse-ekdala (C2): the replay runs as a Styrelseprotokoll", () => {
+  const styrelse = loadExpected(join(dir, "styrelse-ekdala.expected.json"));
+  const styrelseLines = loadLines(join(dir, "styrelse-ekdala.jsonl"));
+
+  it("the tail carries the §-numbered decision note; no Må-runda detector without a checkin item", async () => {
+    const f = fake(() => "fail");
+    const r = await runReplay({ lines: styrelseLines, expected: styrelse, tickMs: 45_000, agenda: true, client: f.client });
+    expect(f.detectorCalls()).toBe(0);
+    expect(r.log.every((t) => t.window === null)).toBe(true);
+    const tail = f.notes[0].at(-1)!;
+    expect(tail).toContain("Format: Styrelseprotokoll");
+    expect(tail).toContain("§-numbered board minutes");
+    expect(r.items.filter((i) => i.carried).map((i) => i.id)).toEqual(["c1", "c2"]);
+  });
+
+  it("decisions render once as 'Beslut: <sentence>'", () => {
+    const { ownLines } = agendaTabText(styrelse, [{ id: "n1", section: "decision", text: "Att anta den reviderade budgeten för 2027", anchor: "ag-8" }]);
+    expect(ownLines).toEqual(["Beslut: Att anta den reviderade budgeten för 2027."]);
+  });
+});
