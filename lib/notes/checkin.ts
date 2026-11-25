@@ -30,7 +30,7 @@ export type CheckinFound = { startMs: number | null; endMs: number | null };
  * - an end found closes the window (an end while no start is known is ignored);
  * - an open window closes at `startMs + CHECKIN_MAX_MS` once `lastMs` reaches it;
  * - no start by `CHECKIN_SEARCH_MS`: closed, no window;
- * - "failed" counts; at CHECKIN_MAX_FAILURES the window closes at `newSpan.firstMs` (or without a
+ * - "failed" counts, an answered call resets the count; at CHECKIN_MAX_FAILURES in a row the window closes at `newSpan.firstMs` (or without a
  *   window when it never started).
  */
 export function nextWindow(
@@ -50,6 +50,8 @@ export function nextWindow(
       return w;
     }
   } else {
+    // Failures count in a row (fix round 1): a successful call resets them.
+    w.failures = 0;
     if (w.startMs === null && found.startMs !== null) w.startMs = clamp(found.startMs);
     // An end means nothing before a start: a detector slip must not switch masking off for the
     // meeting (a start-less window closes only at CHECKIN_SEARCH_MS or after the failures).
@@ -176,12 +178,18 @@ export async function detectCheckin(
   });
   if (!res.ok) return { found: "failed", usage: res.usage };
 
-  // First line per printed time (two lines in one second: the earlier one).
-  const byTime = new Map<string, number>();
-  for (const l of input.lines) if (!byTime.has(formatTimestamp(l.atMs))) byTime.set(formatTimestamp(l.atMs), l.atMs);
-  const resolve = (t: string | null): number | null | undefined => (t === null ? null : byTime.get(t.trim()));
-  const startMs = resolve(res.value.start_at);
-  const endMs = resolve(res.value.end_at);
+  // Lines per printed time. Two lines in one second: the start is the earliest and the end the
+  // latest of them, so the window over-masks rather than leaks.
+  const byTime = new Map<string, { first: number; last: number }>();
+  for (const l of input.lines) {
+    const key = formatTimestamp(l.atMs);
+    const t = byTime.get(key);
+    byTime.set(key, t ? { first: Math.min(t.first, l.atMs), last: Math.max(t.last, l.atMs) } : { first: l.atMs, last: l.atMs });
+  }
+  const resolve = (t: string | null, pick: "first" | "last"): number | null | undefined =>
+    t === null ? null : byTime.get(t.trim())?.[pick];
+  const startMs = resolve(res.value.start_at, "first");
+  const endMs = resolve(res.value.end_at, "last");
   if (startMs === undefined || endMs === undefined) {
     console.error(`checkin: answer time not among the new lines (org ${opts.orgId})`);
     return { found: "failed", usage: res.usage };

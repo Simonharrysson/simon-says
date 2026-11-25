@@ -188,10 +188,32 @@ export function messageUsage(usage: BetaUsage, model: string): NotesUsage {
  * `last_rendered_text`), since lines in a human Doc are rendered by the format renderer.
  */
 export function humanTabText(notesTabText: string, items: NotesItem[], ownLines?: string[]): string {
-  const ours = new Set((ownLines ?? items.map((i) => formatItem(i))).map((l) => l.trim()).filter(Boolean));
+  if (ownLines) return withoutOwnLines(notesTabText, ownLines);
+  const ours = new Set(items.map((i) => formatItem(i).trim()).filter(Boolean));
   return notesTabText
     .split("\n")
     .filter((line) => !ours.has(line.trim()))
+    .join("\n");
+}
+
+/** Spaces collapsed, NFC, and the (c)-style "– " placement prefix dropped: how own lines are compared. */
+const ownKey = (line: string) =>
+  line
+    .normalize("NFC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^– /, "");
+
+/**
+ * `text` without the lines that are one of `ownLines` (our rendered rows), compared with spaces
+ * collapsed and with or without the "– " prefix (the scan's humanText collapses spaces). F3.
+ */
+export function withoutOwnLines(text: string, ownLines: string[]): string {
+  const ours = new Set(ownLines.map(ownKey).filter(Boolean));
+  if (!ours.size) return text;
+  return text
+    .split("\n")
+    .filter((line) => !ours.has(ownKey(line)))
     .join("\n");
 }
 
@@ -219,7 +241,14 @@ export function buildRequest(input: UpdateNotesInput): BetaMessageStreamParams {
     nextId: effectiveNextId(input),
     final: input.final,
   };
-  const tail = agenda ? agendaTailText({ ...tailInput, agenda }) : tailText(tailInput);
+  // F3 per item: the scan's humanText also holds our own lines (and the carried c* lines).
+  const own = input.ownLines ?? [];
+  const tail = agenda
+    ? agendaTailText({
+        ...tailInput,
+        agenda: { ...agenda, anchors: agenda.anchors.map((a) => ({ ...a, humanText: withoutOwnLines(a.humanText, own) })) },
+      })
+    : tailText(tailInput);
   return {
     model: NOTES_MODEL,
     max_tokens: MAX_TOKENS,
@@ -309,7 +338,8 @@ export function applyOps(
     }
     const moves = op.anchor !== undefined && op.anchor !== target.anchor;
     const edits = op.text !== undefined || op.owner !== undefined || op.due !== undefined;
-    const badDone = op.done !== undefined && target.section !== "action";
+    // done only on tasks; a carried task only ever takes done: true (never re-opened by Claude).
+    const badDone = op.done !== undefined && (target.section !== "action" || (target.carried && op.done !== true));
     if (moves || badDone || (target.carried && edits)) {
       dropped++;
       continue;

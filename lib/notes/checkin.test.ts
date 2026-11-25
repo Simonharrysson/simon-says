@@ -79,6 +79,16 @@ describe("nextWindow", () => {
     expect(n).toEqual({ startMs: null, endMs: null, closed: true, failures: 3 });
   });
 
+  it("failures count only in a row: a successful call resets them", () => {
+    let w: CheckinWindow = { ...OPEN, startMs: 60_000 };
+    w = nextWindow(w, "failed", { firstMs: 100_000, lastMs: 140_000 });
+    w = nextWindow(w, "failed", { firstMs: 141_000, lastMs: 180_000 });
+    w = nextWindow(w, { startMs: null, endMs: null }, { firstMs: 181_000, lastMs: 220_000 });
+    expect(w).toMatchObject({ closed: false, failures: 0 });
+    w = nextWindow(w, "failed", { firstMs: 221_000, lastMs: 260_000 });
+    expect(w).toMatchObject({ closed: false, failures: 1 });
+  });
+
   it("no start by CHECKIN_SEARCH_MS → closed without a window", () => {
     const w = nextWindow(OPEN, { startMs: null, endMs: null }, { firstMs: 1_750_000, lastMs: 1_800_000 });
     expect(w).toEqual({ startMs: null, endMs: null, closed: true, failures: 0 });
@@ -215,6 +225,19 @@ describe("detectCheckin", () => {
     };
     const out = await detectCheckin(input, { orgId: "org-1", client: broken });
     expect(out).toEqual({ found: "failed", usage: null });
+  });
+
+  it("two lines in one second: start → the earliest, end → the latest (over-mask, never leak)", async () => {
+    const same = [
+      { atMs: 432_100, speaker: "Anna Berg", text: "Då tar vi må-rundan." },
+      { atMs: 432_800, speaker: "Erik Lund", text: "Jag mår bra." },
+      { atMs: 500_000, speaker: "Anna Berg", text: "Tack, vidare." },
+      { atMs: 560_200, speaker: "Erik Lund", text: "Och jag är lite trött." },
+      { atMs: 560_900, speaker: "Anna Berg", text: "Nu: från förra veckan." },
+    ];
+    const { client } = fakeClient({ start_at: "00:07:12", end_at: "00:09:20" });
+    const out = await detectCheckin({ ...input, lines: same }, { orgId: "org-1", client });
+    expect(out.found).toEqual({ startMs: 432_100, endMs: 560_900 });
   });
 
   it("the window's state is told: start already known → only the end is asked for", async () => {

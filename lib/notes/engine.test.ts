@@ -674,3 +674,40 @@ describe("agenda mode: updateNotes", () => {
     expect(toAgendaOp({ op: "change", id: "c1", done: true })).toEqual({ op: "change", id: "c1", done: true });
   });
 });
+
+describe("fix round 1: own lines per agenda item, carried done", () => {
+  it("our own lines (with or without the '– ' prefix) are stripped from every item's human_text", () => {
+    const ctx: AgendaContext = {
+      ...agenda,
+      anchors: [
+        {
+          key: "ag-3",
+          label: "Från förra veckan",
+          role: "followup",
+          humanText: "Kassör: Mejla klubben om avgiften.\nAnna har pratat med kommunen",
+        },
+        { key: "ag-4", label: "Kommande event", role: "topic", humanText: "Höstfesten 14 november\nLokalen är bokad till höstfesten." },
+      ],
+    };
+    const body = buildRequest(
+      agendaInput({ agenda: ctx, ownLines: ["– Lokalen är bokad till höstfesten.", "Kassör: Mejla klubben om avgiften."] }),
+    );
+    const tail = (body.messages[0].content as { text: string }[]).at(-1)!.text;
+    const agendaBlock = tail.slice(tail.indexOf("<agenda>"), tail.indexOf("</agenda>"));
+    expect(agendaBlock).not.toContain("Lokalen är bokad");
+    expect(agendaBlock).not.toContain("Mejla klubben");
+    expect(agendaBlock).toContain("Höstfesten 14 november");
+    expect(agendaBlock).toContain("Anna har pratat med kommunen");
+  });
+
+  it("a carried item takes only done: true; done: false is dropped", () => {
+    const anchors = anchorRoles(agenda);
+    const doneC1 = agendaItems.map((i) => (i.id === "c1" ? { ...i, done: true } : i));
+    const out = applyOps(doneC1, [{ op: "change", id: "c1", done: false }], { agenda: { anchors } });
+    expect(out.ops).toEqual([]);
+    expect(out.items.find((i) => i.id === "c1")?.done).toBe(true);
+    // Our own (non-carried) task may still be un-done.
+    const own: NotesItem[] = [{ id: "n5", section: "action", text: "Boka bussen", anchor: "ag-4", done: true }];
+    expect(applyOps(own, [{ op: "change", id: "n5", done: false }], { agenda: { anchors } }).ops).toHaveLength(1);
+  });
+});
