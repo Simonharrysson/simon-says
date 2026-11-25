@@ -1,16 +1,19 @@
 import type { docs_v1 } from "@googleapis/docs";
-import { scanAgenda } from "@/lib/agenda/scan";
+import { normLabel, scanAgenda } from "@/lib/agenda/scan";
 import { isNumberedGlyph, listGlyph, paraBullet, paraInTable, paraLine, paraStyle, parseNotesTab, type Paragraph } from "@/lib/docs/tab";
 import type { FormatProfile } from "./schema";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "./standard";
 
 // The STRUCTURE of a förening's old minutes or template, for learning its format (spec "Learning
 // a format", Task B1). Privacy is the point of this file: what leaves a Doc is only
-//   - the title line, heading texts, first-column labels of 2-column tables and top-level agenda
-//     labels, each cut to 80 characters;
+//   - the title line, heading texts, first-column labels of 2-column tables that hold at least
+//     one known info field (Datum, Tid, …), and top-level agenda labels (at most 8 words, no
+//     digits, not a name), each cut to 80 characters;
 //   - the text before ":" of a line when it is at most 3 words (roles such as "Kassör");
 //   - counts.
-// Never body text, sub-bullet text or table cell values. Pure: no Google client.
+// Never body text, sub-bullet text or table cell values; no label holding a first name of the
+// org's people (`names`). With more than one Doc, `recurringOnly` keeps only the labels found in
+// at least two of them. Pure: no Google client.
 
 export interface DocStructure {
   title: string | null;
@@ -40,6 +43,19 @@ const looksLikeName = (s: string) => {
   const w = words(s);
   return w.length >= 2 && w.every((x) => /^\p{Lu}/u.test(x));
 };
+
+/** First names (lowercase) of the org's people: a label holding one never leaves the Doc. */
+export function firstNames(names: string[]): Set<string> {
+  return new Set(names.map((n) => words(n)[0]?.toLowerCase()).filter((x): x is string => Boolean(x && x.length >= 2)));
+}
+
+/** A label that holds one of `names` as a whole word (case-insensitive). */
+const hasName = (s: string, names: Set<string>) =>
+  names.size > 0 && collapse(s).toLowerCase().split(/[^\p{L}'’-]+/u).some((w) => names.has(w));
+
+/** An agenda label that may leave the Doc: at most 8 words, no digit, not a name. */
+const safeItemLabel = (s: string, names: Set<string>) =>
+  words(s).length >= 1 && words(s).length <= 8 && !/\d/.test(s) && !looksLikeName(s) && !hasName(s, names);
 
 /** Letters, spaces, hyphens, "&" and "/" only: no digits (dates, times), no URLs, no symbols. */
 const LABELISH = /^\p{L}[\p{L} &/-]*$/u;
@@ -83,7 +99,15 @@ function firstTabId(doc: docs_v1.Schema$Document): string | null {
   return doc.tabs?.[0]?.tabProperties?.tabId ?? null;
 }
 
-export function docStructure(doc: docs_v1.Schema$Document): DocStructure {
+/** Known info-table field labels (normalised): a 2-column table's labels leave the Doc only when it holds one. */
+const INFO_FIELDS = new Set(
+  [...(SCAN_PROFILE.infoTable ?? []), "Datum", "Tid", "Närvarande", "Plats", "Sekreterare", "Ordförande", "Frånvarande", "Justerare"].map(
+    (f) => normLabel(f),
+  ),
+);
+
+export function docStructure(doc: docs_v1.Schema$Document, opts: { names?: Set<string> } = {}): DocStructure {
+  const names = opts.names ?? new Set<string>();
   const empty: DocStructure = {
     title: null,
     headings: [],
@@ -102,20 +126,22 @@ export function docStructure(doc: docs_v1.Schema$Document): DocStructure {
 
   // Title: the scanned title line, only when it is short like a title (else it may be prose).
   const titleText = scan.title ? collapse(scan.title.text).replace(/:\s*$/, "") : "";
-  const title = titleText && words(titleText).length <= 8 ? cut(titleText) : null;
+  const title = titleText && words(titleText).length <= 8 && !hasName(titleText, names) ? cut(titleText) : null;
 
   const headings = body
-    .filter(isHeading)
+    .filter((p) => isHeading(p) && !hasName(paraLine(p), names))
     .slice(0, MAX_HEADINGS)
     .map((p) => ({ level: headingLevel(p), text: cut(paraLine(p)) }));
 
-  // First-column labels of 2-column tables (label | value), short and not a person's name.
+  // First-column labels of 2-column tables (label | value) that hold a known info field (a
+  // roster's first column is names, never labels), short and not a person's name.
   const tableLabels: string[] = [];
   for (const table of tab.tables ?? []) {
     if (!table.rows.length || !table.rows.every((r) => r.cells.length === 2)) continue;
+    if (!table.rows.some((r) => INFO_FIELDS.has(normLabel(r.cells[0].text)))) continue;
     for (const row of table.rows) {
       const label = collapse(row.cells[0].text).replace(/[\s:]+$/, "");
-      if (!label || words(label).length > 4 || looksLikeName(label) || /\d/.test(label)) continue;
+      if (!label || words(label).length > 4 || looksLikeName(label) || /\d/.test(label) || hasName(label, names)) continue;
       const text = cut(label);
       if (!tableLabels.includes(text) && tableLabels.length < MAX_TABLE_LABELS) tableLabels.push(text);
     }
@@ -136,7 +162,8 @@ export function docStructure(doc: docs_v1.Schema$Document): DocStructure {
       } else if (items.length && !isHeading(p)) items[items.length - 1].lines++;
     }
   }
-  items = items.slice(0, MAX_ITEMS);
+  // Only short, digit-free, name-free labels leave the Doc (body lines taken for items must not).
+  items = items.filter((i) => safeItemLabel(i.label, names)).slice(0, MAX_ITEMS);
   const topItems = items.map((i) => cut(i.label));
   const nestedCounts = items.map((i) => i.lines);
 
@@ -158,7 +185,7 @@ export function docStructure(doc: docs_v1.Schema$Document): DocStructure {
   const prefixCounts = new Map<string, number>();
   for (const p of body) {
     const prefix = linePrefix(paraLine(p));
-    if (prefix) prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
+    if (prefix && !hasName(prefix, names)) prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
   }
   const linePrefixes = [...prefixCounts]
     .map(([prefix, count]) => ({ prefix, count }))
@@ -180,4 +207,37 @@ export function docStructure(doc: docs_v1.Schema$Document): DocStructure {
   }
 
   return { title, headings, tableLabels, topItems, nestedCounts, numbering, linePrefixes, taskLines };
+}
+
+/**
+ * With more than one Doc, only what recurs leaves: each Doc keeps the title, headings, table
+ * labels, agenda items and line prefixes that (normalised) appear in at least one other picked
+ * Doc. A one-off label (a topic, a name typed as an item) is the kind of text that must not leave.
+ * One Doc: unchanged. Counts and numbering are kept.
+ */
+export function recurringOnly(structures: DocStructure[]): DocStructure[] {
+  if (structures.length < 2) return structures;
+  const norm = (s: string) => normLabel(s);
+  const seen = (pick: (s: DocStructure) => string[]) => {
+    const counts = new Map<string, number>();
+    for (const s of structures) for (const k of new Set(pick(s).map(norm))) counts.set(k, (counts.get(k) ?? 0) + 1);
+    return (x: string) => (counts.get(norm(x)) ?? 0) >= 2;
+  };
+  const title = seen((s) => (s.title ? [s.title] : []));
+  const heading = seen((s) => s.headings.map((h) => h.text));
+  const table = seen((s) => s.tableLabels);
+  const item = seen((s) => s.topItems);
+  const prefix = seen((s) => s.linePrefixes.map((p) => p.prefix));
+  return structures.map((s) => {
+    const keep = s.topItems.map((t) => item(t));
+    return {
+      ...s,
+      title: s.title && title(s.title) ? s.title : null,
+      headings: s.headings.filter((h) => heading(h.text)),
+      tableLabels: s.tableLabels.filter(table),
+      topItems: s.topItems.filter((_, i) => keep[i]),
+      nestedCounts: s.nestedCounts.filter((_, i) => keep[i]),
+      linePrefixes: s.linePrefixes.filter((p) => prefix(p.prefix)),
+    };
+  });
 }

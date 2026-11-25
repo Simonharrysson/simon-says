@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { docs_v1 } from "@googleapis/docs";
 import fixture from "@/fixtures/agenda/veckomote.doc.json";
 import h3Fixture from "@/fixtures/agenda/veckomote-h3.doc.json";
-import { docStructure, linePrefix } from "./structure";
+import { docOf, paraEl } from "@/test/docsim";
+import { docStructure, firstNames, linePrefix, recurringOnly } from "./structure";
 
 // Fictional agenda Docs (fixtures/agenda): "Mötesprotokoll:", a 4-row info table whose
 // Sekreterare cell holds "Elin Berglund", a numbered agenda of six items where ag-4 ("Kommande
@@ -74,6 +75,81 @@ describe("docStructure", () => {
 
   it("a Doc without tabs gives an empty structure", () => {
     expect(docStructure({}).topItems).toEqual([]);
+  });
+});
+
+/** A 2-column table element from [label, value] rows. */
+const table2 = (rows: [string, string][]): docs_v1.Schema$StructuralElement => ({
+  table: { rows: rows.length, columns: 2, tableRows: rows.map(([a, b]) => ({ tableCells: [{ content: [paraEl(a)] }, { content: [paraEl(b)] }] })) },
+});
+
+describe("docStructure privacy (final review I1)", () => {
+  const names = firstNames(["Elin Berglund", "Oskar Lind", "Maja Ek"]);
+
+  it("no agenda heading, no list: body lines never become items", () => {
+    const d = docOf([
+      paraEl("Möte i styrelsen", { style: "TITLE" }),
+      paraEl("Oskar har pratat med kommunen om bidraget"),
+      paraEl("Vi tycker att 3 500 kr räcker"),
+      paraEl("Maja bokar lokalen"),
+    ]);
+    const s = docStructure(d, { names });
+    expect(s.topItems).toEqual([]);
+    const json = JSON.stringify(s);
+    for (const t of ["kommunen", "3 500", "Maja", "Oskar", "bokar"]) expect(json).not.toContain(t);
+  });
+
+  it("bulleted notes without an agenda heading: long, numeric or name-holding lines stay in the Doc", () => {
+    const d = docOf([
+      paraEl("Protokoll", { style: "TITLE" }),
+      paraEl("Elin redovisade kassan för hösten", { level: 0, listId: "b" }),
+      paraEl("Vi behöver 12 nya bollar till träningen", { level: 0, listId: "b" }),
+      paraEl("Diskussion om att flytta träningen till torsdagar eftersom hallen är upptagen", { level: 0, listId: "b" }),
+      paraEl("Ekonomi", { level: 0, listId: "b" }),
+    ]);
+    const s = docStructure(d, { names });
+    expect(s.topItems).toEqual(["Ekonomi"]);
+    expect(s.nestedCounts).toEqual([0]);
+    const json = JSON.stringify(s);
+    for (const t of ["Elin", "12 nya", "torsdagar"]) expect(json).not.toContain(t);
+  });
+
+  it("a roster table (names | role) gives no table labels; an info table does", () => {
+    const d = docOf([
+      paraEl("Protokoll", { style: "TITLE" }),
+      table2([["Elin", "Kassör"], ["Oskar", "Ordförande"], ["Anders", "Ledamot"]]),
+      paraEl(""),
+      table2([["Datum", ""], ["Plats", ""]]),
+      paraEl(""),
+      paraEl("Agenda", { style: "HEADING_2" }),
+      paraEl("Ekonomi", { level: 0 }),
+    ]);
+    const s = docStructure(d, { names });
+    expect(s.tableLabels).toEqual(["Datum", "Plats"]);
+    expect(JSON.stringify(s)).not.toContain("Anders");
+  });
+
+  it("a label holding a first name of the org's people never leaves", () => {
+    const d = docOf([
+      paraEl("Agenda", { style: "HEADING_2" }),
+      paraEl("Ekonomi", { level: 0 }),
+      paraEl("Majas förslag", { level: 0 }),
+      paraEl("Maja: kollar hallen", {}),
+    ]);
+    const s = docStructure(d, { names: firstNames(["Maja Ek", "Majas Bror"]) });
+    expect(s.topItems).toEqual(["Ekonomi"]);
+    expect(JSON.stringify(s)).not.toContain("Maja");
+  });
+
+  it("recurringOnly: with several Docs only shared labels leave; one Doc is unchanged", () => {
+    const a = docStructure(docOf([paraEl("Agenda", { style: "HEADING_2" }), paraEl("Ekonomi", { level: 0 }), paraEl("Sommarfest", { level: 0 }), paraEl("Övrigt", { level: 0 })]));
+    const b = docStructure(docOf([paraEl("Agenda", { style: "HEADING_2" }), paraEl("Ekonomi", { level: 0 }), paraEl("Banbokning", { level: 0 }), paraEl("Övrigt:", { level: 0 })]));
+    const [ra, rb] = recurringOnly([a, b]);
+    expect(ra.topItems).toEqual(["Ekonomi", "Övrigt"]);
+    expect(rb.topItems).toEqual(["Ekonomi", "Övrigt:"]);
+    expect(ra.nestedCounts).toHaveLength(2);
+    expect(ra.headings.map((h) => h.text)).toEqual(["Agenda"]);
+    expect(recurringOnly([a])[0]).toBe(a);
   });
 });
 

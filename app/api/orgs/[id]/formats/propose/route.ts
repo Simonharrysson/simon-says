@@ -3,12 +3,14 @@ import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
 import { proposeFormat } from "@/lib/formats/learn";
-import { docStructure, type DocStructure } from "@/lib/formats/structure";
+import { docStructure, firstNames, recurringOnly, type DocStructure } from "@/lib/formats/structure";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { docsApi, driveApi } from "@/lib/google/docs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+// One Claude call with thinking (learn.ts), after up to five Doc reads.
+export const maxDuration = 120;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) =>
@@ -54,6 +56,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return fail("bad_request", 400, `Välj mellan 1 och ${MAX_DOCS} dokument.`);
   }
 
+  // The org's people: a label holding one of their first names never leaves a Doc (privacy).
+  const { data: people, error: peopleError } = await db.from("people").select("name").eq("org_id", id);
+  if (peopleError) {
+    console.error(`formats/propose: people: ${peopleError.message}`.slice(0, 200));
+    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+  }
+  const names = firstNames(((people ?? []) as { name: string }[]).map((p) => p.name));
+
   let docs: { isTemplate: boolean; structure: DocStructure }[];
   let folderId: string | null = null;
   try {
@@ -62,9 +72,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     docs = await Promise.all(
       docIds.map(async (documentId) => {
         const doc = (await api.documents.get({ documentId, includeTabsContent: true })).data;
-        return { isTemplate: TEMPLATE.test((doc.title ?? "").trim()), structure: docStructure(doc) };
+        return { isTemplate: TEMPLATE.test((doc.title ?? "").trim()), structure: docStructure(doc, { names }) };
       }),
     );
+    // More than one Doc: only the labels they share (one-off text stays in its Doc).
+    const shared = recurringOnly(docs.map((d) => d.structure));
+    docs = docs.map((d, i) => ({ ...d, structure: shared[i] }));
     try {
       const file = await driveApi(auth).files.get({ fileId: docIds[0], fields: "parents", supportsAllDrives: true });
       const parent = file.data.parents?.[0];
