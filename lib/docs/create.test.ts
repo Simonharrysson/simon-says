@@ -145,3 +145,38 @@ describe("createMeetingDoc", () => {
     expect(g.permCreate).not.toHaveBeenCalled();
   });
 });
+
+describe("createFormatDoc", () => {
+  it("same folder, title, transcript tab and sharing as v1; skeleton in batch 1, cells from a fresh read in batch 2", async () => {
+    const { apply, docOf, paraEl } = await import("@/test/docsim");
+    const { VECKOMOTE } = await import("@/lib/formats/standard");
+    const { createFormatDoc } = await import("./create");
+    const { parseNotesTab } = await import("./tab");
+    const doc = docOf([paraEl("")]);
+    g.get.mockImplementation(async () => ({ data: JSON.parse(JSON.stringify(doc)) }));
+    g.batchUpdate.mockImplementation(async ({ requestBody }: { requestBody: { requests: Parameters<typeof apply>[1] } }) => {
+      apply(doc, requestBody.requests);
+      const replies = requestBody.requests.map((r) => (r.addDocumentTab ? { addDocumentTab: { tabProperties: { tabId: "t.1" } } } : {}));
+      return { data: { replies } };
+    });
+    g.permCreate.mockImplementation(async ({ requestBody }: { requestBody: { emailAddress: string } }) => {
+      if (requestBody.emailAddress === "b@x.se") throw new Error("not a Google account");
+      return { data: {} };
+    });
+    const res = await createFormatDoc(auth, { ...input, profile: VECKOMOTE });
+    expect(res).toEqual({ docId: "doc1", tabId: "t.0", transcriptTabId: "t.1", shareFailed: ["b@x.se"] });
+    expect(g.filesCreate.mock.calls[0][0].requestBody.name).toBe("LiU AI Society möte 2026-11-24 14:05");
+    expect(g.filesCreate.mock.calls[0][0].requestBody.writersCanShare).toBe(false);
+    expect(g.get).toHaveBeenCalledTimes(2);
+    expect(g.batchUpdate).toHaveBeenCalledTimes(2);
+    const first = g.batchUpdate.mock.calls[0][0].requestBody.requests;
+    expect(first.at(-1).addDocumentTab).toBeTruthy();
+    expect(first.some((r: { insertTable?: unknown }) => r.insertTable)).toBe(true);
+    const second = g.batchUpdate.mock.calls[1][0].requestBody.requests;
+    expect(second.every((r: { insertText?: unknown }) => r.insertText)).toBe(true);
+    const cells = parseNotesTab(doc, "t.0").tables![0].rows.map((r) => r.cells.map((c) => c.text));
+    expect(cells).toEqual([["Datum", ""], ["Tid", ""], ["Närvarande", ""], ["Sekreterare", ""]]);
+    expect(g.permCreate).toHaveBeenCalledTimes(2);
+    expect(g.permCreate.mock.calls[0][0]).toMatchObject({ fileId: "doc1", sendNotificationEmail: false, requestBody: { role: "writer", type: "user" } });
+  });
+});

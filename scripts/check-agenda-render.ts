@@ -22,12 +22,13 @@
  *   tick      (Task A6) after the human edits: read + diff (locks), reword every unlocked item, add one
  *             more note under ag-4 and ag-5, render again; checks the human text, the edited copy, the
  *             numbering, the re-indented line's level and lock state.
- *   fallback <veckomote|styrelseprotokoll|bare>
+ *   fallback <veckomote|styrelseprotokoll|bare|testmote>
  *             (Task A7) createFormatDoc (folder "Simon Says – Fiktiv förening A7") then anchorAgenda with
  *             rolesFromSkeleton, prints the Doc and the scan; then ONE renderItems/planFormatRender batch
  *             (notes, a decision, a task + its tasks copy, Närvarande) to see where lines land. `bare` =
  *             the Veckomöte skeleton without tasks/notes headings (the Doc ends in the numbered list),
- *             anchored with VECKOMOTE: the appended headings + LIVE line after a list item.
+ *             anchored with VECKOMOTE: the appended headings + LIVE line after a list item. `testmote` = own items
+ *             with sub-items, Datum + Sekreterare pre-filled, transcript tab.
  *             State: .check-notes/agenda-a7-<kind>.json.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
@@ -926,9 +927,18 @@ async function fallback(kind: string) {
     veckomote: { profile: VECKOMOTE, skeleton: VECKOMOTE },
     styrelseprotokoll: { profile: STYRELSEPROTOKOLL, skeleton: STYRELSEPROTOKOLL },
     bare: { profile: VECKOMOTE, skeleton: { ...VECKOMOTE, tasksSection: null, notesSection: null } },
+    testmote: { profile: VECKOMOTE, skeleton: VECKOMOTE },
   };
+  // `testmote`: A13's shape (own items with sub-items, pre-filled cells, transcript tab).
+  const testmote = kind === "testmote";
+  const blocks = testmote
+    ? skeletonBlocks(VECKOMOTE, {
+        items: [{ label: "Godkänn dagordning" }, { label: "Må-runda" }, { label: "Kommande event", sub: ["Sommarfest på Kårallen", "Workshop om sponsring"] }, { label: "Övrigt" }],
+        filled: { Datum: "2026-11-24", Sekreterare: "Elin Berglund" },
+      })
+    : null;
   const chosen = profiles[kind];
-  if (!chosen) throw new Error(`fallback: unknown kind ${kind} (veckomote|styrelseprotokoll|bare)`);
+  if (!chosen) throw new Error(`fallback: unknown kind ${kind} (veckomote|styrelseprotokoll|bare|testmote)`);
   const { profile } = chosen;
   const mid = `a7${kind.slice(0, 4)}`;
   const startedAt = new Date();
@@ -938,10 +948,11 @@ async function fallback(kind: string) {
     orgName: "Fiktiv förening A7",
     startedAt,
     memberEmails: [],
-    shareTranscript: false,
+    shareTranscript: testmote,
     profile: chosen.skeleton,
-    blocks: skeletonBlocks(chosen.skeleton),
+    blocks: blocks ?? skeletonBlocks(chosen.skeleton),
   });
+  rec("fallback.transcriptTabId", created.transcriptTabId);
   tabId = created.tabId;
   const docId = created.docId;
   console.log(`Doc: ${urlOf(docId)}`);
@@ -954,7 +965,7 @@ async function fallback(kind: string) {
     tabId,
     profile,
     startedAt,
-    roles: rolesFromSkeleton(chosen.skeleton),
+    roles: testmote ? { "ag-1": "procedural", "ag-2": "checkin", "ag-3": "topic", "ag-4": "other" } : rolesFromSkeleton(chosen.skeleton),
   });
   let doc = await get(docId);
   console.log("--- anchored\n" + show(doc).join("\n"));
@@ -972,6 +983,11 @@ async function fallback(kind: string) {
   rec("fallback.ranges", Object.fromEntries(Object.entries(res.sectionRanges).map(([k, name]) => [k, n.itemSpan(tab, name)?.rangeText ?? null])));
   rec("fallback.info", scan.info.map((c) => [c.field, c.valueCell.text]));
   rec("fallback.infoTid", res.rows.map((r) => [r.id, r.last_rendered_text, n.itemSpan(tab, r.range_name!)?.rangeText]));
+  if (testmote) {
+    rec("fallback.subItems", body.filter((p) => p.text.startsWith("Sommarfest") || p.text.startsWith("Workshop")).map((p) => ({ text: p.text, level: p.level, sameList: p.listId === body.find((x) => x.text === "Kommande event")?.listId })));
+    rec("fallback.tabsLeft", paragraphs(doc).some((p) => p.text.includes("\t")));
+    rec("fallback.humanText", scan.items.map((i) => [i.label, i.humanText]));
+  }
   rec("fallback.appendedStyles", res.appended.map((label) => { const p = body.find((x) => x.text === label); return p ? { label, style: p.style, listId: p.listId, indent: [p.indentStart, p.indentFirst] } : { label, missing: true }; }));
 
   // One render on the anchored Doc: where do our lines land?
