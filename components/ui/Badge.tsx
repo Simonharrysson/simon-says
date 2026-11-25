@@ -11,7 +11,7 @@ const magnet: Record<BadgeTone, string> = {
   info: "magnet magnet--blue",
 };
 
-/** A small magnet with a label: status of a meeting, a role, a state. */
+/** A status dot with a label: status of a meeting, a role, a state. */
 export function Badge({ tone = "neutral", children, className }: { tone?: BadgeTone; children: ReactNode; className?: string }) {
   return (
     <span className={cx("badge", tone !== "neutral" && `badge--${tone}`, className)}>

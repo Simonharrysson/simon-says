@@ -1,8 +1,9 @@
 /*
- * Simon Says design system. The world: the meeting room's whiteboard, made exact.
- * Light = glossy white board, dark = black glass board. Exactly four marker hues:
- * ink (text, primary), blue (links, action items, info), green (decisions, success),
- * red (live, destructive, attention). Nothing else carries hue. See docs/ui.md.
+ * Simon Says design system: Geist (Vercel's open design language), not a Vercel clone.
+ * Neutral greys from near-white to near-black, 1px hairlines, small radii, Geist Sans + Mono.
+ * Colour only means status: blue (links, focus, info), green (success, consent, decisions),
+ * red (live, destructive, needs you), amber (warnings that fix themselves). See docs/ui.md.
+ * Token names predate Geist (board, rail, ink); docs/ui.md maps each to its role.
  */
 
 /* ---------- Tokens ---------- */
@@ -10,40 +11,42 @@
 :root {
   color-scheme: light dark;
 
-  /* Board and surfaces */
-  --board: #f7f8f6;
-  --surface: #ffffff;
-  --surface-sunk: #eef0ed;
-  --rail: #c9cdc9; /* aluminium tray: strong borders, control outlines */
-  --line: #e2e5e1; /* hairlines between rows */
+  /* Backgrounds and surfaces */
+  --board: #fafafa; /* page background */
+  --surface: #ffffff; /* cards, sheets, controls */
+  --surface-sunk: #f2f2f2; /* hover, inset areas */
+  --rail: #c7c7c7; /* control outlines (inputs, checkboxes, secondary buttons) */
+  --line: #ebebeb; /* hairlines: card borders, row dividers */
 
-  /* Ink (black marker) */
-  --ink: #16181b;
-  --ink-2: #464b51;
-  --ink-3: #5f656c;
+  /* Text: neutral greys */
+  --ink: #171717;
+  --ink-2: #4d4d4d;
+  --ink-3: #666666;
   --on-ink: #ffffff;
 
-  /* Markers */
-  --blue: #1d58c9;
-  --blue-wash: #e7eefb;
-  --green: #17703f;
-  --green-wash: #e3f2e8;
-  --red: #c62b26;
-  --red-wash: #fbe9e7;
+  /* Status colours (text-safe shades; washes are tinted backgrounds) */
+  --blue: #0068d6;
+  --blue-wash: #ebf5ff;
+  --green: #107d32;
+  --green-wash: #ebfaef;
+  --red: #cb2a2f;
+  --red-wash: #ffebec;
+  --amber: #a35200;
+  --amber-wash: #fff4e0;
 
-  --focus: #1d58c9;
-  --selection: #cddcf7;
+  --focus: #0068d6;
+  --selection: #cce4ff;
 
   /* Type */
-  --font-sans: var(--font-familjen), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
   --text-xs: 0.8125rem; /* 13 */
-  --text-sm: 0.9375rem; /* 15 */
-  --text-md: 1.0625rem; /* 17 body */
-  --text-lg: 1.25rem; /* 20 */
-  --text-xl: 1.625rem; /* 26 */
-  --text-2xl: 2.125rem; /* 34 */
-  --text-display: clamp(2.375rem, 1.5rem + 3.2vw, 4rem);
+  --text-sm: 0.875rem; /* 14 */
+  --text-md: 1rem; /* 16 body */
+  --text-lg: 1.125rem; /* 18 */
+  --text-xl: 1.5rem; /* 24 */
+  --text-2xl: 2rem; /* 32 */
+  --text-display: clamp(2.25rem, 1.5rem + 2.8vw, 3.5rem);
 
   /* Space (4px base) */
   --s-1: 0.25rem;
@@ -56,20 +59,21 @@
   --s-8: 4rem;
   --s-9: 6rem;
 
-  /* Radii */
-  --r-control: 8px;
-  --r-panel: 14px;
+  /* Radii: small and square-ish; pills only for badges and dots */
+  --r-control: 6px;
+  --r-panel: 8px;
   --r-round: 999px;
 
-  /* Depth: one system, soft and offset */
-  --shadow-panel: 0 1px 2px rgb(22 24 27 / 0.05), 0 4px 12px -6px rgb(22 24 27 / 0.08);
-  --shadow-lift: 0 2px 4px rgb(22 24 27 / 0.06), 0 18px 40px -16px rgb(22 24 27 / 0.22);
-  --shadow-magnet: 0 1px 1px rgb(0 0 0 / 0.25), 0 3px 6px -2px rgb(0 0 0 / 0.3);
+  /* Depth. Cards are flat with a 1px hairline (drawn as a ring, so it adds no size);
+     only popovers, menus and dialogs float. */
+  --shadow-panel: 0 0 0 1px var(--line);
+  --shadow-lift: 0 0 0 1px var(--line), 0 2px 2px rgb(0 0 0 / 0.04), 0 8px 16px -4px rgb(0 0 0 / 0.08);
+  --shadow-magnet: 0 0 0 0 transparent; /* status dots are flat */
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --t-fast: 120ms;
-  --t-base: 220ms;
+  --t-base: 200ms;
   --t-write: 700ms;
 
   --page-max: 72rem;
@@ -78,30 +82,30 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --board: #101214;
-    --board-glass: #070809; /* the landing's black glass board, a shade under --board */
-    --surface: #181b1e;
-    --surface-sunk: #0b0d0e;
-    --rail: #464c52;
-    --line: #2a2e33;
+    --board: #000000;
+    --surface: #0a0a0a;
+    --surface-sunk: #1a1a1a;
+    --rail: #454545;
+    --line: #2e2e2e;
 
-    --ink: #f1f2ef;
-    --ink-2: #bcc1c6;
-    --ink-3: #9aa1a8;
-    --on-ink: #101214;
+    --ink: #ededed;
+    --ink-2: #bdbdbd;
+    --ink-3: #a1a1a1;
+    --on-ink: #0a0a0a;
 
-    --blue: #86aefc;
-    --blue-wash: #17233a;
-    --green: #6bd497;
-    --green-wash: #132a1e;
-    --red: #ff7a70;
-    --red-wash: #34171a;
+    --blue: #52a8ff;
+    --blue-wash: #0d1c30;
+    --green: #4cc26b;
+    --green-wash: #0c2414;
+    --red: #ff6166;
+    --red-wash: #2e1215;
+    --amber: #f1a10d;
+    --amber-wash: #2b1f05;
 
-    --focus: #86aefc;
-    --selection: #2b3f66;
+    --focus: #52a8ff;
+    --selection: #1f3a5c;
 
-    --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4), 0 6px 16px -8px rgb(0 0 0 / 0.5);
-    --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.4), 0 22px 48px -18px rgb(0 0 0 / 0.7);
+    --shadow-lift: 0 0 0 1px var(--line), 0 2px 2px rgb(0 0 0 / 0.5), 0 12px 24px -6px rgb(0 0 0 / 0.7);
   }
 }
 
@@ -124,8 +128,9 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
   font-size: var(--text-md);
-  line-height: 1.55;
-  font-feature-settings: "ss01";
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
   display: flex;
@@ -143,9 +148,9 @@ h3,
 h4 {
   margin: 0;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   text-wrap: balance;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 p {
@@ -191,7 +196,7 @@ select {
   caret-color: var(--blue);
 }
 
-/* Scrollbars in the board's own greys */
+/* Scrollbars in the neutral greys */
 * {
   scrollbar-color: var(--rail) transparent;
 }
@@ -286,7 +291,7 @@ select {
   max-width: 68ch;
 }
 
-/* ---------- Header (the aluminium tray) ---------- */
+/* ---------- Header ---------- */
 
 .site-header {
   position: sticky;
@@ -302,7 +307,7 @@ select {
   display: flex;
   align-items: center;
   gap: var(--s-4);
-  min-height: 3.75rem;
+  min-height: 4rem;
 }
 
 .site-header__nav {
@@ -358,16 +363,16 @@ select {
   }
 }
 
-/* Wordmark: a red magnet and the name */
+/* Wordmark (the logo): the glossy ink dot and the name. Kept as-is from the first design. */
 .wordmark {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
   color: var(--ink);
   text-decoration: none;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 1.125rem;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   white-space: nowrap;
   min-height: 2.75rem;
 }
@@ -376,6 +381,7 @@ select {
   text-decoration: none;
 }
 
+/* Status dot (class name kept from the first design): a flat circle in a status colour. */
 .magnet {
   --magnet: var(--red);
   display: inline-block;
@@ -383,8 +389,13 @@ select {
   height: 0.8em;
   flex: none;
   border-radius: var(--r-round);
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, white 45%, var(--magnet)) 0 18%, var(--magnet) 55%);
+  background: var(--magnet);
   box-shadow: var(--shadow-magnet);
+}
+
+.wordmark .magnet {
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, white 45%, var(--magnet)) 0 18%, var(--magnet) 55%);
+  box-shadow: 0 1px 1px rgb(0 0 0 / 0.25), 0 3px 6px -2px rgb(0 0 0 / 0.3);
 }
 
 .magnet--blue {
@@ -435,14 +446,14 @@ select {
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
-  min-height: 2.75rem;
-  padding: 0 var(--s-4);
+  min-height: 2.5rem;
+  padding: 0 var(--s-3);
   border: 1px solid var(--btn-border);
   border-radius: var(--r-control);
   background: var(--btn-bg);
   color: var(--btn-fg);
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
@@ -458,11 +469,11 @@ select {
 
 .btn:hover {
   text-decoration: none;
-  background: color-mix(in srgb, var(--btn-bg) 92%, var(--ink));
+  background: var(--surface-sunk);
 }
 
 .btn:active {
-  transform: translateY(1px);
+  transform: scale(0.98);
 }
 
 .btn:focus-visible {
@@ -478,7 +489,7 @@ select {
 }
 
 .btn--primary:hover {
-  background: color-mix(in srgb, var(--ink) 86%, var(--board));
+  background: color-mix(in srgb, var(--ink) 85%, var(--surface));
 }
 
 .btn--ghost {
@@ -532,31 +543,34 @@ select {
 }
 
 .btn--sm {
-  min-height: 2.25rem;
-  padding: 0 var(--s-3);
-  font-size: var(--text-xs);
+  min-height: 2rem;
+  padding: 0 var(--s-2);
+  font-size: var(--text-sm);
 }
 
+/* Large stays big on purpose: Paus/Fortsätt on the live page is read across a table. */
 .btn--lg {
-  min-height: 3.25rem;
+  min-height: 3rem;
   padding: 0 var(--s-5);
   font-size: var(--text-md);
 }
 
 .btn--icon {
   padding: 0;
-  width: 2.75rem;
+  width: 2.5rem;
 }
 
 .btn--icon.btn--sm {
-  width: 2.25rem;
+  width: 2rem;
 }
 
 /* Phones: every control is a 44px target. */
 @media (max-width: 48rem) {
-  .btn--sm {
+  .btn:not(.btn--lg),
+  .input {
     min-height: 2.75rem;
   }
+  .btn--icon,
   .btn--icon.btn--sm {
     width: 2.75rem;
   }
@@ -607,7 +621,7 @@ select {
 
 .label {
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--ink);
 }
 
@@ -627,13 +641,13 @@ select {
 
 .input {
   width: 100%;
-  min-height: 2.75rem;
+  min-height: 2.5rem;
   padding: 0 var(--s-3);
   border: 1px solid var(--rail);
   border-radius: var(--r-control);
   background: var(--surface);
   color: var(--ink);
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
@@ -642,13 +656,13 @@ select {
 }
 
 .input:hover {
-  border-color: color-mix(in srgb, var(--rail) 60%, var(--ink));
+  border-color: var(--ink-3);
 }
 
 .input:focus-visible {
   outline: none;
-  border-color: var(--focus);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 28%, transparent);
+  border-color: var(--ink-3);
+  box-shadow: 0 0 0 1px var(--surface), 0 0 0 3px var(--focus);
 }
 
 .input[aria-invalid="true"] {
@@ -695,11 +709,11 @@ select {
 
 .check input[type="checkbox"] {
   appearance: none;
-  width: 1.375rem;
-  height: 1.375rem;
-  margin: 0.1rem 0 0;
-  border: 1.5px solid var(--rail);
-  border-radius: 6px;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0.15rem 0 0;
+  border: 1px solid var(--ink-3);
+  border-radius: 4px;
   background: var(--surface);
   display: grid;
   place-content: center;
@@ -709,10 +723,10 @@ select {
 
 .check input[type="checkbox"]::after {
   content: "";
-  width: 0.7rem;
-  height: 0.4rem;
-  border-left: 2.5px solid var(--on-ink);
-  border-bottom: 2.5px solid var(--on-ink);
+  width: 0.625rem;
+  height: 0.35rem;
+  border-left: 2px solid var(--on-ink);
+  border-bottom: 2px solid var(--on-ink);
   transform: translateY(-1px) rotate(-45deg) scale(0);
   transition: transform var(--t-fast) var(--ease-out);
 }
@@ -732,7 +746,7 @@ select {
 }
 
 .check__title {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .check__body {
@@ -755,8 +769,7 @@ select {
 }
 
 .panel--sunk {
-  background: var(--surface-sunk);
-  box-shadow: none;
+  background: var(--board);
 }
 
 .panel__header {
@@ -774,7 +787,7 @@ select {
 
 .panel__title {
   font-size: var(--text-lg);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .section-title {
@@ -791,8 +804,9 @@ select {
   align-items: start;
   gap: var(--s-3);
   padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-control);
+  border-radius: var(--r-panel);
   background: var(--tone-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 22%, transparent);
   color: var(--ink);
   font-size: var(--text-sm);
 }
@@ -803,7 +817,7 @@ select {
 }
 
 .banner__title {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .banner__body {
@@ -825,21 +839,21 @@ select {
   --tone-wash: var(--green-wash);
 }
 
-/* Red only when the user must act. Warnings fix themselves: ink, with an aluminium edge. */
+/* Red only when the user must act. Warnings that fix themselves are amber. */
 .banner--danger {
   --tone: var(--red);
   --tone-wash: var(--red-wash);
 }
 
 .banner--warning {
-  --tone: var(--ink);
-  --tone-wash: var(--surface);
-  box-shadow: inset 0 0 0 1.5px var(--rail);
+  --tone: var(--amber);
+  --tone-wash: var(--amber-wash);
 }
 
 .banner--neutral {
   --tone: var(--ink-2);
-  --tone-wash: var(--surface-sunk);
+  --tone-wash: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 @media (max-width: 30rem) {
@@ -852,25 +866,25 @@ select {
   }
 }
 
-/* ---------- Badge (a magnet with a label) ---------- */
+/* ---------- Badge (a status dot with a label) ---------- */
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.2rem 0.6rem 0.2rem 0.45rem;
+  padding: 0.125rem 0.5rem 0.125rem 0.4rem;
   border-radius: var(--r-round);
   background: var(--surface-sunk);
   color: var(--ink-2);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
   white-space: nowrap;
 }
 
 .badge .magnet {
-  width: 0.6rem;
-  height: 0.6rem;
+  width: 0.5rem;
+  height: 0.5rem;
 }
 
 .badge--live {
@@ -940,7 +954,7 @@ select {
 }
 
 .row__title {
-  font-weight: 600;
+  font-weight: 500;
   overflow-wrap: anywhere;
 }
 
@@ -979,14 +993,14 @@ a.row:focus-visible {
   align-items: flex-start;
   gap: var(--s-2);
   padding: var(--s-6) var(--s-5);
-  border: 1.5px dashed var(--rail);
+  border: 1px dashed var(--rail);
   border-radius: var(--r-panel);
   color: var(--ink-2);
 }
 
 .empty__title {
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--text-md);
 }
 
@@ -1012,7 +1026,7 @@ a.row:focus-visible {
 }
 
 .dialog::backdrop {
-  background: rgb(10 12 14 / 0.45);
+  background: rgb(0 0 0 / 0.4);
 }
 
 .dialog[open] {
@@ -1040,13 +1054,16 @@ a.row:focus-visible {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--s-2);
-  padding: var(--s-3) var(--s-5) var(--s-5);
+  padding: var(--s-3) var(--s-5);
+  border-top: 1px solid var(--line);
+  background: var(--board);
+  border-radius: 0 0 var(--r-panel) var(--r-panel);
 }
 
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: scale(0.97);
   }
 }
 

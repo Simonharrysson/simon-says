@@ -2,30 +2,37 @@
 
 The design system, page structure and live-meeting components. Swedish UI, English code.
 Preview everything with fake data at **`/design`** (dev only; production needs `DESIGN_PREVIEW=1`).
-Screenshots: `docs/ui/` (`<state>-<width>-<scheme>.png`, fake data, Next dev badge hidden). The design review and its captures are in `docs/ui/review/`.
+Screenshots: `docs/ui/` (`<state>-<width>-<scheme>.png`, fake data, Next dev badge hidden) show the
+earlier whiteboard design and are out of date since the Geist restyle. The design review and its
+captures are in `docs/ui/review/`.
 
-## Direction: the meeting-room whiteboard, made exact
+## Direction: Geist, Simon Says' own
 
-Every student-union meeting room has one: a glossy white board, an aluminium tray, four
-markers and a handful of round magnets. That is the whole visual world.
+The visual language follows Geist, Vercel's open design system: neutral greys, hairlines, small
+radii, Geist Sans and Geist Mono, and colour only where it means status. It is a design language,
+not a clone. Simon Says keeps its own name and logo, and uses no Vercel marks or assets. (Until
+2026-11-26 the UI used a "whiteboard" design; the class names `magnet`, `board` and the token
+names `--board`, `--rail`, `--ink` are left over from it and now mean what the table below says.)
 
-- **Light = white board, dark = black glass board** (follows `prefers-color-scheme`).
-- **Exactly four marker hues, nothing else carries colour:**
-  black ink (text, primary actions), **blue** (links, info, action items, "who is this"),
-  **green** (decisions, success, consent given), **red** (live/recording, destructive, needs attention).
-  Red is kept for the hot state: if something is red, it is live or it needs you. Warnings that
-  fix themselves are ink (`banner--warning`: white sheet, aluminium edge), never red. Trash icons
-  in lists are ink at rest (`danger-ghost`) and turn red only on hover/focus.
-- **Magnets** (small glossy dots) are the status language: badges, the wordmark, name plates,
-  the steps on the landing page. A pulsing red magnet = transcribing.
-- **The Google Doc keeps its own look.** Wherever we draw the Doc (landing, edit demo) it is
-  white paper in a system face, so people recognise "that's the Doc", not our UI.
-- Refused on purpose: AI-SaaS gradients, glass, cards-with-icons grids, eyebrow labels.
+- **Light = white surfaces on a near-white page, dark = near-black surfaces on black**
+  (follows `prefers-color-scheme`).
+- **Colour is status only:** blue (links, focus, info, action items, "who is this"),
+  **green** (decisions, success, consent given), **red** (live/recording, destructive, needs
+  attention), **amber** (warnings that fix themselves, `banner--warning`). Everything else is grey.
+  Red is kept for the hot state: if something is red, it is live or it needs you. Trash icons in
+  lists are grey at rest (`danger-ghost`) and turn red only on hover/focus.
+- **Status dots** (class `.magnet`: a flat circle) are the status language: badges, name plates,
+  the steps on the landing page. A pulsing red dot = transcribing.
+- **The logo** is unchanged: the glossy ink dot and "Simon Says" (`.wordmark .magnet` keeps its
+  gloss; every other dot is flat).
+- **The Google Doc keeps its own look.** Wherever we draw the Doc (landing, edit demo, format
+  preview) it is white paper in a system face, so people recognise "that's the Doc", not our UI.
+- Refused on purpose: gradients, glass, cards-with-icons grids, eyebrow labels, heavy shadows.
 
 ### Principles
 
 1. **Calm in the room.** The live page sits on a table during a meeting. Few elements, big
-   targets, nothing moves unless it means something (the red magnet, the listening ring).
+   targets, nothing moves unless it means something (the red dot, the listening ring).
 2. **Honest state.** Notes flowing, paused, stale, Doc paused, reconnecting — always visible,
    always one sentence: what happened + what to do (often: nothing).
 3. **Humans' words win.** Copy and UI never imply the service overwrites people.
@@ -38,36 +45,53 @@ markers and a handful of round magnets. That is the whole visual world.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--board` | `#f7f8f6` | `#101214` | page background |
-| `--surface` | `#ffffff` | `#181b1e` | panels/sheets |
-| `--surface-sunk` | `#eef0ed` | `#0b0d0e` | inset areas, hover |
-| `--rail` | `#c9cdc9` | `#464c52` | control borders (aluminium) |
-| `--line` | `#e2e5e1` | `#2a2e33` | hairlines |
-| `--ink` / `--ink-2` / `--ink-3` | `#16181b` / `#464b51` / `#5f656c` | `#f1f2ef` / `#bcc1c6` / `#9aa1a8` | text levels |
-| `--blue` (+`-wash`) | `#1d58c9` | `#86aefc` | links, info |
-| `--green` (+`-wash`) | `#17703f` | `#6bd497` | success, decisions |
-| `--red` (+`-wash`) | `#c62b26` | `#ff7a70` | live, danger, attention |
+| `--board` | `#fafafa` | `#000000` | page background |
+| `--surface` | `#ffffff` | `#0a0a0a` | cards, sheets, controls |
+| `--surface-sunk` | `#f2f2f2` | `#1a1a1a` | hover, inset areas |
+| `--rail` | `#c7c7c7` | `#454545` | control outlines (inputs, secondary buttons, chips) |
+| `--line` | `#ebebeb` | `#2e2e2e` | hairlines: card borders, row dividers |
+| `--ink` / `--ink-2` / `--ink-3` | `#171717` / `#4d4d4d` / `#666666` | `#ededed` / `#bdbdbd` / `#a1a1a1` | text levels |
+| `--on-ink` | `#ffffff` | `#0a0a0a` | text on the primary (ink) button |
+| `--blue` (+`-wash`) | `#0068d6` / `#ebf5ff` | `#52a8ff` / `#0d1c30` | links, focus, info |
+| `--green` (+`-wash`) | `#107d32` / `#ebfaef` | `#4cc26b` / `#0c2414` | success, decisions, consent |
+| `--red` (+`-wash`) | `#cb2a2f` / `#ffebec` | `#ff6166` / `#2e1215` | live, danger, attention |
+| `--amber` (+`-wash`) | `#a35200` / `#fff4e0` | `#f1a10d` / `#2b1f05` | warnings that fix themselves |
+| `--focus` | `#0068d6` | `#52a8ff` | focus ring |
 
-Contrast (WCAG, computed): every text token ≥ 4.5:1 on board, surface and sunk in both themes
-(lowest: red on sunk, light, 4.85; red on red-wash 4.75). White on red button 5.56.
+The status colours are the darker, text-safe shades of Geist's scales (Geist's bright
+`#0070f3`-style fills are under 4.5:1 as text on white).
 
-**Type.** Familjen Grotesk (a Swedish grotesk, Familjen agency, Stockholm) for everything;
-JetBrains Mono only for measurements: timer, timestamps, speaker labels, invite link, ids.
-Both via `next/font/google` (downloaded at build, served from our domain, no Google request
-from visitors). Scale: 13 / 15 / **17 body** / 20 / 26 / 34 / display `clamp(38px → 64px)`.
-Headings 700, tracking −0.02 to −0.03em, `text-wrap: balance`.
+Contrast (WCAG, computed): every text token ≥ 4.5:1 on board, surface and sunk in both themes.
+Lowest light: red on red-wash 4.69, green on sunk 4.69, blue on sunk 4.75; lowest dark: red on
+red-wash 5.90. `--ink-3` 5.13 on sunk (light). White on the red button 5.37 (light); dark uses
+`#1a0806` on red, 6.62. Primary button text 17.9 / 16.9. Control outlines (`--rail`) 1.69:1 on
+white (the old design's was 1.61); checkboxes use `--ink-3` for their edge (5.7:1).
 
-**Space** 4px base: `--s-1..9` = 4, 8, 12, 16, 24, 32, 48, 64, 96. **Radii** 8 (controls),
-14 (panels), round (magnets, chips, badges). **Depth** one system: `--shadow-panel` (resting
-sheet), `--shadow-lift` (dialogs, auth sheet, board). No border + shadow on the same element.
+**Type.** Geist Sans for everything; Geist Mono only for measurements: timer, timestamps, speaker
+labels, invite link, ids. Both via `next/font/google` (`Geist`, `Geist_Mono`; versions pinned by
+the pinned `next`; downloaded at build, served from our domain, no Google request from visitors).
+Scale: 13 / 14 / **16 body** / 18 / 24 / 32 / display `clamp(36px → 56px)`. Headings 600,
+tracking −0.025em (display −0.045em, section titles −0.035em), `text-wrap: balance`; body
+−0.006em. Buttons, labels and row titles 500.
 
-**Motion.** `--ease-out` = `cubic-bezier(0.16,1,0.3,1)`; 120 ms hovers, 220 ms enters.
-One authored moment: the landing board's notes **write themselves** line by line (clip-path
-wipe, like a marker stroke). Elsewhere: red magnet pulse (live), listening ring on the mic,
-name plates dropping in. `prefers-reduced-motion` turns all of it off; content is always visible
-without animation.
+**Space** 4px base: `--s-1..9` = 4, 8, 12, 16, 24, 32, 48, 64, 96. **Radii** 6 (controls, chips),
+8 (cards, banners, dialogs), round only for badges, status dots and the mic ring.
+**Controls** sm 32px, md 40px, lg 48px (lg stays big on purpose: Paus/Fortsätt on the live page);
+on screens under 48rem every button and input is ≥ 44px. Primary = ink on light, white on dark
+(`--ink` / `--on-ink`); secondary = surface with a `--rail` outline; ghost = transparent.
 
-**Browser surfaces.** Themed selection, focus ring (2px blue, offset 2), caret, scrollbars.
+**Depth.** Cards are flat: `--shadow-panel` is a 1px `--line` ring (a box-shadow, so it adds no
+size). Only floating things get a real shadow: `--shadow-lift` (dialogs, popovers, menus) = ring +
+a small soft drop. Dialog footers sit on `--board` behind a hairline. Status dots are flat
+(`--shadow-magnet` is empty).
+
+**Motion.** `--ease-out` = `cubic-bezier(0.16,1,0.3,1)`; 120 ms hovers, 200 ms enters.
+One authored moment: the landing demo's notes **write themselves** line by line (clip-path
+wipe). Elsewhere: red dot pulse (live), listening ring on the mic, name plates dropping in.
+`prefers-reduced-motion` turns all of it off; content is always visible without animation.
+
+**Browser surfaces.** Themed selection, focus ring (2px blue, offset 2; inputs get a 2px blue
+ring outside a 1px gap), caret, scrollbars.
 
 ## Voice (Swedish copy)
 
@@ -85,7 +109,7 @@ stays in Drive when deleting.
 | `SubmitButton` | Button + `useFormStatus` → loading while its form's server action runs; `pendingLabel`. |
 | `Field`, `Check` | Label/hint/error wired with `aria-describedby` / `aria-invalid`; `Check` = checkbox with title + explanation. |
 | `Banner` | `tone` info/success/warning/danger/neutral, `title`, `action`; role alert for warning/danger, status otherwise (`live={false}` for static). |
-| `Badge` | magnet + label; tone neutral/live (pulses)/alert (static red, "needs you")/success/info. |
+| `Badge` | status dot + label (pill); tone neutral/live (pulses)/alert (static red, "needs you")/success/info. |
 | `EmptyState` | dashed outline, title, body, optional action. |
 | `Panel` | sheet with title/actions; `flush` for edge-to-edge lists. |
 | `ListRow` | leading · title/meta · actions; `href` makes the row a link. Use in `<ul class="list">`. |
@@ -178,7 +202,7 @@ Building blocks (usable on their own):
   in the leave dialog, where leaving is the risky choice).
 
 Weight order on the live page: Paus/Fortsätt (lg) is the strongest control; Stämmer and Välj are
-outlined secondary. The timer's allowance rail has an aluminium track and an ink fill, as wide as
+outlined secondary. The timer's allowance rail has a `--rail` track and an ink fill, as wide as
 the digits.
 - `MeetingEnded {docUrl, durationSeconds, finalizing?, orgHref, autoStopped?}`
 
@@ -228,13 +252,13 @@ Google Picker (`usePicker()` in `components/google/Picker.tsx`, token from
 
 | State | Shows | Confirms |
 |---|---|---|
-| suggestion | blue magnet "Förslag: <Doc-namn>" · **Använd** · Välj annan · Skapa nytt dokument | any of them |
+| suggestion | blue dot "Förslag: <Doc-namn>" · **Använd** · Välj annan · Skapa nytt dokument | any of them |
 | none (no folder, or nothing new in it) | "Ingen dagordning – skapa nytt dokument i formatet <X>" · **Skapa nytt dokument** · Välj dagordning | either |
 | folder not reachable (folder set, this starter's grant has never opened it) | explanation · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` with `grantOnly: true`, so the start screen never changes the folder, admins included → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
 | picker off (`GOOGLE_PICKER_API_KEY`/`GOOGLE_PROJECT_NUMBER` unset) | green "Nytt dokument i formatet <X>" + "Google-väljaren är inte inställd än." | already confirmed (as before A11) |
 
 Start stays disabled until the choice is confirmed: a suggestion is never used on its own. Once
-confirmed, a green magnet line shows the choice ("Dagordning: <namn>" or "Nytt dokument i formatet
+confirmed, a green dot line shows the choice ("Dagordning: <namn>" or "Nytt dokument i formatet
 <X>") with Välj annan / Skapa nytt dokument / Välj dagordning to change it. With an agenda Doc and a
 förening that shares transcripts, "Lägg transkriptet i dokumentet?" appears (default off). The
 "Format" `<select>` (default first, marked "(förvalt)") overrides the format; the default sends

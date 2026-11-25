@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Familjen_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 import "./views.css";
@@ -7,8 +7,9 @@ import "@/components/live/live.css";
 
 // Fonts are downloaded at build time and served from our own domain (no Google request
 // from the visitor's browser).
-const sans = Familjen_Grotesk({ subsets: ["latin"], variable: "--font-familjen", display: "swap" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", display: "swap", weight: ["400", "500"] });
+// Geist Sans + Geist Mono (OFL), pinned by the pinned `next` version.
+const sans = Geist({ subsets: ["latin"], variable: "--font-geist-sans", display: "swap" });
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap", weight: ["400", "500"] });
 
 export const metadata: Metadata = {
   title: { default: "Simon Says — mötesanteckningar som skriver sig själva", template: "%s · Simon Says" },
@@ -18,8 +19,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f8f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#101214" },
+    { media: "(prefers-color-scheme: light)", color: "#fafafa" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 

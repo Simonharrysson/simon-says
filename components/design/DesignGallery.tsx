@@ -496,20 +496,22 @@ export function DesignGallery({ view }: { view: string | null }) {
 
 function Tokens() {
   const colors = [
-    ["--board", "Tavlan"],
-    ["--surface", "Ark"],
+    ["--board", "Bakgrund"],
+    ["--surface", "Yta"],
     ["--surface-sunk", "Fördjupning"],
-    ["--rail", "Aluminium"],
-    ["--line", "Linje"],
-    ["--ink", "Svart penna"],
+    ["--rail", "Kontrollkant"],
+    ["--line", "Hårlinje"],
+    ["--ink", "Text"],
     ["--ink-2", "Text 2"],
     ["--ink-3", "Text 3"],
-    ["--blue", "Blå penna"],
-    ["--green", "Grön penna"],
-    ["--red", "Röd penna"],
+    ["--blue", "Blå"],
+    ["--green", "Grön"],
+    ["--red", "Röd"],
+    ["--amber", "Bärnsten"],
     ["--blue-wash", "Blå tvätt"],
     ["--green-wash", "Grön tvätt"],
     ["--red-wash", "Röd tvätt"],
+    ["--amber-wash", "Bärnsten tvätt"],
   ];
   return (
     <div className="page stack stack--6" style={{ padding: "1.5rem" }}>
@@ -524,13 +526,13 @@ function Tokens() {
       </div>
       <div className="stack stack--3">
         <p className="hero__title" style={{ fontSize: "var(--text-display)" }}>
-          Display 64
+          Display 56
         </p>
-        <p style={{ fontSize: "var(--text-2xl)", fontWeight: 700, letterSpacing: "-0.02em" }}>Rubrik 34 · Styrelsemöte</p>
-        <p style={{ fontSize: "var(--text-xl)", fontWeight: 700, letterSpacing: "-0.02em" }}>Rubrik 26 · Personer</p>
-        <p style={{ fontSize: "var(--text-lg)", fontWeight: 700 }}>Rubrik 20 · Bjud in</p>
-        <p>Brödtext 17 · Anteckningarna skrivs i ett nytt Google-dokument och delas med föreningen.</p>
-        <p className="subtle">Liten 15 · Uppdaterad 18:42</p>
+        <p style={{ fontSize: "var(--text-2xl)", fontWeight: 600, letterSpacing: "-0.03em" }}>Rubrik 32 · Styrelsemöte</p>
+        <p style={{ fontSize: "var(--text-xl)", fontWeight: 600, letterSpacing: "-0.025em" }}>Rubrik 24 · Personer</p>
+        <p style={{ fontSize: "var(--text-lg)", fontWeight: 600 }}>Rubrik 18 · Bjud in</p>
+        <p>Brödtext 16 · Anteckningarna skrivs i ett nytt Google-dokument och delas med föreningen.</p>
+        <p className="subtle">Liten 14 · Uppdaterad 18:42</p>
         <p className="hint">Hjälptext 13 · Högst 100 tecken.</p>
         <p className="mono" style={{ fontSize: "1.75rem" }}>
           1:02:09 · Talare 2
