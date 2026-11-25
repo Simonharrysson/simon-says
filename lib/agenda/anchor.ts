@@ -91,16 +91,25 @@ function statusSpan(tab: NotesTab, body: Paragraph[], scan: AgendaScan): { start
     const p = body.find((x) => r.start >= x.start && r.end <= x.end - 1);
     if (!plain(p)) continue;
     const text = p.text.slice(r.start - p.start, r.end - p.start);
-    if (isStatusText(text)) return r;
+    // Exactly one of our forms: a human who typed inside our range keeps their text (a fresh line is added).
+    if (STATUS_EXACT.test(text)) return r;
   }
   const p = body.find((x) => plain(x) && STATUS_EXACT.test(paraLine(x)));
   return p ? { start: p.start, end: p.end - 1 } : null;
 }
 
-/** Is the whole text of the Tid cell paragraph `p` covered exactly by one of our `ss-*-info-tid` ranges? */
+/** A Tid value we write: "18:05" at start, "18:05–19:10" after the final pass. */
+const OUR_TID = /^\d{2}:\d{2}(–\d{2}:\d{2})?$/;
+
+/**
+ * Is the whole text of the Tid cell paragraph `p` ours: covered exactly by one of our
+ * `ss-*-info-tid` ranges AND still in a form we write? (A human typing inside our range keeps it;
+ * the earlier meeting's info-tid row is not available here, so an in-form edit like "18:10" can't
+ * be told from ours — the shape check is the guard.)
+ */
 function ownTid(tab: NotesTab, p: Paragraph): boolean {
   const end = p.end - 1;
-  if (end <= p.start) return false;
+  if (end <= p.start || !OUR_TID.test(paraLine(p))) return false;
   for (const [name, entries] of tab.ranges) {
     if (!/^ss-.+-info-tid$/.test(name)) continue;
     const r = onePart(entries);

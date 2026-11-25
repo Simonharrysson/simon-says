@@ -384,6 +384,26 @@ describe("anchoring twice (fix I2, round 2)", () => {
     expect(rangeText(after, "ss-m2-header")).toBe(INITIAL_LIVE_LINE);
   });
 
+  it("a human typed inside our status range: not deleted, a fresh status line is added", () => {
+    const status = "Simon Says · avslutat 19:10 OBS ny tid";
+    const doc = endedDoc(status, status.length); // the range grew with the typing
+    const { p } = anchorAs(doc, "m2");
+    const after = tabOf(apply(doc, p.requests));
+    expect(p.requests.some((r) => r.deleteContentRange && r.deleteContentRange.range!.endIndex! - r.deleteContentRange.range!.startIndex! === status.length)).toBe(false);
+    expect(statusLines(after).map(paraLine).sort()).toEqual([INITIAL_LIVE_LINE, status].sort());
+    expect(rangeText(after, "ss-m2-header")).toBe(INITIAL_LIVE_LINE);
+  });
+
+  it("a human edit of our Tid out of our form ('18:05 ca') is never rewritten", () => {
+    const doc = endedDoc();
+    doc.tabs![0].documentTab!.namedRanges!["ss-old-info-tid"] = { name: "ss-old-info-tid", namedRanges: [] };
+    rewrite(doc, "18:05–19:10", "18:05 ca", { name: "ss-old-info-tid", offset: 0, len: "18:05 ca".length });
+    const { p } = anchorAs(doc, "m2");
+    expect(p.rows).toEqual([]);
+    const after = tabOf(apply(doc, p.requests));
+    expect(scanAgenda(after, VECKOMOTE).info[1].valueCell.text).toBe("18:05 ca");
+  });
+
   it("without a range: reused only when the paragraph is exactly a status form", () => {
     const exact = endedDoc();
     exact.tabs![0].documentTab!.namedRanges = {};
