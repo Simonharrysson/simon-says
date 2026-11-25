@@ -430,6 +430,20 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(insertedRow().transcript_tab_id).toBe("t.tr");
   });
 
+  it("no Transkript tab in the agenda Doc when the org does not share transcripts, even if asked", async () => {
+    m.getOrg.mockResolvedValue({ id: ORG, name: "Styrelsen", share_transcript: false });
+    expect((await agendaCall({ transcriptInDoc: true })).status).toBe(200);
+    expect(m.addTranscriptTab).not.toHaveBeenCalled();
+    expect(insertedRow().transcript_tab_id).toBeNull();
+  });
+
+  it("null options are the same as absent", async () => {
+    const res = await call({ orgId: ORG, consent: true, agendaDocId: null, formatProfileId: null, formatKind: null, transcriptInDoc: null });
+    expect(res.status).toBe(200);
+    expect(m.createMeetingDoc).toHaveBeenCalled();
+    expect(m.checkAgendaDoc).not.toHaveBeenCalled();
+  });
+
   it("403 agenda_no_edit when the starter cannot edit the Doc; nothing written", async () => {
     m.checkAgendaDoc.mockResolvedValue({ ok: false, error: "no_edit" });
     const res = await agendaCall();

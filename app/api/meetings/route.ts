@@ -17,7 +17,9 @@ const KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
 
 /** The optional start options of the body; null when one is present but malformed. */
 function startOptions(body: Record<string, unknown>): StartOptions | null {
-  const { agendaDocId, formatProfileId, formatKind, transcriptInDoc } = body;
+  // null is the same as absent.
+  const opt = (k: string) => (body[k] === null ? undefined : body[k]);
+  const [agendaDocId, formatProfileId, formatKind, transcriptInDoc] = ["agendaDocId", "formatProfileId", "formatKind", "transcriptInDoc"].map(opt);
   if (agendaDocId !== undefined && (typeof agendaDocId !== "string" || !DOC_ID.test(agendaDocId))) return null;
   if (formatProfileId !== undefined && (typeof formatProfileId !== "string" || !isUuid(formatProfileId))) return null;
   if (formatKind !== undefined && !KINDS.includes(formatKind as (typeof KINDS)[number])) return null;

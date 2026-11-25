@@ -32,7 +32,7 @@ export interface StartOptions {
   formatProfileId?: string | null;
   /** A standard format by kind (Testmöte, override): a non-default row equal to the constant. */
   formatKind?: StandardKind;
-  /** Agenda mode only: add a "Transkript" tab to the agenda Doc (answer 8: default no). */
+  /** Agenda mode only: add a "Transkript" tab to the agenda Doc (answer 8: default no; never when the org doesn't share transcripts). */
   transcriptInDoc?: boolean;
   /** Default: eventKind === "test_started". */
   isTest?: boolean;
@@ -169,7 +169,8 @@ export async function startMeeting(
   const ctx: SetupCtx = { auth, meetingId, startedAt, orgId, orgName: org.name, user };
 
   const setup = agendaMode
-    ? await agendaSetup(ctx, opts.agendaDocId!, format.profile, opts.transcriptInDoc === true)
+    ? // The tab only when the org shares transcripts at all AND the starter said yes (answer 8: default no).
+      await agendaSetup(ctx, opts.agendaDocId!, format.profile, org.share_transcript && opts.transcriptInDoc === true)
     : format.profile.kind === "enkel"
       ? await v1Setup(ctx, org.share_transcript)
       : await formatSetup(ctx, format.profile, org.share_transcript);
@@ -245,7 +246,7 @@ export async function startMeeting(
   if (anchor) {
     // Counts and role names only: never the Doc's text (privacy).
     await log("agenda_anchored", {
-      items: Object.keys(anchor.agendaRoles).length,
+      items: Object.keys(anchor.sectionRanges).filter((k) => k.startsWith("ag-")).length,
       appended: anchor.appended.length,
       roles: [...new Set(Object.values(anchor.agendaRoles))].sort(),
     });
