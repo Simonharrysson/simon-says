@@ -25,7 +25,11 @@ const people = [
 
 describe("openTasks", () => {
   it("keeps v1 action rows and kind=task rows", () => {
-    const out = openTasks([row({ id: "n1" }), row({ id: "n2", section: "note", kind: "task" }), row({ id: "n9", section: "note" })]);
+    const out = openTasks([
+      row({ id: "n1" }),
+      row({ id: "n2", section: "note", kind: "task" }),
+      row({ id: "n9", section: "note" }),
+    ]);
     expect(out.map((r) => r.id)).toEqual(["n1", "n2"]);
   });
   it("drops done, deleted, copies and -t ids", () => {
@@ -40,10 +44,25 @@ describe("openTasks", () => {
     expect(out.map((r) => r.id)).toEqual(["n6"]);
   });
   it("a locked row keeps its human text and has no owner or due", () => {
-    const [r] = openTasks([row({ id: "n1", locked: true, text: "Anna fixar kaffe", owner: "Anna", due: "fre" })]);
+    const [r] = openTasks([
+      row({
+        id: "n1",
+        locked: true,
+        text: "Anna fixar kaffe",
+        owner: "Anna",
+        due: "fre",
+      }),
+    ]);
     expect(r.text).toBe("Anna fixar kaffe");
     expect(r.owner).toBeNull();
     expect(r.due).toBeNull();
+  });
+  it("sorts a null owner first", () => {
+    const out = openTasks([
+      row({ id: "a", owner: "Anna" }),
+      row({ id: "b", owner: null }),
+    ]);
+    expect(out.map((r) => r.id)).toEqual(["b", "a"]);
   });
   it("orders by owner text then position", () => {
     const out = openTasks([
@@ -68,6 +87,14 @@ describe("carriedItems", () => {
     expect(out.map((r) => r.carried_from_id)).toEqual(["n2", "n3", "n4", "n1"]);
     expect(out.map((r) => r.position)).toEqual([0, 1, 2, 3]);
   });
+  it("a locked source row carries no owner_person_id", () => {
+    const locked = openTasks([
+      row({ id: "n1", locked: true, owner: "Anna", text: "Anna fixar" }),
+    ]);
+    expect(
+      carriedItems("M0", locked, "f1", people)[0].owner_person_id,
+    ).toBeNull();
+  });
   it("groups by person name", () => {
     const out = carriedItems("M0", open, "f1", people, "person");
     expect(out.map((r) => r.carried_from_id)).toEqual(["n2", "n1", "n3", "n4"]);
@@ -88,6 +115,8 @@ describe("carriedItems", () => {
       range_name: null,
       last_rendered_text: null,
     });
-    expect(out.find((x) => x.carried_from_id === "n4")!.owner_person_id).toBeNull();
+    expect(
+      out.find((x) => x.carried_from_id === "n4")!.owner_person_id,
+    ).toBeNull();
   });
 });

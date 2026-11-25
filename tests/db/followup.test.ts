@@ -1,5 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { adminClient, createTestUser, hasLocalSupabase, seedMeeting } from "@/test/local-supabase";
+import {
+  adminClient,
+  createTestUser,
+  hasLocalSupabase,
+  seedMeeting,
+} from "@/test/local-supabase";
 import { createOrg } from "@/lib/db/orgs";
 import type { NoteItemRow } from "@/lib/db/types";
 import { previousMeeting, propagateDone } from "@/lib/agenda/followup";
@@ -21,18 +26,45 @@ describe.skipIf(!hasLocalSupabase)("followup (db)", () => {
     real = (await seedMeeting(orgId, userId, "done")).meetingId;
     test = (await seedMeeting(orgId, userId, "done")).meetingId;
     live = (await seedMeeting(orgId, userId, "live")).meetingId;
-    await db.from("meetings").update({ started_at: "2026-01-01T10:00:00Z" }).eq("id", real);
-    await db.from("meetings").update({ started_at: "2026-02-01T10:00:00Z", is_test: true }).eq("id", test);
-    await db.from("meetings").update({ started_at: "2026-03-01T10:00:00Z" }).eq("id", live);
-    await db.from("note_items").insert({ meeting_id: real, id: "n4", section: "action", text: "Boka lokal" });
+    await db
+      .from("meetings")
+      .update({ started_at: "2026-01-01T10:00:00Z" })
+      .eq("id", real);
+    await db
+      .from("meetings")
+      .update({ started_at: "2026-02-01T10:00:00Z", is_test: true })
+      .eq("id", test);
+    await db
+      .from("meetings")
+      .update({ started_at: "2026-03-01T10:00:00Z" })
+      .eq("id", live);
+    await db
+      .from("note_items")
+      .insert({
+        meeting_id: real,
+        id: "n4",
+        section: "action",
+        text: "Boka lokal",
+      });
   });
 
   const now = new Date("2026-04-01T00:00:00Z");
 
   it("picks the latest done meeting with the same is_test, never a live one", async () => {
-    expect((await previousMeeting(orgId, false, now, adminClient()))?.id).toBe(real);
-    expect((await previousMeeting(orgId, true, now, adminClient()))?.id).toBe(test);
-    expect(await previousMeeting(orgId, false, new Date("2025-01-01T00:00:00Z"), adminClient())).toBeNull();
+    expect((await previousMeeting(orgId, false, now, adminClient()))?.id).toBe(
+      real,
+    );
+    expect((await previousMeeting(orgId, true, now, adminClient()))?.id).toBe(
+      test,
+    );
+    expect(
+      await previousMeeting(
+        orgId,
+        false,
+        new Date("2025-01-01T00:00:00Z"),
+        adminClient(),
+      ),
+    ).toBeNull();
   });
 
   it("propagates done once to the source row", async () => {
@@ -45,10 +77,60 @@ describe.skipIf(!hasLocalSupabase)("followup (db)", () => {
       carried_from_meeting: real,
       carried_from_id: "n4",
     } as NoteItemRow;
-    expect(await propagateDone([carried], adminClient())).toBe(1);
-    const { data } = await adminClient().from("note_items").select("done, text").eq("meeting_id", real).eq("id", "n4").single();
+    expect(await propagateDone([carried], orgId, false, adminClient())).toBe(1);
+    const { data } = await adminClient()
+      .from("note_items")
+      .select("done, text")
+      .eq("meeting_id", real)
+      .eq("id", "n4")
+      .single();
     expect(data).toEqual({ done: true, text: "Boka lokal" });
-    expect(await propagateDone([carried], adminClient())).toBe(0);
-    expect(await propagateDone([{ ...carried, done: false }], adminClient())).toBe(0);
+    expect(await propagateDone([carried], orgId, false, adminClient())).toBe(0);
+    expect(
+      await propagateDone(
+        [{ ...carried, done: false }],
+        orgId,
+        false,
+        adminClient(),
+      ),
+    ).toBe(0);
+  });
+
+  it("never touches a source meeting of another org or other is_test", async () => {
+    const o = await createTestUser("fuother");
+    const r2 = await createOrg(o.db, "Annan uppföljning");
+    if (!r2.ok) throw new Error("org setup failed");
+    const foreign = (await seedMeeting(r2.id, o.id, "done")).meetingId;
+    await adminClient()
+      .from("note_items")
+      .insert({
+        meeting_id: foreign,
+        id: "n7",
+        section: "action",
+        text: "Annans",
+      });
+    const carried = {
+      meeting_id: "x",
+      id: "c1",
+      section: "action",
+      text: "t",
+      done: true,
+      carried_from_meeting: foreign,
+      carried_from_id: "n7",
+    } as NoteItemRow;
+    expect(await propagateDone([carried], orgId, false, adminClient())).toBe(0);
+    const { data } = await adminClient()
+      .from("note_items")
+      .select("done")
+      .eq("meeting_id", foreign)
+      .eq("id", "n7")
+      .single();
+    expect(data!.done).toBe(false);
+    const own = {
+      ...carried,
+      carried_from_meeting: real,
+      carried_from_id: "n4",
+    };
+    expect(await propagateDone([own], orgId, true, adminClient())).toBe(0);
   });
 });
