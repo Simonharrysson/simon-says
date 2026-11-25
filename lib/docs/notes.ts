@@ -1,4 +1,4 @@
-import type { docs_v1 } from "@googleapis/docs";
+import { parseNotesTab, type NotesTab } from "./tab";
 import type { OAuth2Client } from "google-auth-library";
 import type { MeetingRow, NoteItemRow, NoteSection } from "@/lib/db/types";
 import { docsApi, isRevisionConflict, replaceRange, type DocsRequest } from "@/lib/google/docs";
@@ -13,9 +13,6 @@ import type { NotesItem } from "@/lib/notes/schema";
 // - a stale requiredRevisionId gives 400 "...does not match the latest revision." → 'conflict'.
 // The service never writes to an item a human edited (locked) or deleted, and never removes
 // text outside its own items. The single "now" item is never locked.
-
-/** Replaces any embedded object (chip, image, …) in paragraph text, so such edits never compare equal. */
-const OBJECT = "￼";
 
 export const itemRangeName = (meetingId: string, itemId: string) => `ss-${meetingId}-${itemId}`;
 
@@ -53,68 +50,8 @@ export function toNotesItem(row: NoteItemRow): NotesItem {
 // ---------------------------------------------------------------------------------------------
 // Reading the notes tab
 
-interface Paragraph {
-  start: number;
-  end: number;
-  /** Text including the trailing "\n"; non-text elements appear as OBJECT. */
-  text: string;
-  /** Holds a pending suggestion (suggested insertion, deletion or style change) by a human. */
-  suggested: boolean;
-}
-
-export interface NotesTab {
-  revisionId: string;
-  tabId: string;
-  paragraphs: Paragraph[];
-  /** name → one entry per named range with that name → its parts. */
-  ranges: Map<string, { start: number; end: number }[][]>;
-}
-
-function findTab(tabs: docs_v1.Schema$Tab[] | undefined, tabId: string): docs_v1.Schema$Tab | undefined {
-  for (const tab of tabs ?? []) {
-    if (tab.tabProperties?.tabId === tabId) return tab;
-    const child = findTab(tab.childTabs, tabId);
-    if (child) return child;
-  }
-  return undefined;
-}
-
-/** Any `suggested…` field with content (ids or change maps) on a Docs object. */
-function hasSuggestion(obj: object): boolean {
-  for (const [k, v] of Object.entries(obj)) {
-    if (!k.startsWith("suggested") || v == null) continue;
-    if (Array.isArray(v) ? v.length > 0 : typeof v === "object" ? Object.keys(v).length > 0 : true) return true;
-  }
-  return false;
-}
-
-/** Paragraphs and named ranges of one tab, from `documents.get` with includeTabsContent=true. */
-export function parseNotesTab(doc: docs_v1.Schema$Document, tabId: string): NotesTab {
-  const tab = findTab(doc.tabs, tabId);
-  if (!tab?.documentTab) throw new Error(`tab ${tabId} not found (was includeTabsContent set?)`);
-  const paragraphs: Paragraph[] = [];
-  for (const el of tab.documentTab.body?.content ?? []) {
-    if (!el.paragraph || el.startIndex == null || el.endIndex == null) continue;
-    let text = "";
-    let suggested = hasSuggestion(el.paragraph);
-    for (const pe of el.paragraph.elements ?? []) {
-      if (pe.textRun?.content != null) text += pe.textRun.content;
-      else text += OBJECT.repeat(Math.max(1, (pe.endIndex ?? 0) - (pe.startIndex ?? 0)));
-      const inner = pe.textRun ?? pe.inlineObjectElement ?? pe.autoText ?? pe.pageBreak ?? pe.footnoteReference ??
-        pe.horizontalRule ?? pe.equation ?? pe.person ?? pe.richLink ?? pe.columnBreak ?? null;
-      if (inner && hasSuggestion(inner)) suggested = true;
-    }
-    paragraphs.push({ start: el.startIndex, end: el.endIndex, text, suggested });
-  }
-  const ranges = new Map<string, { start: number; end: number }[][]>();
-  for (const [name, group] of Object.entries(tab.documentTab.namedRanges ?? {})) {
-    const entries = (group.namedRanges ?? []).map((nr) =>
-      (nr.ranges ?? []).map((r) => ({ start: r.startIndex ?? 0, end: r.endIndex ?? 0 })),
-    );
-    if (entries.length) ranges.set(name, entries);
-  }
-  return { revisionId: doc.revisionId ?? "", tabId, paragraphs, ranges };
-}
+export { parseNotesTab, cellAt } from "./tab";
+export type { NotesTab, Paragraph, Table, TableCell } from "./tab";
 
 export interface ItemSpan {
   rangeStart: number;
