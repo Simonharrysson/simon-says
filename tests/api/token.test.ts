@@ -411,13 +411,14 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     const { owner, orgId: org } = await freshOrg("Spacing org");
     const id = await live(org, owner.id);
     const ago = (sec: number) => new Date(Date.now() - sec * 1000).toISOString();
-    // 6 earlier live mints, the last 30 s ago: spacing 5 × 2^(6−4) = 20 s → allowed.
+    // 6 earlier live mints, the last 60 s ago: spacing 5 × 2^(6−4) = 20 s → allowed. (Older than
+    // the 41 s the 7th mint is aged to below, so the 7th stays the newest start.)
     const rows = Array.from({ length: 6 }, (_, i) => ({
       id: `sp-${randomUUID()}`,
       meeting_id: id,
-      started_at: ago(i === 5 ? 30 : 3600),
+      started_at: ago(i === 5 ? 60 : 3600),
       max_seconds: 1,
-      closed_at: ago(i === 5 ? 29 : 3599),
+      closed_at: ago(i === 5 ? 59 : 3599),
     }));
     await adminClient().from("el_sessions").insert(rows);
     as(owner);
