@@ -110,10 +110,13 @@ followed by `inspect` → `tick` → `inflight 10` → `inspect`.
   documented fail-safe. Consequence for Task 8/10: a frozen "now" item only updates if Claude makes a new "now" item.
   Task 10 could detect `rangeText ≠ paraText` on the "now" item and, for example, retire it, so that Claude gets a new id.
 
-## TODO: retention cleanup job (privacy page promise)
+## Retention cleanup job (done, Task R, migration 0015)
 
-/integritet says usage records (`usage_daily`) and the org-creations log (`org_creations`) are kept 24 months to prevent abuse.
-Nothing enforces that yet: a scheduled cleanup (e.g. in the daily cron) must delete rows older than 24 months, or the page must be changed.
+/integritet promises `usage_daily` and `org_creations` are kept 24 months. `cleanup_retention()` (service_role only)
+deletes older rows and returns the counts; the daily alarm cron (06:00 UTC) calls it after the summary email and logs
+`cron retention: ...`. A failure there never blocks the email. `org_creations` rows are only deleted when their org no longer exists, because `orgs_limit_per_creator` counts them (a live org's record must stay). Deliberately NOT deleted: `spend_alarms` and
+`meeting_events`, since the page promises no period for them (only the two named tables). Add them to the page first,
+then to the function.
 
 ## 2026-11-24 · Task 6 · Starting a meeting (createMeetingDoc, appendTranscript)
 
