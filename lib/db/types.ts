@@ -7,7 +7,14 @@ export type MeetingStatus = "live" | "ending" | "done" | "abandoned";
 export type NoteSection = "decision" | "action" | "now" | "attendees" | "note";
 export type NoteKind = "decision" | "task" | "note" | "attendee" | "now";
 export type ItemRole = "procedural" | "checkin" | "followup" | "other" | "topic";
-export type CheckinWindow = { startMs: number | null; endMs: number | null; closed: boolean; failures: number };
+export type CheckinWindow = {
+  startMs: number | null;
+  endMs: number | null;
+  closed: boolean;
+  failures: number;
+  /** Detector calls made so far (cost cap, final review R2-M1); absent = 0. */
+  calls?: number;
+};
 
 export function kindOfSection(section: NoteSection): NoteKind {
   if (section === "action") return "task";

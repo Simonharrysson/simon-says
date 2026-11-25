@@ -723,6 +723,32 @@ describe("agenda mode: updateNotes", () => {
     expect(out.failure).toBeNull();
   });
 
+  it("only adds under the Må-runda / Från förra veckan (dropped by rule) are a quiet tick, not all_dropped (R2-M3)", async () => {
+    quiet();
+    const ruled = fakeClient(
+      message({
+        text: opsText([
+          { op: "add", id: "n10", kind: "note", anchor: "ag-2", text: "Erik är trött" },
+          { op: "add", id: "n11", kind: "note", anchor: "ag-3", text: "Mejlet skickades" },
+        ]),
+      }),
+    );
+    const out = await updateNotes(agendaInput(), { client: ruled.client });
+    expect(out.ops).toEqual([]);
+    expect(out.dropped).toBe(2);
+    expect(out.failure).toBeNull();
+    // One add under an unknown anchor among them: still a failure.
+    const mixed = fakeClient(
+      message({
+        text: opsText([
+          { op: "add", id: "n10", kind: "note", anchor: "ag-2", text: "Erik är trött" },
+          { op: "add", id: "n11", kind: "note", anchor: "ag-99", text: "Okänd punkt" },
+        ]),
+      }),
+    );
+    expect((await updateNotes(agendaInput(), { client: mixed.client })).failure).toBe("all_dropped");
+  });
+
   it("toAgendaOp: add needs kind and text; change needs a field", () => {
     expect(toAgendaOp({ op: "add", id: "n1", text: "x", anchor: "ag-4" })).toBeNull();
     expect(toAgendaOp({ op: "add", id: "n1", kind: "decision", text: " ", anchor: "ag-4" })).toBeNull();

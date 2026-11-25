@@ -23,7 +23,7 @@ import type { FormatProfile } from "@/lib/formats/schema";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import { profileFor } from "@/lib/formats/store";
 import type { AgendaContext } from "@/lib/notes/agenda-prompt";
-import { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
+import { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, countCall, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
 import { ownerLabel, resolveOwner } from "@/lib/people/roles";
 import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
@@ -278,12 +278,16 @@ export interface ReadState {
 }
 
 /** Diff one read of the notes tab against the stored rows. */
-export function readState(tab: NotesTab, rows: NoteItemRow[]): ReadState {
+export function readState(tab: NotesTab, rows: NoteItemRow[], opts: { cells?: boolean } = {}): ReadState {
   const kept = retireFrozenNow(tab, rows);
   const diff = diffHumanEdits(kept, currentItems(tab, kept), suggestedItems(tab, kept));
   return {
     revisionId: tab.revisionId,
-    text: tab.paragraphs.map((p) => p.text).join(""),
+    // v1 (`cells: false`) reads the body only, as before table cells were parsed (final review R2-M4).
+    text: tab.paragraphs
+      .filter((p) => opts.cells !== false || !p.inTable)
+      .map((p) => p.text)
+      .join(""),
     diff,
     items: diff.rows.filter((r) => !r.locked && !r.deleted_by_human).map(toNotesItem),
   };
@@ -379,6 +383,32 @@ export function agendaContext(
     anchors: placed.map(({ at: _at, ...a }) => a),
     people: people.map((p) => ({ name: p.name, role: p.role ?? null })),
   };
+}
+
+/**
+ * Må-runda text typed in the Doc never reaches the notes engine (final review R2-M2): the checkin
+ * item's human text is blanked in the agenda context, and the paragraphs of its blocks after the
+ * item line are left out of the notes tab text. Item line and other items unchanged.
+ */
+export function hideCheckinText(
+  tab: NotesTab,
+  scan: AgendaScan,
+  meeting: Pick<MeetingRow, "section_ranges" | "agenda_roles">,
+  agenda: AgendaContext,
+): { agenda: AgendaContext; text: string } {
+  const all = tab.paragraphs.map((p) => p.text).join("");
+  const key = checkinAnchor(meeting);
+  if (!key) return { agenda, text: all };
+  const span = itemSpan(tab, (meeting.section_ranges as Record<string, string>)[key]);
+  const item = span ? itemAt(scan, span.paraStart) : null;
+  const blanked = { ...agenda, anchors: agenda.anchors.map((a) => (a.key === key ? { ...a, humanText: "" } : a)) };
+  if (!item) return { agenda: blanked, text: all };
+  const hidden = item.blocks.map((b, i) => ({ start: i === 0 ? item.paraEnd : b.start, limit: b.limit }));
+  const text = tab.paragraphs
+    .filter((p) => !hidden.some((h) => p.start >= h.start && p.start < h.limit))
+    .map((p) => p.text)
+    .join("");
+  return { agenda: blanked, text };
 }
 
 /** The anchor key of the Må-runda item (role checkin, with a range), or null. */
@@ -486,9 +516,10 @@ export function sentTicks(segments: SegmentRead[], sentTick: number): Set<number
  */
 export function endPassWindow(prev: CheckinWindow, span: { firstMs: number; lastMs: number }): CheckinWindow {
   const endMs = Math.min(CHECKIN_MAX_MS, span.lastMs + 1);
+  const calls = prev.calls !== undefined ? { calls: prev.calls } : {};
   return span.firstMs < endMs
-    ? { startMs: span.firstMs, endMs, closed: true, failures: Math.max(prev.failures, CHECKIN_MAX_FAILURES) }
-    : { startMs: null, endMs: null, closed: true, failures: Math.max(prev.failures, CHECKIN_MAX_FAILURES) };
+    ? { startMs: span.firstMs, endMs, closed: true, failures: Math.max(prev.failures, CHECKIN_MAX_FAILURES), ...calls }
+    : { startMs: null, endMs: null, closed: true, failures: Math.max(prev.failures, CHECKIN_MAX_FAILURES), ...calls };
 }
 
 /**
@@ -753,7 +784,7 @@ async function checkinStep(
       console.error(`tick ${meeting.id}: checkin: ${errorText(e)}`);
     }
     answered = found !== "failed";
-    next = nextWindow(prev, found, span);
+    next = countCall(nextWindow(prev, found, span), prev.calls ?? 0, span.firstMs);
   }
   let hold = false;
   if (!answered && !next.closed && next.startMs === null) {
@@ -829,6 +860,8 @@ export async function runTick(
       hold: boolean;
       /** Primaries whose (unlocked) tasks copy Claude edits under the primary's id (R-A6). */
       proxied: Set<string>;
+      /** The notes tab text the engine reads: the Må-runda item's lines left out (R2-M2). */
+      text: string;
     } | null = null;
     const sentTick = meeting.notes_sent_tick ?? 0;
     if (layout === "format") {
@@ -846,12 +879,14 @@ export async function runTick(
       // Items from the anchors, the mode fixed at the start; the scan only adds new items (R1-I1).
       const scan = scanAgenda(withoutOwnLines(tab, ctx.rows), profile, { anchors: anchoredStarts(tab, meeting.section_ranges ?? {}, meeting.id) });
       const fresh = newAgendaItems(scan, tab, meeting.section_ranges ?? {}, meeting.id).map((n) => ({ ...n, label: itemAt(scan, n.start)?.label ?? "" }));
-      const agenda = agendaContext(tab, scan, meeting, profile, people, fresh);
+      // Må-runda text in the Doc stays out of what the notes engine reads (R2-M2).
+      const hidden = hideCheckinText(tab, scan, meeting, agendaContext(tab, scan, meeting, profile, people, fresh));
+      const agenda = hidden.agenda;
       // The detector runs on the lines not yet sent, within the spend caps and time.
       const detectOk = spendOk && left() >= NAME_ROUND_MIN_LEFT_MS;
       const step = await checkinStep(meeting, leaseId, ctx, sentTick, agenda, detectOk, final, deps);
       if (step.lost) return "busy"; // a newer tick holds the lease: it does this tick's work
-      fmt = { profile, people, tab, agenda, fresh, window: step.window, hold: step.hold, proxied: new Set() };
+      fmt = { profile, people, tab, agenda, fresh, window: step.window, hold: step.hold, proxied: new Set(), text: hidden.text };
     }
 
     const { blocks, speakerNames } = fmt
@@ -864,7 +899,9 @@ export async function runTick(
       : liveHeader(deps.now(), layout);
 
     // read → diff → Claude
-    const first = readState(fmt ? fmt.tab : await deps.readNotes(auth, meeting), ctx.rows);
+    const first = fmt
+      ? { ...readState(fmt.tab, ctx.rows), text: fmt.text }
+      : readState(await deps.readNotes(auth, meeting), ctx.rows, { cells: false });
     let items = first.items;
     if (fmt) {
       const proxies = copyProxies(first.diff.rows);

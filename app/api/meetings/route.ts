@@ -5,8 +5,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startMeeting, type StartOptions } from "@/lib/meetings/start";
 
 export const dynamic = "force-dynamic";
-// Creating the Doc takes a handful of Google calls.
-export const maxDuration = 60;
+// Creating the Doc takes a handful of Google calls; an agenda start adds the roles call (at most
+// 15 s, then the fuzzy roles) and 10–20 Google calls with conflict retries.
+export const maxDuration = 120;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) =>

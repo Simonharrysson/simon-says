@@ -151,3 +151,63 @@ describe.skipIf(!hasLocalSupabase)("guard_meeting_start (0021, Ruling 39)", () =
     expect(error).not.toBeNull();
   });
 });
+
+describe.skipIf(!hasLocalSupabase)("guard_meeting_start_v2 (0027, final review R2-I1)", () => {
+  const insertLive = async (orgId: string, userId: string, docId: string) => {
+    const { data, error } = await adminClient()
+      .from("meetings")
+      .insert({ org_id: orgId, started_by: userId, doc_id: docId, notes_tab_id: "t", status: "live", started_at: new Date().toISOString() })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return data.id as string;
+  };
+  const guard = async (id: string) =>
+    (await adminClient().rpc("guard_meeting_start_v2", { p_meeting_id: id, p_max_per_hour: 6 })).data as string;
+  const exists = async (id: string) => ((await adminClient().from("meetings").select("id").eq("id", id)).data ?? []).length > 0;
+
+  it("two members starting on the same Doc at once: exactly one survives", async () => {
+    const a = await createTestUser("v2a");
+    const b = await createTestUser("v2b");
+    const r = await createOrg(a.db, "Samma dokument");
+    if (!r.ok) throw new Error("org");
+    const doc = `doc-${crypto.randomUUID()}`;
+    const [ma, mb] = await Promise.all([insertLive(r.id, a.id, doc), insertLive(r.id, b.id, doc)]);
+    const results = await Promise.all([guard(ma), guard(mb)]);
+    expect(results.sort()).toEqual(["ok", "org_busy"]);
+    expect([await exists(ma), await exists(mb)].filter(Boolean)).toHaveLength(1);
+  });
+
+  it("another org's live meeting on the same Doc → doc_busy, the row removed", async () => {
+    const a = await createTestUser("v2c");
+    const b = await createTestUser("v2d");
+    const ra = await createOrg(a.db, "Förening A");
+    const rb = await createOrg(b.db, "Förening B");
+    if (!ra.ok || !rb.ok) throw new Error("org");
+    const doc = `doc-${crypto.randomUUID()}`;
+    const first = await insertLive(ra.id, a.id, doc);
+    expect(await guard(first)).toBe("ok");
+    const second = await insertLive(rb.id, b.id, doc);
+    expect(await guard(second)).toBe("doc_busy");
+    expect(await exists(second)).toBe(false);
+    expect(await exists(first)).toBe(true);
+  });
+
+  it("a done meeting on the Doc is no obstacle; the old guard still answers", async () => {
+    const a = await createTestUser("v2e");
+    const r = await createOrg(a.db, "Igen");
+    if (!r.ok) throw new Error("org");
+    const doc = `doc-${crypto.randomUUID()}`;
+    const old = await insertLive(r.id, a.id, doc);
+    await adminClient().from("meetings").update({ status: "done" }).eq("id", old);
+    const next = await insertLive(r.id, a.id, doc);
+    expect(await guard(next)).toBe("ok");
+    expect((await adminClient().rpc("guard_meeting_start", { p_meeting_id: next, p_max_per_hour: 6 })).data).toBe("ok");
+  });
+
+  it("is service-role only", async () => {
+    const u = await createTestUser("guardrpc2");
+    const { error } = await u.db.rpc("guard_meeting_start_v2", { p_meeting_id: crypto.randomUUID(), p_max_per_hour: 6 });
+    expect(error).not.toBeNull();
+  });
+});

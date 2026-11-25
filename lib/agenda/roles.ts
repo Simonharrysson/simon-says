@@ -106,10 +106,14 @@ export function buildRolesUserText(items: Item[], fixed: FixedItem[]): string {
   ].join("\n");
 }
 
+/** The roles call runs inside a meeting start: past this it gives up and the fuzzy roles stand (R2-I2). */
+export const ROLES_TIMEOUT_MS = 15_000;
+
 /**
  * Roles for the scanned items: one Claude call (labels only), usage recorded on the org. Fuzzy
- * only under KILL_SWITCH / the daily cap; any failure, refusal, unknown or duplicate key falls
- * back to `fuzzyRoles` entirely. Items Claude leaves out get their fuzzy role.
+ * only under KILL_SWITCH / the daily cap; any failure, refusal, timeout (ROLES_TIMEOUT_MS),
+ * unknown or duplicate key falls back to `fuzzyRoles` entirely. Items Claude leaves out get their
+ * fuzzy role.
  */
 export async function matchFixedItems(
   items: Item[],
@@ -126,6 +130,7 @@ export async function matchFixedItems(
       jsonSchema: ROLES_JSON_SCHEMA,
       schema: OutputSchema,
       maxTokens: 2000,
+      timeoutMs: ROLES_TIMEOUT_MS,
       orgId: opts.orgId,
       client: opts.client,
     });

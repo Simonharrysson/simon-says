@@ -53,12 +53,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // As the user: RLS hides meetings of other orgs (404).
   const { data: meeting, error } = await supabase
     .from("meetings")
-    .select("id, started_by")
+    .select("id, started_by, is_test")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`token: meeting: ${error.message}`);
   if (!meeting) return fail("not_found", 404);
   if (meeting.started_by !== user.id) return fail("not_starter", 403);
+  // A Testmöte replays a fictional meeting through a seeded test session: never a live, billed one.
+  if (meeting.is_test) return fail("test_meeting", 409);
   if (getEnv().KILL_SWITCH) return fail("kill_switch", 503);
 
   const body = (await request.json().catch(() => null)) as { closingSessionId?: unknown } | null;

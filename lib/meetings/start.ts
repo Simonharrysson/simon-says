@@ -4,11 +4,11 @@ import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, type AnchorResult } from "@/lib/agenda/anchor";
-import { carriedItems, openTasks, previousMeeting } from "@/lib/agenda/followup";
+import { carriedItems, carryPlan, previousMeeting, previousOnDoc } from "@/lib/agenda/followup";
 import { missingRequired } from "@/lib/agenda/scan";
 import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle } from "@/lib/docs/create";
 import { planFormatRender } from "@/lib/docs/format-render";
-import { readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
+import { itemSpan, readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
 import { logEvent } from "@/lib/db/events";
 import { memberEmails } from "@/lib/db/members";
 import { getOrg, myRole } from "@/lib/db/orgs";
@@ -224,16 +224,19 @@ export async function startMeeting(
     return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
   }
 
-  // Re-check after the insert, atomically (0021): of concurrent starts exactly one survives; the
-  // guard deletes a losing row itself (its Doc stays in Drive; an agenda Doc keeps its anchoring,
-  // the rare race F14 accepts: docs/learnings.md "Meeting formats A10").
-  const { data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start", {
+  // Re-check after the insert, atomically (0027: per starter, per org and per Doc): of concurrent
+  // starts exactly one survives; the guard deletes a losing row itself (its Doc stays in Drive; an
+  // agenda Doc keeps the loser's anchor ranges, which change no text, docs/learnings.md A10).
+  const { data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start_v2", {
     p_meeting_id: meetingId,
     p_max_per_hour: MAX_STARTS_PER_HOUR,
   });
   if (guardError) throw new Error(`meetings: start guard: ${guardError.message}`);
   if (guard === "starter_busy") return startBusy();
   if (guard === "start_rate") return startRate();
+  if (guard === "org_busy") return failed("already_live", 409, "Ett möte pågår redan i föreningen. Avsluta det först.");
+  if (guard === "doc_busy") return agendaUsed();
+  if (guard !== "ok") throw new Error(`meetings: start guard: ${String(guard)}`);
 
   // The start stands. Only now the remaining writes: the standard format row and the Transkript tab.
   const admin = supabaseAdmin();
@@ -246,7 +249,15 @@ export async function startMeeting(
       // Never run a meeting under the wrong format (profileFor would read Enkel): undo the start.
       console.error(`meetings: format row failed (Doc ${setup.docId} left in Drive): ${(err as Error).message}`);
       const { error } = await admin.from("meetings").delete().eq("id", meetingId);
-      if (error) console.error(`meetings ${meetingId}: undo after format row failure: ${error.message}`);
+      if (error) {
+        // The row stays: never leave it live (it would block the org and the Doc). Abandoned instead.
+        console.error(`meetings ${meetingId}: undo after format row failure: ${error.message}`);
+        const { error: e2 } = await admin
+          .from("meetings")
+          .update({ status: "abandoned", end_status: "abandoned", ended_at: new Date().toISOString() })
+          .eq("id", meetingId);
+        if (e2) console.error(`meetings ${meetingId}: marking abandoned failed: ${e2.message}`);
+      }
       return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
     }
   }
@@ -395,7 +406,8 @@ async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile)
   let anchor: AnchorResult;
   try {
     // Throws AgendaShapeError before writing anything when the Doc has no agenda items.
-    anchor = await anchorAgenda(ctx.auth, { meetingId: ctx.meetingId, orgId: ctx.orgId, docId, profile, startedAt: ctx.startedAt });
+    const ownInfo = await earlierInfo(docId);
+    anchor = await anchorAgenda(ctx.auth, { meetingId: ctx.meetingId, orgId: ctx.orgId, docId, profile, startedAt: ctx.startedAt, ownInfo });
   } catch (err) {
     if (err instanceof AgendaShapeError) return err.code === "several_agendas" ? agendaSeveral() : agendaNoItems();
     if (err instanceof GoogleAuthLostError) return authLost();
@@ -415,6 +427,38 @@ async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile)
     title: access.name || meetingTitle(ctx.orgName, ctx.startedAt),
     anchor,
   };
+}
+
+/**
+ * Datum / Tid rows earlier meetings wrote into this Doc and no human edited (unlocked, not
+ * deleted): range name → last rendered text. anchorAgenda rewrites a cell only while it still
+ * holds exactly that text (final review R1-I3). Service role: a Doc may have served another org.
+ * A failed read gives {} (no cell rewritten).
+ */
+async function earlierInfo(docId: string): Promise<Record<string, string>> {
+  const db = supabaseAdmin();
+  const { data: meetings, error } = await db
+    .from("meetings")
+    .select("id")
+    .eq("doc_id", docId)
+    .in("status", ["done", "abandoned"])
+    .order("started_at", { ascending: false })
+    .limit(20);
+  // Unreadable: nothing is proven ours, so no cell is rewritten (the safe side).
+  if (error) return (console.error(`meetings: earlier info: ${error.message}`), {});
+  const ids = ((meetings ?? []) as { id: string }[]).map((m) => m.id);
+  if (!ids.length) return {};
+  const { data: rows, error: rowsError } = await db
+    .from("note_items")
+    .select("range_name, last_rendered_text, locked, deleted_by_human")
+    .in("meeting_id", ids)
+    .in("id", ["info-tid", "info-datum"]);
+  if (rowsError) return (console.error(`meetings: earlier info: ${rowsError.message}`), {});
+  const out: Record<string, string> = {};
+  for (const r of (rows ?? []) as Pick<NoteItemRow, "range_name" | "last_rendered_text" | "locked" | "deleted_by_human">[]) {
+    if (r.range_name && r.last_rendered_text != null && !r.locked && !r.deleted_by_human) out[r.range_name] = r.last_rendered_text;
+  }
+  return out;
 }
 
 /** Fallback, Enkel: today's v1 Doc. */
@@ -531,22 +575,46 @@ async function prefill(input: {
     // Testmöten pull only from Testmöten, real meetings only from real ones (answer 7); an agenda
     // Testmöte only from agenda Testmöten.
     const prev = await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc);
-    if (prev) {
-      const [prevRows, ppl] = await Promise.all([
-        db.from("note_items").select("*").eq("meeting_id", prev.id),
+    // A false start on this same Doc (done or abandoned, after `prev`): its carried lines are
+    // already in the Doc, so they are taken over, never written twice (final review R1/R2).
+    const onDoc = await previousOnDoc(meeting.org_id, input.isTest, meeting.doc_id, input.startedAt, db);
+    const sameDoc = onDoc && (!prev || onDoc.id === prev.id || !prev.startedAt || onDoc.startedAt >= prev.startedAt) ? onDoc : null;
+    if (prev || sameDoc) {
+      const rowsOf = async (id: string) => {
+        const { data, error } = await db.from("note_items").select("*").eq("meeting_id", id);
+        if (error) throw new Error(`prefill: previous rows: ${error.message}`);
+        return (data ?? []) as NoteItemRow[];
+      };
+      const [prevRows, sameRows, ppl] = await Promise.all([
+        prev ? rowsOf(prev.id) : Promise.resolve([]),
+        sameDoc && sameDoc.id !== prev?.id ? rowsOf(sameDoc.id) : Promise.resolve(null),
         fictional
           ? Promise.resolve({ data: testPeople(meeting.org_id), error: null })
           : db.from("people").select("id, name, role").eq("org_id", meeting.org_id),
       ]);
-      if (prevRows.error) throw new Error(`prefill: previous rows: ${prevRows.error.message}`);
       if (ppl.error) throw new Error(`prefill: people: ${ppl.error.message}`);
       people = (ppl.data ?? []) as RolePerson[];
-      const open = openTasks((prevRows.data ?? []) as NoteItemRow[]);
-      carried = carriedItems(prev.id, open, followup, people, groupBy).map((r) => ({
-        ...r,
-        meeting_id: meeting.id,
-        ...(fictional ? { owner_person_id: null } : {}),
-      }));
+      const docRows = sameDoc ? (sameRows ?? prevRows) : [];
+      // Only lines still in the Doc are taken over (one read; none when nothing could be).
+      const tab = docRows.some((r) => r.carried_from_id != null && r.range_name)
+        ? await readNotesTab(auth, meeting.doc_id, meeting.notes_tab_id)
+        : null;
+      const plan = carryPlan({
+        prev: prev ? { id: prev.id, rows: prevRows } : null,
+        sameDoc: sameDoc ? { id: sameDoc.id, rows: docRows } : null,
+        intact: (name) => Boolean(tab && itemSpan(tab, name)),
+      });
+      const adopted = plan.adopted.map((r, position) => ({ ...r, meeting_id: meeting.id, anchor: followup, position }));
+      const taken = new Set(adopted.map((r) => r.id));
+      let next = Math.max(0, ...adopted.map((r) => Number(r.id.slice(1)) || 0));
+      const fresh = prev
+        ? carriedItems(prev.id, plan.open, followup, people, groupBy).map((r) => {
+            let id = `c${++next}`;
+            while (taken.has(id)) id = `c${++next}`;
+            return { ...r, id, position: adopted.length + r.position, meeting_id: meeting.id, ...(fictional ? { owner_person_id: null } : {}) };
+          })
+        : [];
+      carried = [...adopted, ...fresh];
     }
   }
 
@@ -555,15 +623,21 @@ async function prefill(input: {
   const { error: insertError } = await db.from("note_items").insert(rows);
   if (insertError) throw new Error(`prefill: insert: ${insertError.message}`);
   if (!carried.length) return 0;
+  // Taken-over rows are in the Doc already; only the fresh ones are rendered.
+  const toRender = carried.filter((r) => !r.range_name);
+  if (!toRender.length) {
+    await input.log("followup_prefilled", { count: carried.length, adopted: carried.length, rendered: true });
+    return carried.length;
+  }
 
   let rendered = false;
   try {
-    rendered = await renderCarried(auth, meeting as MeetingRow, rows, carried, profile, people, groupBy);
+    rendered = await renderCarried(auth, meeting as MeetingRow, rows, toRender, profile, people, groupBy);
   } catch (err) {
     // Saved but unrendered (range_name null): the first tick renders them like any new item.
     console.error(`meetings ${meeting.id}: pre-fill render failed: ${(err as Error).message}`);
   }
-  await input.log("followup_prefilled", { count: carried.length, rendered });
+  await input.log("followup_prefilled", { count: carried.length, adopted: carried.length - toRender.length, rendered });
   return carried.length;
 }
 
@@ -616,7 +690,7 @@ const startRate = () =>
 /**
  * Per-user start limits (Ruling 39), counted from meetings rows across every org: at most one
  * live meeting per starter, and MAX_STARTS_PER_HOUR starts per rolling hour. Checked before the
- * Doc is created; guard_meeting_start (0021) enforces the same atomically after the insert.
+ * Doc is created; guard_meeting_start_v2 (0027) enforces the same atomically after the insert.
  */
 async function startLimit(userId: string): Promise<StartResult | null> {
   const db = supabaseAdmin();

@@ -203,6 +203,17 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect(await res.json()).toEqual({ error: "not_live" });
   });
 
+  it("409 test_meeting for a Testmöte: never a live ElevenLabs session (final review, small)", async () => {
+    const id = await live(orgId, starter.id);
+    await adminClient().from("meetings").update({ is_test: true }).eq("id", id);
+    as(starter);
+    const before = mint.fn.mock.calls.length;
+    const res = await callToken(id);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "test_meeting" });
+    expect(mint.fn.mock.calls.length).toBe(before);
+  });
+
   it("mints with max_session_duration_seconds = least(remaining time, 1 h) (3 600 at start, Ruling 39)", async () => {
     const id = await live(orgId, starter.id);
     as(starter);

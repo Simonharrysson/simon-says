@@ -13,13 +13,14 @@ import { agendaHeadingCount, itemAt, normLabel, scanAgenda, withoutEarlierLines,
 //   HEADING_2 paragraph;
 // - writes the LIVE line (our own range) right after the notes heading, or at the end of the tab
 //   when the Doc has no notes section;
-// - fills the EMPTY Datum and Tid cells (Tid with a row of its own, so the final pass can write
-//   "18:05–19:10"); every non-empty cell, and Sekreterare always, is left alone;
+// - fills the EMPTY Datum and Tid cells, each with a range and a row of its own (the final pass
+//   writes Tid "18:05–19:10"); every non-empty cell, and Sekreterare always, is left alone;
 // - ranges the first signature line (Styrelseprotokoll), so the tasks block ends above it.
 // Anchoring the same Doc again (a start retry, a Doc used by an earlier meeting) is safe: an
-// existing status line of ours is reused (only its range's text replaced), a Tid an earlier
-// meeting of ours wrote (our ss-*-info-tid range over exactly the cell text) is rewritten with
-// this start, and this meeting's own old ranges are deleted before they are re-created.
+// existing status line of ours is reused (only its range's text replaced), a Datum / Tid an
+// earlier meeting of ours wrote and no human changed (its range over exactly the cell text, equal
+// to that meeting's row) is rewritten with this start, and this meeting's own old ranges are
+// deleted before they are re-created.
 // Inserts only ever go before a paragraph's newline or into an empty cell: never inside a human's
 // text (pre-flight F6). Requests run from the highest index down, so no index needs adjusting.
 
@@ -42,7 +43,7 @@ export interface AnchorPlan {
   sectionRanges: Record<string, string>;
   /** The LIVE line's range (store as meetings.header_range). */
   headerRange: string;
-  /** Rows the server owns from the start: `info-tid` when the Tid cell was empty. */
+  /** Rows the server owns from the start: `info-datum` / `info-tid` for the cells it wrote. */
   rows: NoteItemRow[];
   /** Section labels appended at the end of the tab, in Doc order. */
   appended: string[];
@@ -98,22 +99,26 @@ function statusSpan(tab: NotesTab, body: Paragraph[], scan: AgendaScan): { start
   return p ? { start: p.start, end: p.end - 1 } : null;
 }
 
-/** A Tid value we write: "18:05" at start, "18:05–19:10" after the final pass. */
+/** A Tid value we write: "18:05" at start, "18:05–19:10" after the final pass; a Datum "2026-11-25". */
 const OUR_TID = /^\d{2}:\d{2}(–\d{2}:\d{2})?$/;
+const OUR_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Is the whole text of the Tid cell paragraph `p` ours: covered exactly by one of our
- * `ss-*-info-tid` ranges AND still in a form we write? (A human typing inside our range keeps it;
- * the earlier meeting's info-tid row is not available here, so an in-form edit like "18:10" can't
- * be told from ours — the shape check is the guard.)
+ * Is the whole text of the Datum / Tid cell paragraph `p` ours to rewrite? Covered exactly by one
+ * of our `ss-*-info-<field>` ranges, in a form we write, AND (final review R1-I3) equal to what
+ * that meeting last rendered there (`ownInfo`: range name → its row's last_rendered_text, from
+ * the DB; rows a human edited are left out). An in-form edit ("18:10" typed over "18:05") is a
+ * human's and stays. This meeting's own range (an anchoring retry) is ours when it holds `text`.
  */
-function ownTid(tab: NotesTab, p: Paragraph): boolean {
+function ownInfo(tab: NotesTab, p: Paragraph, field: "tid" | "datum", m: string, text: string, own: Record<string, string>): boolean {
   const end = p.end - 1;
-  if (end <= p.start || !OUR_TID.test(paraLine(p))) return false;
+  const line = paraLine(p);
+  if (end <= p.start || !(field === "tid" ? OUR_TID : OUR_DATUM).test(line)) return false;
   for (const [name, entries] of tab.ranges) {
-    if (!/^ss-.+-info-tid$/.test(name)) continue;
+    if (!name.startsWith("ss-") || !name.endsWith(`-info-${field}`)) continue;
     const r = onePart(entries);
-    if (r && r.start === p.start && r.end === end) return true;
+    if (!r || r.start !== p.start || r.end !== end) continue;
+    if (name === `ss-${m}-info-${field}` ? line === text : own[name] === line) return true;
   }
   return false;
 }
@@ -189,7 +194,13 @@ type NewLine = { text: string; style: "HEADING_2" | "NORMAL_TEXT"; name: string 
 export function planAnchoring(
   scan: AgendaScan,
   tab: NotesTab,
-  opts: { meetingId: string; profile: FormatProfile; startedAt: Date },
+  opts: {
+    meetingId: string;
+    profile: FormatProfile;
+    startedAt: Date;
+    /** Earlier meetings' Datum/Tid rows on this Doc: range name → last_rendered_text (unlocked rows only). */
+    ownInfo?: Record<string, string>;
+  },
 ): AnchorPlan {
   const { meetingId: m, profile } = opts;
   const tabId = tab.tabId;
@@ -309,7 +320,8 @@ export function planAnchoring(
     push(at, requests);
   }
 
-  // Empty Datum / Tid cells (an empty cell is one paragraph holding only its newline).
+  // Empty Datum / Tid cells (an empty cell is one paragraph holding only its newline), or ones an
+  // earlier meeting of ours wrote and no human changed since (ownInfo). Each gets a range and a row.
   const { date, time } = stockholm(opts.startedAt);
   for (const cell of scan.info) {
     const field = normLabel(cell.field);
@@ -317,39 +329,34 @@ export function planAnchoring(
     const s = cell.valueCell.paragraphStart;
     const p = tab.paragraphs.find((x) => x.start === s && paraInTable(x));
     if (!p) continue;
-    const empty = cell.valueCell.text === "" && p.text === "\n";
-    // A Tid an earlier meeting of ours wrote (proven by our ss-*-info-tid range over exactly the
-    // cell text): ours to rewrite with this meeting's start. Any other text is a human's.
-    const earlier = field === "tid" && !empty && p.text === `${cell.valueCell.text}\n` && ownTid(tab, p);
-    if (!empty && !earlier) continue;
     const text = field === "datum" ? date : time;
-    const requests: DocsRequest[] = [
+    const empty = cell.valueCell.text === "" && p.text === "\n";
+    const earlier = !empty && p.text === `${cell.valueCell.text}\n` && ownInfo(tab, p, field, m, text, opts.ownInfo ?? {});
+    if (!empty && !earlier) continue;
+    const name = `ss-${m}-info-${field}`;
+    push(s, [
       ...(earlier ? [{ deleteContentRange: { range: range(s, p.end - 1) } }] : []),
       { insertText: { text, location: { index: s, tabId } } },
       plainText(s, s + text.length),
-    ];
-    if (field === "tid") {
-      const name = `ss-${m}-info-tid`;
-      requests.push(namedRange(name, s, s + text.length));
-      rows.push({
-        meeting_id: m,
-        id: "info-tid",
-        section: "note",
-        text,
-        owner: null,
-        due: null,
-        locked: false,
-        deleted_by_human: false,
-        last_rendered_text: text,
-        range_name: name,
-        position: 0,
-        kind: "note",
-        anchor: "info.tid",
-        done: false,
-        copy_of: null,
-      });
-    }
-    push(s, requests);
+      namedRange(name, s, s + text.length),
+    ]);
+    rows.push({
+      meeting_id: m,
+      id: `info-${field}`,
+      section: "note",
+      text,
+      owner: null,
+      due: null,
+      locked: false,
+      deleted_by_human: false,
+      last_rendered_text: text,
+      range_name: name,
+      position: 0,
+      kind: "note",
+      anchor: `info.${field}`,
+      done: false,
+      copy_of: null,
+    });
   }
 
   ops.sort((a, b) => b.index - a.index || a.order - b.order);
@@ -396,6 +403,8 @@ export async function anchorAgenda(
     profile: FormatProfile;
     startedAt: Date;
     roles?: Record<string, ItemRole>;
+    /** See planAnchoring: earlier meetings' Datum/Tid rows on this Doc. */
+    ownInfo?: Record<string, string>;
   },
   guard: GuardOptions = {},
 ): Promise<AnchorResult> {
@@ -413,7 +422,7 @@ export async function anchorAgenda(
       // Lines an earlier meeting of ours wrote (a Doc used again) never decide what is an item (R1-I1).
       const scan = scanAgenda(withoutEarlierLines(tab), input.profile);
       if (!scan.items.length) throw new AgendaShapeError("no_items");
-      const plan = planAnchoring(scan, tab, { meetingId: input.meetingId, profile: input.profile, startedAt: input.startedAt });
+      const plan = planAnchoring(scan, tab, { meetingId: input.meetingId, profile: input.profile, startedAt: input.startedAt, ownInfo: input.ownInfo });
       return { tab, scan, plan };
     },
     async ({ tab, scan, plan }) => {

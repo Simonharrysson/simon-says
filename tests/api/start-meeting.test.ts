@@ -371,15 +371,23 @@ describe("POST /api/meetings", () => {
     expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
   });
 
-  it("a start that loses the atomic re-check (guard_meeting_start, 0021) is refused; the guard removed its row", async () => {
+  it("a start that loses the atomic re-check (guard_meeting_start_v2, 0027) is refused; the guard removed its row", async () => {
     m.guard.mockResolvedValue({ data: "starter_busy", error: null });
     const res = await call({ orgId: ORG, consent: true });
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("starter_busy");
-    expect(m.guard).toHaveBeenCalledWith("guard_meeting_start", { p_meeting_id: m.insert.mock.calls[0][0].id, p_max_per_hour: 6 });
+    expect(m.guard).toHaveBeenCalledWith("guard_meeting_start_v2", { p_meeting_id: m.insert.mock.calls[0][0].id, p_max_per_hour: 6 });
     expect(m.logEvent).not.toHaveBeenCalled();
     m.guard.mockResolvedValue({ data: "start_rate", error: null });
     expect((await call({ orgId: ORG, consent: true })).status).toBe(429);
+    // Another member's start in the org, or any meeting on the same Doc, won the race (R2-I1).
+    m.guard.mockResolvedValue({ data: "org_busy", error: null });
+    let res2 = await call({ orgId: ORG, consent: true });
+    expect([res2.status, (await res2.json()).error]).toEqual([409, "already_live"]);
+    m.guard.mockResolvedValue({ data: "doc_busy", error: null });
+    res2 = await call({ orgId: ORG, consent: true });
+    expect([res2.status, (await res2.json()).error]).toEqual([409, "agenda_used"]);
+    expect(m.logEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -695,7 +703,7 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(m.noteUpdate.mock.calls[0][0]).toEqual(
       expect.objectContaining({ range_name: expect.stringMatching(/^ss-/), last_rendered_text: expect.any(String), position: expect.any(Number) }),
     );
-    expect(eventsOf("followup_prefilled")[0][2]).toEqual({ count: 2, rendered: true });
+    expect(eventsOf("followup_prefilled")[0][2]).toEqual({ count: 2, adopted: 0, rendered: true });
   });
 
   it("a render conflict is retried; a failing pre-fill never fails the start", async () => {
@@ -712,7 +720,42 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     const res = await agendaCall();
     expect(res.status).toBe(200);
     expect(m.insert).toHaveBeenCalledTimes(1);
-    expect(eventsOf("followup_prefilled").at(-1)![2]).toEqual({ count: 1, rendered: false });
+    expect(eventsOf("followup_prefilled").at(-1)![2]).toEqual({ count: 1, adopted: 0, rendered: false });
+  });
+
+  it("after a false start on the same Doc, its carried lines are taken over, never written twice (R1/R2)", async () => {
+    // Week 1 (prev1, another Doc) left "Boka hall" open; false start A on this Doc carried it as c1
+    // (still in the Doc) and was abandoned; the real start B must neither re-carry nor re-render it.
+    m.prevMeetings = [{ id: "prev1", org_id: ORG, is_test: false, status: "done", started_at: ago(7 * 86400) }];
+    m.docMeetings = [{ id: "A", doc_id: AGENDA_DOC, status: "abandoned", started_at: ago(600) } as never];
+    const base = { section: "action", kind: "task", owner: null, due: null, locked: false, deleted_by_human: false, done: false, copy_of: null, position: 0 };
+    m.noteRows = [
+      { ...base, meeting_id: "prev1", id: "n1", text: "Boka hall", last_rendered_text: "Boka hall.", range_name: "ss-prev1-n1" },
+      { ...base, meeting_id: "prev1", id: "n2", text: "Köp bollar", last_rendered_text: "Köp bollar.", range_name: "ss-prev1-n2" },
+      { ...base, meeting_id: "A", id: "c1", anchor: "ag-3", text: "Boka hall", last_rendered_text: "– Boka hall.", range_name: "ss-A-c1", carried_from_meeting: "prev1", carried_from_id: "n1" },
+      // A carried line a human removed from the Doc: carried again, as a fresh line.
+      { ...base, meeting_id: "A", id: "c2", anchor: "ag-3", text: "Köp bollar", last_rendered_text: "– Köp bollar.", range_name: "ss-A-c2", carried_from_meeting: "prev1", carried_from_id: "n2" },
+    ];
+    m.readNotesTab.mockResolvedValue({
+      revisionId: "r3",
+      tabId: "t.0",
+      paragraphs: [{ start: 1, end: 14, text: "– Boka hall.\n", suggested: false }],
+      ranges: new Map([["ss-A-c1", [[{ start: 1, end: 13 }]]]]),
+    });
+    const res = await agendaCall();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.carried).toBe(2);
+    const inserted = m.noteInsert.mock.calls[0][0] as Record<string, unknown>[];
+    expect(inserted.filter((r) => String(r.id).startsWith("c")).map((r) => [r.id, r.range_name, r.carried_from_meeting, r.carried_from_id, r.meeting_id === json.meetingId])).toEqual([
+      ["c1", "ss-A-c1", "prev1", "n1", true],
+      ["c2", null, "prev1", "n2", true],
+    ]);
+    // Only the fresh line is rendered.
+    const [, , , desired] = m.renderItems.mock.calls[0];
+    expect(desired.map((d: { id: string }) => d.id).sort()).toEqual(["c1", "c2", "info-tid"]);
+    expect(m.noteUpdate.mock.calls.map((c) => c[1])).toEqual(["c2"]);
+    expect(eventsOf("followup_prefilled")[0][2]).toEqual({ count: 2, adopted: 1, rendered: true });
   });
 
   it("a start the guard refuses writes no note rows", async () => {

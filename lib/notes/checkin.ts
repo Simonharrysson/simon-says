@@ -20,7 +20,25 @@ export const CHECKIN_SEARCH_MS = 30 * 60_000;
 /** After this many failed detector calls the window closes. */
 export const CHECKIN_MAX_FAILURES = 3;
 
+/** Cost cap (final review R2-M1): no start after this many detector calls (~9 min of ticks) → no Må-runda. */
+export const CHECKIN_MAX_CALLS_NO_START = 12;
+/** Cost cap: the window closes after this many detector calls whatever else holds. */
+export const CHECKIN_MAX_CALLS = 30;
+
 export type CheckinFound = { startMs: number | null; endMs: number | null };
+
+/**
+ * One more detector call on `w` (the window after nextWindow for that call, pure): counted in
+ * `calls`; an open window without a start closes (no window) at CHECKIN_MAX_CALLS_NO_START calls,
+ * any open window at CHECKIN_MAX_CALLS (ended at `firstMs`, never inside a sent block).
+ */
+export function countCall(w: CheckinWindow, prevCalls: number, firstMs: number): CheckinWindow {
+  const calls = prevCalls + 1;
+  if (w.closed) return { ...w, calls };
+  if (w.startMs === null && calls >= CHECKIN_MAX_CALLS_NO_START) return { ...w, calls, closed: true, endMs: null };
+  if (calls >= CHECKIN_MAX_CALLS) return { ...w, calls, closed: true, endMs: w.startMs === null ? null : Math.max(w.startMs, firstMs) };
+  return { ...w, calls };
+}
 
 /**
  * The window after one tick (pure). `found` is the detector's answer for the tick's lines

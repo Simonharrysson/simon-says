@@ -284,7 +284,7 @@ export function applyOps(
     nextId?: string;
     agenda?: { anchors: Map<string, ItemRole | "notes"> };
   } = {},
-): { ops: NotesOp[]; items: NotesItem[]; dropped: number; nextId: string } {
+): { ops: NotesOp[]; items: NotesItem[]; dropped: number; nextId: string; ruled?: number } {
   const blocked = new Set(opts.protectedIds ?? []);
   const final = opts.final ?? false;
   let counter = Math.max(idNumber(opts.nextId), idNumber(nextItemId([...blocked, ...items.map((i) => i.id)])));
@@ -292,12 +292,16 @@ export function applyOps(
   let work = items.map((i) => ({ ...i }));
   const accepted: NotesOp[] = [];
   let dropped = 0;
+  /** Adds dropped only because their item is the Må-runda or "Från förra veckan" (by design). */
+  let ruled = 0;
   let removals = 0;
   let rewrites = 0;
 
   for (const op of ops) {
     if (op.op === "add" && opts.agenda && !agendaAddAllowed(op.item, opts.agenda.anchors)) {
       dropped++;
+      const role = op.item.anchor ? opts.agenda.anchors.get(op.item.anchor) : undefined;
+      if (role === "checkin" || role === "followup") ruled++;
       continue;
     }
     if (op.op === "add") {
@@ -366,7 +370,7 @@ export function applyOps(
     if (rewrite) rewrites++;
     accepted.push({ ...op, id });
   }
-  return { ops: accepted, items: work, dropped, nextId: `n${counter}` };
+  return { ops: accepted, items: work, dropped, nextId: `n${counter}`, ...(opts.agenda ? { ruled } : {}) };
 }
 
 /** An agenda-mode `add` is placed under a live agenda item or `notes`, never under checkin/followup. */
@@ -519,6 +523,9 @@ export async function updateNotes(
   if (dropped) console.warn(`notes engine: dropped ${dropped} of ${parsed.count} ops`);
   // Ops came back but validation rejected every one: the notes didn't move although Claude meant
   // them to. Zero ops returned is fine (a quiet stretch).
-  const failure = parsed.count > 0 && applied.ops.length === 0 ? "all_dropped" : null;
+  // Adds only under the Må-runda / "Från förra veckan" items (dropped by rule, R2-M3) are a quiet
+  // tick too, not a failure.
+  const onlyRuled = parsed.invalid === 0 && applied.dropped > 0 && applied.dropped === (applied.ruled ?? 0);
+  const failure = parsed.count > 0 && applied.ops.length === 0 && !onlyRuled ? "all_dropped" : null;
   return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId, failure };
 }

@@ -94,7 +94,7 @@ describe("planAnchoring on the A1 fixture", () => {
     for (const r of p.requests) expect(JSON.stringify(r)).toContain(TAB);
   });
 
-  it("fills empty Datum and Tid (Stockholm), Tid with its own row; Närvarande and Sekreterare untouched", () => {
+  it("fills empty Datum and Tid (Stockholm), each with its own range and row; Närvarande and Sekreterare untouched", () => {
     const doc = fixtureDoc();
     const { plan: p } = plan(doc);
     const inserts = p.requests.filter((r) => r.insertText).map((r) => [r.insertText!.location!.index, r.insertText!.text]);
@@ -104,8 +104,11 @@ describe("planAnchoring on the A1 fixture", () => {
     expect(p.requests.filter((r) => r.createNamedRange?.name === "ss-m1-info-tid").map((r) => r.createNamedRange!.range)).toEqual([
       { tabId: TAB, startIndex: 36, endIndex: 41 },
     ]);
-    expect(p.requests.some((r) => r.createNamedRange?.range?.startIndex === 28)).toBe(false);
+    expect(p.requests.filter((r) => r.createNamedRange?.name === "ss-m1-info-datum").map((r) => r.createNamedRange!.range)).toEqual([
+      { tabId: TAB, startIndex: 28, endIndex: 38 },
+    ]);
     expect(p.rows).toEqual([
+      expect.objectContaining({ id: "info-datum", anchor: "info.datum", range_name: "ss-m1-info-datum", last_rendered_text: "2026-11-25" }),
       expect.objectContaining({
         id: "info-tid",
         section: "note",
@@ -359,9 +362,11 @@ describe("anchoring twice (fix I2, round 2)", () => {
     rewrite(doc, INITIAL_LIVE_LINE, status, { name: "ss-old-header", offset: 0, len: statusLen });
     return doc;
   }
-  const anchorAs = (doc: Doc, meetingId: string, startedAt = new Date("2026-12-02T17:00:00Z")) => {
+  /** The ended meeting's rows as the DB has them: what it last rendered in each info range. */
+  const OLD_INFO = { "ss-old-info-tid": "18:05–19:10" };
+  const anchorAs = (doc: Doc, meetingId: string, startedAt = new Date("2026-12-02T17:00:00Z"), ownInfo: Record<string, string> = OLD_INFO) => {
     const tab = tabOf(doc);
-    return { tab, p: planAnchoring(scanAgenda(tab, VECKOMOTE), tab, { meetingId, profile: VECKOMOTE, startedAt }) };
+    return { tab, p: planAnchoring(scanAgenda(tab, VECKOMOTE), tab, { meetingId, profile: VECKOMOTE, startedAt, ownInfo }) };
   };
 
   it("a Doc left by an ended meeting: one status line, reset; our old Tid rewritten with this start (18:00)", () => {
@@ -392,6 +397,30 @@ describe("anchoring twice (fix I2, round 2)", () => {
     expect(p.requests.some((r) => r.deleteContentRange && r.deleteContentRange.range!.endIndex! - r.deleteContentRange.range!.startIndex! === status.length)).toBe(false);
     expect(statusLines(after).map(paraLine).sort()).toEqual([INITIAL_LIVE_LINE, status].sort());
     expect(rangeText(after, "ss-m2-header")).toBe(INITIAL_LIVE_LINE);
+  });
+
+  it("a human edit of our Tid still in our form ('18:10' typed over it) is never rewritten (R1-I3)", () => {
+    const doc = endedDoc();
+    rewrite(doc, "18:05–19:10", "18:10", { name: "ss-old-info-tid", offset: 0, len: "18:10".length });
+    const { p } = anchorAs(doc, "m2");
+    expect(p.rows).toEqual([]);
+    const after = tabOf(apply(doc, p.requests));
+    expect(scanAgenda(after, VECKOMOTE).info[1].valueCell.text).toBe("18:10");
+    // Nor without the earlier meeting's row (DB unread): the human's text wins.
+    expect(anchorAs(endedDoc(), "m2", undefined, {}).p.rows).toEqual([]);
+  });
+
+  it("our Datum from the earlier meeting, unchanged: rewritten with today's date; changed: left alone", () => {
+    const doc = endedDoc();
+    rewrite(doc, "2026-11-25", "2026-11-25", { name: "ss-old-info-datum", offset: 0, len: 10 });
+    const own = { ...OLD_INFO, "ss-old-info-datum": "2026-11-25" };
+    const { p } = anchorAs(doc, "m2", undefined, own);
+    expect(p.rows.map((r) => [r.id, r.last_rendered_text])).toEqual([["info-datum", "2026-12-02"], ["info-tid", "18:00"]]);
+    const after = tabOf(apply(doc, p.requests));
+    expect(scanAgenda(after, VECKOMOTE).info.map((c) => c.valueCell.text).slice(0, 2)).toEqual(["2026-12-02", "18:00"]);
+    const edited = endedDoc();
+    rewrite(edited, "2026-11-25", "2026-11-26", { name: "ss-old-info-datum", offset: 0, len: 10 });
+    expect(anchorAs(edited, "m2", undefined, own).p.rows.map((r) => r.id)).toEqual(["info-tid"]);
   });
 
   it("a human edit of our Tid out of our form ('18:05 ca') is never rewritten", () => {
@@ -426,7 +455,7 @@ describe("anchoring twice (fix I2, round 2)", () => {
     expect(statusLines(after)).toHaveLength(1);
     expect(rangeText(after, "ss-m1-header")).toBe(INITIAL_LIVE_LINE);
     expect(rangeText(after, "ss-m1-info-tid")).toBe("18:05");
-    expect(again.rows.map((r) => r.id)).toEqual(["info-tid"]);
+    expect(again.rows.map((r) => r.id)).toEqual(["info-datum", "info-tid"]);
     ITEMS.forEach((label, i) => expect(rangeText(after, `ss-m1-ag-${i + 1}`)).toBe(label));
   });
 
@@ -436,7 +465,7 @@ describe("anchoring twice (fix I2, round 2)", () => {
     tidCell.content = [paraEl("18:00")];
     reindex(doc);
     const { plan: p } = plan(doc);
-    expect(p.rows).toEqual([]);
+    expect(p.rows.map((r) => r.id)).toEqual(["info-datum"]); // the empty Datum cell only
     expect(p.requests.some((r) => r.createNamedRange?.name?.endsWith("info-tid"))).toBe(false);
     const cell = tabOf(doc).paragraphs.find((x) => x.text === "18:00\n")!;
     for (const r of p.requests) {
@@ -478,7 +507,7 @@ describe("anchorAgenda", () => {
       agendaRoles: { "ag-1": "procedural" },
       appended: [],
     });
-    expect(res.rows.map((r) => r.id)).toEqual(["info-tid"]);
+    expect(res.rows.map((r) => r.id)).toEqual(["info-datum", "info-tid"]);
     expect(res.scan.items).toHaveLength(6);
   });
 

@@ -9,7 +9,7 @@ vi.mock("@/lib/env", () => ({ getEnv: () => ({ KILL_SWITCH: false, GLOBAL_DAILY_
 vi.mock("@/lib/db/usage", () => ({ dayUsd: async () => (spendChecks.n++, 0) }));
 vi.mock("@/lib/db/claude-usage", () => ({ recordClaudeUsage: async (...a: unknown[]) => void recorded.push(a) }));
 
-const { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, CHECKIN_SEARCH_MS, detectCheckin, maskCheckin, nextWindow } =
+const { CHECKIN_MAX_CALLS, CHECKIN_MAX_CALLS_NO_START, CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, CHECKIN_SEARCH_MS, countCall, detectCheckin, maskCheckin, nextWindow } =
   await import("./checkin");
 
 const OPEN: CheckinWindow = { startMs: null, endMs: null, closed: false, failures: 0 };
@@ -246,5 +246,23 @@ describe("detectCheckin", () => {
     expect(out.found).toEqual({ startMs: null, endMs: 130_000 });
     const text = (bodies[0].messages[0].content as { text: string }[])[0].text;
     expect(text).toContain("began at 00:00:40");
+  });
+});
+
+describe("countCall: the detector's cost cap (final review R2-M1)", () => {
+  const open = { startMs: null, endMs: null, closed: false, failures: 0 };
+  it("counts calls; no start after CHECKIN_MAX_CALLS_NO_START calls closes without a window", () => {
+    expect(countCall(open, 0, 1000)).toEqual({ ...open, calls: 1 });
+    expect(countCall(open, CHECKIN_MAX_CALLS_NO_START - 2, 1000)).toMatchObject({ closed: false });
+    expect(countCall(open, CHECKIN_MAX_CALLS_NO_START - 1, 1000)).toEqual({ ...open, closed: true, endMs: null, calls: CHECKIN_MAX_CALLS_NO_START });
+  });
+  it("a started window runs on, up to CHECKIN_MAX_CALLS, then ends at the tick's first line", () => {
+    const started = { ...open, startMs: 5000 };
+    expect(countCall(started, CHECKIN_MAX_CALLS_NO_START + 3, 9000)).toMatchObject({ closed: false });
+    expect(countCall(started, CHECKIN_MAX_CALLS - 1, 9000)).toEqual({ ...started, closed: true, endMs: 9000, calls: CHECKIN_MAX_CALLS });
+  });
+  it("a window that closed on this call keeps its own end", () => {
+    const closed = { startMs: 5000, endMs: 7000, closed: true, failures: 0 };
+    expect(countCall(closed, 3, 9000)).toEqual({ ...closed, calls: 4 });
   });
 });

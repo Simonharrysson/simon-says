@@ -499,6 +499,28 @@ describe("format layout: the agenda context (F4) and new items (F5)", () => {
     expect(ctx2.anchors.find((a) => a.key === "ag-5")).toMatchObject({ label: "Ekonomi", humanText: "" });
   });
 
+  it("Må-runda text typed in the Doc never reaches the notes engine (R2-M2)", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const ma = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;
+    applyDoc(doc, [{ insertText: { text: "\nAnna är sjuk idag", location: { tabId: TAB, index: ma.end - 1 } } }]);
+    const el = doc.tabs![0].documentTab!.body!.content!.find((e) => e.paragraph?.elements?.[0]?.textRun?.content === "Anna är sjuk idag\n")!;
+    el.paragraph!.bullet!.nestingLevel = 1;
+    const tab = parseNotesTab(doc, TAB);
+    const meeting = fmtMeeting(M, plan);
+    const scan = scanAgenda(tab, VECKOMOTE);
+    const ctx = tick.agendaContext(tab, scan, meeting, VECKOMOTE, []);
+    expect(ctx.anchors.find((a) => a.key === "ag-2")!.humanText).toBe("Anna är sjuk idag");
+    const hidden = tick.hideCheckinText(tab, scan, meeting, ctx);
+    expect(hidden.agenda.anchors.find((a) => a.key === "ag-2")!.humanText).toBe("");
+    expect(hidden.agenda.anchors.find((a) => a.key === "ag-4")!.humanText).toBe("Sommarfest på Kårallen\nWorkshop om sponsring");
+    expect(hidden.text).not.toContain("Anna är sjuk");
+    expect(hidden.text).toContain("Må-runda\n");
+    expect(hidden.text).toContain("Workshop om sponsring");
+    // No checkin item (a förening without a Må-runda): nothing hidden.
+    const none = { ...meeting, agenda_roles: { ...ROLES, "ag-2": "topic" as const } };
+    expect(tick.hideCheckinText(tab, scan, none, ctx).text).toContain("Anna är sjuk");
+  });
+
   it("an anchor whose item text is gone is listed gone, without a label", () => {
     const { doc, plan } = anchoredDoc(M);
     const ma = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;
@@ -558,7 +580,7 @@ describe("format layout: the render list (F2) and Claude's view of own lines (F3
     expect(lines).toContain("Närvarande");
     expect(docText(doc)).toContain("Anna Berg, Erik Lund");
     expect(rows.find((r) => r.id === "checkin-done")).toMatchObject({ anchor: "ag-2", kind: "note", locked: false, range_name: `ss-${M}-checkin-done` });
-    expect(rows.map((r) => r.id).sort()).toEqual(["c1", "checkin-done", "info-narvarande", "info-tid", "n1", "n1-t"]);
+    expect(rows.map((r) => r.id).sort()).toEqual(["c1", "checkin-done", "info-datum", "info-narvarande", "info-tid", "n1", "n1-t"]);
     // Left out of the list, the planner would remove it: that is why it is in every tick's list.
     const without = planFormatRender(meeting, parseNotesTab(doc, TAB), rows, tick.formatDesired(items, emptyDiff(rows), [], VECKOMOTE), {
       profile: VECKOMOTE,
@@ -1503,13 +1525,13 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     const block1 = f.calls[0].transcriptBlocks[0];
     expect(block1).toContain(CHECKIN_PLACEHOLDER);
     expect(block1).not.toMatch(/mår bra|trött/);
-    expect((await read(id)).checkin_window).toEqual({ startMs: 2000, endMs: null, closed: false, failures: 0 });
+    expect((await read(id)).checkin_window).toEqual({ startMs: 2000, endMs: null, closed: false, failures: 0, calls: 1 });
 
     await say(id, sessionId, "Jag har sovit dåligt", 4000);
     await say(id, sessionId, "Nu tar vi förra veckan", 5000);
     await backdate(id);
     expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
-    expect((await read(id)).checkin_window).toEqual({ startMs: 2000, endMs: 5000, closed: true, failures: 0 });
+    expect((await read(id)).checkin_window).toEqual({ startMs: 2000, endMs: 5000, closed: true, failures: 0, calls: 2 });
     expect(linesOf(doc).filter((l) => l === "– Må-runda genomförd.")).toHaveLength(1);
 
     await say(id, sessionId, "Mejlet är skickat", 6000);
@@ -1557,7 +1579,7 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     expect(f.detects).toHaveLength(0);
     expect(f.calls).toHaveLength(0);
     expect((await read(id)).checkin_window).toEqual(OPEN);
-    expect((await noteRows(id)).map((r) => r.id).sort()).toEqual(["c1", "info-tid"]);
+    expect((await noteRows(id)).map((r) => r.id).sort()).toEqual(["c1", "info-datum", "info-tid"]);
     // Only the LIVE line moved.
     expect(docText(doc).replace("uppdaterad 18:31", "uppdaterad –")).toBe(before);
   });
@@ -1731,7 +1753,7 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
     expect(f.detects).toHaveLength(1);
     expect(f.calls).toHaveLength(0);
-    expect((await read(id)).checkin_window).toEqual({ startMs: null, endMs: null, closed: false, failures: 1 });
+    expect((await read(id)).checkin_window).toEqual({ startMs: null, endMs: null, closed: false, failures: 1, calls: 1 });
   });
 
   it("end pass with the start still unknown and no detector answer: over-masks the unsent lines, closes, no Må-runda line", async () => {
@@ -1742,7 +1764,7 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     expect(await tick.runTick(id, { final: true }, f.deps)).toBe("ok");
     expect(f.calls).toHaveLength(1);
     expect(f.calls[0].transcriptBlocks).toEqual([`[00:00:01] –: ${CHECKIN_PLACEHOLDER}`]);
-    expect((await read(id)).checkin_window).toEqual({ startMs: 1000, endMs: 2001, closed: true, failures: 3 });
+    expect((await read(id)).checkin_window).toEqual({ startMs: 1000, endMs: 2001, closed: true, failures: 3, calls: 1 });
     expect(linesOf(doc)).not.toContain("– Må-runda genomförd.");
     expect(linesOf(doc)).toContain("Simon Says · avslutat 19:10");
     await adminClient().from("meetings").update({ status: "done" }).eq("id", id);
