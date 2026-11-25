@@ -575,7 +575,9 @@ export class LiveStream {
   private micProblem(why: string): void {
     if (!this.active() || this.paused || this.recovering || !this.o.audio.recover) return;
     this.recovering = true;
-    const attempt = ++this.recoverAttempts;
+    // An ended track never comes back: resuming the context would keep feeding silence, so go
+    // straight to reopening the mic (attempt ≥ 2). A muted one may unmute: resume first.
+    const attempt = why === "ended" ? Math.max(2, ++this.recoverAttempts) : ++this.recoverAttempts;
     this.log(`audio: mic ${why}; recover attempt ${attempt}`);
     this.o.audio
       .recover(attempt)
@@ -726,7 +728,10 @@ export class LiveStream {
       this.loudAt = [];
       const raw = typeof ev.data === "string" ? ev.data : String(ev.data);
       const parsed = parseEvent(raw);
-      begin(parsed.kind === "started" ? "session_started" : `first message ${parsed.kind}`);
+      // An error or session end is no sign the session takes audio: keep holding it for the next one.
+      if (parsed.kind !== "error" && parsed.kind !== "session_end") {
+        begin(parsed.kind === "started" ? "session_started" : `first message ${parsed.kind}`);
+      }
       this.onMessage(parsed, sessionId);
     };
     socket.onerror = (ev) => {

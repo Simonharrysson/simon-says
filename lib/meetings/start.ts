@@ -47,7 +47,7 @@ export async function startMeeting(
     return failed("already_live", 409, "Ett möte pågår redan i föreningen. Avsluta det först.");
   }
 
-  const limited = await startLimit(user.id, null);
+  const limited = await startLimit(user.id);
   if (limited) return limited;
 
   let auth;
@@ -106,14 +106,15 @@ export async function startMeeting(
     return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
   }
 
-  // Re-check after the insert (Ruling 39): two concurrent starts both pass the check above, so
-  // the earliest row wins and the later one is removed again (its Doc stays in Drive).
-  const lost = await startLimit(user.id, { id: meetingId, startedAt: startedAt.toISOString() });
-  if (lost) {
-    const { error: de } = await supabaseAdmin().from("meetings").delete().eq("id", meetingId);
-    if (de) console.error(`meetings: could not remove refused start ${meetingId}: ${de.message}`);
-    return lost;
-  }
+  // Re-check after the insert, atomically (0021): of concurrent starts exactly one survives; the
+  // guard deletes a losing row itself (its Doc stays in Drive).
+  const { data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start", {
+    p_meeting_id: meetingId,
+    p_max_per_hour: MAX_STARTS_PER_HOUR,
+  });
+  if (guardError) throw new Error(`meetings: start guard: ${guardError.message}`);
+  if (guard === "starter_busy") return startBusy();
+  if (guard === "start_rate") return startRate();
 
   await logEvent(meetingId, eventKind, {
     by: user.id,
@@ -132,17 +133,17 @@ export async function startMeeting(
   };
 }
 
-type MeetingKey = { id: string; startedAt: string };
-const before = (a: { id: string; started_at: string }, b: MeetingKey) =>
-  Date.parse(a.started_at) < Date.parse(b.startedAt) || (a.started_at === b.startedAt && a.id < b.id);
+const startBusy = () =>
+  failed("starter_busy", 409, "Du har redan ett möte igång. Öppna det och avsluta det först (under Möten i föreningen).");
+const startRate = () =>
+  failed("start_rate", 429, "Du har startat många möten den senaste timmen. Vänta en stund och försök igen.");
 
 /**
  * Per-user start limits (Ruling 39), counted from meetings rows across every org: at most one
- * live (or ending) meeting per starter, and MAX_STARTS_PER_HOUR starts per rolling hour. `own`
- * is the user's just-inserted meeting: only rows ordered before it (started_at, id) count, so
- * of two racing starts exactly the earlier one survives.
+ * live meeting per starter, and MAX_STARTS_PER_HOUR starts per rolling hour. Checked before the
+ * Doc is created; guard_meeting_start (0021) enforces the same atomically after the insert.
  */
-async function startLimit(userId: string, own: MeetingKey | null): Promise<StartResult | null> {
+async function startLimit(userId: string): Promise<StartResult | null> {
   const db = supabaseAdmin();
   const hourAgo = new Date(Date.now() - 3600_000).toISOString();
   const [active, recent] = await Promise.all([
@@ -151,18 +152,7 @@ async function startLimit(userId: string, own: MeetingKey | null): Promise<Start
   ]);
   if (active.error) throw new Error(`meetings: start limit: ${active.error.message}`);
   if (recent.error) throw new Error(`meetings: start limit: ${recent.error.message}`);
-  const counts = (rows: { id: string; started_at: string }[]) =>
-    rows.filter((r) => (own ? r.id !== own.id && before(r, own) : true));
-  const otherLive = counts((active.data ?? []) as { id: string; started_at: string }[]);
-  if (otherLive.length > 0) {
-    return failed(
-      "starter_busy",
-      409,
-      "Du har redan ett möte igång. Öppna det och avsluta det först (under Möten i föreningen).",
-    );
-  }
-  if (counts((recent.data ?? []) as { id: string; started_at: string }[]).length >= MAX_STARTS_PER_HOUR) {
-    return failed("start_rate", 429, "Du har startat många möten den senaste timmen. Vänta en stund och försök igen.");
-  }
+  if ((active.data ?? []).length > 0) return startBusy();
+  if ((recent.data ?? []).length >= MAX_STARTS_PER_HOUR) return startRate();
   return null;
 }

@@ -106,3 +106,48 @@ describe.skipIf(!hasLocalSupabase)("segments are server-only (A3)", () => {
     expect(data).toBeNull();
   });
 });
+
+describe.skipIf(!hasLocalSupabase)("guard_meeting_start (0021, Ruling 39)", () => {
+  const insertLive = async (orgId: string, userId: string, startedAt = new Date().toISOString()) => {
+    const { data, error } = await adminClient()
+      .from("meetings")
+      .insert({ org_id: orgId, started_by: userId, doc_id: "doc", notes_tab_id: "t", status: "live", started_at: startedAt })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    return data.id as string;
+  };
+  const guard = async (id: string) =>
+    (await adminClient().rpc("guard_meeting_start", { p_meeting_id: id, p_max_per_hour: 6 })).data as string;
+  const exists = async (id: string) => ((await adminClient().from("meetings").select("id").eq("id", id)).data ?? []).length > 0;
+
+  it("two concurrent starts by one starter: exactly one survives", async () => {
+    const u = await createTestUser("race");
+    const r = await createOrg(u.db, "Racet");
+    if (!r.ok) throw new Error("org");
+    const [a, b] = await Promise.all([insertLive(r.id, u.id), insertLive(r.id, u.id)]);
+    const results = await Promise.all([guard(a), guard(b)]);
+    expect(results.sort()).toEqual(["ok", "starter_busy"]);
+    expect([await exists(a), await exists(b)].filter(Boolean)).toHaveLength(1);
+  });
+
+  it("the 7th start within an hour is refused and removed", async () => {
+    const u = await createTestUser("rate");
+    const r = await createOrg(u.db, "Takten");
+    if (!r.ok) throw new Error("org");
+    const earlier = new Date(Date.now() - 600_000).toISOString();
+    for (let i = 0; i < 6; i++) {
+      const id = await insertLive(r.id, u.id, earlier);
+      await adminClient().from("meetings").update({ status: "done" }).eq("id", id);
+    }
+    const seventh = await insertLive(r.id, u.id);
+    expect(await guard(seventh)).toBe("start_rate");
+    expect(await exists(seventh)).toBe(false);
+  });
+
+  it("is service-role only", async () => {
+    const u = await createTestUser("guardrpc");
+    const { error } = await u.db.rpc("guard_meeting_start", { p_meeting_id: crypto.randomUUID(), p_max_per_hour: 6 });
+    expect(error).not.toBeNull();
+  });
+});

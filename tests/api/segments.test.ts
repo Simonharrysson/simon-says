@@ -349,7 +349,15 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
       as(starter);
       const res = await call(postHeartbeat, m);
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ warn: false, stop: false, minutesLeft: null, docPaused: false, lastTickOkAt: null, currentElSessionId: null });
+      expect(await res.json()).toEqual({
+        warn: false,
+        stop: false,
+        minutesLeft: null,
+        reason: null,
+        docPaused: false,
+        lastTickOkAt: null,
+        currentElSessionId: null,
+      });
       const { data } = await adminClient().from("meetings").select("last_heartbeat_at, status").eq("id", m).single();
       expect(data!.last_heartbeat_at).not.toBeNull();
       expect(data!.status).toBe("live");

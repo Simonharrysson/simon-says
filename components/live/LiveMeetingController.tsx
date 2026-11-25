@@ -301,6 +301,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       });
       s.on("posted", () => postedAt.current.push(Date.now()));
       s.on("health", setHealth);
+      // Stopp's own drain reports what still waits for the net (C6).
+      s.on("pending", setPendingRuns);
       // The consent check's meter hands over to the stream's level (throttled for React).
       cap.stopCheck();
       let lastLevelAt = 0;

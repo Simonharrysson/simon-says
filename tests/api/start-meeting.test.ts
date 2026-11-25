@@ -17,6 +17,7 @@ const m = vi.hoisted(() => ({
   /** The user's live meetings (any org) and meetings started in the last hour, as the admin client sees them. */
   liveRows: (): { id: string; started_at: string }[] => [],
   recentRows: (): { id: string; started_at: string }[] => [],
+  guard: vi.fn(async (_fn: string, _args: unknown) => ({ data: "ok" as string, error: null })),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -29,6 +30,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({
+    rpc: m.guard,
     from: () => ({
       insert: m.insert,
       delete: () => ({ eq: async (_c: string, id: string) => (m.del(id), { error: null }) }),
@@ -84,6 +86,7 @@ beforeEach(() => {
   m.del.mockReset();
   m.liveRows = () => [];
   m.recentRows = () => [];
+  m.guard.mockReset().mockResolvedValue({ data: "ok", error: null });
 });
 
 const ago = (s: number) => new Date(Date.now() - s * 1000).toISOString();
@@ -193,18 +196,14 @@ describe("POST /api/meetings", () => {
     expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
   });
 
-  it("two racing starts: the later row is removed again after the insert", async () => {
-    // The pre-check saw nothing; by the time of the re-check an earlier start has landed.
-    m.liveRows = () => (m.insert.mock.calls.length ? [{ id: "earlier", started_at: ago(1) }, { id: m.insert.mock.calls[0][0].id, started_at: m.insert.mock.calls[0][0].started_at }] : []);
+  it("a start that loses the atomic re-check (guard_meeting_start, 0021) is refused; the guard removed its row", async () => {
+    m.guard.mockResolvedValue({ data: "starter_busy", error: null });
     const res = await call({ orgId: ORG, consent: true });
     expect(res.status).toBe(409);
-    expect(m.del).toHaveBeenCalledWith(m.insert.mock.calls[0][0].id);
+    expect((await res.json()).error).toBe("starter_busy");
+    expect(m.guard).toHaveBeenCalledWith("guard_meeting_start", { p_meeting_id: m.insert.mock.calls[0][0].id, p_max_per_hour: 6 });
     expect(m.logEvent).not.toHaveBeenCalled();
-  });
-
-  it("the earlier of two racing starts survives the re-check", async () => {
-    m.liveRows = () => (m.insert.mock.calls.length ? [{ id: m.insert.mock.calls[0][0].id, started_at: m.insert.mock.calls[0][0].started_at }, { id: "later", started_at: new Date(Date.now() + 1000).toISOString() }] : []);
-    expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
-    expect(m.del).not.toHaveBeenCalled();
+    m.guard.mockResolvedValue({ data: "start_rate", error: null });
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(429);
   });
 });

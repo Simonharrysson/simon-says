@@ -818,9 +818,14 @@ describe("LiveStream", () => {
       await t.stream.start();
       await settle();
       t.sockets[0].open();
+      // An ended track reopens the mic at once (resume can't bring it back); a muted one resumes first.
       t.audio.onProblem?.("ended");
       await settle();
-      expect(t.audio.recovers).toEqual([1]);
+      expect(t.audio.recovers).toEqual([2]);
+      t.audio.push(0);
+      t.audio.onProblem?.("muted");
+      await settle();
+      expect(t.audio.recovers).toEqual([2, 1]);
       for (let s = 0; s < QUIET_NOTICE_MS / 1000 + 2; s++) {
         for (let i = 0; i < 10; i++) t.audio.push(i);
         await vi.advanceTimersByTimeAsync(1000);
@@ -873,6 +878,24 @@ describe("LiveStream", () => {
       await vi.advanceTimersByTimeAsync(SESSION_START_WAIT_MS);
       t.audio.push(5);
       expect(t.sockets[1].audioTags).toEqual([4, 5]);
+    });
+
+    it("C12: an error as the first message doesn't release the held audio into a dying socket", async () => {
+      const t = setup();
+      t.replies.token.push("network");
+      await t.stream.start();
+      t.audio.push(7);
+      t.audio.push(8);
+      await vi.advanceTimersByTimeAsync(1000);
+      await settle();
+      t.sockets[0].openOnly();
+      t.sockets[0].emit({ message_type: "auth_error", error: "expired" });
+      expect(t.sockets[0].audioTags).toEqual([]);
+      t.sockets[0].drop();
+      await vi.advanceTimersByTimeAsync(1000);
+      await settle();
+      t.sockets[1].open();
+      expect(t.sockets[1].audioTags).toEqual([7, 8]);
     });
 
     it("D: an unknown message type is logged once", async () => {
