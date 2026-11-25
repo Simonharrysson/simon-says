@@ -249,6 +249,37 @@ confirmed new Doc and keeps the format override. The doc Picker shows the meetin
 `POST /api/orgs/<id>/meeting-folder`), or "Google-väljaren är inte inställd än." with the Picker off.
 `/design`: `live-agenda-suggestion`, `live-agenda-none`, `live-agenda-folder`, `live-agenda-off`.
 
+### Learning a format (B2)
+
+`FormatCard`, admins with the Picker on: **Lär Simon Says ert format** (`LearnFormat` in
+`components/views/FormatEditor.tsx`) opens the Picker in `docs-multi` mode for a template or 1–5
+old minutes. More than five gives "Välj högst 5 dokument." Next comes "Simon Says läser strukturen …"
+(`POST /api/orgs/<id>/formats/propose`), then `FormatEditor`. With the Picker off, the button is
+disabled and shows "Google-väljaren är inte inställd än."
+
+`FormatEditor` shows:
+- Claude's explanation;
+- the quality note, as a neutral banner titled "Om era gamla protokoll";
+- the fields:
+  - title;
+  - info-table fields (none means no table);
+  - agenda heading;
+  - the fixed items, each with a label, a type (Formalia / Må-runda / Från förra veckan / Ämne /
+    Övrigt), "Sist", ↑ ↓ and **Ta bort**. Removing the Må-runda is valid: not every förening has one.
+    The hint says so.
+  - numbering (1. / § / none);
+  - tasks heading on/off with group by role/person;
+  - notes heading on/off;
+  - signatures.
+- A Doc-paper preview of `skeletonBlocks(profile)` beside the fields (below them on narrow
+  screens). While a field is invalid, the preview keeps the last valid profile.
+
+The Swedish errors from `editorToProfile` (`lib/formats/editor.ts`) are listed under the fields,
+for example "Titeln får inte vara tom." or "Bara en punkt kan vara Må-runda.". While there are
+errors, **Godkänn och använd** is disabled. It posts `POST /api/orgs/<id>/formats` and refreshes the
+page. **Avbryt** drops the proposal; nothing is stored before approval.
+`/design`: `format-learn-proposing`, `format-learn-editor`, `format-learn-error`.
+
 ## Name round and speaker list (Task 11)
 
 A new meeting opens in `name-round`: "Säg 'Jag heter …' en i taget"; voices appear as "Talare n …" while the page

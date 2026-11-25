@@ -943,3 +943,74 @@ a.row:hover .row__chevron {
     background-position: -200% 0;
   }
 }
+
+/* Format editor (learn a format, B2): fields beside a Doc-paper preview of the skeleton */
+.format-editor__layout {
+  display: grid;
+  gap: var(--s-5);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 60rem) {
+  .format-editor__layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .format-preview {
+    position: sticky;
+    top: var(--s-4);
+  }
+}
+
+.format-editor__group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.format-editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: center;
+}
+
+.format-editor__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 11rem);
+  gap: var(--s-2);
+  align-items: center;
+  padding-bottom: var(--s-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.format-editor__last {
+  display: inline-flex;
+  gap: var(--s-1);
+  align-items: center;
+}
+
+.format-preview__table {
+  border-collapse: collapse;
+  margin-top: 0.75em;
+  width: 100%;
+}
+
+.format-preview__table th,
+.format-preview__table td {
+  border: 1px solid #dadce0;
+  padding: 0.25em 0.5em;
+  text-align: left;
+  font-weight: 400;
+}
+
+.format-preview__table th {
+  width: 40%;
+  color: var(--doc-muted);
+}
+
+.format-preview__sub {
+  padding-left: 1.5em;
+}

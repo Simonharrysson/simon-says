@@ -4,6 +4,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import type { FormatKind } from "@/lib/formats/schema";
+import { LearnFormat } from "./FormatEditor";
 import { MeetingFolderButton } from "./MeetingFolderButton";
 
 export interface FormatCardProps {
@@ -23,7 +24,7 @@ const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
 
 const dateOf = (iso: string) => iso.slice(0, 10);
 
-/** The org's meeting format: current default, switch (admins), meeting folder, learn-a-format placeholder. */
+/** The org's meeting format: current default, switch (admins), meeting folder, learn a format (B2). */
 export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
   const learned = formats.filter((f) => f.kind === "learned");
   return (
@@ -71,14 +72,17 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
               <p className="hint">Google-väljaren är inte inställd än.</p>
             ))}
         </div>
-        {isAdmin && (
-          <div>
-            <Button variant="ghost" disabled>
-              Lär Simon Says ert format
-            </Button>
-            <p className="hint">Kommer snart.</p>
-          </div>
-        )}
+        {isAdmin &&
+          (pickerEnabled ? (
+            <LearnFormat orgId={orgId} />
+          ) : (
+            <div>
+              <Button variant="ghost" disabled>
+                Lär Simon Says ert format
+              </Button>
+              <p className="hint">Google-väljaren är inte inställd än.</p>
+            </div>
+          ))}
       </div>
     </Panel>
   );

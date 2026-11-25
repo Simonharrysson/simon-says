@@ -21,6 +21,7 @@ import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
 import { LoginView } from "@/components/views/LoginView";
 import { FormatCard } from "@/components/views/FormatCard";
+import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
 import { StatusView } from "@/components/views/StatusView";
@@ -187,6 +188,46 @@ function AppChrome({ children }: { children: ReactNode }) {
   );
 }
 
+/** A learned proposal (fictional förening): no Må-runda, § numbering, signatures. */
+const learnedProposal = {
+  profile: {
+    kind: "learned" as const,
+    title: "Protokoll styrelsemöte",
+    infoTable: ["Datum", "Plats", "Närvarande"],
+    agendaHeading: "Dagordning",
+    fixedAgendaItems: [
+      { key: "open", label: "Mötets öppnande", role: "procedural" as const },
+      { key: "previous", label: "Föregående protokoll", role: "followup" as const },
+      { key: "other", label: "Övriga frågor", role: "other" as const, position: "last" as const },
+      { key: "close", label: "Mötets avslutande", role: "procedural" as const, position: "last" as const },
+    ],
+    numbering: "paragraph" as const,
+    tasksSection: { label: "Att göra", groupBy: "person" as const },
+    notesSection: null,
+    decisionPrefix: "Beslut:",
+    taskStyle: "role-first" as const,
+    tone: "full-sentences" as const,
+    signatures: ["Mötesordförande", "Justerare"],
+    requiredItems: [],
+  },
+  explanation:
+    "Era protokoll börjar med en tabell med datum, plats och närvarande, följt av en dagordning numrerad med §. Mötet öppnas och avslutas alltid formellt, och uppgifterna samlas under Att göra.",
+  qualityNote: "Uppgifterna saknar ofta ansvarig och datum. Simon Says skriver alltid ut båda, och varje beslut som en hel mening.",
+  folderId: null,
+};
+
+function LearnDemo({ view }: { view: LearnPhase }) {
+  return (
+    <AppChrome>
+      <div className="page">
+        <Panel title="Mötesformat" titleId="format-title-demo">
+          <LearnFormatView orgId={ORG_ID} view={view} onStart={noop} onCancel={noop} />
+        </Panel>
+      </div>
+    </AppChrome>
+  );
+}
+
 function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginLink?: boolean }) {
   return (
     <>
@@ -277,6 +318,11 @@ const render: Record<string, () => ReactNode> = {
         actions={actions}
       />
     </AppChrome>
+  ),
+  "format-learn-proposing": () => <LearnDemo view={{ phase: "proposing" }} />,
+  "format-learn-editor": () => <LearnDemo view={{ phase: "editor", proposal: learnedProposal }} />,
+  "format-learn-error": () => (
+    <LearnDemo view={{ phase: "error", message: "Simon Says kan inte läsa ett av dokumenten. Välj dem igen i Google-väljaren." }} />
   ),
   "org-member-empty": () => (
     <AppChrome>
