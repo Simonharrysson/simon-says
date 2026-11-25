@@ -1,28 +1,95 @@
 # Simon Says
 
-Live meeting notes in Google Docs for student associations in Linköping. One laptop at the table
-streams the room's audio; structured notes build up live in a new Google Doc (a notes tab, and
-optionally a transcript tab) in the Drive of whoever started the meeting. Free, UI in Swedish.
+**One laptop on the table. Live, structured meeting notes in a Google Doc.**
 
-- Design: [docs/design.md](docs/design.md) · UI: [docs/ui.md](docs/ui.md) · Plan: [docs/plan.md](docs/plan.md) · Learnings: [docs/learnings.md](docs/learnings.md)
-- Production: https://simonsays.harrysson.co (pages: `/status`, `/integritet`)
-- Stack: Next.js (App Router) on Vercel (project `simon-says`, region `arn1`), Supabase (`simonsays-prod`, EU).
+Simon Says listens to an in-person meeting through a single laptop microphone and writes
+decisions, action items (with owner and due date) and "what we are discussing now" into a new
+Google Doc while people talk. If someone types in the Doc, the service reads it and works around
+it. It never overwrites what a human wrote.
 
-## Architecture
+Built for student and volunteer associations in Linköping. Free to use. The UI is in Swedish.
+Production: https://simonsays.harrysson.co
 
+**Status:** v1, in testing. The notes engine, the Google Doc writer and the end-to-end "Testmöte"
+(a scripted fictional meeting) run on production. Live transcription with ElevenLabs is built against a simulated
+server and gets its first real-audio verification in late November 2026. Not yet a finished product.
+
+![A Testmöte filling a Google Doc](docs/media/testmote.gif)
+
+*A scripted, fictional board meeting filling the Doc. Screenshot of the result:
+[docs/media/doc-filled.png](docs/media/doc-filled.png).*
+
+## How it works
+
+```mermaid
+flowchart LR
+  B["Browser mic<br/>(laptop)"] -->|"PCM audio"| EL["ElevenLabs<br/>scribe_v3_live"]
+  S["Server mints<br/>single-use token"] -.->|"token"| B
+  EL -->|"committed + diarized text"| B
+  B -->|"POST /segments"| API["Next.js on Vercel"]
+  API --> DB[("Supabase<br/>Postgres, EU")]
+  DB --> T["Tick<br/>(lease, 30 s apart)"]
+  T -->|"transcript blocks<br/>prompt-cached"| C["Claude<br/>returns ops"]
+  C --> D["Diff against Doc<br/>(human edits win)"]
+  D -->|"revision-guarded write"| G["Google Doc<br/>notes tab + transcript tab"]
+  CR["Cron: finalize<br/>abandoned meetings"] --> T
+  K["Caps + kill switch"] -.-> S
+  K -.-> T
 ```
- laptop browser ──PCM audio──────────────▶ ElevenLabs (scribe_v3_live, WebSocket)
-      │  ▲                                        │ committed + diarized text
-      │  └── single-use token ──┐                 ▼
-      └── committed segments ──▶ Next.js on Vercel (arn1) ──▶ Supabase (Postgres, RLS)
-                                   │  notes tick (≥ 30 s apart)    transcripts, notes, usage
-                                   ├──▶ Anthropic (Claude): operations on the notes
-                                   └──▶ Google Docs/Drive (drive.file): notes + transcript tabs
- Vercel Cron: finalise abandoned meetings, daily summary ──▶ Resend (alarms to the operator)
-```
 
-Audio never reaches our server and is not stored. Only committed text is sent on. Usage is
-counted server-side. Limits (per org, per day, kill switch) are in `lib/limits.ts`.
+Audio goes from the laptop straight to ElevenLabs. Our server only sees committed text.
+
+## Design principles
+
+- **Human edits always win.** Before every write the service reads the Doc and compares whole
+  paragraphs with what it last rendered. Anything a person touched is locked: kept verbatim,
+  never reworded or removed. Text people type outside our ranges is sent to the model as
+  read-only context, so it is not duplicated.
+- **Revision-guarded writes.** Every Docs write carries the revision it was computed from. On a
+  conflict the service re-reads, re-diffs and retries with a random backoff, so a person typing
+  in the Doc is never clobbered.
+- **Op-based notes, low churn.** Claude returns operations (add, change, remove an item), not a
+  rewritten list. Items have stable ids, so the Doc changes little between ticks and does not
+  flicker.
+- **Server-counted usage caps.** Hours and dollars are counted from token mints and server time,
+  never from client-reported numbers. Per-meeting, per-org and global daily caps, plus a kill
+  switch.
+- **Privacy by construction.** Supabase in the EU, Google scope `drive.file` only (the service
+  can touch only files it created), no audio stored, consent confirmed in the room before Start,
+  a pause button that stops audio immediately. Details: [/integritet](https://simonsays.harrysson.co/integritet).
+
+## Measured
+
+Only numbers we measured. The notes eval replays 7 fictional meetings (about 55 minutes in
+total, Swedish and English, with traps such as a changed decision, a changed owner and a hedged
+"no promises") through the real engine, 2 runs each.
+
+| What | Result |
+| --- | --- |
+| Expected decisions and actions found | 96 of 96 |
+| Forbidden items in the final notes (tabled, reversed or hedged things written as decisions or actions) | 0 |
+| Notes churn (share of items that change between ticks), median | 8.7 % |
+| Claude cost per meeting-hour | about $0.69 (cold cache about $0.75) |
+| Testmöte, 10-minute scripted meeting replayed at 4x, start to finished Doc | about 3.5 minutes |
+| Revision guard, 2 minutes of continuous typing in the Doc | 11 of 12 writes landed, the typed text stayed intact |
+
+Caveats: the eval transcripts are clean and fictional, and the sample is small. Real meetings
+are messier. The cost figure covers Claude only, not transcription.
+
+## Roadmap
+
+- **v1.1, name round and voices:** each person says their name once and the service remembers
+  their voice, so names appear without a round from the second meeting on.
+- **v1.1, learn the minutes format:** read a förening's old minutes in Google Docs and write the
+  notes in the same shape.
+- **Long-term, everything on a Jetson Orin Nano:** transcription, speaker separation and the
+  notes model run locally on one small box, with jobs queued. A cloud turbo mode stays for when
+  notes are needed instantly. See [docs/design.md](docs/design.md).
+
+## Docs
+
+[Design](docs/design.md) · [UI](docs/ui.md) · [Plan](docs/plan.md) · [Learnings](docs/learnings.md) ·
+Stack: Next.js (App Router) on Vercel (`arn1`), Supabase (EU), ElevenLabs, Anthropic, Google Docs/Drive.
 
 ## Run locally
 
@@ -35,6 +102,10 @@ cp .env.example .env.local            # fill in, see below
 npm run dev                           # http://localhost:3000
 npm run typecheck && npm test
 ```
+
+The operator-only "Testmöte" button on an org page replays a scripted fictional meeting through the real
+pipeline into a Doc, with no microphone needed.
+The live page can be exercised without ElevenLabs via the fake server: `npm run fake-el`.
 
 ## Environment variables
 
@@ -68,3 +139,7 @@ needs it. Automatic API grants are off, so every migration grants table access e
 
 `.github/workflows/ci.yml`: gitleaks (full history), `supabase start` + `supabase db reset`,
 `tsc --noEmit`, `vitest run`. `spike/` (Task 0 tooling) is excluded from typecheck and tests.
+
+## License
+
+No license file yet, so all rights are reserved by default.
