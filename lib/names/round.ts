@@ -117,11 +117,14 @@ export async function runNameRound(
   const now = opts.now ?? new Date();
   const started = Date.now();
   try {
-    let claim = db().from("el_sessions").update({ name_round_at: now.toISOString() }).eq("id", sessionId).eq("meeting_id", meeting.id);
-    claim = opts.force
-      ? claim.or(`name_round_at.is.null,name_round_at.lt."${new Date(now.getTime() - FORCE_GAP_MS).toISOString()}"`)
-      : claim.is("name_round_at", null);
-    const claimed = must("claim", await claim.select("id")) as unknown[];
+    // Two single-condition updates (each atomic): never run → claim; forced and the last one
+    // started long enough ago → claim.
+    const claim = () => db().from("el_sessions").update({ name_round_at: now.toISOString() }).eq("id", sessionId).eq("meeting_id", meeting.id);
+    let claimed = must("claim", await claim().is("name_round_at", null).select("id")) as unknown[];
+    if (!claimed.length && opts.force) {
+      const before = new Date(now.getTime() - FORCE_GAP_MS).toISOString();
+      claimed = must("claim", await claim().lt("name_round_at", before).select("id")) as unknown[];
+    }
     if (!claimed.length) return { status: "busy" };
 
     const [segments, rowsRes, peopleRes] = await Promise.all([
