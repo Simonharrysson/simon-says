@@ -2,14 +2,14 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getEnv } from "@/lib/env";
+import { sessionCookieOptions } from "@/lib/supabase/cookie-options";
 
 /** Per-request Supabase client acting as the signed-in user (session in cookies). */
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
   const env = getEnv();
   return createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-    // No browser Supabase client exists, so JS never needs to read the session cookie.
-    cookieOptions: { httpOnly: true },
+    cookieOptions: sessionCookieOptions(),
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (toSet) => {

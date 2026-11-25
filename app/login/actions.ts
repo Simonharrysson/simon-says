@@ -1,10 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { GOOGLE_SCOPES } from "@/lib/google/scopes";
 import { safeNextPath } from "@/lib/next-path";
-import { originFrom } from "@/lib/origin";
+import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -13,7 +12,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  */
 export async function signInWithGoogle(formData?: FormData): Promise<void> {
   const supabase = await createSupabaseServerClient();
-  const origin = originFrom(await headers());
+  const origin = appOrigin();
   const next = safeNextPath(formData?.get("next")?.toString());
   const callback = next === "/" ? `${origin}/auth/callback` : `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
   const { data, error } = await supabase.auth.signInWithOAuth({

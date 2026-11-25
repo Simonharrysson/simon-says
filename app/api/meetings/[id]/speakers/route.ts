@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const db = supabaseAdmin();
   const { data: session, error: se } = await db
     .from("el_sessions")
-    .select("id")
+    .select("id, kind")
     .eq("id", elSessionId)
     .eq("meeting_id", meeting.id)
     .maybeSingle();
@@ -122,7 +122,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!person) return fail("unknown_person", 400);
     personId = person.id as string;
     displayName = person.name as string;
-  } else {
+  } else if (session.kind !== "test") {
     const person = await ensurePerson(meeting.org_id, displayName);
     personId = person.id;
     displayName = person.name;
@@ -135,6 +135,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .eq("el_session_id", elSessionId);
   if (re) throw new Error(`speakers: map: ${re.message}`);
   const target = resolveSpeaker((rows ?? []) as SpeakerRow[], speakerLabel).label;
+  // Ruling 38: a Testmöte's voices are fictional: name them in the map only, never as people.
+  if (session.kind === "test") personId = null;
   const { error: ue } = await db.from("speaker_map").upsert(
     {
       meeting_id: meeting.id,

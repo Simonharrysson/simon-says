@@ -37,10 +37,13 @@ const schema = z.object({
   ADMIN_EMAILS: optional,
   CRON_SECRET: required,
   APP_URL: z.url(),
-  GLOBAL_DAILY_HOURS: z.coerce.number().positive().default(30),
-  GLOBAL_DAILY_USD: z.coerce.number().positive().default(25),
+  // finite(): "Infinity" would switch the global caps off.
+  GLOBAL_DAILY_HOURS: z.coerce.number().positive().finite().default(30),
+  GLOBAL_DAILY_USD: z.coerce.number().positive().finite().default(25),
   // Booked on every closed ElevenLabs session (Ruling 14). Creator overage rate.
-  ELEVENLABS_USD_PER_HOUR: z.coerce.number().nonnegative().default(0.22),
+  ELEVENLABS_USD_PER_HOUR: z.coerce.number().nonnegative().finite().default(0.22),
+  // Strictly "0" or "1": anything else ("true", "on", "") fails at boot rather than silently
+  // meaning off.
   KILL_SWITCH: z
     .enum(["0", "1"])
     .default("0")

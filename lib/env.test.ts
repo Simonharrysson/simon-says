@@ -45,6 +45,15 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ ...valid, ELEVENLABS_USD_PER_HOUR: "-1" })).toThrow(/ELEVENLABS_USD_PER_HOUR/);
   });
 
+  it("rejects non-finite global caps (Infinity would switch them off)", () => {
+    expect(() => parseEnv({ ...valid, GLOBAL_DAILY_HOURS: "Infinity" })).toThrow(/GLOBAL_DAILY_HOURS/);
+    expect(() => parseEnv({ ...valid, GLOBAL_DAILY_USD: "Infinity" })).toThrow(/GLOBAL_DAILY_USD/);
+  });
+
+  it("KILL_SWITCH is strictly 0 or 1", () => {
+    for (const v of ["true", "on", "yes", "2"]) expect(() => parseEnv({ ...valid, KILL_SWITCH: v }), v).toThrow(/KILL_SWITCH/);
+  });
+
   it("parses KILL_SWITCH=1 as on", () => {
     expect(parseEnv({ ...valid, KILL_SWITCH: "1" }).KILL_SWITCH).toBe(true);
   });

@@ -72,7 +72,8 @@ const { GET } = await import("./route");
 const call = (query = "") =>
   GET(
     new NextRequest(`https://simonsays.example/auth/callback?code=abc${query}`, {
-      headers: { host: "simonsays.example" },
+      // A forged Host header is ignored: redirects use APP_URL (https://example.com in tests).
+      headers: { host: "evil.example", "x-forwarded-host": "evil.example" },
     }),
   );
 
@@ -82,7 +83,7 @@ const sessionCookies = () => [...jar].filter(([name]) => /^sb-example-auth-token
 describe("auth callback", () => {
   it("stores the Google token and leaves a session cookie without provider tokens, httpOnly", async () => {
     const res = await call();
-    expect(res.headers.get("location")).toBe("https://simonsays.example/");
+    expect(res.headers.get("location")).toBe("https://example.com/");
     expect(google.storeGoogleToken).toHaveBeenCalledWith("u1", "1//google-refresh", DRIVE);
 
     const session = sessionCookies();
@@ -103,16 +104,16 @@ describe("auth callback", () => {
 
   it("returns to a safe next path (invite link) and ignores an unsafe one", async () => {
     let res = await call("&next=%2Fjoin%2FAbc-1_x");
-    expect(res.headers.get("location")).toBe("https://simonsays.example/join/Abc-1_x");
+    expect(res.headers.get("location")).toBe("https://example.com/join/Abc-1_x");
     jar.set("sb-example-auth-token-code-verifier", { value: JSON.stringify("verifier") });
     res = await call("&next=%2F%2Fevil.com");
-    expect(res.headers.get("location")).toBe("https://simonsays.example/");
+    expect(res.headers.get("location")).toBe("https://example.com/");
   });
 
   it("redirects to /login?fel=kod and signs out when storing the token throws", async () => {
     google.storeGoogleToken.mockRejectedValue(new Error("db down"));
     const res = await call();
-    expect(res.headers.get("location")).toBe("https://simonsays.example/login?fel=kod");
+    expect(res.headers.get("location")).toBe("https://example.com/login?fel=kod");
     expect(sessionCookies()).toEqual([]);
   });
 
@@ -120,14 +121,14 @@ describe("auth callback", () => {
     providerRefresh = undefined;
     google.hasGoogleToken.mockRejectedValue(new Error("db down"));
     const res = await call();
-    expect(res.headers.get("location")).toBe("https://simonsays.example/login?fel=kod");
+    expect(res.headers.get("location")).toBe("https://example.com/login?fel=kod");
     expect(sessionCookies()).toEqual([]);
   });
 
   it("signs out and asks for drive.file when it wasn't granted", async () => {
     grantedScope = "openid email";
     const res = await call();
-    expect(res.headers.get("location")).toBe("https://simonsays.example/login?fel=drive");
+    expect(res.headers.get("location")).toBe("https://example.com/login?fel=drive");
     expect(google.storeGoogleToken).not.toHaveBeenCalled();
     expect(sessionCookies()).toEqual([]);
   });

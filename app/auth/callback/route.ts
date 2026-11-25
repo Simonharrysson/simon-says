@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasGoogleToken, storeGoogleToken } from "@/lib/google/client";
 import { fetchGrantedScope, hasDriveFile } from "@/lib/google/scopes";
 import { safeNextPath } from "@/lib/next-path";
-import { originFrom } from "@/lib/origin";
+import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * really granted, and stores the encrypted refresh token. Logs only booleans and the scope.
  */
 export async function GET(request: NextRequest) {
-  const origin = originFrom(request.headers);
+  const origin = appOrigin();
   const to = (path: string) => NextResponse.redirect(`${origin}${path}`);
   const code = request.nextUrl.searchParams.get("code");
   if (!code) {

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getEnv } from "@/lib/env";
+import { sessionCookieOptions } from "@/lib/supabase/cookie-options";
 
 /**
  * Refreshes the Supabase session on every page/API request, so Server Components (which
@@ -12,7 +13,7 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
-    cookieOptions: { httpOnly: true },
+    cookieOptions: sessionCookieOptions(),
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (toSet, headers) => {
@@ -31,6 +32,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets, the OAuth callback (it sets the session itself) and cron/health.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // Skip static assets (incl. public/pcm-worklet.js), the OAuth callback (it sets the session itself) and cron/health.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js)$).*)"],
 };

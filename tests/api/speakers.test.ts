@@ -187,6 +187,20 @@ describe.skipIf(!hasLocalSupabase)("/api/meetings/[id]/speakers", () => {
     expect((await get(id)).speakers[0].displayName).toBe("Anna Berg");
   });
 
+  it("a test session (Testmöte) is named in the map only; no person is added (Ruling 38)", async () => {
+    const { id, session } = await meeting();
+    const s = await session(600);
+    await adminClient().from("el_sessions").update({ kind: "test" }).eq("id", s);
+    await say(id, s, "speaker_0", "Hej", 1000);
+    current.db = starter.db;
+    const res = await patch(id, { elSessionId: s, speakerLabel: "speaker_0", displayName: "Fiktiva Fia" });
+    expect(res.status).toBe(200);
+    const { data: row } = await adminClient().from("speaker_map").select("display_name, person_id").eq("meeting_id", id).single();
+    expect(row).toEqual({ display_name: "Fiktiva Fia", person_id: null });
+    const { data: people } = await adminClient().from("people").select("id").eq("org_id", orgId).eq("name", "Fiktiva Fia");
+    expect(people).toEqual([]);
+  });
+
   it("a merged label is renamed on its target", async () => {
     const { id, session } = await meeting();
     const s = await session(600);
