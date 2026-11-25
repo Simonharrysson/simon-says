@@ -9,7 +9,7 @@ import { adminClient, anonClient, createTestUser, hasLocalSupabase } from "@/tes
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
 
 describe.skipIf(!hasLocalSupabase)("cleanup_retention", () => {
-  it("deletes rows older than 24 months, keeps recent ones, second run deletes nothing", async () => {
+  it("deletes old rows (creation records only of deleted orgs), keeps recent ones and live orgs' records, second run deletes nothing", async () => {
     const admin = adminClient();
     const u = await createTestUser("ret");
     const r = await createOrg(u.db, `Retention-${randomUUID().slice(0, 8)}`);
@@ -23,6 +23,13 @@ describe.skipIf(!hasLocalSupabase)("cleanup_retention", () => {
         { org_id: r.id, day: newDay, seconds: 2 },
       ]);
     expect(e1).toBeNull();
+    // The live org's own creation record, made old: must be kept (it counts toward the per-creator limit).
+    const { error: e3 } = await admin
+      .from("org_creations")
+      .update({ created_at: daysAgo(800).toISOString() })
+      .eq("org_id", r.id);
+    expect(e3).toBeNull();
+    // Old records of orgs that no longer exist (random ids): removed.
     const oldOrg = randomUUID();
     const newOrg = randomUUID();
     const { error: e2 } = await admin.from("org_creations").insert([
@@ -38,8 +45,8 @@ describe.skipIf(!hasLocalSupabase)("cleanup_retention", () => {
 
     const usage = await admin.from("usage_daily").select("day").eq("org_id", r.id);
     expect(usage.data?.map((x) => x.day)).toEqual([newDay]);
-    const creations = await admin.from("org_creations").select("org_id").in("org_id", [oldOrg, newOrg]);
-    expect(creations.data?.map((x) => x.org_id)).toEqual([newOrg]);
+    const creations = await admin.from("org_creations").select("org_id").in("org_id", [oldOrg, newOrg, r.id]);
+    expect(creations.data?.map((x) => x.org_id).sort()).toEqual([newOrg, r.id].sort());
 
     const second = await admin.rpc("cleanup_retention");
     expect(Number(second.data[0].usage_daily_deleted)).toBe(0);

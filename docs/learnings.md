@@ -114,7 +114,7 @@ followed by `inspect` → `tick` → `inflight 10` → `inspect`.
 
 /integritet promises `usage_daily` and `org_creations` are kept 24 months. `cleanup_retention()` (service_role only)
 deletes older rows and returns the counts; the daily alarm cron (06:00 UTC) calls it after the summary email and logs
-`cron retention: ...`. A failure there never blocks the email. Deliberately NOT deleted: `spend_alarms` and
+`cron retention: ...`. A failure there never blocks the email. `org_creations` rows are only deleted when their org no longer exists, because `orgs_limit_per_creator` counts them (a live org's record must stay). Deliberately NOT deleted: `spend_alarms` and
 `meeting_events`, since the page promises no period for them (only the two named tables). Add them to the page first,
 then to the function.
 

@@ -16,7 +16,11 @@ declare
 begin
   delete from public.usage_daily u where u.day < (v_cutoff at time zone 'utc')::date;
   get diagnostics v_usage = row_count;
-  delete from public.org_creations c where c.created_at < v_cutoff;
+  -- Only rows of orgs that no longer exist: orgs_limit_per_creator counts this table, so the
+  -- record of a live org must stay or its creator could create more than the limit.
+  delete from public.org_creations c
+  where c.created_at < v_cutoff
+    and not exists (select 1 from public.orgs o where o.id = c.org_id);
   get diagnostics v_orgs = row_count;
   return query select v_usage, v_orgs;
 end;
