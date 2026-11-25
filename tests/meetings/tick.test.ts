@@ -1245,7 +1245,8 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
         id: sessionId,
         meeting_id: id,
         max_seconds: 3600,
-        started_at: new Date(Date.now() - 600_000).toISOString(),
+        // Meeting and session start together, so session-relative times are meeting-relative.
+        started_at: FMT_STARTED.toISOString(),
         name_round_at: new Date().toISOString(),
       });
     if (se) throw new Error(se.message);
