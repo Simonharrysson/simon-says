@@ -291,6 +291,17 @@ from the list order and level.
 info-table prefill must read cell indices from the table element and re-read between inserts (or fill from the last cell backwards).
 A5's `Paragraph`-based scan needs table cell paragraphs separately.
 
-**Pending (human stage, controller runs it in the Docs editor):** what Enter at the end of our bullet, Tab on our bullet and a new sub-bullet
-typed after ours do to `itemSpan` and `nestingLevel`, and what an edit to the filled Närvarande cell does to its named range. See
-`.superpowers/sdd/2026-11-25-meeting-formats/task-A1-report.md` for the steps.
+**Human stage (controller typed in the Docs editor, 2026-11-25):**
+- **Enter at the end of our bullet + typing** ("Manniska 1" after "Claude A"): the new paragraph is a human sibling at the same level
+  (list1/lvl1, next letter); our range `ss-a1-A` stays exactly "Claude A" and `itemSpan` is unchanged (rangeText = paraText) — not locked.
+- **Tab on our bullet** ("Claude B"): nesting level 1 → 2, text, range and `itemSpan` unchanged. **The text diff does not see indent
+  changes**, so a human re-indent does not lock the item — the renderer must never re-apply or "fix" a level on an existing item
+  (only new inserts choose a level).
+- **New line typed after another of ours** ("Manniska 2" after "Claude C"): human sibling after our item; our range unchanged.
+  → v1's rule holds in lists: text typed at a range's edge or on a new line lands **outside** the range. For "ours go after the human's
+  last paragraph of the item", A6 must find the item's last paragraph by list level/position, not by our last range.
+- **Table cell edited at both edges** (", Cecilia" at the end, "X" at the start of the filled Närvarande cell): range `ss-a1-cell`
+  stays "Anna Svensson, Bo Karlsson"; the cell text is "XAnna Svensson, Bo Karlsson, Cecilia". Same edge rule as paragraphs →
+  cell anchors need a **whole-cell text diff** against what we rendered (lock on any difference); `itemSpan`/`parseNotesTab` skip
+  tables, so A5/A7 need a cell-aware span reader.
+- One list id throughout (`distinct listIds: 1`): human Enter and Tab stay in the ordförande's list.
