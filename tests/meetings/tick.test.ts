@@ -101,6 +101,11 @@ describe("headers and time", () => {
     expect(tick.liveHeader(new Date("2026-11-24T13:05:00Z"))).toBe("● LIVE · uppdaterad 14:05");
     expect(tick.endedHeader(new Date("2026-11-24T15:59:00Z"))).toBe("Avslutat 16:59");
   });
+  it("format layout header lines (the status line in the notes section)", () => {
+    expect(tick.liveHeader(new Date("2026-11-25T17:05:00Z"), "format")).toBe("Simon Says antecknar live · uppdaterad 18:05");
+    expect(tick.endedHeader(new Date("2026-11-25T18:10:00Z"), "format")).toBe("Simon Says · avslutat 19:10");
+    expect(tick.liveHeader(new Date("2026-11-25T17:05:00Z"), "v1")).toBe("● LIVE · uppdaterad 18:05");
+  });
   it("tickDue: 45 s target", () => {
     const now = new Date("2026-11-24T12:00:45Z");
     expect(tick.tickDue(null, now)).toBe(true);

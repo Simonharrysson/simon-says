@@ -328,3 +328,21 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 "Kommande event" — then `tick`: only the edited tasks copy (`n4-t`) locked; the same task's copy under Ekonomi kept updating
 (one copy locks, the other follows); the human sub-point intact and our new line went **after** everything in the item's block
 (human + ours); the Tabbed line stayed at level 2, unlocked and reworded; numbering 1–6 unchanged, one listId, re-render 0 requests.
+
+**Task A7 fallback check (2026-11-25; `check-agenda-render … fallback veckomote|styrelseprotokoll|bare`, new Docs via
+`createFormatDoc` in the folder "Simon Says – Fiktiv förening A7", then `anchorAgenda` with `rolesFromSkeleton`, then one render):**
+- Skeleton: one text insert at 1, paragraph styles, ONE `createParagraphBullets NUMBERED_DECIMAL_ALPHA_ROMAN` (Veckomöte) and
+  `insertTable` last; the cells filled in a second batch from a fresh read. As M6 says, the table gets an empty paragraph before
+  and after it. Veckomöte: H1 title, 4×2 table, H2 "Agenda", items 1.–5. in one list (Godkänn dagordning, Må-runda, Från förra
+  veckan, Övriga punkter, Övrigt), H2 tasks, H2 "Anteckningar". Styrelseprotokoll: H2 "Dagordning", 9 `HEADING_3` "§1 …"–"§9 …"
+  items, H2 "Att göra", the three signature lines.
+- `scanAgenda` finds 5 (resp. 9) items with keys matching `rolesFromSkeleton` (checkin = Må-runda, followup = Från förra veckan /
+  Föregående protokoll, topic = Övriga punkter). Every anchor range's text is exactly the item line ("§7 Övriga punkter" for
+  paragraph numbering: the range covers the typed "§n", the scan label drops it). The returned `revisionId` equals a fresh read's.
+- LIVE line: NORMAL_TEXT directly under "Anteckningar" (Veckomöte), or at the end after the signatures (Styrelseprotokoll, no notes
+  section); never inside an agenda item. Datum/Tid filled (Stockholm), Tid in `ss-<m>-info-tid`; other cells untouched.
+- `bare` (Doc ends in the numbered list item "Övrigt"): the appended "Vad ska vi göra till nästa gång?" + "Anteckningar" (+ LIVE)
+  come out `HEADING_2`/NORMAL_TEXT with **no** listId (`deleteParagraphBullets` on our new paragraphs; the human list keeps 1.–5.).
+- Render on the anchored Doc: (c) lines under "Övriga punkter" in the list Doc; under a `HEADING_3` item a new bullet list (●);
+  task copies in the tasks section — in Styrelseprotokoll **above** the signature lines (the `signatures` anchor ends the tasks
+  block); Närvarande in the empty cell; one listId, every row owned, re-render 0 requests.

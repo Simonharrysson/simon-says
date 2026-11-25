@@ -112,8 +112,11 @@ export function stockholmTime(at: Date): string {
   }).format(at);
 }
 
-export const liveHeader = (now: Date) => `● LIVE · uppdaterad ${stockholmTime(now)}`;
-export const endedHeader = (endedAt: Date) => `Avslutat ${stockholmTime(endedAt)}`;
+/** The header line: v1's "● LIVE" title line, or the format layout's status line in the notes section. */
+export const liveHeader = (now: Date, layout: "v1" | "format" = "v1") =>
+  layout === "format" ? `Simon Says antecknar live · uppdaterad ${stockholmTime(now)}` : `● LIVE · uppdaterad ${stockholmTime(now)}`;
+export const endedHeader = (endedAt: Date, layout: "v1" | "format" = "v1") =>
+  layout === "format" ? `Simon Says · avslutat ${stockholmTime(endedAt)}` : `Avslutat ${stockholmTime(endedAt)}`;
 
 /** A normal tick is due once the last one started at least TICK_TARGET_SEC ago. */
 export function tickDue(lastTickAt: string | null, now: Date, minSec = TICK_TARGET_SEC): boolean {
@@ -451,7 +454,10 @@ export async function runTick(
     const timeLeft = opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity;
     const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && spendOk;
     const sentTick = meeting.notes_sent_tick ?? 0;
-    const header = final ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now()) : liveHeader(deps.now());
+    const layout = meeting.layout ?? "v1";
+    const header = final
+      ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now(), layout)
+      : liveHeader(deps.now(), layout);
 
     // read → diff → Claude
     const first = readState(await deps.readNotes(auth, meeting), ctx.rows);

@@ -264,7 +264,7 @@ export function planFormatRender(
     return p ? p.start : null;
   };
   /**
-   * Start of the next anchor paragraph (agenda item, tasks, notes) after `start`, else the end of
+   * Start of the next anchor paragraph (agenda item, tasks, notes, signatures) after `start`, else the end of
    * the tab. For the tasks block the LIVE line ends it too (a format without a notes section has
    * the LIVE line after the tasks; in the notes section the LIVE line is the block's first line).
    */
@@ -273,7 +273,8 @@ export function planFormatRender(
     const liveSpan = endsAtLive && live ? itemSpan(tab, live) : null;
     const starts = [
       liveSpan?.paraStart ?? null,
-      ...Object.keys(anchors).filter((k) => k.startsWith("ag-") || k === "tasks" || k === "notes").map(anchorStart),
+      // "signatures": the signature lines after the tasks (A7) are never inside the tasks block.
+      ...Object.keys(anchors).filter((k) => k.startsWith("ag-") || k === "tasks" || k === "notes" || k === "signatures").map(anchorStart),
       ...scanned().items.map((i) => i.paraStart),
       scanned().tasksHeading?.start ?? null,
       scanned().notesHeading?.start ?? null,

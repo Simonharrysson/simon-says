@@ -22,6 +22,13 @@
  *   tick      (Task A6) after the human edits: read + diff (locks), reword every unlocked item, add one
  *             more note under ag-4 and ag-5, render again; checks the human text, the edited copy, the
  *             numbering, the re-indented line's level and lock state.
+ *   fallback <veckomote|styrelseprotokoll|bare>
+ *             (Task A7) createFormatDoc (folder "Simon Says – Fiktiv förening A7") then anchorAgenda with
+ *             rolesFromSkeleton, prints the Doc and the scan; then ONE renderItems/planFormatRender batch
+ *             (notes, a decision, a task + its tasks copy, Närvarande) to see where lines land. `bare` =
+ *             the Veckomöte skeleton without tasks/notes headings (the Doc ends in the numbered list),
+ *             anchored with VECKOMOTE: the appended headings + LIVE line after a list item.
+ *             State: .check-notes/agenda-a7-<kind>.json.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
  */
@@ -904,10 +911,114 @@ async function tick() {
   console.log(`\nDoc: ${urlOf(st.docId)}`);
 }
 
+// ---------------------------------------------------------------------------------------------
+// fallback (Task A7)
+
+async function fallback(kind: string) {
+  const { VECKOMOTE, STYRELSEPROTOKOLL } = await import("@/lib/formats/standard");
+  const { createFormatDoc } = await import("@/lib/docs/create");
+  const { skeletonBlocks, rolesFromSkeleton } = await import("@/lib/formats/skeleton");
+  const { anchorAgenda, INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
+  const { itemAt, scanAgenda } = await import("@/lib/agenda/scan");
+  const { liveHeader } = await import("@/lib/meetings/tick");
+  type Profile = import("@/lib/formats/schema").FormatProfile;
+  const profiles: Record<string, { profile: Profile; skeleton: Profile }> = {
+    veckomote: { profile: VECKOMOTE, skeleton: VECKOMOTE },
+    styrelseprotokoll: { profile: STYRELSEPROTOKOLL, skeleton: STYRELSEPROTOKOLL },
+    bare: { profile: VECKOMOTE, skeleton: { ...VECKOMOTE, tasksSection: null, notesSection: null } },
+  };
+  const chosen = profiles[kind];
+  if (!chosen) throw new Error(`fallback: unknown kind ${kind} (veckomote|styrelseprotokoll|bare)`);
+  const { profile } = chosen;
+  const mid = `a7${kind.slice(0, 4)}`;
+  const startedAt = new Date();
+
+  const created = await createFormatDoc(auth, {
+    meetingId: mid,
+    orgName: "Fiktiv förening A7",
+    startedAt,
+    memberEmails: [],
+    shareTranscript: false,
+    profile: chosen.skeleton,
+    blocks: skeletonBlocks(chosen.skeleton),
+  });
+  tabId = created.tabId;
+  const docId = created.docId;
+  console.log(`Doc: ${urlOf(docId)}`);
+  console.log("--- skeleton\n" + show(await get(docId)).join("\n"));
+
+  const res = await anchorAgenda(auth, {
+    meetingId: mid,
+    orgId: "fiktiv",
+    docId,
+    tabId,
+    profile,
+    startedAt,
+    roles: rolesFromSkeleton(chosen.skeleton),
+  });
+  let doc = await get(docId);
+  console.log("--- anchored\n" + show(doc).join("\n"));
+  rec("fallback.revisionMatches", doc.revisionId === res.revisionId);
+  rec("fallback.items", res.scan.items.map((i) => ({ key: i.key, label: i.label, kind: i.kind, role: res.agendaRoles[i.key] })));
+  rec("fallback.appended", res.appended);
+  rec("fallback.sectionRanges", Object.keys(res.sectionRanges));
+  const tab = n.parseNotesTab(doc, tabId);
+  const scan = scanAgenda(tab, profile);
+  rec("fallback.rescanItems", scan.items.length);
+  const live = n.itemSpan(tab, res.headerRange);
+  const body = paragraphs(doc).filter((p) => !p.cell);
+  const liveIdx = body.findIndex((p) => p.start === live?.paraStart);
+  rec("fallback.live", live ? { text: live.paraText, style: body[liveIdx]?.style, listId: body[liveIdx]?.listId, after: body[liveIdx - 1]?.text, inItem: itemAt(scan, live.paraStart)?.key ?? null } : null);
+  rec("fallback.ranges", Object.fromEntries(Object.entries(res.sectionRanges).map(([k, name]) => [k, n.itemSpan(tab, name)?.rangeText ?? null])));
+  rec("fallback.info", scan.info.map((c) => [c.field, c.valueCell.text]));
+  rec("fallback.infoTid", res.rows.map((r) => [r.id, r.last_rendered_text, n.itemSpan(tab, r.range_name!)?.rangeText]));
+  rec("fallback.appendedStyles", res.appended.map((label) => { const p = body.find((x) => x.text === label); return p ? { label, style: p.style, listId: p.listId, indent: [p.indentStart, p.indentFirst] } : { label, missing: true }; }));
+
+  // One render on the anchored Doc: where do our lines land?
+  const meeting: MeetingRow = {
+    id: mid, org_id: "fiktiv", started_by: null, doc_id: docId, notes_tab_id: tabId, transcript_tab_id: null,
+    header_range: res.headerRange, header_rendered: INITIAL_LIVE_LINE, section_ranges: res.sectionRanges,
+    status: "live", consent_confirmed_at: null, started_at: startedAt.toISOString(), ended_at: null,
+    last_heartbeat_at: null, last_tick_at: null, last_tick_ok_at: null, failed_ticks: 0, tick_lease_until: null,
+    doc_paused_at: null, current_el_session_id: null, layout: "format", agenda_doc: false, agenda_roles: res.agendaRoles,
+  };
+  const topic = Object.entries(res.agendaRoles).find(([, r]) => r === "topic")?.[0] ?? "ag-1";
+  const items: NotesItem[] = [
+    { id: "n1", section: "note", anchor: topic, text: "Sommarfesten blir lördag 14 juni" },
+    { id: "n2", section: "decision", anchor: topic, text: "Vi köper nya flaggor för 2 000 kr" },
+    { id: "n3", section: "action", anchor: topic, text: "Skicka protokollet till alla", owner: "Justerare", due: "fre" },
+    { id: "n4", section: "action", anchor: topic, text: "Betala hyran för lokalen", owner: "Anna Berg" },
+    ...(profile.notesSection ? [{ id: "n5", section: "note" as const, anchor: "notes", text: "Nästa möte hålls i Kårallen" }] : []),
+    { id: "info-narvarande", section: "attendees", anchor: "info.narvarande", text: "Anna Berg, Lisa Holm, Erik Lund" },
+  ];
+  const ownerLabel = (o: string) => ({ "Anna Berg": "Kassör" } as Record<string, string>)[o] ?? o;
+  const desired = fr.expandCopies(items, res.rows, profile);
+  let rendered: Awaited<ReturnType<typeof n.renderItems>> | null = null;
+  for (let attempt = 0; attempt < 4 && rendered?.status !== "ok"; attempt++) {
+    const t = await n.readNotesTab(auth, docId, tabId);
+    rendered = await n.renderItems(auth, meeting, res.rows, desired, t.revisionId, liveHeader(new Date(), "format"), { plan: fr.planFormatRender, profile, ownerLabel });
+  }
+  if (rendered?.status !== "ok") throw new Error("fallback render failed");
+  doc = await get(docId);
+  console.log("--- rendered\n" + show(doc).join("\n"));
+  const t2 = n.parseNotesTab(doc, tabId);
+  rec("render.unownedRows", rendered.rows.filter((r) => r.range_name && !r.locked && !n.ownedSpan(t2, r)).map((r) => r.id));
+  const again = fr.planFormatRender({ ...meeting, header_rendered: rendered.headerRendered ?? meeting.header_rendered }, t2, rendered.rows, desired, { profile, ownerLabel });
+  rec("render.rerenderRequests", again.requests.length);
+  rec("render.listIds", new Set(paragraphs(doc).map((p) => p.listId).filter(Boolean)).size);
+  const lines = paragraphs(doc).filter((p) => !p.cell).map((p) => p.text);
+  const sig = lines.findIndex((x) => /^Mötesordförande:/.test(x));
+  rec("render.copiesAboveSignatures", sig < 0 ? "no signatures" : lines.slice(sig).every((x) => !x.startsWith("Justerare: Skicka") && !x.startsWith("Kassör:")));
+  rec("render.lines", rendered.rows.map((r) => [r.id, r.anchor, r.last_rendered_text]));
+  mkdirSync(STATE_DIR, { recursive: true });
+  writeFileSync(join(STATE_DIR, `agenda-a7-${kind}.json`), JSON.stringify({ docId, meeting, rows: rendered.rows, results: R }, null, 2));
+  console.log(`\nDoc: ${urlOf(docId)}`);
+}
+
 async function main(): Promise<void> {
   const [userArg, stage] = process.argv.slice(2);
   if (!userArg || !stage) {
-    console.error("usage: npm run check-agenda-render -- <userId|email> <build|auto|human|inspect [a6]|render|tick>");
+    console.error("usage: npm run check-agenda-render -- <userId|email> <build|auto|human|inspect [a6]|render|tick|fallback <kind>>");
     process.exit(2);
   }
   await prepareEnv();
@@ -938,6 +1049,8 @@ async function main(): Promise<void> {
       return render(state());
     case "tick":
       return tick();
+    case "fallback":
+      return fallback(process.argv[4] ?? "");
     default:
       throw new Error(`unknown stage ${stage}`);
   }

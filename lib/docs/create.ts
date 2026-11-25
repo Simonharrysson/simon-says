@@ -1,6 +1,10 @@
 import type { OAuth2Client } from "google-auth-library";
 import type { NoteSection } from "@/lib/db/types";
+import type { FormatProfile } from "@/lib/formats/schema";
+import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
 import { docsApi, driveApi, paragraphsWithRanges, type DocsRequest } from "@/lib/google/docs";
+import { skeletonRequests, skeletonTableFill } from "./skeleton";
+import { parseNotesTab } from "./tab";
 
 /** Section headings of the notes tab, in order. */
 export const SECTIONS: { section: NoteSection; title: string }[] = [
@@ -76,16 +80,9 @@ async function findOrCreateFolder(auth: OAuth2Client, name: string): Promise<str
   return created.data.id;
 }
 
-/**
- * Create the meeting's Google Doc in the starter's Drive: in the org folder, a notes tab
- * ("Anteckningar": header line + four section headings, each with a named range), a "Transkript"
- * tab if `shareTranscript`, and writer access for the members (no notification email).
- */
-export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingDocInput): Promise<MeetingDoc> {
-  const { meetingId, orgName, startedAt, memberEmails, shareTranscript } = input;
+/** A new Doc in the starter's org folder (title `meetingTitle`, members can edit but not share) and its first tab id. */
+async function createDocFile(auth: OAuth2Client, orgName: string, startedAt: Date): Promise<{ docId: string; tabId: string }> {
   const drive = driveApi(auth);
-  const docs = docsApi(auth);
-
   const folderId = await findOrCreateFolder(auth, folderName(orgName));
   const docId = (
     await drive.files.create({
@@ -95,10 +92,43 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
     })
   ).data.id;
   if (!docId) throw new Error("createMeetingDoc: Doc has no id");
+  const first = (await docsApi(auth).documents.get({ documentId: docId, includeTabsContent: true })).data;
+  const tabId = first.tabs?.[0]?.tabProperties?.tabId;
+  if (!tabId) throw new Error("createMeetingDoc: new Doc has no tab");
+  return { docId, tabId };
+}
 
-  const first = (await docs.documents.get({ documentId: docId, includeTabsContent: true })).data;
-  const notesTabId = first.tabs?.[0]?.tabProperties?.tabId;
-  if (!notesTabId) throw new Error("createMeetingDoc: new Doc has no tab");
+/** Writer access for each member, no notification email; returns the addresses that failed. */
+async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[]): Promise<string[]> {
+  const drive = driveApi(auth);
+  // One failing address (e.g. not a Google account) must not stop the meeting.
+  const shareFailed: string[] = [];
+  for (const emailAddress of memberEmails) {
+    try {
+      await drive.permissions.create({
+        fileId: docId,
+        sendNotificationEmail: false,
+        requestBody: { role: "writer", type: "user", emailAddress },
+      });
+    } catch (err) {
+      console.error(`createMeetingDoc: share failed: ${(err as Error).message}`);
+      shareFailed.push(emailAddress);
+    }
+  }
+  return shareFailed;
+}
+
+const TRANSCRIPT_TAB: DocsRequest = { addDocumentTab: { tabProperties: { title: "Transkript" } } };
+
+/**
+ * Create the meeting's Google Doc in the starter's Drive: in the org folder, a notes tab
+ * ("Anteckningar": header line + four section headings, each with a named range), a "Transkript"
+ * tab if `shareTranscript`, and writer access for the members (no notification email).
+ */
+export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingDocInput): Promise<MeetingDoc> {
+  const { meetingId, orgName, startedAt, memberEmails, shareTranscript } = input;
+  const docs = docsApi(auth);
+  const { docId, tabId: notesTabId } = await createDocFile(auth, orgName, startedAt);
 
   const headerRange = `ss-${meetingId}-header`;
   const sectionRanges = Object.fromEntries(
@@ -123,7 +153,7 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
     });
     at += s.title.length + 1;
   }
-  if (shareTranscript) requests.push({ addDocumentTab: { tabProperties: { title: "Transkript" } } });
+  if (shareTranscript) requests.push(TRANSCRIPT_TAB);
 
   const res = await docs.documents.batchUpdate({ documentId: docId, requestBody: { requests } });
   const transcriptTabId = shareTranscript
@@ -131,20 +161,43 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
     : null;
   if (shareTranscript && !transcriptTabId) throw new Error("createMeetingDoc: transcript tab was not created");
 
-  // One failing address (e.g. not a Google account) must not stop the meeting.
-  const shareFailed: string[] = [];
-  for (const emailAddress of memberEmails) {
-    try {
-      await drive.permissions.create({
-        fileId: docId,
-        sendNotificationEmail: false,
-        requestBody: { role: "writer", type: "user", emailAddress },
-      });
-    } catch (err) {
-      console.error(`createMeetingDoc: share failed: ${(err as Error).message}`);
-      shareFailed.push(emailAddress);
-    }
+  const shareFailed = await shareDoc(auth, docId, memberEmails);
+  return { docId, notesTabId, transcriptTabId, headerRange, headerRendered: INITIAL_HEADER, sectionRanges, shareFailed };
+}
+
+/**
+ * The fallback / Testmöte Doc in a format (spec G8): same folder, title, sharing and transcript
+ * tab rules as createMeetingDoc; the notes tab (named after the profile's title) holds
+ * `skeletonBlocks(profile)`, or `blocks` (A13 passes its own items and filled values). Two batches:
+ * the text and empty table, then the table cells from a fresh read (A1 M6). No named ranges:
+ * anchorAgenda anchors the new Doc like any agenda Doc. Enkel never comes here (v1 Doc).
+ */
+export async function createFormatDoc(
+  auth: OAuth2Client,
+  input: CreateMeetingDocInput & { profile: FormatProfile; blocks?: SkeletonBlock[] },
+): Promise<{ docId: string; tabId: string; transcriptTabId: string | null; shareFailed: string[] }> {
+  const { orgName, startedAt, memberEmails, shareTranscript, profile } = input;
+  const docs = docsApi(auth);
+  const { docId, tabId } = await createDocFile(auth, orgName, startedAt);
+  const blocks = input.blocks ?? skeletonBlocks(profile);
+
+  const requests: DocsRequest[] = [
+    { updateDocumentTabProperties: { tabProperties: { tabId, title: profile.title }, fields: "title" } },
+    ...skeletonRequests(tabId, blocks, profile.numbering),
+  ];
+  if (shareTranscript) requests.push(TRANSCRIPT_TAB);
+  const res = await docs.documents.batchUpdate({ documentId: docId, requestBody: { requests } });
+  const transcriptTabId = shareTranscript
+    ? (res.data.replies?.at(-1)?.addDocumentTab?.tabProperties?.tabId ?? null)
+    : null;
+  if (shareTranscript && !transcriptTabId) throw new Error("createFormatDoc: transcript tab was not created");
+
+  if (blocks.some((b) => b.type === "table")) {
+    const doc = (await docs.documents.get({ documentId: docId, includeTabsContent: true })).data;
+    const fill = skeletonTableFill(parseNotesTab(doc, tabId), blocks);
+    if (fill.length) await docs.documents.batchUpdate({ documentId: docId, requestBody: { requests: fill } });
   }
 
-  return { docId, notesTabId, transcriptTabId, headerRange, headerRendered: INITIAL_HEADER, sectionRanges, shareFailed };
+  const shareFailed = await shareDoc(auth, docId, memberEmails);
+  return { docId, tabId, transcriptTabId, shareFailed };
 }
