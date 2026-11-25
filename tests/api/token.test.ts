@@ -407,7 +407,9 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
   });
 
   it("R2: the mint spacing grows with the meeting's live mints (5 s up to 4, then doubling, max 10 min)", async () => {
-    const id = await live(orgId, starter.id);
+    // An org of its own: closed sessions book full hours, so the shared org's month may be used up.
+    const { owner, orgId: org } = await freshOrg("Spacing org");
+    const id = await live(org, owner.id);
     const ago = (sec: number) => new Date(Date.now() - sec * 1000).toISOString();
     // 6 earlier live mints, the last 30 s ago: spacing 5 × 2^(6−4) = 20 s → allowed.
     const rows = Array.from({ length: 6 }, (_, i) => ({
@@ -418,7 +420,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
       closed_at: ago(i === 5 ? 29 : 3599),
     }));
     await adminClient().from("el_sessions").insert(rows);
-    as(starter);
+    as(owner);
     expect((await callToken(id)).status).toBe(200); // 7th mint
     // Now 7 live mints: spacing 40 s. 30 s after the 7th mint: refused, told to wait ~10 s.
     const { current_el_session_id: cur } = await meetingRow(id);
