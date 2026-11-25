@@ -66,6 +66,25 @@ export interface AgendaStepViewProps {
   onNewDoc: () => void;
   onFormatChange: (value: string) => void;
   onTranscriptChange: (on: boolean) => void;
+  /** Focus the confirmed choice on mount (after "Skapa nytt dokument i stället", whose button is gone). */
+  focusChoiceOnMount?: boolean;
+}
+
+/** What the polite live region says for a state (the visible line may be richer). */
+function announcement(p: AgendaStepViewProps, formatName: string): string {
+  if (p.message) return p.message;
+  if (p.chosen?.kind === "agenda") return `Dagordning vald: ${p.chosen.name}.`;
+  if (p.chosen?.kind === "new") return `Nytt dokument i formatet ${formatName}.`;
+  switch (p.view.state) {
+    case "suggestion":
+      return `Förslag: ${p.view.suggestion.name}.`;
+    case "none":
+      return "Ingen dagordning hittades.";
+    case "folder-unreachable":
+      return "Ditt Google-konto har inte öppnat mötesmappen än.";
+    default:
+      return "";
+  }
 }
 
 /** Presentational: no fetching (the /design page renders every state with fake data). */
@@ -75,11 +94,24 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   const off = p.view.state === "picker-off";
   const lock = p.busy || p.disabled;
 
+  // A confirm (Använd, a pick, Skapa nytt) unmounts the button that had focus: move focus to
+  // the confirmed line instead of letting it fall to <body>. Not on mount (unless asked).
+  const choiceRef = useRef<HTMLParagraphElement>(null);
+  const mounted = useRef(false);
+  const chosenKey = p.chosen ? (p.chosen.kind === "agenda" ? `agenda:${p.chosen.name}` : "new") : "";
+  const focusOnMount = p.focusChoiceOnMount ?? false;
+  useEffect(() => {
+    if (mounted.current || focusOnMount) {
+      if (chosenKey) choiceRef.current?.focus();
+    }
+    mounted.current = true;
+  }, [chosenKey, focusOnMount]);
+
   let body: ReactNode;
   if (p.chosen?.kind === "agenda") {
     body = (
       <>
-        <p className="agenda__line">
+        <p className="agenda__line agenda__choice" ref={choiceRef} tabIndex={-1}>
           <span className="magnet magnet--green agenda__magnet" aria-hidden="true" />
           <span>
             Dagordning: <strong className="agenda__name">{p.chosen.name}</strong>
@@ -98,7 +130,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   } else if (p.chosen?.kind === "new") {
     body = (
       <>
-        <p className="agenda__line">
+        <p className="agenda__line agenda__choice" ref={choiceRef} tabIndex={-1}>
           <span className="magnet magnet--green agenda__magnet" aria-hidden="true" />
           <span>
             Nytt dokument i formatet <strong>{formatName}</strong>
@@ -181,9 +213,10 @@ export function AgendaStepView(p: AgendaStepViewProps) {
         Dagordning
       </h2>
       <div className="agenda__body">{body}</div>
-      <p className="agenda__message hint" aria-live="polite">
-        {p.message ?? ""}
-      </p>
+      {p.message && <p className="agenda__message hint">{p.message}</p>}
+      <span className="visually-hidden" aria-live="polite">
+        {announcement(p, formatName)}
+      </span>
 
       {p.chosen?.kind === "agenda" && p.offerTranscript && (
         <label className="check" htmlFor={`${id}-transcript`}>
@@ -265,6 +298,9 @@ function AgendaStepOff({ formats, onChange, disabled }: AgendaStepProps) {
   );
 }
 
+/** GET agenda-candidates must answer within this long, or the step offers "Skapa nytt dokument". */
+const CANDIDATES_TIMEOUT_MS = 15_000;
+
 interface Candidates {
   folderId: string | null;
   accessible: boolean;
@@ -288,7 +324,8 @@ function AgendaStepOn({ orgId, formats, onChange, shareTranscript = false, start
     const seq = ++loadSeq.current;
     setView({ state: "loading" });
     try {
-      const res = await fetch(`/api/orgs/${orgId}/agenda-candidates`, { cache: "no-store" });
+      // A stalled Google call must not block Start: after the timeout the step falls back to "none".
+      const res = await fetch(`/api/orgs/${orgId}/agenda-candidates`, { cache: "no-store", signal: AbortSignal.timeout(CANDIDATES_TIMEOUT_MS) });
       const json = (await res.json().catch(() => null)) as (Candidates & { message?: string }) | null;
       if (seq !== loadSeq.current) return;
       if (!res.ok || !json) {
@@ -389,6 +426,7 @@ function AgendaStepOn({ orgId, formats, onChange, shareTranscript = false, start
       }}
       onFormatChange={setFormatValue}
       onTranscriptChange={setTranscriptInDoc}
+      focusChoiceOnMount={startWithNewDoc}
     />
   );
 }

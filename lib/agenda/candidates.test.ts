@@ -75,6 +75,11 @@ describe("rankCandidates", () => {
     expect(ranked.map((f) => f.id)).toEqual(["new", "old"]);
   });
 
+  it("a missing createdTime or modifiedTime does not throw; it ranks last", () => {
+    const ranked = rankCandidates([file("bad", "Utan datum", "", ""), file("ok", "Veckomöte", daysAgo(20), daysAgo(2))], NOW);
+    expect(ranked.map((f) => f.id)).toEqual(["ok", "bad"]);
+  });
+
   it("otherwise newer modifiedTime first, and the input is not mutated", () => {
     const input = [file("a", "A", daysAgo(20), daysAgo(4)), file("b", "B", daysAgo(20), daysAgo(2))];
     const ranked = rankCandidates(input, NOW);

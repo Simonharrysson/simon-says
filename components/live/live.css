@@ -942,8 +942,10 @@ a.doclink:hover {
   overflow-wrap: anywhere;
 }
 
-.agenda__message:empty {
-  display: none;
+.agenda__choice:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .agenda__format {

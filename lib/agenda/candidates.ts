@@ -60,7 +60,8 @@ export function rankCandidates<T extends DriveDoc>(files: T[], now: Date): T[] {
   const thisWeek = mondayOf(stockholmDate(now));
   const score = (f: T) => ({
     dated: today.test(f.name) ? 1 : 0,
-    week: mondayOf(stockholmDate(new Date(f.createdTime))) === thisWeek ? 1 : 0,
+    // A missing or bad createdTime is "not this week" (Intl throws on an Invalid Date).
+    week: Number.isFinite(Date.parse(f.createdTime)) && mondayOf(stockholmDate(new Date(f.createdTime))) === thisWeek ? 1 : 0,
     modified: Date.parse(f.modifiedTime) || 0,
   });
   return files
