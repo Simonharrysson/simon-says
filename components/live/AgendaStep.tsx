@@ -39,6 +39,19 @@ const defaultValue = (formats: AgendaFormatOption[]) => {
   return def ? optionValue(def) : "";
 };
 
+/** The select value for a kept override; the default when there is none (or it is gone). */
+function initialValue(
+  formats: AgendaFormatOption[],
+  keep: Pick<AgendaChoice, "formatProfileId" | "formatKind"> | null,
+): string {
+  const f = keep?.formatProfileId
+    ? formats.find((o) => o.id === keep.formatProfileId)
+    : keep?.formatKind
+      ? formats.find((o) => !o.id && o.kind === keep.formatKind)
+      : undefined;
+  return f ? optionValue(f) : defaultValue(formats);
+}
+
 /** The start body's format fields for a select value: nothing for the default (the server reads it). */
 function formatFields(formats: AgendaFormatOption[], value: string): Pick<AgendaChoice, "formatProfileId" | "formatKind"> {
   const f = formats.find((o) => optionValue(o) === value);
@@ -165,6 +178,9 @@ export function AgendaStepView(p: AgendaStepViewProps) {
           <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
             Välj annan
           </Button>
+          <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
+            Skapa nytt dokument
+          </Button>
         </div>
       </>
     );
@@ -265,6 +281,8 @@ export interface AgendaStepProps {
   shareTranscript?: boolean;
   /** Start on "new Doc", confirmed (after an agenda_* start error: "Skapa nytt dokument i stället"). Remount by key to apply. */
   startWithNewDoc?: boolean;
+  /** Pre-select this format override (kept across the remount after an agenda_* error). */
+  initialFormat?: Pick<AgendaChoice, "formatProfileId" | "formatKind"> | null;
   disabled?: boolean;
 }
 
@@ -274,8 +292,8 @@ export function AgendaStep(props: AgendaStepProps) {
 }
 
 /** No Picker configured: the fallback, as before A11 (a new Doc), confirmed from the start. Loads nothing from Google. */
-function AgendaStepOff({ formats, onChange, disabled }: AgendaStepProps) {
-  const [formatValue, setFormatValue] = useState(() => defaultValue(formats));
+function AgendaStepOff({ formats, onChange, disabled, initialFormat = null }: AgendaStepProps) {
+  const [formatValue, setFormatValue] = useState(() => initialValue(formats, initialFormat));
   useEffect(() => {
     onChange({ agendaDocId: null, agendaName: null, ...formatFields(formats, formatValue), transcriptInDoc: false, confirmed: true });
   }, [formats, formatValue, onChange]);
@@ -308,13 +326,21 @@ interface Candidates {
   suggestedId: string | null;
 }
 
-function AgendaStepOn({ orgId, formats, onChange, shareTranscript = false, startWithNewDoc = false, disabled }: AgendaStepProps) {
+function AgendaStepOn({
+  orgId,
+  formats,
+  onChange,
+  shareTranscript = false,
+  startWithNewDoc = false,
+  initialFormat = null,
+  disabled,
+}: AgendaStepProps) {
   const picker = usePicker();
   const [view, setView] = useState<AgendaViewState>({ state: "loading" });
   const [folderId, setFolderId] = useState<string | null>(null);
   const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(startWithNewDoc ? { kind: "new" } : null);
   const [agendaDocId, setAgendaDocId] = useState<string | null>(null);
-  const [formatValue, setFormatValue] = useState(() => defaultValue(formats));
+  const [formatValue, setFormatValue] = useState(() => initialValue(formats, initialFormat));
   const [transcriptInDoc, setTranscriptInDoc] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -390,7 +416,8 @@ function AgendaStepOn({ orgId, formats, onChange, shareTranscript = false, start
       const res = await fetch(`/api/orgs/${orgId}/meeting-folder`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ folderId: picked[0].id }),
+        // grantOnly: the start screen never changes the förening's folder (only FormatCard does).
+        body: JSON.stringify({ folderId: picked[0].id, grantOnly: true }),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string } | null;

@@ -95,6 +95,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [agenda, setAgenda] = useState<AgendaChoice | null>(null);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
+  /** The format override kept across that remount. */
+  const [keptFormat, setKeptFormat] = useState<Pick<AgendaChoice, "formatProfileId" | "formatKind"> | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("ok");
   const [partial, setPartial] = useState("");
   const [micLevel, setMicLevel] = useState<number | null>(null);
@@ -717,6 +719,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             pickerEnabled={props.pickerEnabled ?? false}
             shareTranscript={props.shareTranscript}
             startWithNewDoc={agendaKey > 0}
+            initialFormat={keptFormat}
             disabled={phase === "starting"}
             onChange={setAgenda}
           />
@@ -730,6 +733,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
               setStartError(null);
               setStartErrorText(null);
               setStartErrorCode(null);
+              setKeptFormat(agenda ? { formatProfileId: agenda.formatProfileId, formatKind: agenda.formatKind } : null);
               setAgenda(null);
               setAgendaKey((k) => k + 1);
             }

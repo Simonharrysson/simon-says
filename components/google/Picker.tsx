@@ -94,6 +94,8 @@ function loadPicker(): Promise<PickerNs> {
       });
     if (window.gapi) return withGapi();
     const script = document.createElement("script");
+    // A failed earlier attempt left its tag behind: replace it.
+    document.querySelectorAll(`script[src="${GAPI_SRC}"]`).forEach((el) => el.remove());
     script.src = GAPI_SRC;
     script.async = true;
     script.onload = withGapi;
@@ -153,17 +155,20 @@ export function usePicker(): {
     ]);
     setReady(true);
 
-    let view: DocsView;
+    const views: DocsView[] = [];
     if (opts.mode === "folder") {
-      view = new picker.DocsView(picker.ViewId.FOLDERS).setSelectFolderEnabled(true).setIncludeFolders(true);
+      views.push(new picker.DocsView(picker.ViewId.FOLDERS).setSelectFolderEnabled(true).setIncludeFolders(true));
     } else {
-      view = new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(opts.mode === "doc-or-pdf" ? `${DOC_MIME},${PDF_MIME}` : DOC_MIME);
-      if (opts.parentId) view = view.setParent(opts.parentId);
+      const mimes = opts.mode === "doc-or-pdf" ? `${DOC_MIME},${PDF_MIME}` : DOC_MIME;
+      // The folder first (when given), then all Docs: a Doc kept elsewhere can still be picked.
+      if (opts.parentId) views.push(new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(mimes).setParent(opts.parentId));
+      views.push(new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(mimes));
     }
 
     return new Promise<PickedFile[] | null>((resolve) => {
-      let builder = new picker.PickerBuilder()
-        .addView(view)
+      let builder = new picker.PickerBuilder();
+      for (const v of views) builder = builder.addView(v);
+      builder = builder
         .setOAuthToken(token.accessToken)
         .setDeveloperKey(token.developerKey)
         .setAppId(token.appId)

@@ -228,9 +228,9 @@ Google Picker (`usePicker()` in `components/google/Picker.tsx`, token from
 
 | State | Shows | Confirms |
 |---|---|---|
-| suggestion | blue magnet "Förslag: <Doc-namn>" · **Använd** · Välj annan | Använd, or a Picker pick |
+| suggestion | blue magnet "Förslag: <Doc-namn>" · **Använd** · Välj annan · Skapa nytt dokument | any of them |
 | none (no folder, or nothing new in it) | "Ingen dagordning – skapa nytt dokument i formatet <X>" · **Skapa nytt dokument** · Välj dagordning | either |
-| folder not reachable (folder set, this starter's grant has never opened it) | explanation · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
+| folder not reachable (folder set, this starter's grant has never opened it) | explanation · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` with `grantOnly: true`, so the start screen never changes the folder, admins included → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
 | picker off (`GOOGLE_PICKER_API_KEY`/`GOOGLE_PROJECT_NUMBER` unset) | green "Nytt dokument i formatet <X>" + "Google-väljaren är inte inställd än." | already confirmed (as before A11) |
 
 Start stays disabled until the choice is confirmed: a suggestion is never used on its own. Once
@@ -242,7 +242,8 @@ nothing, another standard format sends `formatKind`, a learned version `formatPr
 and request problems show as one polite line under the step (`aria-live`). Doc names are the
 förening's text: shown in the UI, never logged. A failed start with an `agenda_*` code shows the
 server's Swedish message with "Skapa nytt dokument i stället", which remounts the step on a
-confirmed new Doc.
+confirmed new Doc and keeps the format override. The doc Picker shows the meeting folder first
+(when set) and all Docs as a second view.
 
 `FormatCard`: admins get "Välj mötesmapp" / "Byt mötesmapp" (folder Picker →
 `POST /api/orgs/<id>/meeting-folder`), or "Google-väljaren är inte inställd än." with the Picker off.

@@ -109,7 +109,7 @@ export function ConsentStep({
         {agendaDoc ? (
           <li>
             Anteckningarna skrivs i den valda dagordningen
-            {agendaDoc.transcriptInDoc ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen läggs inte i dokumentet."}
+            {agendaDoc.transcriptInDoc ? ", med hela transkriptet i en egen flik." : ". Transkriptet läggs inte i dokumentet."}
           </li>
         ) : (
           <li>
