@@ -429,3 +429,11 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - So the format renderer (`deleteRuns`, `keepHumanNewline`) never takes the newline before a table nor the one at a table's end;
   `test/docsim.ts` throws on both, refuses an empty range, and merges paragraphs on a cross-paragraph delete (the first
   paragraph's style kept, as the A1/Task 9 heading measurement). v1 requests are unchanged.
+
+## Meeting formats — final review and prod (2026-11-26, controller)
+
+- Final review: 3 parallel opus reviewers (Doc writing / server+DB / learn+stadgar+UI), one fix wave (314eda1…ed2e9f8, a86ab93), one scoped re-review: all Important and must-fix findings fixed. Parked for later (ledger): one anchored non-list line flips bold mode for the meeting; a stray empty bullet can remain above a table after we remove our line; the losing start of a two-person race leaves its anchoring in the Doc; a mixed numbered+bulleted agenda merges the bulleted part into the last numbered item.
+- Migrations 0023–0027 in prod (0027 = per-org/per-Doc start guard; the code falls back to 0021 if it is missing).
+- Smoke calls on the real API: the learn schema, stadgar as Doc text and stadgar as a PDF document block with structured output are all accepted.
+- Prod v1 a86ab93: a third agenda Testmöte (replay of week two) filled the Doc correctly with the anchors-from-ranges path: carried tasks pre-filled, no duplicates of already-carried tasks, loose remarks in Anteckningar, Må-runda out, "avslutat".
+- Local paid checks cannot use oneShot's spend gate without the Supabase service key (Vercel "sensitive" vars don't pull); smoke calls go through buildOneShotRequest directly.
