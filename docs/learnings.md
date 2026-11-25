@@ -187,3 +187,15 @@ How to try the page against the fake (no credits): `npm run fake-el` in one term
 `ELEVENLABS_WS_URL=ws://localhost:8787/v1/speech-to-text/realtime npm run dev` in another (the override is ignored when
 `NODE_ENV` or `VERCEL_ENV` is production, and the token route then skips the real mint). `curl localhost:8787/drop`
 simulates a network drop; `npm run fake-el -- --session-limit 60` ends every session after a minute.
+
+## Name round (Task 11, 2026-11-25)
+
+- [ ] **Verify on 11-28:** does ElevenLabs' `infer_speaker_names` (Task 0) send `speaker_names` events we could use
+  before Claude? v1 uses Claude only (`lib/names/extract.ts`); if EL's names are good, use them first and Claude as
+  the fallback for labels it didn't name.
+- Real check (`npm run check-names`, synthetic fixture's first 2 min): 4/4 names right in 2.5–3 s, ~1 600 input /
+  155 output tokens, ≈ $0.01 per round. The tick gives the call 30 s.
+- Known people win over what was heard: with "Leila Nassar" in the list, "Leila Nasser" is returned as "Leila
+  Nassar" (one letter off, unique candidate). Intended (the list is the förening's spelling), but a wrong list entry
+  wins too — rename in the speaker list.
+

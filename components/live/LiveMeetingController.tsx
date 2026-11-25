@@ -6,12 +6,24 @@ import { MicCapture } from "@/lib/audio/capture";
 import { LiveStream, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
-import type { ConnectionState, LivePhase } from "./types";
+import type { NameRoundEntry } from "./NameRound";
+import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
 
 /** Notes count as stale when runs posted this long ago have not reached the Doc yet. */
 const STALE_AFTER_MS = 3 * 60_000;
 /** How often the page re-reads the meeting while the final pass runs elsewhere. */
 const ENDING_POLL_MS = 5000;
+/** How often the speaker list is re-read: often during the name round, calmly after. */
+const SPEAKERS_POLL_NAME_ROUND_MS = 4000;
+const SPEAKERS_POLL_MS = 15_000;
+
+/** GET/POST/PATCH /api/meetings/[id]/speakers answer this. */
+interface SpeakerView {
+  currentElSessionId: string | null;
+  nameRoundDone: boolean;
+  speakers: Speaker[];
+  people: PersonOption[];
+}
 
 export interface LiveMeetingInfo {
   id: string;
@@ -77,6 +89,12 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [superseded, setSuperseded] = useState(false);
   /** The stream's last refusal code (e.g. "not_starter": signed in as someone else). */
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [people, setPeople] = useState<PersonOption[]>([]);
+  const [currentSession, setCurrentSession] = useState<string | null>(null);
+  const [nameRoundBusy, setNameRoundBusy] = useState(false);
+  /** The name round is on (a new meeting, until "Klar", "Hoppa över" or the server ran it). */
+  const nameRoundOpen = useRef(false);
 
   const capture = useRef<MicCapture | null>(null);
   const stream = useRef<LiveStream | null>(null);
@@ -159,7 +177,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         case "connecting":
         case "live":
         case "reconnecting":
-          setPhase("live");
+          setPhase(nameRoundOpen.current ? "name-round" : "live");
           return;
         case "paused":
           setPhase("paused");
@@ -303,7 +321,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       setMeeting(m);
       // The address becomes the meeting's own, so a reload offers "Fortsätt mötet".
       window.history.replaceState(null, "", `/meetings/${m.id}`);
-      setPhase("live");
+      nameRoundOpen.current = true;
+      setPhase("name-round");
       await runStream(m, cap);
     })();
   };
@@ -355,6 +374,91 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       await runStream(resumed, cap);
     })();
   };
+
+  const closeNameRound = useCallback(() => {
+    nameRoundOpen.current = false;
+    setPhase((p) => (p === "name-round" ? "live" : p));
+  }, []);
+
+  const applyView = useCallback(
+    (v: SpeakerView) => {
+      setSpeakers(v.speakers);
+      setPeople(v.people);
+      setCurrentSession(v.currentElSessionId);
+      // The server ran the round on its own (about two minutes in): the list takes over.
+      if (nameRoundOpen.current && v.nameRoundDone) closeNameRound();
+    },
+    [closeNameRound],
+  );
+
+  const speakersUrl = meeting ? `/api/meetings/${meeting.id}/speakers` : null;
+  const loadSpeakers = useCallback(async () => {
+    if (!speakersUrl) return;
+    try {
+      const res = await fetch(speakersUrl, { cache: "no-store" });
+      if (res.ok) applyView((await res.json()) as SpeakerView);
+    } catch {
+      // Next poll.
+    }
+  }, [speakersUrl, applyView]);
+
+  // The speaker list follows the server while the meeting runs.
+  const polling = phase === "name-round" || phase === "live" || phase === "paused";
+  const pollMs = phase === "name-round" ? SPEAKERS_POLL_NAME_ROUND_MS : SPEAKERS_POLL_MS;
+  useEffect(() => {
+    if (!polling || !speakersUrl) return;
+    void loadSpeakers();
+    const t = setInterval(() => void loadSpeakers(), pollMs);
+    return () => clearInterval(t);
+  }, [polling, pollMs, speakersUrl, loadSpeakers]);
+
+  /** "Klar": read the names now (the server only fills voices nobody has named). */
+  const onNameRoundDone = () => {
+    if (!speakersUrl) return closeNameRound();
+    setNameRoundBusy(true);
+    void (async () => {
+      try {
+        const res = await fetch(speakersUrl, { method: "POST" });
+        if (res.ok) applyView((await res.json()) as SpeakerView);
+      } catch {
+        // The server's own round still runs; names can be set in the list.
+      }
+      setNameRoundBusy(false);
+      closeNameRound();
+    })();
+  };
+
+  /** Name a speaker: shown at once, saved, then the server's list. */
+  const onAssignSpeaker = (key: SpeakerKey, choice: SpeakerChoice) => {
+    if (!speakersUrl) return;
+    setSpeakers((all) =>
+      all.map((s) =>
+        s.elSessionId === key.elSessionId && s.speakerLabel === key.speakerLabel
+          ? { ...s, displayName: choice.displayName, needsConfirm: false }
+          : s,
+      ),
+    );
+    void (async () => {
+      try {
+        const res = await fetch(speakersUrl, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ elSessionId: key.elSessionId, speakerLabel: key.speakerLabel, ...choice }),
+        });
+        if (res.ok) {
+          applyView((await res.json()) as SpeakerView);
+          return;
+        }
+      } catch {
+        // fall through: show the server's list again
+      }
+      await loadSpeakers();
+    })();
+  };
+
+  const nameRound: NameRoundEntry[] = speakers
+    .filter((s) => !currentSession || s.elSessionId === currentSession)
+    .map((s) => ({ key: `${s.elSessionId}::${s.speakerLabel}`, label: s.label, name: s.displayName, needsConfirm: s.needsConfirm }));
 
   const onStop = () => {
     const s = stream.current;
@@ -469,10 +573,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       docPaused={docPaused}
       staleMinutes={staleMinutes}
       minutesLeft={minutesLeft}
-      // Name round and speaker names arrive with Task 11.
-      speakers={[]}
-      people={[]}
-      nameRound={[]}
+      speakers={speakers}
+      people={people}
+      nameRound={nameRound}
+      nameRoundBusy={nameRoundBusy}
       startError={startError}
       startErrorText={startErrorText}
       micLevel={micLevel}
@@ -493,8 +597,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       onResume={() => stream.current?.resume()}
       onStop={onStop}
       onReLogin={reLogin}
-      onAssignSpeaker={() => {}}
-      onNameRoundDone={() => {}}
+      onAssignSpeaker={onAssignSpeaker}
+      onNameRoundDone={onNameRoundDone}
+      onNameRoundSkip={closeNameRound}
       onResumeMeeting={onResumeMeeting}
       // An abandoned meeting is already ended (its notes are final); only a live one can be ended here.
       onEndUnfinished={meeting?.status === "live" ? onEndUnfinished : undefined}

@@ -196,7 +196,20 @@ then `POST /api/meetings` creates the Doc, the address becomes `/meetings/<id>` 
 `/meetings/<id>` (starter only; live or abandoned < 2 h → "Fortsätt mötet", which `POST /resume`s and starts
 the mic from that click; ending → polls until done; done → ended). `LiveMeetingController` maps `LiveStream`
 (`lib/audio/stream.ts`) onto `LiveMeeting`; heartbeat answers feed `minutesLeft`, `docPaused` and
-`lastTickOkAt`. Speakers and the name round stay empty until Task 11.
+`lastTickOkAt`.
+
+## Name round and speaker list (Task 11)
+
+A new meeting opens in `name-round`: "Säg 'Jag heter …' en i taget"; voices appear as "Talare n …" while the page
+polls `GET /api/meetings/<id>/speakers` (4 s, then 15 s while live). "Klar" `POST`s the same route: the server
+reads the names from the session's first minutes (Claude, `lib/names/`), fills `speaker_map` for voices nobody has
+named and adds new confident names to the förening's people; then the speaker list takes over. Without "Klar" the
+tick runs the round itself once the session has ~2 min of speech, and the page leaves the round when it sees
+`nameRoundDone`. Until a session's round has run the tick holds back its transcript lines, so they are written
+with names. After a reconnect the new session's voices show "Vem är detta?" (labels restart per session) with the
+meeting's names first as one-tap choices; its own round runs after ~2 min and fills only what is still open, unsure
+guesses as "Anna?" + Stämmer. `PATCH` (starter only) renames a voice (through merge aliases); it applies to
+transcript lines written afterwards and to the notes from the next tick.
 
 ## Dependencies
 

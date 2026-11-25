@@ -59,6 +59,8 @@ export interface LiveMeetingProps {
   onAssignSpeaker: (speaker: SpeakerKey, choice: SpeakerChoice) => void;
   onNameRoundDone: () => void;
   onNameRoundSkip?: () => void;
+  /** "Klar" was pressed and the names are being read. */
+  nameRoundBusy?: boolean;
   onResumeMeeting: () => void;
   onEndUnfinished?: () => void;
   onRetry: () => void;
@@ -181,7 +183,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
       ) : (
         <div className={`live__grid${nameRound ? " live__grid--single" : ""}`}>
           <div className="live__main">
-            {nameRound && <NameRound entries={p.nameRound} onDone={p.onNameRoundDone} onSkip={p.onNameRoundSkip} />}
+            {nameRound && <NameRound entries={p.nameRound} onDone={p.onNameRoundDone} onSkip={p.onNameRoundSkip} busy={p.nameRoundBusy} />}
             <DocLink
               url={p.docUrl}
               title={p.title}
