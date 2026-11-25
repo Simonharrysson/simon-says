@@ -5,7 +5,7 @@ import { LiveMeetingController } from "@/components/live/LiveMeetingController";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import { getEnv, pickerEnabled } from "@/lib/env";
-import { FORMAT_NAMES } from "@/lib/formats/standard";
+import { FORMAT_NAMES, formatLabel } from "@/lib/formats/standard";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -19,19 +19,23 @@ export const metadata: Metadata = { title: "Nytt möte", robots: { index: false,
  */
 const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
 
-/** The start screen's format choices: the förening's default first, the other standard formats, then its learned versions. */
+/**
+ * The start screen's format choices: the förening's default first, the other standard formats,
+ * then its custom versions (learned, or a Styrelseprotokoll with the stadgar's items: R3-I2).
+ */
 function startFormats(
   def: Awaited<ReturnType<typeof orgDefaultFormat>>,
   rows: Awaited<ReturnType<typeof listOrgFormats>>,
 ): AgendaFormatOption[] {
-  const out: AgendaFormatOption[] = [{ id: def.id, kind: def.profile.kind, name: FORMAT_NAMES[def.profile.kind], isDefault: true }];
+  const defRow = rows.find((r) => r.id === def.id);
+  const defName = defRow?.custom ? formatLabel(defRow) : FORMAT_NAMES[def.profile.kind];
+  const out: AgendaFormatOption[] = [{ id: def.id, kind: def.profile.kind, name: defName, isDefault: true }];
   for (const kind of STANDARD_KINDS) {
-    if (kind !== def.profile.kind) out.push({ id: null, kind, name: FORMAT_NAMES[kind], isDefault: false });
+    // A custom default (e.g. Styrelseprotokoll with stadgar) still leaves the bare standard choosable.
+    if (kind !== def.profile.kind || defRow?.custom) out.push({ id: null, kind, name: FORMAT_NAMES[kind], isDefault: false });
   }
   for (const r of rows) {
-    if (r.kind === "learned" && r.id !== def.id) {
-      out.push({ id: r.id, kind: r.kind, name: `${FORMAT_NAMES.learned} (${r.createdAt.slice(0, 10)})`, isDefault: false });
-    }
+    if (r.custom && r.id !== def.id) out.push({ id: r.id, kind: r.kind, name: formatLabel(r), isDefault: false });
   }
   return out;
 }

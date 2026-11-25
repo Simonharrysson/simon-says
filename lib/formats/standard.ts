@@ -77,3 +77,11 @@ export const FORMAT_NAMES: Record<FormatKind, string> = {
   enkel: "Enkel",
   learned: "Eget",
 };
+
+/** A saved format's display name: the standard name; "(date)" for learned and custom versions (R3-I2). */
+export function formatLabel(f: { kind: FormatKind; createdAt: string; custom: boolean; requiredCount: number }): string {
+  const date = f.createdAt.slice(0, 10);
+  if (f.kind === "learned") return `${FORMAT_NAMES.learned} (${date})`;
+  if (!f.custom) return FORMAT_NAMES[f.kind];
+  return f.requiredCount > 0 ? `${FORMAT_NAMES[f.kind]} med stadgarnas punkter (${date})` : `${FORMAT_NAMES[f.kind]}, anpassat (${date})`;
+}

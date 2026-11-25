@@ -77,7 +77,7 @@ export default async function OrgPage({
       formatCard={
         <FormatCard
           orgId={org.id}
-          current={{ kind: format.profile.kind, name: FORMAT_NAMES[format.profile.kind] }}
+          current={{ kind: format.profile.kind, name: FORMAT_NAMES[format.profile.kind], id: format.id, profile: format.profile }}
           isAdmin={role === "admin"}
           meetingFolder={{ id: org.meeting_folder_id ?? null }}
           formats={formats}

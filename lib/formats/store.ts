@@ -28,22 +28,33 @@ export async function formatById(id: string): Promise<FormatProfile | null> {
   return data ? parseProfile(data.profile) : null;
 }
 
+/**
+ * The org's saved formats, newest first. `custom`: a version that is not a standard constant (a
+ * learned format, or a Styrelseprotokoll with the stadgar's items, R3-I2) — offered by id, since
+ * choosing the bare standard would lose it. `requiredCount`: how many stadgar items it carries.
+ */
 export async function listOrgFormats(
   db: SupabaseClient,
   orgId: string,
-): Promise<{ id: string; kind: FormatKind; isDefault: boolean; createdAt: string }[]> {
+): Promise<{ id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom: boolean; requiredCount: number }[]> {
   const { data, error } = await db
     .from("format_profiles")
-    .select("id, kind, is_default, created_at")
+    .select("id, kind, is_default, created_at, profile")
     .eq("org_id", orgId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listOrgFormats: ${error.message}`);
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    kind: r.kind as FormatKind,
-    isDefault: r.is_default as boolean,
-    createdAt: r.created_at as string,
-  }));
+  return (data ?? []).map((r) => {
+    const kind = r.kind as FormatKind;
+    const profile = parseProfile(r.profile);
+    return {
+      id: r.id as string,
+      kind,
+      isDefault: r.is_default as boolean,
+      createdAt: r.created_at as string,
+      custom: kind === "learned" || (profile !== null && kind in STANDARD && canonical(profile) !== canonical(STANDARD[kind as keyof typeof STANDARD])),
+      requiredCount: profile?.requiredItems.length ?? 0,
+    };
+  });
 }
 
 /** Admin only (the DB function checks): makes a new version of a standard format the default. */

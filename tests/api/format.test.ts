@@ -62,6 +62,11 @@ describe.skipIf(!hasLocalSupabase)("POST /api/orgs/[id]/format", () => {
     const list = await listOrgFormats(admin.db, orgId);
     expect(list).toHaveLength(2);
     expect(list.filter((f) => f.isDefault)).toHaveLength(1);
+    // Standard rows are not custom (R3-I2: only custom versions are offered by id).
+    expect(list.map((f) => [f.kind, f.custom, f.requiredCount])).toEqual([
+      ["styrelseprotokoll", false, 0],
+      ["veckomote", false, 0],
+    ]);
 
     expect((await call(orgId, { profileId: id })).status).toBe(200);
     expect((await orgDefaultFormat(admin.db, orgId)).profile).toEqual(VECKOMOTE);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Banner } from "@/components/ui/Banner";
@@ -10,7 +10,7 @@ import type { ItemRole } from "@/lib/db/types";
 import { editorToProfile, profileToEditor, ROLE_NAMES, type EditorItem, type EditorState } from "@/lib/formats/editor";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
-import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
+import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 
 // Learning a förening's format (Task B2): pick a template or 1–5 old minutes in the Google
 // Picker, let Simon Says read their structure (POST …/formats/propose), then edit and approve
@@ -65,6 +65,9 @@ export function FormatPreview({ profile }: { profile: FormatProfile }) {
   );
 }
 
+/** Focus the element with this id after React has rendered the change. */
+const focusSoon = (id: string) => requestAnimationFrame(() => document.getElementById(id)?.focus());
+
 /** Editable list of short texts (table fields, signatures, required items). */
 function TextList({
   id,
@@ -95,13 +98,22 @@ function TextList({
             maxLength={80}
             onChange={(e) => onChange(values.map((x, j) => (j === i ? e.target.value : x)))}
           />
-          <Button variant="danger-ghost" size="sm" onClick={() => onChange(values.filter((_, j) => j !== i))}>
+          <Button
+            variant="danger-ghost"
+            size="sm"
+            aria-label={`Ta bort ${label.toLowerCase()} ${i + 1}`}
+            onClick={() => {
+              onChange(values.filter((_, j) => j !== i));
+              // Focus stays in the list: the next row, else the previous one, else "add".
+              focusSoon(values.length > 1 ? `${id}-${Math.min(i, values.length - 2)}` : `${id}-add`);
+            }}
+          >
             Ta bort
           </Button>
         </div>
       ))}
       <div>
-        <Button variant="ghost" size="sm" onClick={() => onChange([...values, ""])}>
+        <Button id={`${id}-add`} variant="ghost" size="sm" onClick={() => onChange([...values, ""])}>
           {addLabel}
         </Button>
       </div>
@@ -122,6 +134,8 @@ export interface FormatEditorProps {
 
 export function FormatEditor({ orgId, proposal, approveKind = "learned", showRequired = false, onCancel, onApproved }: FormatEditorProps) {
   const router = useRouter();
+  const uid = useId();
+  const itemId = (i: number, part: "label" | "up" | "down") => `${uid}-item-${i}-${part}`;
   const [state, setState] = useState<EditorState>(() => profileToEditor(proposal.profile));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -133,14 +147,23 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
   const set = (patch: Partial<EditorState>) => setState((s) => ({ ...s, ...patch }));
   const setItem = (i: number, patch: Partial<EditorItem>) =>
     setState((s) => ({ ...s, items: s.items.map((it, j) => (j === i ? { ...it, ...patch } : it)) }));
-  const moveItem = (i: number, by: number) =>
+  const moveItem = (i: number, by: number) => {
+    const j = i + by;
+    if (j < 0 || j >= state.items.length) return;
     setState((s) => {
       const items = [...s.items];
-      const j = i + by;
-      if (j < 0 || j >= items.length) return s;
       [items[i], items[j]] = [items[j], items[i]];
       return { ...s, items };
     });
+    // Focus follows the item; at the end of the list the other arrow (this one is disabled now).
+    const atEdge = j === 0 || j === state.items.length - 1;
+    focusSoon(itemId(j, atEdge ? (by < 0 ? "down" : "up") : by < 0 ? "up" : "down"));
+  };
+  const removeItem = (i: number) => {
+    set({ items: state.items.filter((_, j) => j !== i) });
+    focusSoon(state.items.length > 1 ? itemId(Math.min(i, state.items.length - 2), "label") : `${uid}-add-item`);
+  };
+  const hasCheckin = state.items.some((it) => it.role === "checkin");
 
   const approve = async () => {
     if (!result.ok) return;
@@ -204,15 +227,21 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
               value={state.agendaHeading}
               maxLength={80}
               placeholder="Agenda"
+              aria-describedby="fe-agenda-hint"
               onChange={(e) => set({ agendaHeading: e.target.value })}
             />
+            {/* The skeleton always writes one (the scan finds heading items only below it). */}
+            <p id="fe-agenda-hint" className="hint">
+              Tomt fält ger rubriken ”Agenda”.
+            </p>
           </div>
           <fieldset className="format-editor__group">
             <legend className="label">Punkter varje möte</legend>
-            <p className="hint">Har ni ingen Må-runda? Ta bort den punkten.</p>
+            {hasCheckin && <p className="hint">Har ni ingen Må-runda? Ta bort den punkten.</p>}
             {state.items.map((item, i) => (
               <div key={i} className="format-editor__item">
                 <input
+                  id={itemId(i, "label")}
                   className="input"
                   aria-label={`Punkt ${i + 1}`}
                   value={item.label}
@@ -235,10 +264,11 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
                   <input type="checkbox" checked={item.last} onChange={(e) => setItem(i, { last: e.target.checked })} /> Sist
                 </label>
                 <div className="cluster">
-                  <Button variant="ghost" size="sm" aria-label={`Flytta upp punkt ${i + 1}`} disabled={i === 0} onClick={() => moveItem(i, -1)}>
+                  <Button id={itemId(i, "up")} variant="ghost" size="sm" aria-label={`Flytta upp punkt ${i + 1}`} disabled={i === 0} onClick={() => moveItem(i, -1)}>
                     ↑
                   </Button>
                   <Button
+                    id={itemId(i, "down")}
                     variant="ghost"
                     size="sm"
                     aria-label={`Flytta ner punkt ${i + 1}`}
@@ -247,14 +277,14 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
                   >
                     ↓
                   </Button>
-                  <Button variant="danger-ghost" size="sm" onClick={() => set({ items: state.items.filter((_, j) => j !== i) })}>
+                  <Button variant="danger-ghost" size="sm" aria-label={`Ta bort punkt ${i + 1}`} onClick={() => removeItem(i)}>
                     Ta bort
                   </Button>
                 </div>
               </div>
             ))}
             <div>
-              <Button variant="ghost" size="sm" onClick={() => set({ items: [...state.items, { label: "", role: "topic", last: false }] })}>
+              <Button id={`${uid}-add-item`} variant="ghost" size="sm" onClick={() => set({ items: [...state.items, { label: "", role: "topic", last: false }] })}>
                 Lägg till punkt
               </Button>
             </div>
@@ -366,6 +396,11 @@ const COPY = {
     busy: "Simon Says läser strukturen …",
     hint: "Välj en mall eller 1–5 gamla protokoll. Simon Says läser bara strukturen, aldrig innehållet.",
   },
+  customize: {
+    start: "Anpassa format",
+    busy: "",
+    hint: "Ändra det format ni använder nu, till exempel ta bort Må-runda eller lägga till en egen punkt.",
+  },
   stadgar: {
     start: "Lägg in punkter från stadgarna",
     busy: "Simon Says läser stadgarna …",
@@ -384,19 +419,29 @@ export function LearnFormatView({
 }: {
   orgId: string;
   view: LearnPhase;
-  variant?: "learn" | "stadgar";
+  variant?: "learn" | "stadgar" | "customize";
   onStart: () => void;
   onCancel: () => void;
   onApproved?: () => void;
 }) {
   const copy = COPY[variant];
+  const startRef = useRef<HTMLButtonElement>(null);
+  const wasEditor = useRef(false);
+  // Back from the editor (approved or cancelled): focus returns to the button that opened it.
+  useEffect(() => {
+    if (view.phase === "editor") wasEditor.current = true;
+    else if (wasEditor.current) {
+      wasEditor.current = false;
+      startRef.current?.focus();
+    }
+  }, [view.phase]);
   if (view.phase === "editor") {
     return (
       <FormatEditor
         orgId={orgId}
         proposal={view.proposal}
-        approveKind={variant === "stadgar" ? "styrelseprotokoll" : "learned"}
-        showRequired={variant === "stadgar"}
+        approveKind={variant === "stadgar" || (variant === "customize" && view.proposal.profile.kind === "styrelseprotokoll") ? "styrelseprotokoll" : "learned"}
+        showRequired={variant === "stadgar" || view.proposal.profile.requiredItems.length > 0}
         onCancel={onCancel}
         onApproved={onApproved}
       />
@@ -413,7 +458,7 @@ export function LearnFormatView({
     <div className="stack stack--2">
       {view.phase === "error" && <Banner tone="danger">{view.message}</Banner>}
       <div>
-        <Button variant="secondary" onClick={onStart}>
+        <Button ref={startRef} variant="secondary" onClick={onStart}>
           {view.phase === "error" ? "Försök igen" : copy.start}
         </Button>
       </div>
@@ -469,8 +514,32 @@ export function LearnFormat({ orgId }: { orgId: string }) {
   );
 }
 
-/** Admins: Styrelseprotokoll with the stadgar's required items (C1): Picker → read → editor → approve. */
-export function StadgarFormat({ orgId }: { orgId: string }) {
+/**
+ * Admins: adjust the current default directly (R3-I3), e.g. a Veckomöte without Må-runda. Opens
+ * the editor on it (Enkel has no agenda: on the Veckomöte); approved as a learned format, or as a
+ * Styrelseprotokoll when it is one (its stadgar items kept).
+ */
+export function CustomizeFormat({ orgId, current }: { orgId: string; current: FormatProfile }) {
+  const [view, setView] = useState<LearnPhase>({ phase: "idle" });
+  const base = current.kind === "enkel" ? VECKOMOTE : current;
+  return (
+    <LearnFormatView
+      orgId={orgId}
+      view={view}
+      variant="customize"
+      onStart={() => setView({ phase: "editor", proposal: { profile: base } })}
+      onCancel={() => setView({ phase: "idle" })}
+      onApproved={() => setView({ phase: "idle" })}
+    />
+  );
+}
+
+/**
+ * Admins: Styrelseprotokoll with the stadgar's required items (C1): Picker → read → editor →
+ * approve. Starts from the current default when it is a learned format or a Styrelseprotokoll
+ * (its own items kept, R3-I3), else from the standard Styrelseprotokoll.
+ */
+export function StadgarFormat({ orgId, current }: { orgId: string; current?: FormatProfile }) {
   const picker = usePicker();
   const [view, setView] = useState<LearnPhase>({ phase: "idle" });
 
@@ -498,7 +567,10 @@ export function StadgarFormat({ orgId }: { orgId: string }) {
       setView({
         phase: "editor",
         proposal: {
-          profile: { ...STYRELSEPROTOKOLL, requiredItems: json.requiredItems },
+          profile: {
+            ...(current && (current.kind === "learned" || current.kind === "styrelseprotokoll") ? current : STYRELSEPROTOKOLL),
+            requiredItems: json.requiredItems,
+          },
           explanation: json.requiredItems.length
             ? `Stadgarna kräver ${json.requiredItems.length} punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.`
             : "Simon Says hittade inga punkter som stadgarna kräver på styrelsemöten. Du kan lägga till dem själv nedan.",

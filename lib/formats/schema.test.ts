@@ -85,3 +85,14 @@ describe("FormatProfileSchema", () => {
     expect(parseProfile(null)).toBeNull();
   });
 });
+
+describe("formatLabel (final review R3-I2)", () => {
+  it("names standard, learned and custom versions", async () => {
+    const { formatLabel } = await import("./standard");
+    const at = "2026-11-25T10:00:00Z";
+    expect(formatLabel({ kind: "styrelseprotokoll", createdAt: at, custom: false, requiredCount: 0 })).toBe("Styrelseprotokoll");
+    expect(formatLabel({ kind: "styrelseprotokoll", createdAt: at, custom: true, requiredCount: 3 })).toBe("Styrelseprotokoll med stadgarnas punkter (2026-11-25)");
+    expect(formatLabel({ kind: "veckomote", createdAt: at, custom: true, requiredCount: 0 })).toBe("Veckomöte, anpassat (2026-11-25)");
+    expect(formatLabel({ kind: "learned", createdAt: at, custom: true, requiredCount: 0 })).toBe("Eget (2026-11-25)");
+  });
+});

@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from "react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { cx } from "./cx";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-quiet" | "danger-ghost";
@@ -47,7 +47,7 @@ export function Button({
   children,
   type = "button",
   ...rest
-}: Common & ButtonHTMLAttributes<HTMLButtonElement>) {
+}: Common & ButtonHTMLAttributes<HTMLButtonElement> & { ref?: Ref<HTMLButtonElement> }) {
   return (
     <button
       type={type}
