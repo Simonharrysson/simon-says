@@ -11,8 +11,8 @@ Built for student and volunteer associations in Linköping. Free to use. The UI 
 Production: https://simonsays.harrysson.co
 
 **Status:** v1, in testing. The notes engine, the Google Doc writer and the end-to-end "Testmöte"
-(a scripted fictional meeting) run on production. Live transcription with ElevenLabs is
-verified on 2026-11-28. Not yet a finished product.
+(a scripted fictional meeting) run on production. Live transcription with ElevenLabs is built against a simulated
+server and gets its first real-audio verification in late November 2026. Not yet a finished product.
 
 ![A Testmöte filling a Google Doc](docs/media/testmote.gif)
 
@@ -105,6 +105,7 @@ npm run typecheck && npm test
 
 The operator-only "Testmöte" button on an org page replays a scripted fictional meeting through the real
 pipeline into a Doc, with no microphone needed.
+The live page can be exercised without ElevenLabs via the fake server: `npm run fake-el`.
 
 ## Environment variables
 
