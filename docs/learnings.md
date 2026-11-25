@@ -348,4 +348,4 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   block); Närvarande in the empty cell; one listId, every row owned, re-render 0 requests.
 - `fallback testmote` (A13's shape: own items, "Kommande event" with two sub-items, Datum + Sekreterare pre-filled, transcript tab):
   sub-items `list1/lvl1` a./b. in the items' list, no tab left in any text, read as the item's humanText; the pre-filled Datum and
-  Sekreterare untouched by anchoring (Tid filled); transcript tab created; render under "Kommande event" went (b) (lvl1 c.–f.).
+  Sekreterare untouched by anchoring (Tid filled); transcript tab created; render under "Kommande event" went (b): our lines carry no "– " prefix (joined the sub-item list).
