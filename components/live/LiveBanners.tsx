@@ -11,6 +11,8 @@ export interface LiveBannersProps {
   connection: ConnectionState;
   /** Minutes left before a cap stops the meeting, from 15 min before. */
   minutesLeft?: number | null;
+  /** While reconnecting: seconds until the next attempt (shown when ≥ 5 s, R2). */
+  retryInSeconds?: number | null;
   /** The cap behind `minutesLeft` (heartbeat `reason`): meeting_length, org_month, global_day… */
   limitReason?: string | null;
   /** Why the stream stopped (state 'error'): token, mic…, refused. */
@@ -26,7 +28,17 @@ export interface LiveBannersProps {
  * waits behind "Visa 1 varning till". Red only when the user must act (stopped, Doc paused,
  * time running out); things that fix themselves are ink.
  */
-export function LiveBanners({ banners, connection, minutesLeft, limitReason, streamError, refusal, onReLogin, onRetry }: LiveBannersProps) {
+export function LiveBanners({
+  banners,
+  connection,
+  minutesLeft,
+  limitReason,
+  retryInSeconds,
+  streamError,
+  refusal,
+  onReLogin,
+  onRetry,
+}: LiveBannersProps) {
   if (banners.length === 0) return null;
   const connected = connection === "ok";
 
@@ -89,7 +101,12 @@ export function LiveBanners({ banners, connection, minutesLeft, limitReason, str
         );
       case "connection":
         return (
-          <Banner key="conn" tone="warning" icon={<IconWifiOff />} title="Ljudet väntar i webbläsaren">
+          <Banner
+            key="conn"
+            tone="warning"
+            icon={<IconWifiOff />}
+            title={retryInSeconds != null && retryInSeconds >= 5 ? `Ansluter igen om ${retryInSeconds} s` : "Ljudet väntar i webbläsaren"}
+          >
             {connection === "offline"
               ? "Ingen internetanslutning. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när nätet är tillbaka. Inget sparas på datorn."
               : "Anslutningen bröts. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när vi är tillbaka. Du behöver inte göra något."}

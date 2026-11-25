@@ -8,6 +8,12 @@ import type { TranscriptLine } from "@/lib/docs/transcript";
 import type { UpdateNotesInput, UpdateNotesResult } from "@/lib/notes/engine";
 import type { NotesItem } from "@/lib/notes/schema";
 
+// after() needs a Next request scope: record the scheduled work and run it in the test.
+const scheduled = vi.hoisted(() => [] as (() => unknown)[]);
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (fn: () => unknown) => void scheduled.push(fn),
+}));
 const current = vi.hoisted(() => ({ db: null as import("@supabase/supabase-js").SupabaseClient | null }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current.db }));
 
@@ -653,9 +659,16 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect((await endCall(id)).status).toBe(404);
     current.db = starter.db;
     expect((await endCall("nope")).status).toBe(404);
+    scheduled.length = 0;
+    // R1: answers at once with the meeting claimed as ending; the final pass runs after the response.
     const res = await endCall(id);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ result: "ended" });
+    expect(await res.json()).toEqual({ result: "ending" });
+    expect((await read(id)).status).toBe("ending");
+    expect(scheduled).toHaveLength(1);
+    expect(await (await endCall(id)).json()).toEqual({ result: "noop" }); // already ending
+    expect(scheduled).toHaveLength(1);
+    await scheduled[0]();
     expect((await read(id)).status).toBe("done");
     expect(await (await endCall(id)).json()).toEqual({ result: "noop" });
   });

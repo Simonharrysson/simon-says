@@ -5,7 +5,7 @@ import { isUuid } from "@/lib/db/ids";
 import { claimElSession, releaseUnmintedElSession, type ClaimStatus } from "@/lib/db/usage";
 import { devWsOverride, mintToken, realtimeWsUrl } from "@/lib/elevenlabs/token";
 import { getEnv } from "@/lib/env";
-import { MAX_MINTS_PER_MEETING } from "@/lib/limits";
+import { MAX_MINTS_PER_MEETING, mintSpacingSeconds } from "@/lib/limits";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -91,12 +91,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (claim.status === "reconnect_limit") {
       // Two causes: the 5 s spacing (wait and retry) or the meeting's mint cap (no retry can
       // succeed: start a new meeting). Tell the page which.
-      const { count } = await supabaseAdmin()
+      const { data: rows } = await supabaseAdmin()
         .from("el_sessions")
-        .select("id", { count: "exact", head: true })
+        .select("kind, started_at")
         .eq("meeting_id", meeting.id)
-        .eq("kind", "live");
-      if ((count ?? 0) >= MAX_MINTS_PER_MEETING) return fail("mint_cap", 429);
+        .in("kind", ["live", "unminted"]);
+      const live = (rows ?? []).filter((r) => r.kind === "live").length;
+      if (live >= MAX_MINTS_PER_MEETING) return fail("mint_cap", 429);
+      // The spacing grows with the mints (0022): tell the page how long to wait.
+      const last = Math.max(0, ...(rows ?? []).map((r) => Date.parse(r.started_at as string)));
+      const retryAfter = Math.max(1, Math.ceil(mintSpacingSeconds(live) - (Date.now() - last) / 1000));
+      return NextResponse.json({ error: "reconnect_limit", retryAfter }, { status: 429, headers: noStore });
     }
     return fail(error, status);
   }

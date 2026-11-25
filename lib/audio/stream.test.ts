@@ -115,7 +115,7 @@ function makeFetch() {
   return { fetchFn, replies, calls, of: (path: string) => calls.filter((c) => c.path === path) };
 }
 
-function setup(opts: { initialClosingSessionId?: string | null; log?: (m: string) => void } = {}) {
+function setup(opts: { initialClosingSessionId?: string | null; log?: (m: string) => void; shortSessionMs?: number } = {}) {
   const f = makeFetch();
   const audio = new FakeAudio();
   const sockets: FakeSocket[] = [];
@@ -131,6 +131,8 @@ function setup(opts: { initialClosingSessionId?: string | null; log?: (m: string
     },
     initialClosingSessionId: opts.initialClosingSessionId,
     log: opts.log,
+    // Most tests drop sockets at once; the R2 short-session wait has its own tests.
+    shortSessionMs: opts.shortSessionMs ?? 0,
   });
   stream.on("state", (s) => states.push(s));
   return { stream, audio, sockets, states, ...f };
@@ -920,6 +922,68 @@ describe("LiveStream", () => {
       expect(posted).toEqual([expect.objectContaining({ segmentIndex: 3, speaker: "unknown", text: "Sista meningen" })]);
       const init = t.fetchFn.mock.calls.find((c) => String(c[0]).endsWith("/segments"))![1] as RequestInit;
       expect(init.keepalive).toBe(true);
+    });
+  });
+
+  describe("residual fixes (R2, R3)", () => {
+    it("R2: a session that dies within a minute → next attempt after 30 s, then 60 s; a long one resets", async () => {
+      const t = setup({ shortSessionMs: 60_000 });
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      t.sockets[0].drop(); // lived ~0 s
+      expect(t.stream.state).toMatchObject({ state: "reconnecting" });
+      expect(t.stream.state.retryAt! - Date.now()).toBe(30_000);
+      await vi.advanceTimersByTimeAsync(29_000);
+      await settle();
+      expect(t.sockets).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1000);
+      await settle();
+      expect(t.sockets).toHaveLength(2);
+      t.sockets[1].open();
+      t.sockets[1].drop(); // short again → 60 s
+      expect(t.stream.state.retryAt! - Date.now()).toBe(60_000);
+      await vi.advanceTimersByTimeAsync(60_000);
+      await settle();
+      expect(t.sockets).toHaveLength(3);
+      t.sockets[2].open();
+      await vi.advanceTimersByTimeAsync(61_000); // lived over a minute
+      t.sockets[2].drop();
+      expect(t.stream.state.retryAt! - Date.now()).toBe(1000); // normal backoff again
+    });
+
+    it("R2: 429 reconnect_limit with retryAfter waits exactly that long, without counting as a failure", async () => {
+      const t = setup();
+      t.replies.token.push(json(429, { error: "reconnect_limit", retryAfter: 40 }), json(429, { error: "reconnect_limit", retryAfter: 80 }));
+      await t.stream.start();
+      await settle();
+      expect(t.stream.state).toMatchObject({ state: "reconnecting" });
+      expect(t.stream.state.retryAt! - Date.now()).toBe(40_000);
+      await vi.advanceTimersByTimeAsync(40_000);
+      await settle();
+      expect(t.of("token")).toHaveLength(2);
+      expect(t.stream.state.retryAt! - Date.now()).toBe(80_000);
+      await vi.advanceTimersByTimeAsync(80_000);
+      await settle();
+      expect(t.sockets).toHaveLength(1);
+      expect(t.stream.state.state).not.toBe("error");
+    });
+
+    it("R3: signed out while draining → drain stops at once instead of looping; signedOut says why", async () => {
+      const t = setup();
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      t.sockets[0].emit(diarized(0, [["Hej", "speaker_0"]]));
+      t.replies.segments.push(json(401, { error: "unauthenticated" }));
+      const left = t.stream.drain(STOP_FLUSH_MAX_MS);
+      await settle();
+      expect(await left).toBe(1);
+      expect(t.of("segments")).toHaveLength(1);
+      expect(t.stream.signedOut).toBe(true);
+      // After signing in again the next drain posts it.
+      expect(await t.stream.drain(5000)).toBe(0);
+      expect(t.stream.signedOut).toBe(false);
     });
   });
 });

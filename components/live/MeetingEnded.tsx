@@ -19,6 +19,9 @@ export function MeetingEnded({
   pendingRuns,
   endFailed,
   onRetryEnd,
+  signedOutUnsent,
+  onReLogin,
+  onEndWithoutUnsent,
   focusOnMount,
 }: {
   docUrl: string | null;
@@ -36,6 +39,10 @@ export function MeetingEnded({
   /** POST /end failed: offer a retry instead of leaving the page (C6). */
   endFailed?: boolean;
   onRetryEnd?: () => void;
+  /** Signed out after Avsluta with lines unsent (R3): they need a new sign-in to be saved. */
+  signedOutUnsent?: number | null;
+  onReLogin?: () => void;
+  onEndWithoutUnsent?: () => void;
   /** Move focus to the heading (after Avsluta, so screen readers hear the new state). */
   focusOnMount?: boolean;
 }) {
@@ -61,6 +68,38 @@ export function MeetingEnded({
           Det som sades sist har inte nått servern än. Vi försöker igen hela tiden; låt fliken vara öppen tills det här försvinner.
         </Banner>
       )}
+      {signedOutUnsent != null && (
+        <Banner
+          tone="danger"
+          title={
+            signedOutUnsent > 0
+              ? `Du är utloggad – ${signedOutUnsent} ${signedOutUnsent === 1 ? "rad är" : "rader är"} inte sparade`
+              : "Du är utloggad – mötet kunde inte avslutas"
+          }
+          action={
+            <span className="cluster">
+              {onReLogin && (
+                <Button variant="primary" onClick={onReLogin}>
+                  Logga in igen
+                </Button>
+              )}
+              {onRetryEnd && (
+                <Button icon={<IconRefresh size={18} />} onClick={onRetryEnd}>
+                  Försök igen
+                </Button>
+              )}
+              {onEndWithoutUnsent && signedOutUnsent > 0 && (
+                <Button variant="ghost" onClick={onEndWithoutUnsent}>
+                  Avsluta utan dem
+                </Button>
+              )}
+            </span>
+          }
+        >
+          Logga in igen (öppnas i en ny flik) och tryck sedan Försök igen, så sparas resten och mötet avslutas. Stänger du
+          fliken nu avslutas mötet ändå inom en kvart, men utan de raderna.
+        </Banner>
+      )}
       {endFailed && (
         <Banner
           tone="danger"
@@ -80,7 +119,7 @@ export function MeetingEnded({
         {autoStopped && `${autoStopText(stopReason)} `}
         {finalizing
           ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna får en sista genomgång, det tar ungefär en minut.${
-              waiting || endFailed ? "" : " Du kan stänga fliken, det blir klart ändå."
+              waiting || endFailed || signedOutUnsent != null ? "" : " Du kan stänga fliken, det blir klart ändå."
             }`
           : shareFailed && shareFailed > 0
             ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna är färdiga.${shared}`

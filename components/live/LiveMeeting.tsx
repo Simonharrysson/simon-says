@@ -53,6 +53,11 @@ export interface LiveMeetingProps {
   /** After Avsluta: POST /end failed. */
   endFailed?: boolean;
   onRetryEnd?: () => void;
+  /** After Avsluta while signed out: lines that need a new sign-in (null: not the case). */
+  signedOutUnsent?: number | null;
+  onEndWithoutUnsent?: () => void;
+  /** While reconnecting: seconds until the next attempt. */
+  retryInSeconds?: number | null;
   speakers: Speaker[];
   people: PersonOption[];
   nameRound: NameRoundEntry[];
@@ -181,6 +186,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
         connection={p.connection}
         minutesLeft={p.minutesLeft}
         limitReason={p.limitReason}
+        retryInSeconds={p.retryInSeconds}
         streamError={p.streamError}
         refusal={p.refusal}
         onReLogin={p.onReLogin}
@@ -214,6 +220,9 @@ export function LiveMeeting(p: LiveMeetingProps) {
           pendingRuns={p.pendingRuns}
           endFailed={p.endFailed}
           onRetryEnd={p.onRetryEnd}
+          signedOutUnsent={p.signedOutUnsent}
+          onReLogin={p.onReLogin}
+          onEndWithoutUnsent={p.onEndWithoutUnsent}
           focusOnMount
         />
       ) : (

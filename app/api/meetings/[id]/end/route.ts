@@ -1,20 +1,22 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
-import { endMeeting } from "@/lib/meetings/tick";
+import { claimEnd, END_BUDGET_MS, finishMeeting } from "@/lib/meetings/tick";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-// The final notes pass (Claude + Docs) runs inside this request.
+// The final notes pass (Claude + Docs) runs after the response, in after().
 export const maxDuration = 300;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status, headers: noStore });
 
 /**
- * End a meeting: close its ElevenLabs sessions, run the final notes pass, header
- * `Avslutat HH:mm`, status done. The starter or an org admin. Works under KILL_SWITCH (no
- * Claude then). Ending an ended meeting is a no-op: `{ result: "noop" }`.
+ * End a meeting. The starter or an org admin. Atomically live → ending and answers at once
+ * `{ result: "ending" }`; the final pass (close ElevenLabs sessions, final notes, header
+ * `Avslutat HH:mm`, status done) runs after the response, and the cron retries it if this
+ * function dies. The page polls the meeting until done. Works under KILL_SWITCH (no Claude then).
+ * A meeting that is already ending or ended: `{ result: "noop" }`.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,7 +39,17 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     return fail("forbidden", 403);
   }
 
-  const result = await endMeeting(meeting.id);
-  if (result === "not_found") return fail("not_found", 404);
-  return NextResponse.json({ result }, { headers: noStore });
+  const deadlineAt = new Date(Date.now() + END_BUDGET_MS);
+  const claim = await claimEnd(meeting.id);
+  if (claim === "not_found") return fail("not_found", 404);
+  if (claim === "claimed") {
+    after(() =>
+      finishMeeting(meeting.id, { deadlineAt })
+        .then((r) => {
+          if (r !== "done") console.warn(`end ${meeting.id}: final pass ${r}; the cron retries`);
+        })
+        .catch((e) => console.error(`end ${meeting.id}: final pass failed: ${(e as Error).message}`)),
+    );
+  }
+  return NextResponse.json({ result: claim === "claimed" ? "ending" : "noop" }, { headers: noStore });
 }

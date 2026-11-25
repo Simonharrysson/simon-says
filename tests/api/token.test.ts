@@ -394,13 +394,51 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     const first = await (await callToken(id)).json();
     const res = await callToken(id, { closingSessionId: first.sessionId });
     expect(res.status).toBe(429);
-    expect(await res.json()).toEqual({ error: "reconnect_limit" });
+    const body = await res.json();
+    expect(body.error).toBe("reconnect_limit");
+    expect(body.retryAfter).toBeGreaterThanOrEqual(1);
+    expect(body.retryAfter).toBeLessThanOrEqual(5);
     expect(mint.fn).toHaveBeenCalledTimes(1);
     expect((await sessionRow(first.sessionId)).closed_at).toBeNull();
     expect((await meetingRow(id)).current_el_session_id).toBe(first.sessionId);
 
     await age(id, first.sessionId, 6);
     expect((await callToken(id, { closingSessionId: first.sessionId })).status).toBe(200);
+  });
+
+  it("R2: the mint spacing grows with the meeting's live mints (5 s up to 4, then doubling, max 10 min)", async () => {
+    const id = await live(orgId, starter.id);
+    const ago = (sec: number) => new Date(Date.now() - sec * 1000).toISOString();
+    // 6 earlier live mints, the last 30 s ago: spacing 5 × 2^(6−4) = 20 s → allowed.
+    const rows = Array.from({ length: 6 }, (_, i) => ({
+      id: `sp-${randomUUID()}`,
+      meeting_id: id,
+      started_at: ago(i === 5 ? 30 : 3600),
+      max_seconds: 1,
+      closed_at: ago(i === 5 ? 29 : 3599),
+    }));
+    await adminClient().from("el_sessions").insert(rows);
+    as(starter);
+    expect((await callToken(id)).status).toBe(200); // 7th mint
+    // Now 7 live mints: spacing 40 s. 30 s after the 7th mint: refused, told to wait ~10 s.
+    const { current_el_session_id: cur } = await meetingRow(id);
+    await age(id, cur!, 30);
+    const res = await callToken(id, { closingSessionId: cur });
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toBe("reconnect_limit");
+    expect(body.retryAfter).toBeGreaterThanOrEqual(9);
+    expect(body.retryAfter).toBeLessThanOrEqual(11);
+    await age(id, cur!, 41);
+    expect((await callToken(id, { closingSessionId: cur })).status).toBe(200);
+  });
+
+  it("R2: mint_spacing_secs caps at 600 s and is service-role only", async () => {
+    const { data } = await adminClient().rpc("mint_spacing_secs", { p_base_secs: 5, p_live_mints: 13 });
+    expect(data).toBe(600);
+    const { data: four } = await adminClient().rpc("mint_spacing_secs", { p_base_secs: 5, p_live_mints: 4 });
+    expect(four).toBe(5);
+    expect((await starter.db.rpc("mint_spacing_secs", { p_base_secs: 5, p_live_mints: 1 })).error).not.toBeNull();
   });
 
   it("429 mint_cap: at most 14 mints per meeting (ceil(4 h / 1 h) + 10); failed mints don't count", async () => {

@@ -29,6 +29,13 @@ import { pcm16ToBase64, rmsLevel, TARGET_RATE } from "./resample";
 export const BACKOFF_MS = [1000, 2000, 5000] as const;
 export const BACKOFF_STEADY_MS = 5000;
 export const RECONNECT_LIMIT_WAIT_MS = 5000;
+/**
+ * R2: a session that lived less than this before dropping makes the next attempt wait
+ * SHORT_SESSION_WAITS_MS (30 s, then 60 s while it keeps happening). Every new session books a
+ * full hour (Ruling 39), so a socket that dies at once must not reconnect every few seconds.
+ */
+export const SHORT_SESSION_MS = 60_000;
+export const SHORT_SESSION_WAITS_MS = [30_000, 60_000] as const;
 /** 429 reconnect_limit is also the answer at 30 mints; after this many waits it counts as a failure. */
 export const MAX_RECONNECT_LIMIT_WAITS = 4;
 export const MAX_TOKEN_FAILURES = 3;
@@ -112,6 +119,8 @@ export interface StreamStatus {
   stopReason?: string;
   /** Stopped because another tab (or laptop) took over the meeting's session. */
   superseded?: boolean;
+  /** While reconnecting: when the next attempt is made (epoch ms), for "Ansluter igen om N s". */
+  retryAt?: number;
 }
 
 /** Things the page should tell the user about, beyond the connection state. */
@@ -182,6 +191,8 @@ export interface LiveStreamOptions {
   visibility?: VisibilityLike | null;
   isOnline?: () => boolean;
   log?: (message: string, detail?: unknown) => void;
+  /** A session shorter than this triggers the 30 s / 60 s wait (R2). Default SHORT_SESSION_MS; 0 turns it off (tests). */
+  shortSessionMs?: number;
 }
 
 type Events = {
@@ -258,6 +269,9 @@ export class LiveStream {
   private lastHeardAt = 0;
   private readonly ignoredTypes = new Set<string>();
   private dropCurrent: ((why: string) => void) | null = null;
+  /** When the current socket's session was minted/opened, and how many short-lived ones in a row. */
+  private socketCreatedAt = 0;
+  private shortSessions = 0;
 
   private lastChunkAt = 0;
   private recoverAttempts = 0;
@@ -418,9 +432,16 @@ export class LiveStream {
     while (this.pending > 0 && Date.now() < until) {
       await this.flush(true);
       this.emit("pending", this.pending);
+      // Signed out (401/403 keeps the queue): retrying can't succeed until a new sign-in (R3).
+      if (this.pending > 0 && this.authLost) break;
       if (this.pending > 0) await sleep(1000);
     }
     return this.pending;
+  }
+
+  /** The server answered 401/403 to the last post: the queue waits for a new sign-in. */
+  get signedOut(): boolean {
+    return this.authLost;
   }
 
   /** Page is going away (pagehide): post what we have with keepalive, best effort. */
@@ -635,13 +656,22 @@ export class LiveStream {
     }
     if (!this.active() || this.paused) return;
 
-    const body = (await res.json().catch(() => null)) as { error?: string; openSessionId?: string | null } | null;
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+      openSessionId?: string | null;
+      retryAfter?: number;
+    } | null;
     const code = body?.error ?? `http_${res.status}`;
     this.log(`token: refused ${res.status} ${code}`);
     if (code === "session_open" && body?.openSessionId && body.openSessionId !== sentClosing && !this.socket) {
       // The server holds a session we never heard of (its token response was lost): close it next.
       this.lastSessionId = body.openSessionId;
       this.scheduleReconnect("reconnecting");
+      return;
+    }
+    if (code === "reconnect_limit" && typeof body?.retryAfter === "number" && body.retryAfter > 0) {
+      // R2: the server says how long its (growing) mint spacing still runs: wait exactly that.
+      this.scheduleReconnect("reconnecting", Math.max(RECONNECT_LIMIT_WAIT_MS, Math.min(600, body.retryAfter) * 1000));
       return;
     }
     if (code === "reconnect_limit" && this.limitWaits < MAX_RECONNECT_LIMIT_WAITS) {
@@ -673,6 +703,7 @@ export class LiveStream {
     }
     this.socket = socket;
     this.socketSessionId = sessionId;
+    this.socketCreatedAt = Date.now();
     this.langBySegment = new Map();
     this.undiarized = new Map();
     this.socketAudioMs = 0;
@@ -754,7 +785,12 @@ export class LiveStream {
       return;
     }
     if (this.status.state === "error") return;
-    this.scheduleReconnect(this.offline() ? "offline" : "reconnecting");
+    // R2: a session that died within a minute → wait 30 s, then 60 s, before the next one.
+    const lived = Date.now() - this.socketCreatedAt;
+    this.shortSessions = lived < (this.o.shortSessionMs ?? SHORT_SESSION_MS) ? this.shortSessions + 1 : 0;
+    const wait = this.shortSessions > 0 ? SHORT_SESSION_WAITS_MS[Math.min(this.shortSessions, SHORT_SESSION_WAITS_MS.length) - 1] : undefined;
+    if (wait) this.log(`session lived ${lived} ms; waiting ${wait} ms before the next one`);
+    this.scheduleReconnect(this.offline() ? "offline" : "reconnecting", wait);
   }
 
   private scheduleReconnect(connection: "reconnecting" | "offline", delayMs?: number): void {
@@ -762,7 +798,7 @@ export class LiveStream {
     this.clearReconnect();
     const delay = delayMs ?? BACKOFF_MS[this.attempt] ?? BACKOFF_STEADY_MS;
     this.attempt++;
-    if (!this.paused) this.setStatus({ state: "reconnecting", connection });
+    if (!this.paused) this.setStatus({ state: "reconnecting", connection, retryAt: Date.now() + delay });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       void this.connect();

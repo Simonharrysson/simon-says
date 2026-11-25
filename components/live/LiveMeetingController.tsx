@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MicCapture } from "@/lib/audio/capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
+import { runEndFlow } from "@/lib/live/end-flow";
 import { stopParam } from "@/lib/ui/limit-copy";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
@@ -95,6 +96,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [health, setHealth] = useState<StreamHealth>({ audioStalled: false, postsFailing: false, authLost: false, quiet: false });
   /** The page's first connection is still being made (not a reconnect). */
   const [firstConnect, setFirstConnect] = useState(false);
+  /** While reconnecting: when the next attempt is made ("Ansluter igen om N s", R2). */
+  const [retryAt, setRetryAt] = useState<number | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   /** The cap behind a warning or an automatic stop. */
   const [limitReason, setLimitReason] = useState<string | null>(props.stopReason ?? null);
@@ -102,6 +105,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** After Avsluta: lines still waiting for the net, and whether POST /end failed. */
   const [pendingRuns, setPendingRuns] = useState(0);
   const [endFailed, setEndFailed] = useState(false);
+  /** After Avsluta while signed out: lines that need a new sign-in to be saved (R3). */
+  const [signedOutUnsent, setSignedOutUnsent] = useState<number | null>(null);
   /** Another tab (or laptop) took over this meeting's session. */
   const [superseded, setSuperseded] = useState(false);
   /** The stream's last refusal code (e.g. "not_starter": signed in as someone else). */
@@ -149,10 +154,12 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
 
   // While the final pass runs on the server, re-read the meeting until it is done.
   useEffect(() => {
-    if (phase !== "ending" || busy) return;
+    // Not while /end failed or waits for a sign-in: the meeting is still live on the server, and a
+    // refresh would turn this page into "Fortsätt mötet" under the user's feet.
+    if (phase !== "ending" || busy || endFailed || signedOutUnsent != null) return;
     const t = setInterval(() => router.refresh(), ENDING_POLL_MS);
     return () => clearInterval(t);
-  }, [phase, busy, router]);
+  }, [phase, busy, endFailed, signedOutUnsent, router]);
 
   // Leaving while the mic runs (or lines still wait for the net after Avsluta) loses them: ask
   // first, and post what we have.
@@ -188,39 +195,43 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
    * then ended). That also leaves `/meetings/ny/…`'s tree, which has no meeting. A failed /end
    * keeps the page here with a retry instead of navigating away from unsent work.
    */
-  const endOnServer = useCallback(async (id: string, auto: boolean, reason?: string | null) => {
-    setPhase("ending");
-    setStoppedAt((t) => t ?? Date.now());
-    setEndFailed(false);
-    const s = stream.current;
-    // Each round is bounded (15 s per post, 60 s per round). The server drops our queue once the
-    // meeting is over (meeting_not_live), so this ends even if the laptop never gets back online.
-    while (s && s.pending > 0) {
-      setPendingRuns(s.pending);
-      await s.drain(STOP_FLUSH_MAX_MS);
-    }
-    setPendingRuns(0);
-    let ok = false;
-    try {
-      const res = await fetch(`/api/meetings/${id}/end`, { method: "POST", signal: AbortSignal.timeout(END_TIMEOUT_MS) });
-      ok = res.ok || res.status === 404;
-    } catch {
-      ok = false;
-    }
-    if (!ok) {
-      setEndFailed(true);
-      setBusy(false);
-      return;
-    }
-    leaving.current = true;
-    window.location.replace(`/meetings/${id}${auto ? `?stoppat=${stopParam(reason)}` : ""}`);
-  }, []);
+  const endOnServer = useCallback(
+    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false) => {
+      setPhase("ending");
+      setStoppedAt((t) => t ?? Date.now());
+      setEndFailed(false);
+      setSignedOutUnsent(null);
+      const outcome = await runEndFlow({
+        stream: stream.current,
+        drainRoundMs: STOP_FLUSH_MAX_MS,
+        onPending: setPendingRuns,
+        endWithoutUnsent,
+        // /end claims `ending` and answers at once; the final pass runs on the server (R1).
+        postEnd: async () =>
+          (await fetch(`/api/meetings/${id}/end`, { method: "POST", signal: AbortSignal.timeout(END_TIMEOUT_MS) })).status,
+      });
+      if (outcome.kind === "end_failed") {
+        setEndFailed(true);
+        setBusy(false);
+        return;
+      }
+      if (outcome.kind === "signed_out") {
+        setSignedOutUnsent(outcome.unsent);
+        setBusy(false);
+        return;
+      }
+      leaving.current = true;
+      window.location.replace(`/meetings/${id}${auto ? `?stoppat=${stopParam(reason)}` : ""}`);
+    },
+    [],
+  );
 
   const onStreamState = useCallback(
     (s: StreamStatus, id: string) => {
       setRefusal(s.state === "error" ? (s.refusal ?? null) : null);
       setStreamError(s.state === "error" ? (s.error ?? null) : null);
       setFirstConnect(s.state === "connecting");
+      setRetryAt(s.state === "reconnecting" ? (s.retryAt ?? null) : null);
       setConnection(s.connection === "ok" && (s.state === "connecting" || s.state === "reconnecting") ? "reconnecting" : s.connection);
       switch (s.state) {
         case "connecting":
@@ -530,11 +541,18 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     })();
   };
 
-  /** "Försök igen" after a failed POST /end. */
+  /** "Försök igen" after a failed POST /end (or after signing in again). */
   const onRetryEnd = () => {
     if (!meeting) return;
     setBusy(true);
     void endOnServer(meeting.id, autoStopped, limitReason);
+  };
+
+  /** Signed out: end with what the server has; the unsent lines are given up (R3). */
+  const onEndWithoutUnsent = () => {
+    if (!meeting) return;
+    setBusy(true);
+    void endOnServer(meeting.id, autoStopped, limitReason, true);
   };
 
   const onEndUnfinished = () => {
@@ -554,6 +572,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const oldestUnwritten = postedAt.current[0];
   const staleMs = oldestUnwritten ? now - oldestUnwritten : 0;
   const staleMinutes = (phase === "live" || phase === "name-round") && staleMs > STALE_AFTER_MS ? Math.floor(staleMs / 60_000) : null;
+  const retryInSeconds = retryAt && retryAt > now ? Math.ceil((retryAt - now) / 1000) : null;
   const updatedMinutesAgo = lastTickOkAt ? Math.max(0, Math.floor((now - Date.parse(lastTickOkAt)) / 60_000)) : null;
   const startedAt = meeting?.startedAt;
   const elapsedMs =
@@ -657,6 +676,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       pendingRuns={pendingRuns}
       endFailed={endFailed}
       onRetryEnd={onRetryEnd}
+      signedOutUnsent={signedOutUnsent}
+      onEndWithoutUnsent={onEndWithoutUnsent}
+      retryInSeconds={retryInSeconds}
       speakers={speakers}
       people={people}
       nameRound={nameRound}

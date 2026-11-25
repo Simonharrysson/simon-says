@@ -57,6 +57,7 @@ describe("LiveStream ↔ fake ElevenLabs", () => {
       audio,
       fetch: fetchFn as unknown as typeof fetch,
       createSocket: (u) => new WebSocket(u) as unknown as SocketLike,
+      shortSessionMs: 0,
     });
     stream.on("partial", (t) => partials.push(t));
     const seen: SegmentIn[] = [];

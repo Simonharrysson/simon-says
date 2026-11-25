@@ -21,6 +21,17 @@ export const MAX_MINTS_PER_MEETING = Math.ceil(MEETING_SECONDS / SESSION_MAX_SEC
 /** Starting meetings (Ruling 39): at most this many per user per rolling hour, and one live at a time. */
 export const MAX_STARTS_PER_HOUR = 6;
 export const MIN_MINT_INTERVAL_SECONDS = 5;
+/** Longest wait between two mints (R2). */
+export const MAX_MINT_SPACING_SECONDS = 600;
+
+/**
+ * Seconds a meeting must wait after its last mint (mirrors mint_spacing_secs, migration 0022):
+ * base × 2^max(0, liveMints − 4), capped at 10 min. Each reconnect books a full session hour
+ * (Ruling 39), so a reconnect storm slows down instead of burning the month.
+ */
+export function mintSpacingSeconds(liveMints: number, base = MIN_MINT_INTERVAL_SECONDS): number {
+  return Math.min(MAX_MINT_SPACING_SECONDS, base * 2 ** Math.max(0, Math.min(liveMints, 30) - 4));
+}
 
 export type LimitReason =
   | "org_month"

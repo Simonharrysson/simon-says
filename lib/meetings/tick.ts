@@ -752,6 +752,21 @@ export async function endMeeting(
   meetingId: string,
   opts: { abandon?: boolean; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
 ): Promise<EndResult> {
+  const claim = await claimEnd(meetingId, opts);
+  if (claim !== "claimed") return claim;
+  const result = await finishMeeting(meetingId, { deadlineAt: opts.deadlineAt, deps: opts.deps });
+  return result === "done" ? "ended" : result === "not_found" ? "not_found" : "ending";
+}
+
+/**
+ * The first half of endMeeting: atomically live → ending (with ended_at and the target status).
+ * "noop" when it was not live (already ending or ended), "not_found" when it doesn't exist.
+ * The end route claims at once and runs finishMeeting after the response (R1).
+ */
+export async function claimEnd(
+  meetingId: string,
+  opts: { abandon?: boolean; deps?: Partial<TickDeps> } = {},
+): Promise<"claimed" | "noop" | "not_found"> {
   const now = (opts.deps?.now ?? (() => new Date()))();
   const claimed = must(
     "end: claim",
@@ -772,8 +787,7 @@ export async function endMeeting(
     const exists = must("end: read", await db().from("meetings").select("id").eq("id", meetingId).maybeSingle());
     return exists ? "noop" : "not_found";
   }
-  const result = await finishMeeting(meetingId, { deadlineAt: opts.deadlineAt, deps: opts.deps });
-  return result === "done" ? "ended" : result === "not_found" ? "not_found" : "ending";
+  return "claimed";
 }
 
 // ---------------------------------------------------------------------------------------------

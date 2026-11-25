@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideLimits, MEETING_SECONDS, ORG_MONTH_SECONDS, type LimitInput } from "./limits";
+import { decideLimits, MEETING_SECONDS, mintSpacingSeconds, ORG_MONTH_SECONDS, type LimitInput } from "./limits";
 
 const base: LimitInput = {
   killSwitch: false,
@@ -64,5 +64,11 @@ describe("decideLimits", () => {
   it("kill switch beats everything, then missing consent", () => {
     expect(decideLimits({ ...base, killSwitch: true, consentConfirmed: false, dayUsd: 99 }).reason).toBe("kill_switch");
     expect(decideLimits({ ...base, consentConfirmed: false, dayUsd: 99 }).reason).toBe("no_consent");
+  });
+});
+
+describe("mintSpacingSeconds (R2)", () => {
+  it("5 s for the first 4 mints, then doubling, capped at 10 min", () => {
+    expect([0, 1, 4, 5, 6, 7, 10, 11, 14].map((n) => mintSpacingSeconds(n))).toEqual([5, 5, 5, 10, 20, 40, 320, 600, 600]);
   });
 });
