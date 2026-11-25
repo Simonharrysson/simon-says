@@ -31,8 +31,8 @@ export interface OrgDetailViewProps {
   isAdmin: boolean;
   userId: string | null;
   inviteUrl: string;
-  /** Member emails, oldest first. Omitted when unavailable. */
-  members?: string[];
+  /** Members (email, role), oldest first. Omitted when unavailable. */
+  members?: { userId: string; email: string; role: "admin" | "member" }[];
   people: { id: string; name: string }[];
   meetings: OrgDetailMeeting[];
   notice: Notice | null;
@@ -54,6 +54,10 @@ export interface OrgDetailViewProps {
     deleteMeeting: FormAction;
     updateOrg: FormAction;
     deleteOrg: FormAction;
+    /** Admins: remove a member (hidden `orgId`, `userId`). */
+    removeMember?: FormAction;
+    /** Leave the org yourself (hidden `orgId`). */
+    leaveOrg?: FormAction;
   };
 }
 
@@ -159,15 +163,51 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             <Panel flush title="Medlemmar" titleId="members-title" actions={<span className="subtle">{members.length}</span>}>
               <p className="subtle panel-intro">Kan logga in, starta möten och får tillgång till nya mötesdokument.</p>
               <ul className="list" aria-labelledby="members-title">
-                {members.map((email) => (
-                  <li key={email}>
-                    <div className="row row--compact">
-                      <span className="row__main">
-                        <span className="row__title member-email">{email}</span>
-                      </span>
-                    </div>
-                  </li>
-                ))}
+                {members.map((m) => {
+                  const me = userId !== null && m.userId === userId;
+                  const label = m.email || "Okänd medlem";
+                  return (
+                    <li key={m.userId}>
+                      <div className="row row--compact">
+                        <span className="row__main">
+                          <span className="row__title member-email">{label}</span>
+                          {(m.role === "admin" || me) && (
+                            <span className="subtle">{[m.role === "admin" ? "admin" : null, me ? "du" : null].filter(Boolean).join(" · ")}</span>
+                          )}
+                        </span>
+                        {me && actions.leaveOrg ? (
+                          <ConfirmAction
+                            action={actions.leaveOrg}
+                            hidden={{ orgId: org.id }}
+                            trigger="Lämna"
+                            triggerVariant="ghost"
+                            triggerSize="sm"
+                            title={`Lämna ${org.name}?`}
+                            description="Du ser inte längre föreningens möten och får inte nya mötesdokument. Dokument som redan delats med dig ligger kvar i din Drive. Du kan gå med igen via en inbjudningslänk."
+                            confirmLabel="Lämna föreningen"
+                            pendingLabel="Lämnar…"
+                          />
+                        ) : (
+                          isAdmin &&
+                          !me &&
+                          actions.removeMember && (
+                            <ConfirmAction
+                              action={actions.removeMember}
+                              hidden={{ orgId: org.id, userId: m.userId }}
+                              trigger="Ta bort"
+                              triggerVariant="ghost"
+                              triggerSize="sm"
+                              title={`Ta bort ${label}?`}
+                              description="Hen ser inte längre föreningens möten och får inte nya mötesdokument. Mötesdokument som redan delats med hen förblir delade – ta bort delningen i Google Drive om det behövs. Inbjudningslänken fungerar fortfarande, så skapa en ny länk om hen inte ska kunna gå med igen."
+                              confirmLabel="Ta bort medlemmen"
+                              pendingLabel="Tar bort…"
+                            />
+                          )
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </Panel>
           )}

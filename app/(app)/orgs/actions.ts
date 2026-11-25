@@ -10,6 +10,8 @@ import {
   deleteOrg,
   deletePerson,
   joinOrg,
+  leaveOrg,
+  removeMember,
   renamePerson,
   rotateInviteCode,
   updateOrgSettings,
@@ -98,4 +100,20 @@ export async function deleteOrgAction(form: FormData): Promise<void> {
   const result = await deleteOrg(db, orgId, field(form, "confirmName"));
   if (result === "deleted") redirect("/orgs?klart=raderad");
   redirect(`/orgs/${orgId}?fel=org-${result}`);
+}
+
+export async function removeMemberAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const userId = field(form, "userId");
+  const db = await createSupabaseServerClient();
+  const result = isUuid(userId) ? await removeMember(db, orgId, userId) : "not_member";
+  redirect(`/orgs/${orgId}?${result === "removed" ? "klart=medlem" : `fel=medlem-${result}`}`);
+}
+
+export async function leaveOrgAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const db = await createSupabaseServerClient();
+  const result = await leaveOrg(db, orgId);
+  if (result === "removed") redirect("/orgs?klart=lamnat");
+  redirect(`/orgs/${orgId}?fel=medlem-${result}`);
 }

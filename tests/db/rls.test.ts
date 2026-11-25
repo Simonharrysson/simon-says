@@ -24,7 +24,7 @@ import {
   updateOrgSettings,
 } from "@/lib/db/orgs";
 
-// `segments` is not tested yet: the table waits for the Task 0 spike (Ruling 10).
+// `segments` is server-only since 0019 (tests/db/members.test.ts).
 
 const TABLES = [
   "orgs",

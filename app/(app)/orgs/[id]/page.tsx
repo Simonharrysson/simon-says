@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import { OrgDetailView } from "@/components/views/OrgDetailView";
 import { isUuid } from "@/lib/db/ids";
-import { memberEmails } from "@/lib/db/members";
+import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
-import { originFrom } from "@/lib/origin";
+import { appOrigin } from "@/lib/origin";
 import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgNotice } from "@/lib/ui/messages";
@@ -15,6 +14,8 @@ import {
   deleteMeetingAction,
   deleteOrgAction,
   deletePersonAction,
+  leaveOrgAction,
+  removeMemberAction,
   renamePersonAction,
   rotateInviteAction,
   updateOrgAction,
@@ -23,10 +24,10 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Förening" };
 
-/** Member emails for the members panel. Service role, so only called after RLS let us read the org. */
-async function safeMemberEmails(orgId: string): Promise<string[] | undefined> {
+/** Members for the members panel. Service role, so only called after RLS let us read the org. */
+async function safeMembers(orgId: string): Promise<OrgMember[] | undefined> {
   try {
-    return await memberEmails(orgId);
+    return await orgMemberList(orgId);
   } catch (err) {
     console.error("org page: member emails unavailable", (err as Error)?.message);
     return undefined;
@@ -50,10 +51,10 @@ export default async function OrgPage({
     myRole(db, id),
     listPeople(db, id),
     listMeetings(db, id),
-    safeMemberEmails(id),
+    safeMembers(id),
     db.auth.getUser(),
   ]);
-  const inviteUrl = `${originFrom(await headers())}/join/${org.invite_code}`;
+  const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
 
   return (
     <OrgDetailView
@@ -79,6 +80,8 @@ export default async function OrgPage({
         deleteMeeting: deleteMeetingAction,
         updateOrg: updateOrgAction,
         deleteOrg: deleteOrgAction,
+        removeMember: removeMemberAction,
+        leaveOrg: leaveOrgAction,
       }}
     />
   );

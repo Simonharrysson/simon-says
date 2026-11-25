@@ -145,6 +145,28 @@ export async function listMeetings(
   return data ?? [];
 }
 
+/** removed | not_member | last_admin (the org must keep an admin) | not_found | forbidden. */
+export type RemoveMemberResult = "removed" | "not_member" | "last_admin" | "not_found" | "forbidden";
+
+/**
+ * An admin removes a member (migration 0018). Their link in the people list is cleared; Google
+ * Docs already shared with them stay shared.
+ */
+export async function removeMember(db: Db, orgId: string, userId: string): Promise<RemoveMemberResult> {
+  const { data, error } = await db.rpc("remove_member", { p_org_id: orgId, p_user_id: userId });
+  if (error?.code === "42501") return "forbidden";
+  if (error) fail("removeMember", error);
+  return data as RemoveMemberResult;
+}
+
+/** Leave an org yourself; the last admin can't (0018). */
+export async function leaveOrg(db: Db, orgId: string): Promise<RemoveMemberResult> {
+  const { data, error } = await db.rpc("leave_org", { p_org_id: orgId });
+  if (error?.code === "42501") return "forbidden";
+  if (error) fail("leaveOrg", error);
+  return data as RemoveMemberResult;
+}
+
 /**
  * Delete an org and everything under it (cascade). Admins only, no live meeting; the caller
  * must type the org's exact name. The Google Docs stay in their owners' Drive. Its usage rows

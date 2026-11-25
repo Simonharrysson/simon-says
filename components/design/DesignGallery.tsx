@@ -43,6 +43,8 @@ const people = [
 ];
 
 const actions: OrgDetailViewProps["actions"] = {
+  removeMember: noopAction,
+  leaveOrg: noopAction,
   rotateInvite: noopAction,
   addPerson: noopAction,
   renamePerson: noopAction,
@@ -213,7 +215,11 @@ const render: Record<string, () => ReactNode> = {
         isAdmin
         userId={ME}
         inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={["anna.berg@example.com", "erik.lund@example.com", "sara@example.com"]}
+        members={[
+          { userId: ME, email: "anna.berg@example.com", role: "admin" },
+          { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "member" },
+          { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
+        ]}
         people={people}
         meetings={meetings}
         notice={orgNotice("mote-active")}
@@ -230,7 +236,10 @@ const render: Record<string, () => ReactNode> = {
         isAdmin={false}
         userId={ME}
         inviteUrl="https://simonsays.harrysson.co/join/Pq7Rt2Vw9z"
-        members={["ordforande@example.com", "anna.berg@example.com"]}
+        members={[
+          { userId: "00000000-0000-4000-8000-0000000000dd", email: "ordforande@example.com", role: "admin" },
+          { userId: ME, email: "anna.berg@example.com", role: "member" },
+        ]}
         people={[]}
         meetings={[]}
         notice={null}

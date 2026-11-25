@@ -28,6 +28,7 @@ const orgsNotices: Record<string, Notice> = {
   invalid: { tone: "danger", text: "Ange ett namn (högst 100 tecken)." },
   inbjudan: { tone: "danger", title: "Inbjudningslänken gäller inte längre", text: "Be den som bjöd in dig om en ny länk." },
   raderad: { tone: "success", text: "Föreningen är raderad. Google-dokumenten ligger kvar i Drive." },
+  lamnat: { tone: "success", text: "Du har lämnat föreningen. Dokument som redan delats med dig ligger kvar i din Drive." },
 };
 
 const orgNotices: Record<string, Notice> = {
@@ -43,6 +44,14 @@ const orgNotices: Record<string, Notice> = {
   "org-forbidden": { tone: "danger", text: "Bara admins kan radera föreningen." },
   "org-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
   mote: { tone: "success", text: "Mötet är raderat. Google-dokumentet ligger kvar i Drive." },
+  medlem: { tone: "success", text: "Medlemmen är borttagen. Mötesdokument som redan delats med hen är fortfarande delade." },
+  "medlem-last_admin": {
+    tone: "danger",
+    text: "Föreningen måste ha kvar minst en admin, så den enda admin kan inte lämna. Radera föreningen i stället om den inte ska användas längre.",
+  },
+  "medlem-not_member": { tone: "danger", text: "Personen är inte medlem längre." },
+  "medlem-forbidden": { tone: "danger", text: "Bara admins kan ta bort medlemmar." },
+  "medlem-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
 };
 
 function pick(map: Record<string, Notice>, fel?: string, klart?: string): Notice | null {
