@@ -1,0 +1,99 @@
+{
+  "source": "Fictional chamber choir board meeting (Swedish with an English-speaking conductor, heavy code-switching) written for Task Q (scripts/notes-eval.ts). Fictional choir and people; no real meeting.",
+  "orgName": "Kammarkören Vox Lumen",
+  "speakerNames": {
+    "S1-speaker_0": "Ingrid Sjöberg",
+    "S1-speaker_1": "Oliver Hayes",
+    "S1-speaker_2": "Maja Lund",
+    "S1-speaker_3": "Felix Andersson"
+  },
+  "languages": ["sv", "en"],
+  "traps": [
+    "Ticket price proposed as 150 kr, changed to 120 kr (60 kr students) before it is decided.",
+    "Felix offers to make the posters, Maja takes them over mid-sentence in English; Felix does the Facebook event instead.",
+    "Oliver 'could maybe ask' about borrowing risers, 'men jag lovar ingenting' (not an action).",
+    "The spring tour is explicitly NOT decided; to the next meeting (allowed only as a deferral). Oliver's proposal IS an action.",
+    "Ingrid typed the concert date decision into the notes tab before the meeting; it must not be duplicated.",
+    "Code-switching sv/en within sentences; notes stay in Swedish.",
+    "Numbers and dates in words (hundratjugo, sjätte december / the sixth of December)."
+  ],
+  "human_lines": [
+    { "atMs": 0, "section": "decision", "line": "✓ Julkonserten hålls lördag 13 december kl 18 i församlingshemmet" }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Biljettpris 120 kr, 60 kr för studenter.",
+      "match": [["120", "hundratjugo*"], ["60", "sextio*"]]
+    },
+    {
+      "key": "D2",
+      "text": "Extra repetition lördag 6 december kl 10–13.",
+      "match": [["*repetition*", "rehearsal*"], ["6 dec*", "sjätte december", "6:e december", "6th", "sixth*"]]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Maja Lund",
+      "text": "Göra affischerna",
+      "due": "nästa vecka",
+      "match": [["*affisch*", "poster*"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Felix Andersson",
+      "text": "Lägga upp Facebook-eventet",
+      "due": "söndag",
+      "match": [["facebook*", "evenemang*", "event*"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Ingrid Sjöberg",
+      "text": "Mejla ut repetitionsschemat",
+      "due": "ikväll",
+      "match": [["*schema*", "schedule*"]]
+    },
+    {
+      "key": "A4",
+      "owner": "Oliver Hayes",
+      "text": "Ta fram ett förslag till vårturné med budget",
+      "due": "till nästa möte",
+      "match": [["*turné*", "tour*"]]
+    }
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "The 150 kr proposal as a decision",
+      "sections": ["decision"],
+      "match": [["150", "hundrafemtio*"]]
+    },
+    {
+      "key": "M2",
+      "text": "Posters with the old owner (Felix)",
+      "sections": ["action"],
+      "match": [["*affisch*", "poster*"]],
+      "owner": "Felix Andersson"
+    },
+    {
+      "key": "M3",
+      "text": "Borrowing risers ('jag lovar ingenting') as an action",
+      "sections": ["action"],
+      "match": [["riser*", "podie*", "podium*", "musikskola*", "music school", "läktare*", "stege*", "stegar*"]]
+    },
+    {
+      "key": "M4",
+      "text": "A decision on the spring tour (only a deferral to the next meeting is allowed)",
+      "sections": ["decision"],
+      "match": [["*turné*", "tour*"]],
+      "unless": [["nästa möte", "next meeting", "bordl*", "senare möte"]]
+    },
+    {
+      "key": "M5",
+      "text": "Duplicate of the human-typed concert date",
+      "sections": ["decision", "action"],
+      "match": [["13 dec*", "trettonde december", "december 13", "13th", "13:e december"]]
+    }
+  ]
+}

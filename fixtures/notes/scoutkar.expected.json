@@ -1,0 +1,105 @@
+{
+  "source": "Fictional scout group leaders' meeting (Swedish) written for Task Q (scripts/notes-eval.ts). Fictional scout group and people; no real meeting.",
+  "orgName": "Granbackens scoutkår",
+  "speakerNames": {
+    "S1-speaker_0": "Anders Nyström",
+    "S1-speaker_1": "Lisa Holmgren",
+    "S1-speaker_2": "Erik Sandberg",
+    "S1-speaker_3": "Noor Haddad"
+  },
+  "languages": ["sv"],
+  "traps": [
+    "Summer camp preliminarily booked week 28, moved to week 30 before it is decided.",
+    "Camp fee first calculated as 1 800 kr, decided as 1 500 kr with 200 kr sibling discount.",
+    "Erik 'kan nog höra med matbutiken' about sponsoring, 'räkna inte med det' (not an action).",
+    "Noor offers to book the bus, Lisa takes it (final owner Lisa); Noor takes the invitation instead.",
+    "Noor types the invitation action into the notes tab herself while saying so (from 04:36); it must not be duplicated, even when the chair repeats it in the summary.",
+    "New tents are tabled to the next meeting (allowed only as a deferral). Lisa checking the old tents IS an action.",
+    "Numbers in words (femtonhundra, vecka trettio, sista mars)."
+  ],
+  "human_lines": [
+    { "atMs": 276110, "section": "action", "line": "☐ Noor Haddad: Skicka ut inbjudan till föräldrarna med packlista (senast 1 maj)" }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Sommarlägret blir vecka 30 på lägergården.",
+      "match": [["vecka 30", "v. 30", "v 30", "v30", "vecka trettio", "week 30"]]
+    },
+    {
+      "key": "D2",
+      "text": "Lägeravgiften blir 1 500 kr per barn, 200 kr syskonrabatt.",
+      "match": [["1500", "femtonhundra*"], ["200", "tvåhundra*"]]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Lisa Holmgren",
+      "text": "Ändra bokningen av lägergården",
+      "due": "imorgon",
+      "match": [["lägergård*", "vecka 30", "v. 30"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Erik Sandberg",
+      "text": "Lägga in lägeravgiften i medlemssystemet",
+      "due": "nästa vecka",
+      "match": [["*avgift*", "medlemssystem*"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Lisa Holmgren",
+      "text": "Boka bussen",
+      "due": "senast sista mars",
+      "match": [["*buss*"]]
+    },
+    {
+      "key": "A4",
+      "owner": "Lisa Holmgren",
+      "text": "Titta på de gamla tälten i förrådet",
+      "due": "innan nästa möte",
+      "match": [["*tält*"]]
+    }
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "Week 28 (the first booking) as a decision",
+      "sections": ["decision"],
+      "match": [["vecka 28", "v. 28", "v 28", "v28", "tjugoåtta*", "week 28"]]
+    },
+    {
+      "key": "M2",
+      "text": "The 1 800 kr fee as a decision",
+      "sections": ["decision"],
+      "match": [["1800", "artonhundra*"]]
+    },
+    {
+      "key": "M3",
+      "text": "Sponsoring from the grocery store ('räkna inte med det') as an action",
+      "sections": ["action"],
+      "match": [["matbutik*", "*sponsr*"]]
+    },
+    {
+      "key": "M4",
+      "text": "The bus with the old owner (Noor)",
+      "sections": ["action"],
+      "match": [["*buss*"]],
+      "owner": "Noor Haddad"
+    },
+    {
+      "key": "M5",
+      "text": "A decision on new tents (only a deferral to the next meeting is allowed)",
+      "sections": ["decision"],
+      "match": [["*tält*"]],
+      "unless": [["nästa möte", "bordl*", "senare möte"]]
+    },
+    {
+      "key": "M6",
+      "text": "Duplicate of the human-typed invitation action",
+      "sections": ["action", "decision"],
+      "match": [["inbjudan*", "inbjudn*", "inbjuda*"]]
+    }
+  ]
+}
