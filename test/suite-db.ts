@@ -156,9 +156,8 @@ export const events = async (id: string, kind?: string) => {
   if (kind) q = q.eq("kind", kind);
   return ((await q.order("id")).data ?? []) as { kind: string; detail: Record<string, unknown> }[];
 };
-/** Mark a meeting finished (status done, ended). */
-export const finish = (id: string, status: "done" | "abandoned" = "done") =>
-  adminClient().from("meetings").update({ status, ended_at: new Date().toISOString() }).eq("id", id);
+/** Mark an ended meeting finished (its final pass ran; ended_at was set when it began ending). */
+export const finish = (id: string, status: "done" | "abandoned" = "done") => adminClient().from("meetings").update({ status }).eq("id", id);
 
 /** The env mock every DB-touching suite file installs (getEnv on the local stack, overridable caps). */
 export type EnvOverride = { KILL_SWITCH?: boolean; GLOBAL_DAILY_HOURS?: number; GLOBAL_DAILY_USD?: number };

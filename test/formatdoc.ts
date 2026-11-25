@@ -1,7 +1,7 @@
 import type { docs_v1 } from "@googleapis/docs";
 import fixture from "@/fixtures/agenda/veckomote.doc.json";
 import { INITIAL_LIVE_LINE, planAnchoring } from "@/lib/agenda/anchor";
-import { scanAgenda } from "@/lib/agenda/scan";
+import { scanAgenda, withoutEarlierLines } from "@/lib/agenda/scan";
 import type { ItemRole, MeetingRow, NoteItemRow } from "@/lib/db/types";
 import { planFormatRender } from "@/lib/docs/format-render";
 import { renderedRows } from "@/lib/docs/notes";
@@ -60,12 +60,15 @@ export function applyDoc(doc: Doc, requests: Req[]): Doc {
 /** A fresh copy of the A1 agenda fixture Doc. */
 export const fixtureDoc = (): Doc => JSON.parse(JSON.stringify(fixture)) as Doc;
 
-/** An agenda Doc (default: the A1 fixture) as the start leaves it for meeting `id` (anchors, LIVE line, Tid "18:05"). */
+/**
+ * An agenda Doc (default: the A1 fixture) as the start leaves it for meeting `id` (anchors, LIVE
+ * line, Tid "18:05"); as anchorAgenda, lines an earlier meeting wrote never decide the items.
+ */
 export function anchoredDoc(id: string, opts: { doc?: Doc; profile?: FormatProfile; startedAt?: Date } = {}) {
   const doc = opts.doc ?? fixtureDoc();
   const profile = opts.profile ?? VECKOMOTE;
   const tab = parseNotesTab(doc, TAB);
-  const plan = planAnchoring(scanAgenda(tab, profile), tab, { meetingId: id, profile, startedAt: opts.startedAt ?? FMT_STARTED });
+  const plan = planAnchoring(scanAgenda(withoutEarlierLines(tab), profile), tab, { meetingId: id, profile, startedAt: opts.startedAt ?? FMT_STARTED });
   applyDoc(doc, plan.requests);
   return { doc, plan };
 }
