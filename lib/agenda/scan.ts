@@ -1,5 +1,5 @@
 import type { FormatProfile } from "@/lib/formats/schema";
-import { paraBullet, paraInTable, paraLine, paraStyle, type NotesTab, type Paragraph } from "@/lib/docs/tab";
+import { isNumberedGlyph, listGlyph, paraBullet, paraInTable, paraLine, paraStyle, type NotesTab, type Paragraph } from "@/lib/docs/tab";
 
 // Scanning a human's agenda Doc (spec "Builder check — answers" 2): title line, a 2-column info
 // table, an agenda heading, the agenda items (top-level list items or headings), then the tasks
@@ -23,9 +23,14 @@ export interface AgendaItem {
   level: number;
   /** End of the last non-empty paragraph belonging to the item (its own paragraph at least). */
   blockEnd: number;
-  /** Where the item's block stops: the next item's paraStart, or the end of the agenda region. */
+  /** Where the item's (last) block stops: the next item's paraStart, or the end of the agenda region. */
   blockLimit: number;
-  /** The block's non-empty paragraphs after the item line, one per line. */
+  /**
+   * Every part of the Doc that belongs to the item, `[start, limit)` in Doc order: its own block,
+   * then the block under each later heading that repeats its label (R-A5 rule 2).
+   */
+  blocks: { start: number; limit: number }[];
+  /** The blocks' non-empty paragraphs after the item line (repeated headings left out), one per line. */
   humanText: string;
 }
 
@@ -49,6 +54,8 @@ const AGENDA_LABELS = ["agenda", "dagordning"];
 const TASKS_LABELS = ["vad ska vi göra till nästa gång", "att göra", "till nästa gång", "uppgifter"];
 const NOTES_LABELS = ["anteckningar", "övriga anteckningar", "noteringar"];
 const DEFAULT_INFO = ["Datum", "Tid", "Närvarande"];
+/** Fixed items known whatever the profile says (Ruling R-A5 rule 4). */
+const DEFAULT_FIXED = ["Godkänn dagordning", "Må-runda", "Från förra veckan", "Övrigt"];
 
 /** A typed item number: "4. ", "4) ", "§4 ", "§ 4. ". Bare digits ("17 maj-fest") are kept. */
 const LEADING_NUMBER = /^\s*(?:§\s*\d+[.)]?|\d+[.)])\s*/;
@@ -68,9 +75,9 @@ const itemLabel = (s: string) => collapse(s).replace(LEADING_NUMBER, "").trim();
 const isEmpty = (p: Paragraph) => paraLine(p).trim() === "";
 const isHeadingStyle = (p: Paragraph) => paraStyle(p).startsWith("HEADING_");
 
-/** The item that contains `index`: its block runs from its paraStart up to its blockLimit. */
+/** The item one of whose blocks contains `index`, or null. */
 export function itemAt(scan: AgendaScan, index: number): AgendaItem | null {
-  return scan.items.find((i) => index >= i.paraStart && index < i.blockLimit) ?? null;
+  return scan.items.find((i) => i.blocks.some((b) => index >= b.start && index < b.limit)) ?? null;
 }
 
 export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
@@ -80,12 +87,8 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
   const agendaLabels = set(AGENDA_LABELS, [profile.agendaHeading]);
   const tasksLabels = set(TASKS_LABELS, [profile.tasksSection?.label]);
   const notesLabels = set(NOTES_LABELS, [profile.notesSection?.label]);
-  const fixedLabels = set([], profile.fixedAgendaItems.map((i) => i.label));
-  const known = new Set([...agendaLabels, ...tasksLabels, ...notesLabels, ...fixedLabels]);
-
-  /** HEADING_* style, fully bold, or a plain paragraph with a known label. Never a list item. */
-  const headingLike = (p: Paragraph) =>
-    !paraBullet(p) && !isEmpty(p) && (isHeadingStyle(p) || Boolean(p.bold) || known.has(normLabel(paraLine(p))));
+  const fixedLabels = set(DEFAULT_FIXED.map(normLabel), profile.fixedAgendaItems.map((i) => i.label));
+  const isAgendaLabel = (p: Paragraph) => agendaLabels.has(normLabel(paraLine(p)));
   const sectionHeading = (p: Paragraph, labels: Set<string>) =>
     !paraBullet(p) && !isEmpty(p) && labels.has(normLabel(paraLine(p)));
 
@@ -126,56 +129,88 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
   if (regionStart >= 0 && regionStart < regionEnd) {
     const region = paras.slice(regionStart, regionEnd);
     const limit = regionEnd < paras.length ? paras[regionEnd].start : (paras[paras.length - 1]?.end ?? 0);
-    const nonListItem = (p: Paragraph) => headingLike(p) || (!paraBullet(p) && TYPED_ITEM.test(collapse(paraLine(p))));
-    const levels = region.filter((p) => paraBullet(p) && !isEmpty(p)).map((p) => paraBullet(p)!.level);
-    const minLevel = levels.length ? Math.min(...levels) : 0;
-    // Lists that hold items: those with a top-level paragraph before the first heading item.
-    // Bullets after a heading item, in a list not seen before it, are that item's sub-points.
-    const firstHeading = region.findIndex(nonListItem);
-    const itemLists = new Set(
-      region
-        .slice(0, firstHeading >= 0 ? firstHeading : region.length)
-        .filter((p) => paraBullet(p) && !isEmpty(p) && paraBullet(p)!.level === minLevel)
-        .map((p) => paraBullet(p)!.listId),
-    );
-    const isItem = (p: Paragraph) => {
-      if (isEmpty(p)) return false;
-      const b = paraBullet(p);
-      if (b) return b.level === minLevel && itemLists.has(b.listId);
-      return nonListItem(p);
+    // Ruling R-A5. Never an item: an empty paragraph or one labelled like the agenda heading (5).
+    const candidate = (p: Paragraph) => !isEmpty(p) && !isAgendaLabel(p);
+    const listParas = region.filter((p) => candidate(p) && paraBullet(p));
+    const hasHeadings = region.some((p) => candidate(p) && !paraBullet(p) && isHeadingStyle(p));
+    // (1) Fully bold or typed-number plain lines mark items only in a Doc without list or heading
+    // items; elsewhere they are a human's notes under the item.
+    const boldOnly = listParas.length === 0 && !hasHeadings;
+    const nonListItem = (p: Paragraph) => {
+      if (!candidate(p) || paraBullet(p)) return false;
+      const line = paraLine(p);
+      if (isHeadingStyle(p) || fixedLabels.has(normLabel(line))) return true; // (4) "<fixed label>:"
+      return boldOnly && (Boolean(p.bold) || TYPED_ITEM.test(collapse(line)));
     };
+    // (3) Lists first seen before the first non-list item hold items at their lowest level. A list
+    // first seen after it is items only when it starts at level 0 with a numbered glyph (a
+    // restarted numbered list); a bulleted one is the preceding item's sub-points.
+    const firstNonList = region.findIndex(nonListItem);
+    const boundary = firstNonList >= 0 ? region[firstNonList].start : Infinity;
+    const lists = new Map<string, { first: number; minLevel: number }>();
+    for (const p of listParas) {
+      const b = paraBullet(p)!;
+      const l = lists.get(b.listId);
+      if (!l) lists.set(b.listId, { first: p.start, minLevel: b.level });
+      else l.minLevel = Math.min(l.minLevel, b.level);
+    }
+    const early = [...lists.values()].filter((l) => l.first < boundary);
+    const earlyMin = early.length ? Math.min(...early.map((l) => l.minLevel)) : 0;
+    const isListItem = (p: Paragraph) => {
+      const b = paraBullet(p)!;
+      const l = lists.get(b.listId)!;
+      if (l.first < boundary) return b.level === earlyMin;
+      const glyph = listGlyph(tab, b.listId, 0);
+      return l.minLevel === 0 && b.level === 0 && (glyph === null || isNumberedGlyph(glyph));
+    };
+    const isItem = (p: Paragraph) => candidate(p) && (paraBullet(p) ? isListItem(p) : nonListItem(p));
 
-    let current: { item: AgendaItem; lines: string[] } | null = null;
+    type Rec = { item: AgendaItem; lines: string[] };
+    const recs: Rec[] = [];
+    let current: Rec | null = null;
     const close = (next: number) => {
-      if (!current) return;
-      current.item.blockLimit = next;
-      current.item.humanText = current.lines.join("\n");
-      items.push(current.item);
+      if (current) current.item.blocks[current.item.blocks.length - 1].limit = next;
     };
     for (const p of region) {
       if (isItem(p)) {
         close(p.start);
+        const label = itemLabel(paraLine(p));
+        // (2) A heading repeating an earlier item's label continues that item.
+        const earlier = paraBullet(p) ? undefined : recs.find((r) => normLabel(r.item.label) === normLabel(label));
+        if (earlier) {
+          earlier.item.blocks.push({ start: p.start, limit: p.end });
+          earlier.item.blockEnd = p.end;
+          current = earlier;
+          continue;
+        }
         const b = paraBullet(p);
         current = {
           item: {
-            key: `ag-${items.length + 1}`,
-            label: itemLabel(paraLine(p)),
+            key: `ag-${recs.length + 1}`,
+            label,
             kind: b ? "list" : "heading",
             paraStart: p.start,
             paraEnd: p.end,
             level: b?.level ?? 0,
             blockEnd: p.end,
             blockLimit: p.end,
+            blocks: [{ start: p.start, limit: p.end }],
             humanText: "",
           },
           lines: [],
         };
+        recs.push(current);
       } else if (current && !isEmpty(p)) {
         current.lines.push(collapse(paraLine(p)));
         current.item.blockEnd = p.end;
       }
     }
     close(limit);
+    for (const r of recs) {
+      r.item.blockLimit = r.item.blocks[r.item.blocks.length - 1].limit;
+      r.item.humanText = r.lines.join("\n");
+      items.push(r.item);
+    }
   }
 
   // Title: the first non-empty body paragraph, if it comes before the info table, the agenda

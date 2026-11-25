@@ -4,6 +4,7 @@ import { parseNotesTab } from "@/lib/docs/tab";
 import { VECKOMOTE } from "@/lib/formats/standard";
 import fixture from "@/fixtures/agenda/veckomote.doc.json";
 import fixtureH3 from "@/fixtures/agenda/veckomote-h3.doc.json";
+import { fuzzyRoles } from "./roles";
 import { itemAt, normLabel, scanAgenda } from "./scan";
 
 type Doc = docs_v1.Schema$Document;
@@ -99,6 +100,7 @@ describe("scanAgenda on the A1 fixture", () => {
     expect(itemAt(s, 95)?.key).toBe("ag-1");
     expect(itemAt(s, 160)?.key).toBe("ag-4");
     expect(itemAt(s, 230)).toBeNull();
+    expect(s.items[3].blocks).toEqual([{ start: 137, limit: 197 }]);
     expect(itemAt(s, 50)).toBeNull();
   });
 
@@ -232,5 +234,145 @@ describe("scanAgenda variants", () => {
     const s = scan(doc);
     expect(s.items.map((i) => i.label)).toEqual([...LABELS.slice(0, 4), "Att göra", "Övrigt"]);
     expect(s.tasksHeading?.text).toBe("Vad ska vi göra till nästa gång?");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Review fix round 1 (Ruling R-A5): real weekly Doc shapes, fictional content.
+
+const NUM = "kix.num";
+const NUM2 = "kix.num2";
+const DOTS = "kix.dots";
+const li = (text: string, listId = NUM, level = 0) => para(`${text}\n`, "NORMAL_TEXT", { listId, nestingLevel: level });
+const p = (text: string, style = "NORMAL_TEXT") => para(`${text}\n`, style);
+const bold = (text: string) => {
+  const el = p(text);
+  el.paragraph!.elements![0].textRun!.textStyle = { bold: true };
+  return el;
+};
+function docOf(...els: El[]): Doc {
+  const levels = (g: string) => [0, 1, 2].map(() => (g === "BULLET" ? { glyphSymbol: "●" } : { glyphType: g }));
+  const doc: Doc = {
+    revisionId: "r",
+    tabs: [
+      {
+        tabProperties: { tabId: "t.0" },
+        documentTab: {
+          body: { content: [{ endIndex: 1, sectionBreak: {} }, p("Mötesprotokoll:"), p("Agenda:"), ...els, p("Anteckningar:", "HEADING_1")] },
+          lists: {
+            [NUM]: { listProperties: { nestingLevels: levels("DECIMAL") } },
+            [NUM2]: { listProperties: { nestingLevels: levels("DECIMAL") } },
+            [DOTS]: { listProperties: { nestingLevels: levels("BULLET") } },
+          },
+        },
+      },
+    ],
+  };
+  reindex(doc);
+  return doc;
+}
+const labels = (doc: Doc) => scan(doc).items.map((i) => i.label);
+
+describe("scanAgenda: real Doc shapes (R-A5)", () => {
+  it("exposes list glyph types", () => {
+    const tab = parseNotesTab(docOf(li("A")), "t.0");
+    expect(tab.lists?.get(NUM)?.[0]).toBe("DECIMAL");
+    expect(tab.lists?.get(DOTS)?.[0]).toBe("BULLET");
+    expect(parseNotesTab(clone(fixture), "t.0").lists?.get("kix.c40iceluu4t4")?.slice(0, 3)).toEqual(["DECIMAL", "ALPHA", "ROMAN"]);
+  });
+
+  it("a bold plain line under ag-2 stays in ag-2's block", () => {
+    const doc = clone(fixture);
+    const content = body(doc);
+    content.splice(content.indexOf(find(doc, "Må-runda")) + 1, 0, bold("Beslut: alla mår bra"));
+    reindex(doc);
+    const s = scan(doc);
+    expect(s.items.map((i) => i.label)).toEqual(LABELS);
+    expect(s.items[1].humanText).toBe("Beslut: alla mår bra");
+    expect(s.items[1].blockEnd).toBe(s.items[2].paraStart);
+  });
+
+  it("a typed '1. …' note under ag-2 stays in ag-2's block", () => {
+    const doc = clone(fixture);
+    const content = body(doc);
+    content.splice(content.indexOf(find(doc, "Må-runda")) + 1, 0, p("1. Vi beslutade att ses oftare"));
+    reindex(doc);
+    const s = scan(doc);
+    expect(s.items.map((i) => i.label)).toEqual(LABELS);
+    expect(s.items[1].humanText).toBe("1. Vi beslutade att ses oftare");
+  });
+
+  it("list items, a plain '<fixed label>:' item, then restarted H3 topics", () => {
+    const doc = docOf(
+      li("Godkänn dagordning"),
+      li("Må-runda"),
+      p("Från förra veckan:"),
+      p("Kassören skickade fakturan."),
+      p("2. Topic A", "HEADING_3"),
+      li("Detalj om A", DOTS),
+      p("3. Topic B", "HEADING_3"),
+      p("4. Övrigt", "HEADING_3"),
+    );
+    const s = scan(doc);
+    expect(s.items.map((i) => [i.label, i.kind])).toEqual([
+      ["Godkänn dagordning", "list"],
+      ["Må-runda", "list"],
+      ["Från förra veckan:", "heading"],
+      ["Topic A", "heading"],
+      ["Topic B", "heading"],
+      ["Övrigt", "heading"],
+    ]);
+    expect(s.items[2].humanText).toBe("Kassören skickade fakturan.");
+    expect(s.items[3].humanText).toBe("Detalj om A");
+    expect(fuzzyRoles(s.items, VECKOMOTE.fixedAgendaItems)).toEqual({
+      "ag-1": "procedural",
+      "ag-2": "checkin",
+      "ag-3": "followup",
+      "ag-4": "topic",
+      "ag-5": "topic",
+      "ag-6": "other",
+    });
+  });
+
+  it("an H3 repeating a list item's label continues that item, no extra item", () => {
+    const doc = docOf(li("Må-runda"), li("Kommande event"), li("Övrigt"), p("2. Kommande event", "HEADING_3"), p("Sommarfesten är bokad."));
+    const s = scan(doc);
+    expect(s.items.map((i) => i.label)).toEqual(["Må-runda", "Kommande event", "Övrigt"]);
+    const ag2 = s.items[1];
+    expect(ag2.blocks).toHaveLength(2);
+    expect(ag2.humanText).toBe("Sommarfesten är bokad.");
+    expect(ag2.blockEnd).toBe(ag2.blocks[1].limit);
+    expect(itemAt(s, ag2.blocks[1].start + 2)?.key).toBe("ag-2");
+    expect(itemAt(s, s.items[2].paraStart)?.key).toBe("ag-3");
+  });
+
+  it("a heading item then a restarted numbered list: the list holds items", () => {
+    const doc = docOf(li("Godkänn dagordning"), li("Må-runda"), p("3. Topic A", "HEADING_3"), li("Topic B", NUM2), li("Övrigt", NUM2));
+    expect(labels(doc)).toEqual(["Godkänn dagordning", "Må-runda", "Topic A", "Topic B", "Övrigt"]);
+  });
+
+  it("a heading item then a bulleted list: sub-points of the heading item", () => {
+    const doc = docOf(li("Godkänn dagordning"), li("Må-runda"), p("3. Topic A", "HEADING_3"), li("Punkt ett", DOTS), li("Punkt två", DOTS));
+    const s = scan(doc);
+    expect(s.items.map((i) => i.label)).toEqual(["Godkänn dagordning", "Må-runda", "Topic A"]);
+    expect(s.items[2].humanText).toBe("Punkt ett\nPunkt två");
+  });
+
+  it("H1 'Agenda' followed by a plain 'Agenda:' makes no 'Agenda' item", () => {
+    const doc = docOf(li("Godkänn dagordning"));
+    const content = body(doc);
+    const h = find(doc, "Agenda:");
+    setText(h, "Agenda\n");
+    h.paragraph!.paragraphStyle!.namedStyleType = "HEADING_1";
+    content.splice(content.indexOf(h) + 1, 0, p("Agenda:"));
+    reindex(doc);
+    expect(labels(doc)).toEqual(["Godkänn dagordning"]);
+  });
+
+  it("bold-only Docs still use bold lines as items", () => {
+    const doc = docOf(bold("Ekonomi"), p("Budgeten ser bra ut."), bold("Sommarfest"));
+    const s = scan(doc);
+    expect(s.items.map((i) => i.label)).toEqual(["Ekonomi", "Sommarfest"]);
+    expect(s.items[0].humanText).toBe("Budgeten ser bra ut.");
   });
 });

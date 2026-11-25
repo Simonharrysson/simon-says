@@ -52,6 +52,17 @@ export interface NotesTab {
   ranges: Map<string, { start: number; end: number }[][]>;
   /** Top-level tables in document order; default []. */
   tables?: Table[];
+  /** listId → glyph type per nesting level (`glyphType`, or "BULLET" for a symbol glyph); default empty. */
+  lists?: Map<string, string[]>;
+}
+
+const NUMBERED = new Set(["DECIMAL", "ZERO_DECIMAL", "ALPHA", "UPPER_ALPHA", "ROMAN", "UPPER_ROMAN"]);
+/** A numbered glyph (1. a. i. …), as opposed to a bullet symbol (●, ○, –). */
+export const isNumberedGlyph = (glyph: string | null | undefined) => Boolean(glyph && NUMBERED.has(glyph));
+
+/** The glyph type of a list at a nesting level, or null when the tab does not say. */
+export function listGlyph(tab: NotesTab, listId: string, level: number): string | null {
+  return tab.lists?.get(listId)?.[level] ?? null;
 }
 
 export const paraStyle = (p: Paragraph) => p.style ?? "NORMAL_TEXT";
@@ -169,7 +180,12 @@ export function parseNotesTab(doc: docs_v1.Schema$Document, tabId: string): Note
     );
     if (entries.length) ranges.set(name, entries);
   }
-  return { revisionId: doc.revisionId ?? "", tabId, paragraphs, ranges, tables };
+  const lists = new Map<string, string[]>();
+  for (const [id, list] of Object.entries(tab.documentTab.lists ?? {})) {
+    const levels = list.listProperties?.nestingLevels ?? [];
+    lists.set(id, levels.map((l) => l.glyphType && l.glyphType !== "GLYPH_TYPE_UNSPECIFIED" ? l.glyphType : l.glyphSymbol ? "BULLET" : "NONE"));
+  }
+  return { revisionId: doc.revisionId ?? "", tabId, paragraphs, ranges, tables, lists };
 }
 
 /** The table cell that contains `index` (cell element bounds), or null. For whole-cell text diffs. */
