@@ -860,7 +860,7 @@ Doc: ${urlOf(docId)}
 
 Do exactly this in the Docs editor (Chrome), in order, one action at a time:
   1. Click at the very END of the agenda line "Ekonomi", press Enter, press Tab, type: Mänsklig underpunkt
-  2. In the tasks section, click at the very END of the line "Kassör: Mejla klubben om avgiften (fre)." and type:  Klart!
+  2. In the tasks section, click at the very END of the line "Kassör: Mejla klubben om avgiften (fre)." and type a space, then: Klart!
   3. Click in our line "Sommarfesten blir lördag 14 juni." (under "Kommande event") and press Tab once, nothing else.
 Then run:  npm run check-agenda-render -- <user> tick`);
 }
@@ -894,7 +894,7 @@ async function tick() {
   const doc = await a6Checks(next, desired, "tick");
   const has = (t: string) => paragraphs(doc).some((p) => p.text === t);
   rec("tick.humanSubbulletIntact", has("Mänsklig underpunkt"));
-  rec("tick.editedCopyIntact", has("Kassör: Mejla klubben om avgiften (fre). Klart!"));
+  rec("tick.editedCopyIntact", paragraphs(doc).some((p) => p.text.startsWith("Kassör: Mejla klubben om avgiften (fre).") && p.text.includes("Klart!")));
   const n1 = res.rows.find((r) => r.id === "n1")!;
   rec("tick.tabbedAfter", { text: n1.last_rendered_text, level: levelOf(doc, n1.last_rendered_text!), locked: n1.locked });
   writeFileSync(RESULTS.replace(".json", "-a6-tick.json"), JSON.stringify(R, null, 2));

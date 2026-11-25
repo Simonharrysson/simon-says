@@ -132,6 +132,21 @@ export function expandCopies(items: NotesItem[], rows: NoteItemRow[], profile: F
   return out;
 }
 
+/**
+ * The tab without the paragraphs our rows' ranges touch, for scanning: our own lines must never
+ * change which paragraphs are agenda items (e.g. our bullet list under a bold item would end a
+ * bold-only Doc's "no lists" rule, R-A5 (1)). Indices are unchanged; only paragraphs are left out.
+ * A12 scans through this too (F4).
+ */
+export function withoutOwnLines(tab: NotesTab, rows: NoteItemRow[]): NotesTab {
+  const spans = rows
+    .filter((r) => r.range_name && !r.deleted_by_human)
+    .map((r) => itemSpan(tab, r.range_name!))
+    .filter((x): x is NonNullable<typeof x> => x !== null && !tab.paragraphs.some((p) => p.start === x.paraStart && paraInTable(p)));
+  if (!spans.length) return tab;
+  return { ...tab, paragraphs: tab.paragraphs.filter((p) => !spans.some((sp) => p.start >= sp.paraStart && p.start < sp.paraEnd)) };
+}
+
 /** A tasks copy frozen because its primary is locked or deleted: never written, never removed. */
 function isFrozenCopy(copyOf: string | null | undefined, byId: Map<string, NoteItemRow>): boolean {
   if (!copyOf) return false;
@@ -232,7 +247,7 @@ export function planFormatRender(
 
   // Where each new item goes.
   let scan: AgendaScan | null = null;
-  const scanned = () => (scan ??= scanAgenda(tab, opts.profile));
+  const scanned = () => (scan ??= scanAgenda(withoutOwnLines(tab, rows), opts.profile));
   const anchorStart = (key: string): number | null => {
     const name = rangeOf(key);
     const span = name ? itemSpan(tab, name) : null;
@@ -242,9 +257,16 @@ export function planFormatRender(
     const p = tab.paragraphs.find((x) => created.start >= x.start && created.start < x.end);
     return p ? p.start : null;
   };
-  /** Start of the next anchor paragraph (agenda item, tasks, notes) after `start`, else the end of the tab. */
-  const blockLimit = (start: number): number => {
+  /**
+   * Start of the next anchor paragraph (agenda item, tasks, notes) after `start`, else the end of
+   * the tab. For the tasks block the LIVE line ends it too (a format without a notes section has
+   * the LIVE line after the tasks; in the notes section the LIVE line is the block's first line).
+   */
+  const blockLimit = (start: number, endsAtLive: boolean): number => {
+    const live = meeting.header_range ?? rangeOf("live");
+    const liveSpan = endsAtLive && live ? itemSpan(tab, live) : null;
     const starts = [
+      liveSpan?.paraStart ?? null,
       ...Object.keys(anchors).filter((k) => k.startsWith("ag-") || k === "tasks" || k === "notes").map(anchorStart),
       ...scanned().items.map((i) => i.paraStart),
       scanned().tasksHeading?.start ?? null,
@@ -277,7 +299,7 @@ export function planFormatRender(
     if (key === "tasks" || key === "notes") {
       const start = anchorStart(key);
       if (start === null) return;
-      const paras = usable(start, blockLimit(start));
+      const paras = usable(start, blockLimit(start, key === "tasks"));
       let after = paras.at(-1);
       let rank = 1_000_000 + order;
       if (key === "tasks" && item.section === "action" && item.owner) {
@@ -405,6 +427,11 @@ function insertGroup(tabId: string, meetingId: string, at: number, slots: Slot[]
       requests.push({ insertText: { text: DASH, location: { tabId, index: starts[i] } } });
     }
     slots.forEach((s, i) => requests.push(named(s, starts[i] + DASH.length * i)));
+  }
+  // Text typed after a bold run inherits bold (a bold-only Doc's item lines): ours is plain.
+  if (slots[0].after?.bold) {
+    const finalEnd = mode === "c" ? end + DASH.length * slots.length : end;
+    requests.push({ updateTextStyle: { range: range(at + 1, finalEnd), textStyle: { bold: false }, fields: "bold" } });
   }
   return { index: at, kind: INSERT, requests };
 }

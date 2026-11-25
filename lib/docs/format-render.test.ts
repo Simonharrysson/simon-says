@@ -359,6 +359,60 @@ describe("planFormatRender under agenda items", () => {
   });
 });
 
+describe("planFormatRender on a bold-only agenda (no lists, no HEADING_* items)", () => {
+  const boldPara = (text: string) => {
+    const el = para(text);
+    el.paragraph!.elements![0].textRun!.textStyle = { bold: true };
+    return el;
+  };
+  /** "Agenda:", bold items Ekonomi and Sommarfest, the tasks and notes headings, the LIVE line. */
+  function boldDoc(edit?: (doc: Doc) => void, extra: [string, string][] = []): Doc {
+    const doc = clone(fixture);
+    doc.tabs![0].documentTab!.body!.content = [
+      { endIndex: 1, sectionBreak: {} },
+      para("Agenda:"),
+      boldPara("Ekonomi"),
+      boldPara("Sommarfest"),
+      para("Vad ska vi göra till nästa gång?", { style: "HEADING_2" }),
+      para("Anteckningar:", { style: "HEADING_1" }),
+      para(LIVE),
+    ];
+    doc.tabs![0].documentTab!.lists = {};
+    reindex(doc);
+    edit?.(doc);
+    return withRanges(doc, [
+      ["ss-m1-ag-1", "Ekonomi"],
+      ["ss-m1-ag-2", "Sommarfest"],
+      ["ss-m1-sec-tasks", "Vad ska vi göra till nästa gång?"],
+      ["ss-m1-sec-notes", "Anteckningar:"],
+      ["ss-m1-live", LIVE],
+      ...extra,
+    ]);
+  }
+
+  it("our bullet list under a bold item does not unmake the items on the next render", () => {
+    const n1 = note("n1", "ag-1", "Budgeten håller");
+    const p1 = plan(boldDoc(), [], [n1]);
+    // Ekonomi is [9,17): a new bulleted NORMAL_TEXT paragraph, inherited bold cleared.
+    expect(p1.requests).toEqual([
+      { insertText: { text: "\nBudgeten håller.", location: { tabId: TAB, index: 16 } } },
+      { updateParagraphStyle: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
+      { createParagraphBullets: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } },
+      { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 17, endIndex: 33 } } },
+      { updateTextStyle: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, textStyle: { bold: false }, fields: "bold" } },
+    ]);
+    const rows = renderedRows("m1", [], [n1], p1);
+    // Next render: ours is a bullet in a new list. Both items are still found.
+    const doc = boldDoc((d) => insertAfter(d, "Ekonomi", "Budgeten håller.", { level: 0, listId: "kix.ours" }), [["ss-m1-n1", "Budgeten håller."]]);
+    const p2 = plan(doc, rows, [n1, note("n2", "ag-1", "Kassan stämmer"), note("n3", "ag-2", "Festen blir i juni")]);
+    const ours = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Budgeten håller.\n")!;
+    const fest = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Sommarfest\n")!;
+    expect(inserts(p2)).toEqual([[fest.end - 1, "\nFesten blir i juni."], [ours.end - 1, "\nKassan stämmer."]]);
+    // n2 joins our list (b): no new list request for it.
+    expect(p2.requests.filter((r) => r.createParagraphBullets)).toHaveLength(1);
+  });
+});
+
 describe("planFormatRender tasks and their copies", () => {
   const anna = task("n1", "ag-5", "Mejla klubben om avgiften.", "Anna Berg", "fre");
   const erik = task("n2", "ag-5", "Boka bussen", "Erik Lund");
@@ -368,6 +422,16 @@ describe("planFormatRender tasks and their copies", () => {
       insertAfter(d, "Ordförande: Boka lokal.", "Sekreterare: Skicka protokollet.");
       more?.(d);
     });
+
+  it("without a notes section the tasks block ends at the LIVE line", () => {
+    // Like a Styrelseprotokoll Doc: no notes heading, the LIVE line appended after the tasks.
+    const doc = anchored((d) => removePara(d, "Anteckningar:"), [], ["ss-m1-sec-notes"]);
+    const m = { ...meeting, section_ranges: { ...meeting.section_ranges, notes: undefined } };
+    const tab = parseNotesTab(doc, TAB);
+    const p = planFormatRender(m, tab, [], [task("n1-t", "tasks", "Ring banken", "Lisa Holm")], { profile: { ...VECKOMOTE, notesSection: null }, ownerLabel: ctx.ownerLabel });
+    const last = tab.paragraphs.find((x) => x.text === "Ordförande: Boka lokal.\n")!;
+    expect(inserts(p)).toEqual([[last.end - 1, "\nKassör: Ring banken."]]);
+  });
 
   it("expandCopies adds one -t copy per unlocked, uncarried task primary", () => {
     const carried: NotesItem = { ...task("c1", "ag-3", "Kolla tröjorna", "Anna Berg"), carried: true };
