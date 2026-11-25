@@ -309,6 +309,28 @@ describe("LiveStream", () => {
     expect(t.of("pause")[1].body).toEqual({ paused: false });
   });
 
+  it("a token that arrives after Paus is remembered, so the next mint closes that session", async () => {
+    const t = setup();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const inner = t.fetchFn.getMockImplementation()!;
+    t.fetchFn.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/token") && t.of("token").length === 0) await gate;
+      return inner(url, init);
+    });
+    const started = t.stream.start();
+    await settle();
+    t.stream.pause(); // while the first mint is in flight
+    release();
+    await started;
+    await settle();
+    expect(t.sockets).toHaveLength(0); // not used while paused
+    t.stream.resume();
+    await settle();
+    expect(t.of("token").map((c) => c.body)).toEqual([{}, { closingSessionId: "s1" }]);
+    expect(t.sockets).toHaveLength(1);
+  });
+
   it("keeps at most 60 s of audio during a reconnect", async () => {
     const t = setup();
     t.replies.token.push("network");

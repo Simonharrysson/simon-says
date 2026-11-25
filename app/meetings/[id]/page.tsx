@@ -15,8 +15,15 @@ export const metadata: Metadata = { title: "Möte", robots: { index: false, foll
  * The live meeting page (full-screen focus mode: outside the (app) layout). Only the person
  * who started the meeting runs it; other members go to the förening's page (Doc link there).
  */
-export default async function MeetingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MeetingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ stoppat?: string }>;
+}) {
   const { id } = await params;
+  const { stoppat } = await searchParams;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -44,6 +51,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         orgName={org.name}
         orgHref={`/orgs/${org.id}`}
         shareTranscript={org.share_transcript}
+        autoStopped={stoppat === "1"}
         meeting={{
           id: m.id,
           status,

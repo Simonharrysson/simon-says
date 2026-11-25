@@ -36,6 +36,8 @@ export interface LiveMeetingControllerProps {
   shareTranscript: boolean;
   /** null: a new meeting (consent step first). */
   meeting: LiveMeetingInfo | null;
+  /** The meeting was stopped by a limit (4 h, caps), not by a person (`?stoppat=1`). */
+  autoStopped?: boolean;
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -63,7 +65,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [partial, setPartial] = useState("");
   const [micLevel, setMicLevel] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [autoStopped, setAutoStopped] = useState(false);
+  const [autoStopped, setAutoStopped] = useState(props.autoStopped ?? false);
+  /** When Stopp was pressed (or the stream stopped): the timer freezes there. */
+  const [stoppedAt, setStoppedAt] = useState<number | null>(null);
   const [minutesLeft, setMinutesLeft] = useState<number | null>(null);
   const [docPaused, setDocPaused] = useState(props.meeting?.docPaused ?? false);
   const [lastTickOkAt, setLastTickOkAt] = useState<string | null>(props.meeting?.lastTickOkAt ?? null);
@@ -72,6 +76,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const capture = useRef<MicCapture | null>(null);
   const stream = useRef<LiveStream | null>(null);
   const userStopped = useRef(false);
+  /** Set once the user chose to leave, so the beforeunload prompt doesn't ask a second time. */
+  const leaving = useRef(false);
   /** When posted runs were acknowledged; pruned once a notes write is newer. */
   const postedAt = useRef<number[]>([]);
 
@@ -82,7 +88,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     const m = props.meeting;
     if (!m) return;
     setMeeting((cur) => (cur && cur.id === m.id ? { ...cur, status: m.status, durationSeconds: m.durationSeconds } : cur));
-    if (m.status === "done" || (m.status === "abandoned" && !m.resumable)) setPhase((p) => (p === "ending" ? "ended" : p));
+    if (m.status !== "ending") setPhase((p) => (p === "ending" ? initialPhase(m) : p));
   }, [props.meeting]);
 
   // Clock for the timer, "uppdaterat för N min sedan" and the stale check.
@@ -102,6 +108,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   useEffect(() => {
     if (!RUNNING.includes(phase)) return;
     const warn = (e: BeforeUnloadEvent) => {
+      if (leaving.current) return;
       e.preventDefault();
       e.returnValue = "";
     };
@@ -123,26 +130,21 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     [],
   );
 
-  const endOnServer = useCallback(
-    async (id: string) => {
-      try {
-        const res = await fetch(`/api/meetings/${id}/end`, { method: "POST" });
-        const json = (await res.json().catch(() => null)) as { result?: string } | null;
-        if (res.ok && json?.result === "ending") {
-          setPhase("ending");
-          router.refresh();
-          return;
-        }
-      } catch {
-        // The cron finishes it anyway; show it as ending and keep polling.
-        setPhase("ending");
-        return;
-      }
-      setPhase("ended");
-      router.refresh();
-    },
-    [router],
-  );
+  /**
+   * POST /end, then load the meeting's own page: the server decides what it shows (finalizing
+   * while `ending`, then ended). That also leaves `/meetings/ny/…`'s tree, which has no meeting.
+   */
+  const endOnServer = useCallback(async (id: string, auto: boolean) => {
+    leaving.current = true;
+    setPhase("ending");
+    setStoppedAt((t) => t ?? Date.now());
+    try {
+      await fetch(`/api/meetings/${id}/end`, { method: "POST" });
+    } catch {
+      // The cron ends it anyway (abandon after 15 min without a heartbeat).
+    }
+    window.location.replace(`/meetings/${id}${auto ? "?stoppat=1" : ""}`);
+  }, []);
 
   const onStreamState = useCallback(
     (s: StreamStatus, id: string) => {
@@ -158,18 +160,25 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           return;
         case "stopping":
           setPhase("ending");
+          setStoppedAt((t) => t ?? Date.now());
           return;
         case "stopped":
           if (userStopped.current) return; // onStop posts /end itself
           setAutoStopped(Boolean(s.autoStopped));
           setBusy(true);
-          void endOnServer(id).finally(() => setBusy(false));
+          void endOnServer(id, Boolean(s.autoStopped));
           return;
         case "error":
           if (s.error === "limit" || s.error === "not_live") {
+            // A cap or the meeting ended elsewhere: stop cleanly (posts what we have), then end.
             setAutoStopped(true);
-            capture.current?.stop();
-            void endOnServer(id);
+            userStopped.current = true;
+            setBusy(true);
+            void (async () => {
+              await stream.current?.stop({ autoStopped: true });
+              capture.current?.stop();
+              await endOnServer(id, true);
+            })();
             return;
           }
           setPhase("error");
@@ -331,19 +340,18 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     void (async () => {
       await s?.stop();
       capture.current?.stop();
-      await endOnServer(meeting.id);
-      setBusy(false);
+      await endOnServer(meeting.id, false);
     })();
   };
 
   const onEndUnfinished = () => {
     if (!meeting) return;
     setBusy(true);
-    setPhase("ending");
-    void endOnServer(meeting.id).finally(() => setBusy(false));
+    void endOnServer(meeting.id, false);
   };
 
   const onLeave = () => {
+    leaving.current = true;
     stream.current?.flushOnExit();
     capture.current?.stop();
     window.location.assign(props.orgHref);
@@ -356,10 +364,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const updatedMinutesAgo = lastTickOkAt ? Math.max(0, Math.floor((now - Date.parse(lastTickOkAt)) / 60_000)) : null;
   const startedAt = meeting?.startedAt;
   const elapsedMs =
-    phase === "ended" && meeting?.durationSeconds !== undefined
+    meeting?.durationSeconds !== undefined
       ? meeting.durationSeconds * 1000
       : startedAt
-        ? Math.max(0, now - Date.parse(startedAt))
+        ? Math.max(0, (stoppedAt ?? now) - Date.parse(startedAt))
         : 0;
 
   return (
@@ -407,7 +415,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       onAssignSpeaker={() => {}}
       onNameRoundDone={() => {}}
       onResumeMeeting={onResumeMeeting}
-      onEndUnfinished={onEndUnfinished}
+      // An abandoned meeting is already ended (its notes are final); only a live one can be ended here.
+      onEndUnfinished={meeting?.status === "live" ? onEndUnfinished : undefined}
       onRetry={() => void stream.current?.retry()}
       onLeave={onLeave}
     />

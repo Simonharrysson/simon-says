@@ -398,34 +398,37 @@ export class LiveStream {
       return;
     }
     this.connecting = false;
-    if (!this.active() || this.paused) return;
-
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      const code = body?.error ?? `http_${res.status}`;
-      this.log(`token: refused ${res.status} ${code}`);
-      if (code === "reconnect_limit" && this.limitWaits < MAX_RECONNECT_LIMIT_WAITS) {
-        this.limitWaits++;
-        this.scheduleReconnect("reconnecting", RECONNECT_LIMIT_WAIT_MS);
-        return;
-      }
-      if (TERMINAL_REFUSALS.has(code)) {
-        this.fail(LIMIT_REFUSALS.has(code) ? "limit" : code === "not_live" ? "not_live" : "refused", code);
-        return;
-      }
-      if (++this.tokenFailures >= MAX_TOKEN_FAILURES) {
-        this.fail("token", code);
-        return;
-      }
-      this.scheduleReconnect("reconnecting");
+    if (res.ok) {
+      // The server made this session current: remember it even if we no longer want it
+      // (paused or stopped meanwhile), so the next mint closes it instead of getting 409.
+      const minted = (await res.json().catch(() => null)) as { token: string; wsUrl: string; sessionId: string } | null;
+      if (minted?.sessionId) this.lastSessionId = minted.sessionId;
+      if (!this.active() || this.paused || !minted) return;
+      this.tokenFailures = 0;
+      this.limitWaits = 0;
+      const { token, wsUrl, sessionId } = minted;
+      this.openSocket(`${wsUrl}${wsUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`, sessionId);
       return;
     }
+    if (!this.active() || this.paused) return;
 
-    const { token, wsUrl, sessionId } = (await res.json()) as { token: string; wsUrl: string; sessionId: string };
-    this.tokenFailures = 0;
-    this.limitWaits = 0;
-    this.lastSessionId = sessionId;
-    this.openSocket(`${wsUrl}${wsUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`, sessionId);
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    const code = body?.error ?? `http_${res.status}`;
+    this.log(`token: refused ${res.status} ${code}`);
+    if (code === "reconnect_limit" && this.limitWaits < MAX_RECONNECT_LIMIT_WAITS) {
+      this.limitWaits++;
+      this.scheduleReconnect("reconnecting", RECONNECT_LIMIT_WAIT_MS);
+      return;
+    }
+    if (TERMINAL_REFUSALS.has(code)) {
+      this.fail(LIMIT_REFUSALS.has(code) ? "limit" : code === "not_live" ? "not_live" : "refused", code);
+      return;
+    }
+    if (++this.tokenFailures >= MAX_TOKEN_FAILURES) {
+      this.fail("token", code);
+      return;
+    }
+    this.scheduleReconnect("reconnecting");
   }
 
   private openSocket(url: string, sessionId: string): void {

@@ -173,6 +173,9 @@ together when one is wrong.
 - [ ] **Reconnect behaviour:** a socket killed mid-run (Wi-Fi off 10 s) — does a new session with a new token work immediately (server mints with `closingSessionId`), and do labels restart?
 - [ ] **Commit timing with `commit_strategy=vad`:** how long are segments; are partials frequent enough for the strip?
 - [ ] **Browser audio:** Chrome and Safari give the AudioWorklet 48 kHz (or 44.1 kHz) and the 100 ms blocks resample to exactly 1600 samples; Safari's AudioContext runs when started from the Start/Fortsätt click.
+- [ ] **Stalled socket:** after a lid close the socket may stall without a close event; nothing detects that today
+  (no read timeout). Check whether Chrome/Safari fire `close` on wake; if not, add a "no message for N s while
+  sending audio" watchdog that closes and reconnects.
 - [ ] **Hidden tab / lid closed:** segments keep arriving while the tab is hidden for 10 min (flush and heartbeat are also driven from the audio callback), and the screen wake lock is re-acquired on return.
 
 How to try the page against the fake (no credits): `npm run fake-el` in one terminal,
