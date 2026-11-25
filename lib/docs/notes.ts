@@ -468,6 +468,7 @@ export function renderedRows(
     const row = byId.get(item.id);
     const section = row?.section ?? item.section;
     const updated: NoteItemRow = {
+      ...row, // keep the format fields (kind, anchor, done, owner_person_id, carried_from_*, copy_of)
       meeting_id: meetingId,
       id: item.id,
       section,

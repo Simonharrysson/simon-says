@@ -560,6 +560,25 @@ describe("renderedRows", () => {
     });
     expect(next.find((r) => r.id === "n4")).toMatchObject({ last_rendered_text: "Nytt ämne", range_name: "ss-m1-n4" });
   });
+
+  it("keeps the format fields of a re-rendered row", () => {
+    const fmt = {
+      kind: "task" as const,
+      anchor: "ag-2",
+      done: true,
+      owner_person_id: "11111111-1111-1111-1111-111111111111",
+      carried_from_meeting: "22222222-2222-2222-2222-222222222222",
+      carried_from_id: "n7",
+      copy_of: "n1",
+    };
+    const rs = rows();
+    rs[1] = { ...rs[1], ...fmt };
+    const next = renderedRows(M, rs, [{ ...toNotesItem(rs[1]), text: "ändrad" }], {
+      applied: new Set([rs[1].id]),
+      removed: new Set(),
+    });
+    expect(next.find((r) => r.id === rs[1].id)).toMatchObject({ ...fmt, text: "ändrad" });
+  });
 });
 
 describe("fix round 1", () => {
