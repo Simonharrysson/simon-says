@@ -14,10 +14,10 @@ Production: https://simonsays.harrysson.co
 (a scripted fictional meeting) run on production. Live transcription with ElevenLabs is built against a simulated
 server and gets its first real-audio verification in late November 2026. Not yet a finished product.
 
-![A Testmöte filling a Google Doc](docs/media/testmote.gif)
+![Notes tab of a finished Testmöte: attendees, decisions, to-dos with owners](docs/media/doc-filled.png)
 
-*A scripted, fictional board meeting filling the Doc. Screenshot of the result:
-[docs/media/doc-filled.png](docs/media/doc-filled.png).*
+*The notes tab after a Testmöte on production: a scripted, fictional 10-minute board meeting
+replayed through the real pipeline. Names come from the name round, not from a list.*
 
 ## How it works
 
