@@ -103,11 +103,13 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <div className="stack stack--5">
           {active ? (
             <Banner tone="info" title="Ett möte pågår" live={false}>
-              Anteckningarna skrivs i{" "}
-              <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
-                mötesdokumentet
-              </a>
-              . Ett nytt möte kan startas när det är avslutat.
+              <p>
+                Anteckningarna skrivs i{" "}
+                <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                  mötesdokumentet
+                </a>
+                . Ett nytt möte kan startas när det är avslutat.
+              </p>
             </Banner>
           ) : (
             startMeeting && (
