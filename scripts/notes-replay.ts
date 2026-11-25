@@ -46,9 +46,10 @@ async function main() {
     maxTicks: arg("ticks") ? Number(arg("ticks")) : undefined,
     realtime: process.argv.includes("--realtime"),
     speed: Number(arg("speed") ?? 1),
+    ...(expected.agenda ? { agenda: true as const } : {}),
     onTick: (t) => {
       const u = t.usage;
-      const spent = ledgerAdd(u.usd);
+      const spent = ledgerAdd(u.usd + (t.checkinUsd ?? 0));
       console.log(
         `\n── tick ${t.tick}${t.final ? " (FINAL)" : ""} @ ${mmss(Math.min(t.tick, tickCount) * tickMs)}  ` +
           `in=${u.input} cacheRead=${u.cacheRead} cacheWrite=${u.cacheWrite} out=${u.output} (thinking ${t.thinking ?? "?"})  ` +

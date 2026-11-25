@@ -12,7 +12,11 @@
  * The table shows the worst run per column. Each run writes .notes-replay/eval-<label>-<time>/
  * <fixture>[.r<k>].json (per-tick items, ops, usage) and summary.json. Spend is added per tick to
  * .notes-replay/spend.json; a run refuses to start, and aborts, once that ledger passes --budget
- * (USD, default 5).
+ * (USD, default 5). `--ledger <file>` keeps the ledger elsewhere (default .notes-replay/spend.json).
+ *
+ * Agenda fixtures (an `agenda` in the expected file, e.g. veckomote-a/-b) replay the format layout
+ * (see runReplay: agenda Doc, owner roles, Från förra veckan, Må-runda detector and masking) and add
+ * four bars: placement >= 90 %, roles, followup and no Må-runda leaks. The detector's cost counts.
  *
  * Reads ANTHROPIC_API_KEY from the environment or ~/simon-says-private/.env. Never prints it.
  */
@@ -20,6 +24,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import {
   checkExpected,
+  DEFAULT_LEDGER,
   ledgerAdd,
   ledgerTotal,
   loadExpected,
@@ -37,6 +42,7 @@ import {
 } from "./lib/notes-run";
 
 const DIR = join("fixtures", "notes");
+const LEDGER = arg("ledger") ?? DEFAULT_LEDGER;
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -84,9 +90,14 @@ const pct = (x: number) => (Number.isNaN(x) ? "–" : `${(x * 100).toFixed(1)}%`
 const max = (xs: number[]) => Math.max(...xs);
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
 
+const frac = (x: { ok: number; total: number }) => `${x.ok}/${x.total}`;
+const worstOf = (rs: Run[], pick: (s: Score) => { ok: number; total: number }) =>
+  rs.reduce((w, r) => (pick(r.score).ok - pick(r.score).total < pick(w.score).ok - pick(w.score).total ? r : w));
+
 function printTable(runs: Run[]) {
   const names = [...new Set(runs.map((r) => r.name))];
-  const head = ["fixture", "min", "n", "churn", "strict", "recall", "must_not", "live2+", "(1 tick)", "$", "$/h", "bars"];
+  const agenda = runs.some((r) => expectedOf(r.name).agenda);
+  const head = ["fixture", "min", "n", "churn", "strict", "recall", "must_not", "live2+", "(1 tick)", ...(agenda ? ["place", "roles", "followup", "leaks"] : []), "$", "$/h", "bars"];
   const body = names.map((n) => {
     const rs = runs.filter((r) => r.name === n);
     const worst = rs.reduce((w, r) => (r.score.found - r.score.total < w.score.found - w.score.total ? r : w));
@@ -100,6 +111,14 @@ function printTable(runs: Run[]) {
       String(max(rs.map((r) => r.score.mustNot.length))),
       String(max(rs.map((r) => r.score.mustNotPersistent.length))),
       String(max(rs.map((r) => r.score.mustNotLive.length))),
+      ...(agenda
+        ? [
+            frac(worstOf(rs, (s) => s.placement).score.placement),
+            frac(worstOf(rs, (s) => s.roles).score.roles),
+            frac(worstOf(rs, (s) => s.followup).score.followup),
+            String(max(rs.map((r) => r.score.checkinLeaks.length))),
+          ]
+        : []),
       sum(rs.map((r) => r.usd)).toFixed(3),
       max(rs.map((r) => r.perHour)).toFixed(2),
       rs.every(runPasses) ? "PASS" : "FAIL",
@@ -117,6 +136,14 @@ function printTable(runs: Run[]) {
     String(sum(runs.map((r) => r.score.mustNot.length))),
     String(sum(runs.map((r) => r.score.mustNotPersistent.length))),
     String(sum(runs.map((r) => r.score.mustNotLive.length))),
+    ...(agenda
+      ? [
+          frac({ ok: sum(runs.map((r) => r.score.placement.ok)), total: sum(runs.map((r) => r.score.placement.total)) }),
+          frac({ ok: sum(runs.map((r) => r.score.roles.ok)), total: sum(runs.map((r) => r.score.roles.total)) }),
+          frac({ ok: sum(runs.map((r) => r.score.followup.ok)), total: sum(runs.map((r) => r.score.followup.total)) }),
+          String(sum(runs.map((r) => r.score.checkinLeaks.length))),
+        ]
+      : []),
     sum(runs.map((r) => r.usd)).toFixed(3),
     (sum(runs.map((r) => r.usd)) / hours).toFixed(2),
     runs.every(runPasses) ? "PASS" : "FAIL",
@@ -129,6 +156,10 @@ function printTable(runs: Run[]) {
   console.log("\nn = runs; a fixture row shows its worst run (ALL: totals over all runs, median churn, $/h over all meeting time).");
   console.log("churn = median per-tick churn (plan metric); strict = text/owner/due/removals, 'now' excl.;");
   console.log("must_not = in the final notes; live2+ = live for 2+ ticks in a row (both fail the bar); (1 tick) = warning.");
+  if (agenda) {
+    console.log("place = decisions/tasks under the expected agenda item (bar >= 90 %); roles = owner shown by role; followup = Från förra veckan done flags;");
+    console.log("leaks = Må-runda content in the final or live notes, or items under a Må-runda / Från förra veckan item (all but place must be exact).");
+  }
   console.log("PASS needs every run of the fixture to meet every bar.");
 }
 
@@ -136,7 +167,8 @@ function details(runs: Run[]) {
   runs.forEach((r, i) => {
     const k = runs.slice(0, i).filter((x) => x.name === r.name).length + 1;
     const lines = [
-      ...r.score.recall.filter((l) => l.startsWith("MISSING")),
+      ...r.score.recall.filter((l) => l.startsWith("MISSING") || l.startsWith("WRONG")),
+      ...r.score.checkinLeaks.map((l) => `LEAK ${l}`),
       ...r.score.mustNot.map((l) => `MUST_NOT ${l}`),
       ...r.score.mustNotPersistent.map((l) => `LIVE ${l}`),
       ...r.score.mustNotLive.map((l) => `warning ${l}`),
@@ -173,7 +205,8 @@ async function main() {
       bad += problems.length;
       console.log(
         `${problems.length ? "FAIL" : "ok  "} ${name}: ${lines.length} lines, ${mmss(lines.at(-1)!.startMs + 5000)}, ` +
-          `${e.decisions?.length ?? 0} decisions, ${e.action_items?.length ?? 0} actions, ${e.must_not?.length ?? 0} must_not`,
+          `${e.decisions?.length ?? 0} decisions, ${e.action_items?.length ?? 0} actions, ${e.must_not?.length ?? 0} must_not` +
+          (e.agenda ? `, agenda ${e.agenda.items.length} items, ${e.carried?.length ?? 0} carried` : ""),
       );
       for (const p of problems) console.log(`     ${p}`);
     }
@@ -200,11 +233,11 @@ async function main() {
   const label = arg("label") ?? "run";
   const repeat = Math.max(1, Number(arg("repeat") ?? 1));
   const names = fixtures();
-  const spentBefore = ledgerTotal();
+  const spentBefore = ledgerTotal(LEDGER);
   if (spentBefore >= budget) throw new Error(`spend ledger $${spentBefore.toFixed(4)} ≥ budget $${budget}: not starting`);
   const outDir = join(".notes-replay", `eval-${label}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   mkdirSync(outDir, { recursive: true });
-  console.log(`eval "${label}": ${names.length} fixtures × ${repeat}, ledger $${spentBefore.toFixed(4)} of $${budget} → ${outDir}`);
+  console.log(`eval "${label}": ${names.length} fixtures × ${repeat}, ledger ${LEDGER} $${spentBefore.toFixed(4)} of $${budget} → ${outDir}`);
 
   const jobs = names.flatMap((name) => Array.from({ length: repeat }, (_, k) => ({ name, k: k + 1 })));
   const done = await pool(
@@ -214,9 +247,10 @@ async function main() {
         lines: loadLines(join(DIR, `${name}.jsonl`)),
         expected: expectedOf(name),
         tickMs,
+        ...(expectedOf(name).agenda ? { agenda: true as const } : {}),
         onTick: (t) => {
-          const spent = ledgerAdd(t.usage.usd);
-          console.log(`[${tag}] tick ${t.tick}${t.final ? " FINAL" : ""} ops=${t.ops.length} $${t.usage.usd.toFixed(4)} stop=${t.stop}  ledger $${spent.toFixed(4)}`);
+          const spent = ledgerAdd(t.usage.usd + (t.checkinUsd ?? 0), LEDGER);
+          console.log(`[${tag}] tick ${t.tick}${t.final ? " FINAL" : ""} ops=${t.ops.length} $${(t.usage.usd + (t.checkinUsd ?? 0)).toFixed(4)} stop=${t.stop}  ledger $${spent.toFixed(4)}`);
           if (spent > budget) throw new Error(`budget $${budget} exceeded (ledger $${spent.toFixed(4)})`);
         },
       });
@@ -234,7 +268,7 @@ async function main() {
   details(runs);
   const runUsd = sum(runs.map((r) => r.usd));
   writeFileSync(join(outDir, "summary.json"), JSON.stringify({ label, repeat, runUsd, runs }, null, 2));
-  console.log(`\nthis run $${runUsd.toFixed(4)}; ledger total $${ledgerTotal().toFixed(4)} of $${budget}`);
+  console.log(`\nthis run $${runUsd.toFixed(4)}; ledger total $${ledgerTotal(LEDGER).toFixed(4)} of $${budget}`);
   console.log(`saved: ${outDir}`);
 }
 
