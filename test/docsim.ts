@@ -135,6 +135,50 @@ function insertText(doc: Doc, text: string, index: number) {
   reindex(doc);
 }
 
+/**
+ * deleteContentRange as measured (A1, final review R1-I2 `tablenl`): the range may cross
+ * paragraphs of one container (the merged paragraph keeps the FIRST paragraph's style and bullet);
+ * the API refuses (400 "Invalid deletion range") a range that touches a table, takes the newline
+ * directly before a table, or takes the body's final newline; an empty range is refused too.
+ */
+function deleteRange(doc: Doc, s: number, e: number) {
+  if (e <= s) throw new Error("docsim: The range should not be empty.");
+  const hits = allParas(doc).filter(({ el }) => el.startIndex! < e && el.endIndex! > s);
+  if (!hits.length || hits.some((h) => h.container !== hits[0].container)) throw new Error("docsim: Invalid deletion range (crosses a table cell)");
+  const container = hits[0].container;
+  const first = hits[0].el;
+  const last = hits[hits.length - 1].el;
+  if (s < first.startIndex! || e > last.endIndex!) throw new Error("docsim: Invalid deletion range (touches a table)");
+  const i0 = container.indexOf(first);
+  const i1 = container.indexOf(last);
+  if (container.slice(i0, i1 + 1).some((el) => !el.paragraph)) throw new Error("docsim: Invalid deletion range (touches a table)");
+  const next = container[i1 + 1];
+  if (e === last.endIndex) {
+    if (next?.table) throw new Error("docsim: Invalid deletion range (the newline before a table)");
+    if (!next) throw new Error("docsim: Invalid deletion range (the final newline)");
+  }
+  let text = textOf(first).slice(0, s - first.startIndex!) + textOf(last).slice(e - last.startIndex!);
+  const removed = container.slice(i0 + 1, i1 + 1);
+  if (text !== "" && !text.endsWith("\n")) {
+    // The last newline went: the rest joins the next paragraph (first paragraph's style kept).
+    text += textOf(next);
+    removed.push(next);
+  }
+  for (const el of removed) container.splice(container.indexOf(el), 1);
+  if (text === "") container.splice(container.indexOf(first), 1);
+  else setText(first, text);
+  for (const group of Object.values(tabOf(doc).namedRanges ?? {})) {
+    for (const nr of group.namedRanges ?? []) {
+      for (const r2 of nr.ranges ?? []) {
+        const map = (i: number) => (i <= s ? i : i >= e ? i - (e - s) : s);
+        r2.startIndex = map(r2.startIndex!);
+        r2.endIndex = map(r2.endIndex!);
+      }
+    }
+  }
+  reindex(doc);
+}
+
 let listCounter = 0;
 
 function insertTable(doc: Doc, rows: number, columns: number, index: number) {
@@ -170,20 +214,7 @@ export function apply(doc: Doc, requests: Req[]): Doc {
     } else if (r.deleteContentRange) {
       const { startIndex: s, endIndex: e, tabId } = r.deleteContentRange.range!;
       if (tabId !== TAB) throw new Error("docsim: deleteContentRange without tabId");
-      const hit = allParas(doc).find(({ el }) => s! >= el.startIndex! && e! < el.endIndex!);
-      if (!hit) throw new Error("docsim: deleteContentRange only inside one paragraph's text");
-      const text = textOf(hit.el);
-      setText(hit.el, text.slice(0, s! - hit.el.startIndex!) + text.slice(e! - hit.el.startIndex!));
-      for (const group of Object.values(tabOf(doc).namedRanges ?? {})) {
-        for (const nr of group.namedRanges ?? []) {
-          for (const r2 of nr.ranges ?? []) {
-            const map = (i: number) => (i <= s! ? i : i >= e! ? i - (e! - s!) : s!);
-            r2.startIndex = map(r2.startIndex!);
-            r2.endIndex = map(r2.endIndex!);
-          }
-        }
-      }
-      reindex(doc);
+      deleteRange(doc, s!, e!);
     } else if (r.updateParagraphStyle) {
       const { range, paragraphStyle, fields } = r.updateParagraphStyle;
       if (range?.tabId !== TAB) throw new Error("docsim: updateParagraphStyle without tabId");

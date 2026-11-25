@@ -4,7 +4,7 @@ import { paraBullet, paraInTable, paraLine, parseNotesTab, type NotesTab, type P
 import type { FormatProfile } from "@/lib/formats/schema";
 import { docsApi, writeWithRevisionGuard, type DocsRequest, type GuardOptions } from "@/lib/google/docs";
 import { matchFixedItems } from "./roles";
-import { itemAt, normLabel, scanAgenda, type AgendaScan } from "./scan";
+import { agendaHeadingCount, itemAt, normLabel, scanAgenda, withoutEarlierLines, type AgendaScan } from "./scan";
 
 // The start-time batch on an agenda Doc (spec "Rendering into a human Doc"): one revision-guarded
 // batchUpdate that
@@ -28,9 +28,9 @@ export const INITIAL_LIVE_LINE = "Simon Says antecknar live · uppdaterad –";
 const DEFAULT_NOTES_LABEL = "Anteckningar";
 
 export class AgendaShapeError extends Error {
-  readonly code: "no_items";
-  constructor(code: "no_items") {
-    super(`agenda Doc has no agenda items (${code})`);
+  readonly code: "no_items" | "several_agendas";
+  constructor(code: "no_items" | "several_agendas") {
+    super(code === "no_items" ? `agenda Doc has no agenda items (${code})` : `agenda Doc has more than one agenda heading (${code})`);
     this.name = "AgendaShapeError";
     this.code = code;
   }
@@ -382,7 +382,8 @@ export interface AnchorResult {
  * Read the agenda Doc (first tab when `tabId` is absent), scan it, and write the anchoring batch
  * guarded by the read's revision; on a revision conflict read, scan and write again (up to 4
  * retries with a 150–600 ms wait, as CONFLICT_RETRIES / retryDelayMs). Throws AgendaShapeError
- * ("no_items") before writing anything when the Doc has no agenda items. Roles are matched once,
+ * before writing anything when the Doc has no agenda items ("no_items") or more than one agenda
+ * heading ("several_agendas"). The scan leaves out lines any earlier meeting of ours wrote. Roles are matched once,
  * after the write (one Claude call at most).
  */
 export async function anchorAgenda(
@@ -407,7 +408,10 @@ export async function anchorAgenda(
       const tabId = input.tabId ?? doc.tabs?.[0]?.tabProperties?.tabId;
       if (!tabId) throw new Error("anchorAgenda: Doc has no tab");
       const tab = parseNotesTab(doc, tabId);
-      const scan = scanAgenda(tab, input.profile);
+      // One Doc per meeting: several agenda headings (a Doc with many weeks) would anchor the wrong week.
+      if (agendaHeadingCount(tab, input.profile) >= 2) throw new AgendaShapeError("several_agendas");
+      // Lines an earlier meeting of ours wrote (a Doc used again) never decide what is an item (R1-I1).
+      const scan = scanAgenda(withoutEarlierLines(tab), input.profile);
       if (!scan.items.length) throw new AgendaShapeError("no_items");
       const plan = planAnchoring(scan, tab, { meetingId: input.meetingId, profile: input.profile, startedAt: input.startedAt });
       return { tab, scan, plan };

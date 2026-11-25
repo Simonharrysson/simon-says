@@ -13,7 +13,8 @@ vi.mock("@/lib/google/docs", async (importOriginal) => ({
 }));
 
 import { readState } from "@/lib/meetings/tick";
-import { expandCopies, formatLine, planFormatRender, type LineCtx } from "./format-render";
+import { anchoredStarts, newAgendaItems, scanAgenda } from "@/lib/agenda/scan";
+import { expandCopies, formatLine, planFormatRender, withoutOwnLines, type LineCtx } from "./format-render";
 import { currentItems, dedupeById, diffHumanEdits, ownedSpan, parseNotesTab, renderedRows, renderItems, toNotesItem } from "./notes";
 
 // Fictional agenda Doc from Task A1 (fixtures/agenda/veckomote.doc.json):
@@ -381,6 +382,32 @@ describe("planFormatRender under agenda items", () => {
   });
 });
 
+describe("probe (final review R1-I1): a separate bulleted list under a numbered item mid-meeting", () => {
+  it("stays the item's sub-points: no new items, notes land under Ekonomi and Övrigt", () => {
+    const doc = anchored((d) => {
+      insertAfter(d, "Ekonomi", "Fakturan från hallen", { level: 0, listId: "kix.bul" });
+      insertAfter(d, "Fakturan från hallen", "Medlemsavgifter", { level: 0, listId: "kix.bul" });
+      d.tabs![0].documentTab!.lists!["kix.bul"] = { listProperties: { nestingLevels: [{ glyphSymbol: "●" }, { glyphSymbol: "○" }] } };
+    });
+    const tab = parseNotesTab(doc, TAB);
+    const scan = scanAgenda(tab, VECKOMOTE, { anchors: anchoredStarts(tab, meeting.section_ranges, "m1") });
+    expect(scan.items.map((i) => i.label)).toEqual(ITEMS);
+    expect(scan.items[4].humanText).toBe("Fakturan från hallen\nMedlemsavgifter");
+    expect(newAgendaItems(scan, tab, meeting.section_ranges, "m1")).toEqual([]);
+    // The start-time rules would have made the bullets items (the regression the anchors fix).
+    expect(scanAgenda(tab, VECKOMOTE).items.map((i) => i.label)).toContain("Medlemsavgifter");
+    const last = tab.paragraphs.find((x) => x.text === "Medlemsavgifter\n")!;
+    const ovrigt = tab.paragraphs.find((x) => x.text === "Övrigt\n")!;
+    const p = plan(doc, [], [note("n1", "ag-5", "Fakturan är betald"), note("n2", "ag-6", "Nästa möte i januari")]);
+    expect(inserts(p)).toEqual([
+      [ovrigt.end - 1, "\nNästa möte i januari."],
+      [ovrigt.end, "– "],
+      [last.end - 1, "\nFakturan är betald."],
+      [last.end, "– "],
+    ]);
+  });
+});
+
 describe("planFormatRender on a bold-only agenda (no lists, no HEADING_* items)", () => {
   const boldPara = (text: string) => {
     const el = para(text);
@@ -412,26 +439,51 @@ describe("planFormatRender on a bold-only agenda (no lists, no HEADING_* items)"
     ]);
   }
 
-  it("our bullet list under a bold item does not unmake the items on the next render", () => {
+  // Final review R1-I1: under a bold item we write "– " lines (no list of ours that would end
+  // the bold-only rule), and the items come from the anchors with the mode fixed at the start,
+  // so a human's bullet under a bold item never unmakes the items.
+  it("under a bold item our line is a '– ' line (c), not a new bullet list", () => {
     const n1 = note("n1", "ag-1", "Budgeten håller");
     const p1 = plan(boldDoc(), [], [n1]);
-    // Ekonomi is [9,17): a new bulleted NORMAL_TEXT paragraph, inherited bold cleared.
+    // Ekonomi is [9,17).
     expect(p1.requests).toEqual([
       { insertText: { text: "\nBudgeten håller.", location: { tabId: TAB, index: 16 } } },
-      { updateParagraphStyle: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
-      { createParagraphBullets: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } },
-      { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 17, endIndex: 33 } } },
-      plainText(17, 33),
+      {
+        updateParagraphStyle: {
+          range: { tabId: TAB, startIndex: 17, endIndex: 33 },
+          paragraphStyle: { namedStyleType: "NORMAL_TEXT", indentStart: { magnitude: 54, unit: "PT" }, indentFirstLine: { magnitude: 36, unit: "PT" } },
+          fields: "namedStyleType,indentStart,indentFirstLine",
+        },
+      },
+      { insertText: { text: "– ", location: { tabId: TAB, index: 17 } } },
+      { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 17, endIndex: 35 } } },
+      plainText(17, 35),
     ]);
-    const rows = renderedRows("m1", [], [n1], p1);
-    // Next render: ours is a bullet in a new list. Both items are still found.
-    const doc = boldDoc((d) => insertAfter(d, "Ekonomi", "Budgeten håller.", { level: 0, listId: "kix.ours" }), [["ss-m1-n1", "Budgeten håller."]]);
+    expect(renderedRows("m1", [], [n1], p1)[0].last_rendered_text).toBe("– Budgeten håller.");
+  });
+
+  it("probe: a human bullet under a bold item (Enter after our line) keeps both items and their notes", () => {
+    const n1 = note("n1", "ag-1", "Budgeten håller");
+    const rows = [row(n1, "– Budgeten håller.")];
+    const doc = boldDoc((d) => {
+      insertAfter(d, "Ekonomi", "– Budgeten håller.");
+      insertAfter(d, "– Budgeten håller.", "Ta med kvitton", { level: 0, listId: "kix.human" });
+      d.tabs![0].documentTab!.lists = { "kix.human": { listProperties: { nestingLevels: [{ glyphSymbol: "●" }] } } };
+    }, [["ss-m1-n1", "– Budgeten håller."]]);
+    const tab = parseNotesTab(doc, TAB);
     const p2 = plan(doc, rows, [n1, note("n2", "ag-1", "Kassan stämmer"), note("n3", "ag-2", "Festen blir i juni")]);
-    const ours = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Budgeten håller.\n")!;
-    const fest = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Sommarfest\n")!;
-    expect(inserts(p2)).toEqual([[fest.end - 1, "\nFesten blir i juni."], [ours.end - 1, "\nKassan stämmer."]]);
-    // n2 joins our list (b): no new list request for it.
-    expect(p2.requests.filter((r) => r.createParagraphBullets)).toHaveLength(1);
+    const human = tab.paragraphs.find((x) => x.text === "Ta med kvitton\n")!;
+    const fest = tab.paragraphs.find((x) => x.text === "Sommarfest\n")!;
+    // n2 after the human's bullet (joins their list, b), n3 under Sommarfest (c). Nothing dropped.
+    expect(inserts(p2)).toEqual([[fest.end - 1, "\nFesten blir i juni."], [fest.end, "– "], [human.end - 1, "\nKassan stämmer."]]);
+    expect(p2.requests.filter((r) => r.createParagraphBullets)).toHaveLength(0);
+    // The scan with the anchors: still the two bold items, the human bullet inside Ekonomi's block.
+    const meetingTab = withoutOwnLines(tab, rows);
+    const scan = scanAgenda(meetingTab, VECKOMOTE, { anchors: anchoredStarts(tab, meeting.section_ranges, "m1") });
+    expect(scan.items.map((i) => [i.label, i.humanText])).toEqual([["Ekonomi", "Ta med kvitton"], ["Sommarfest", ""]]);
+    expect(newAgendaItems(scan, tab, meeting.section_ranges, "m1")).toEqual([]);
+    // Without the anchors (the start-time rules) the same Doc would lose both items: the regression.
+    expect(scanAgenda(meetingTab, VECKOMOTE).items.map((i) => i.label)).toEqual(["Ta med kvitton"]);
   });
 });
 

@@ -33,6 +33,10 @@
  *   reanchor <kind>
  *             (A7 fix I2) anchorAgenda again on the `fallback <kind>` Doc (already anchored and rendered) as a
  *             new meeting, then again as the same meeting: one status line, Tid ranged, every range once.
+ *   tablenl   (final review R1-I2) a fresh fictional Doc with a line directly before a table and one directly
+ *             after it: deleting the line WITH its newline (the newline before the table), then only its
+ *             text; and deleting the line after the table with the newline before it (the table's end).
+ *             Prints whether each delete was accepted. No Claude call, no DB write.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
  */
@@ -1054,6 +1058,57 @@ async function reanchor(kind: string) {
   console.log(`\nDoc: ${urlOf(st.docId)}`);
 }
 
+async function tableNewline() {
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const fresh = async (lastAfterTable = false) => {
+    const id = (await docsApi().documents.create({ requestBody: { title: `Simon Says tabell-test (fiktivt) ${stamp}` } })).data.documentId!;
+    let doc = await get(id);
+    tabId = doc.tabs![0].tabProperties!.tabId!;
+    // "Rubrik\n\n" then a 2x2 table at the empty paragraph (M6: an empty paragraph stays before it),
+    // then our line typed into that empty paragraph, and a line after the table.
+    await batch(id, [{ insertText: { text: lastAfterTable ? "Rubrik\n" : "Rubrik\n\nEfter tabellen", location: { index: 1, tabId } } }]);
+    doc = await get(id);
+    const empty = paragraphs(doc).find((p) => p.text === "" && !p.cell)!;
+    await batch(id, [{ insertTable: { rows: 2, columns: 2, location: { index: empty.start, tabId } } }]);
+    doc = await get(id);
+    const content = tabOf(doc).body!.content!;
+    const t = content.findIndex((el) => el.table);
+    const before = content[t - 1];
+    const after = content[t + 1];
+    await batch(id, [
+      ...(lastAfterTable && after?.paragraph ? [{ insertText: { text: "Vår sista rad", location: { index: after.startIndex!, tabId } } }] : []),
+      { insertText: { text: "Vår rad", location: { index: before.startIndex!, tabId } } },
+    ]);
+    doc = await get(id);
+    return { id, doc };
+  };
+  const shape = (doc: Doc) =>
+    tabOf(doc).body!.content!.filter((el) => !el.sectionBreak).map((el) => (el.table ? `[table ${el.startIndex}-${el.endIndex}]` : `${el.startIndex}-${el.endIndex} ${JSON.stringify((el.paragraph?.elements ?? []).map((e) => e.textRun?.content ?? "").join(""))}`));
+  const tryDelete = async (label: string, pick: (content: docs_v1.Schema$StructuralElement[]) => { start: number; end: number }, lastAfterTable = false) => {
+    await measure(label, async () => {
+      const { id, doc } = await fresh(lastAfterTable);
+      console.log(`  Doc: ${urlOf(id)}\n  before: ${shape(doc).join(" | ")}`);
+      const r = pick(tabOf(doc).body!.content!);
+      try {
+        await batch(id, [{ deleteContentRange: { range: { tabId, startIndex: r.start, endIndex: r.end } } }]);
+        rec(`${label}.accepted`, true);
+        console.log(`  after: ${shape(await get(id)).join(" | ")}`);
+      } catch (err) {
+        rec(`${label}.accepted`, false);
+        rec(`${label}.error`, errInfo(err));
+      }
+    });
+  };
+  const beforeTable = (c: docs_v1.Schema$StructuralElement[]) => c[c.findIndex((el) => el.table) - 1];
+  const afterTable = (c: docs_v1.Schema$StructuralElement[]) => c[c.findIndex((el) => el.table) + 1];
+  await tryDelete("tablenl.lineWithNewlineBeforeTable", (c) => ({ start: beforeTable(c).startIndex!, end: beforeTable(c).endIndex! }));
+  await tryDelete("tablenl.textOnlyBeforeTable", (c) => ({ start: beforeTable(c).startIndex!, end: beforeTable(c).endIndex! - 1 }));
+  await tryDelete("tablenl.lastLineWithNewlineAfterTable", (c) => ({ start: afterTable(c).startIndex! - 1, end: afterTable(c).endIndex! - 1 }), true);
+  await tryDelete("tablenl.lastLineTextOnlyAfterTable", (c) => ({ start: afterTable(c).startIndex!, end: afterTable(c).endIndex! - 1 }), true);
+  mkdirSync(STATE_DIR, { recursive: true });
+  writeFileSync(join(STATE_DIR, "agenda-tablenl.json"), JSON.stringify(R, null, 2));
+}
+
 async function main(): Promise<void> {
   const [userArg, stage] = process.argv.slice(2);
   if (!userArg || !stage) {
@@ -1092,6 +1147,8 @@ async function main(): Promise<void> {
       return fallback(process.argv[4] ?? "");
     case "reanchor":
       return reanchor(process.argv[4] ?? "");
+    case "tablenl":
+      return tableNewline();
     default:
       throw new Error(`unknown stage ${stage}`);
   }

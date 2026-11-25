@@ -417,3 +417,15 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 
 - `styrelse-ekdala`, 2 runs, $0.30 (ledger $0.74 of $4): churn 0 %, recall 11/11, roles 3/3, leaks 0, $1.50/h; placement 11/11 in run 1 but 9/11 in run 2 (82 % < 90 % bar) → FAIL on placement only.
 - Run 2 misplacements: the approval of the previous minutes landed under "Val av justerare" (justerare and protokoll are discussed together), and one task landed under "Föregående protokoll" instead of its topic item. Not tuned (pace ruling R-B0); candidate fix is a Styrelseprotokoll-only tail note (keeps AGENDA_SYSTEM_PROMPT and Veckomöte byte-identical): "approval of the previous minutes belongs under Föregående protokoll; tasks go under the item whose topic they concern".
+
+## 2026-11-25 · Meeting formats final review · Deleting next to a table (measured)
+
+`npm run check-agenda-render -- <user> tablenl` on four fresh fictional Docs ("Rubrik", "Vår rad", a 2×2 table, a line after it):
+- Deleting a paragraph **with its newline** when a table follows directly: **400** `Invalid deletion range. Cannot delete the
+  requested range.` Every later request in that batch (and every later batch built the same way) fails with it.
+- Deleting only its **text** (newline kept): accepted; an empty paragraph stays before the table.
+- The tab's **last paragraph right after a table**, deleted from the newline before it (the table's end): **400**, same message.
+  Its text only: accepted (an empty last paragraph stays).
+- So the format renderer (`deleteRuns`, `keepHumanNewline`) never takes the newline before a table nor the one at a table's end;
+  `test/docsim.ts` throws on both, refuses an empty range, and merges paragraphs on a cross-paragraph delete (the first
+  paragraph's style kept, as the A1/Task 9 heading measurement). v1 requests are unchanged.

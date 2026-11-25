@@ -2,7 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
 import { propagateDone } from "@/lib/agenda/followup";
-import { adoptedAgendaRanges, itemAt, newAgendaItems, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
+import { adoptedAgendaRanges, anchoredStarts, itemAt, newAgendaItems, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
 import { recordClaudeUsage } from "@/lib/db/claude-usage";
 import { logEvent } from "@/lib/db/events";
 import type { CheckinWindow, ItemRole, MeetingRow, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/types";
@@ -843,7 +843,8 @@ export async function runTick(
         meeting.section_ranges = section_ranges;
         meeting.agenda_roles = agenda_roles;
       }
-      const scan = scanAgenda(withoutOwnLines(tab, ctx.rows), profile);
+      // Items from the anchors, the mode fixed at the start; the scan only adds new items (R1-I1).
+      const scan = scanAgenda(withoutOwnLines(tab, ctx.rows), profile, { anchors: anchoredStarts(tab, meeting.section_ranges ?? {}, meeting.id) });
       const fresh = newAgendaItems(scan, tab, meeting.section_ranges ?? {}, meeting.id).map((n) => ({ ...n, label: itemAt(scan, n.start)?.label ?? "" }));
       const agenda = agendaContext(tab, scan, meeting, profile, people, fresh);
       // The detector runs on the lines not yet sent, within the spend caps and time.
@@ -948,7 +949,7 @@ export async function runTick(
         let res: Awaited<ReturnType<TickDeps["render"]>>;
         if (fmt) {
           const ranges = meeting.section_ranges ?? {};
-          const scan = scanAgenda(withoutOwnLines(tab, st.diff.rows), fmt.profile);
+          const scan = scanAgenda(withoutOwnLines(tab, st.diff.rows), fmt.profile, { anchors: anchoredStarts(tab, ranges, meetingId) });
           newAnchors = rekeyNewItems(newAgendaItems(scan, tab, ranges, meetingId), scan, fmt.fresh, agendaKeys(ranges));
           const groupBy = fmt.profile.tasksSection?.groupBy ?? "person";
           const people = fmt.people;

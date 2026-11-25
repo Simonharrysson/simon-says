@@ -315,14 +315,21 @@ export function deleteRuns(
     .filter((r) => r.range_name && !removed.has(r.id) && !r.deleted_by_human)
     .map((r) => itemSpan(tab, r.range_name!))
     .filter((x): x is ItemSpan => x !== null);
+  const tables = tab.tables ?? [];
   for (const run of runs) {
     const isLast = run.end >= lastIndex;
-    // Format layout: the newline before the run belongs to a human paragraph → leave it (and our
-    // now-empty last paragraph) rather than merge the human's text into our paragraph.
+    // Format layout: the newline before the run belongs to a human paragraph (or ends a table,
+    // which the API refuses to delete) → leave it (and our now-empty last paragraph) rather than
+    // merge the human's text into our paragraph.
     const prevIsHuman =
-      opts.keepHumanNewline && run.start > 1 && !kept.some((sp) => run.start - 1 >= sp.paraStart && run.start - 1 < sp.paraEnd);
+      opts.keepHumanNewline &&
+      run.start > 1 &&
+      (tables.some((t) => t.end === run.start) || !kept.some((sp) => run.start - 1 >= sp.paraStart && run.start - 1 < sp.paraEnd));
     const start = isLast && !prevIsHuman ? Math.max(1, run.start - 1) : run.start;
-    const end = isLast ? lastIndex - 1 : run.end;
+    let end = isLast ? lastIndex - 1 : run.end;
+    // Format layout: never the newline directly before a table (API 400 "Invalid deletion range",
+    // measured: check-agenda-render tablenl): our text goes, an empty paragraph stays.
+    if (opts.keepHumanNewline && !isLast && tables.some((t) => t.start === run.end)) end = run.end - 1;
     const requests: DocsRequest[] = run.names.map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
     if (end > start) requests.push({ deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } });
     groups.push({ index: start, kind: DELETE, requests });

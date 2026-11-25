@@ -87,13 +87,73 @@ const itemLabel = (s: string) => collapse(s).replace(LEADING_NUMBER, "").trim();
 const isEmpty = (p: Paragraph) => paraLine(p).trim() === "";
 const isHeadingStyle = (p: Paragraph) => paraStyle(p).startsWith("HEADING_");
 
+/**
+ * How many agenda headings ("Agenda", "Dagordning", the profile's) the tab's body holds. A Doc
+ * with several (one per week, final review R1 minor) is refused at the start: the scan would take
+ * the first week's agenda.
+ */
+export function agendaHeadingCount(tab: NotesTab, profile: FormatProfile): number {
+  const labels = new Set([...AGENDA_LABELS, ...(profile.agendaHeading ? [normLabel(profile.agendaHeading)] : [])]);
+  return tab.paragraphs.filter((p) => !paraInTable(p) && !paraBullet(p) && !isEmpty(p) && labels.has(normLabel(paraLine(p)))).length;
+}
+
 /** The item one of whose blocks contains `index`, or null. */
 export function itemAt(scan: AgendaScan, index: number): AgendaItem | null {
   return scan.items.find((i) => i.blocks.some((b) => index >= b.start && index < b.limit)) ?? null;
 }
 
-export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
+/**
+ * Paragraph starts of a meeting's anchored agenda items: for each `ag-*` key of the anchor map
+ * (and our `ss-<meeting>-ag-*` ranges the map lost, see adoptedAgendaRanges), the body paragraph
+ * holding the start of its named range. Gone (empty) ranges are left out.
+ */
+export function anchoredStarts(tab: NotesTab, sectionRanges: Record<string, unknown>, meetingId?: string): number[] {
+  const map = meetingId ? { ...adoptedAgendaRanges(tab, sectionRanges, meetingId), ...sectionRanges } : sectionRanges;
+  const out = new Set<number>();
+  for (const [key, name] of Object.entries(map)) {
+    if (!/^ag-\d+$/.test(key) || typeof name !== "string") continue;
+    const parts = (tab.ranges.get(name) ?? []).flat().filter((x) => x.end > x.start);
+    if (!parts.length) continue;
+    const at = Math.min(...parts.map((x) => x.start));
+    const p = tab.paragraphs.find((x) => !paraInTable(x) && at >= x.start && at < x.end);
+    if (p) out.add(p.start);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/** A range of ours that covers a human's text or a section of the Doc, never a line we wrote. */
+const STRUCTURE_RANGE = /-(ag-\d+|sec-[a-z]+|header|live)$/;
+
+/**
+ * The tab without the paragraphs any of our item ranges touches (any meeting's `ss-*` range
+ * except agenda anchors, section headings and the status line): for the scan at the start of a
+ * meeting in a Doc an earlier meeting wrote in (final review R1-I1), so its lines (a "– " line,
+ * a bullet list under a bold item) never decide which paragraphs are items. Indices unchanged.
+ */
+export function withoutEarlierLines(tab: NotesTab): NotesTab {
+  const spans: { start: number; end: number }[] = [];
+  for (const [name, entries] of tab.ranges) {
+    if (!name.startsWith("ss-") || STRUCTURE_RANGE.test(name)) continue;
+    for (const x of entries.flat()) if (x.end > x.start) spans.push(x);
+  }
+  if (!spans.length) return tab;
+  const touched = (p: Paragraph) => !paraInTable(p) && spans.some((x) => x.start < p.end && x.end > p.start);
+  return { ...tab, paragraphs: tab.paragraphs.filter((p) => !touched(p)) };
+}
+
+/**
+ * Scan the agenda. `opts.anchors` (during a meeting: `anchoredStarts`) fixes the item mode to the
+ * one found at the start (final review R1-I1), so a human's edit never unmakes the items:
+ * - every anchored paragraph is an item, and the region reaches back to the first of them;
+ * - the item mode comes from the anchored paragraphs: lists holding one keep items at that
+ *   level, any other list follows the glyph rule (numbered at level 0 = items, else sub-points);
+ *   bold / typed-number lines are items only when an anchored item is such a line (the
+ *   bold-only rule (1) is no longer recomputed: one human bullet must not end it).
+ * Without anchors: the start-time rules (R-A5) below.
+ */
+export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchors?: number[] } = {}): AgendaScan {
   const paras = tab.paragraphs.filter((p) => !paraInTable(p));
+  const anchored = opts.anchors ? new Set(opts.anchors) : null;
   const set = (base: string[], extra: (string | null | undefined)[]) =>
     new Set([...base, ...extra.filter((x): x is string => Boolean(x)).map(normLabel)].filter(Boolean));
   const agendaLabels = set(AGENDA_LABELS, [profile.agendaHeading]);
@@ -132,6 +192,10 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
     const after = infoTable?.end ?? 0;
     regionStart = paras.findIndex((p) => p.start >= after && paraBullet(p) && !isEmpty(p));
   }
+  if (anchored?.size) {
+    const firstAnchor = paras.findIndex((p) => anchored.has(p.start));
+    if (firstAnchor >= 0 && (regionStart < 0 || firstAnchor < regionStart)) regionStart = firstAnchor;
+  }
   const searchFrom = regionStart >= 0 ? regionStart : 0;
   const tasksIdx = paras.findIndex((p, i) => i >= searchFrom && sectionHeading(p, tasksLabels));
   const notesIdx = paras.findIndex((p, i) => i >= searchFrom && sectionHeading(p, notesLabels));
@@ -145,9 +209,18 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
     const candidate = (p: Paragraph) => !isEmpty(p) && !isAgendaLabel(p);
     const listParas = region.filter((p) => candidate(p) && paraBullet(p));
     const hasHeadings = region.some((p) => candidate(p) && !paraBullet(p) && isHeadingStyle(p));
+    const anchorParas = anchored ? region.filter((p) => anchored.has(p.start) && !isEmpty(p)) : [];
+    // The mode fixed at the start: lists holding an anchored item (→ its level), and whether an
+    // anchored item is a bold / typed-number line (not a heading, not a "<fixed label>:" line).
+    const anchorLists = new Map<string, number>();
+    for (const p of anchorParas) {
+      const b = paraBullet(p);
+      if (b && !anchorLists.has(b.listId)) anchorLists.set(b.listId, b.level);
+    }
+    const anchoredBold = anchorParas.some((p) => !paraBullet(p) && !isHeadingStyle(p) && !fixedLabels.has(normLabel(paraLine(p))));
     // (1) Fully bold or typed-number plain lines mark items only in a Doc without list or heading
     // items; elsewhere they are a human's notes under the item.
-    const boldOnly = listParas.length === 0 && !hasHeadings;
+    const boldOnly = anchored ? anchoredBold : listParas.length === 0 && !hasHeadings;
     const nonListItem = (p: Paragraph) => {
       if (!candidate(p) || paraBullet(p)) return false;
       const line = paraLine(p);
@@ -173,11 +246,17 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
     const isListItem = (p: Paragraph) => {
       const b = paraBullet(p)!;
       const l = lists.get(b.listId)!;
+      if (anchored) {
+        const level = anchorLists.get(b.listId);
+        if (level !== undefined) return b.level === level;
+        return l.minLevel === 0 && b.level === 0 && isNumberedGlyph(listGlyph(tab, b.listId, 0));
+      }
       if (l.first < boundary) return b.level === earlyMin;
       const glyph = listGlyph(tab, b.listId, 0);
       return l.minLevel === 0 && b.level === 0 && isNumberedGlyph(glyph);
     };
-    const isItem = (p: Paragraph) => candidate(p) && (paraBullet(p) ? isListItem(p) : nonListItem(p));
+    const isItem = (p: Paragraph) =>
+      (anchored?.has(p.start) && !isEmpty(p)) || (candidate(p) && (paraBullet(p) ? isListItem(p) : nonListItem(p)));
 
     type Rec = { item: AgendaItem; lines: string[] };
     const recs: Rec[] = [];
@@ -192,7 +271,8 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
         // A plain "<fixed label>:" item is labelled exactly as the profile's fixed item.
         if (!paraBullet(p) && fixedLabels.has(normLabel(label))) label = label.replace(/:\s*$/, "");
         // (2) A heading repeating an earlier item's label continues that item.
-        const earlier = paraBullet(p) ? undefined : recs.find((r) => normLabel(r.item.label) === normLabel(label));
+        // An anchored paragraph is its own item, whatever a human renamed it to.
+        const earlier = paraBullet(p) || anchored?.has(p.start) ? undefined : recs.find((r) => normLabel(r.item.label) === normLabel(label));
         if (earlier) {
           earlier.item.blocks.push({ start: p.start, limit: p.end });
           earlier.item.blockEnd = p.end;

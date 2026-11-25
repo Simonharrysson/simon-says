@@ -88,6 +88,12 @@ const agendaNoItems = () =>
     422,
     "Vi hittade ingen dagordning i dokumentet (en lista under ”Agenda” eller ”Dagordning”). Skapa ett nytt dokument i stället?",
   );
+const agendaSeveral = () =>
+  failed(
+    "agenda_several",
+    422,
+    "Dokumentet har flera dagordningar (flera möten i samma dokument). Välj ett dokument med bara det här mötet, eller skapa ett nytt dokument.",
+  );
 const docFailed = () =>
   failed("doc_failed", 502, "Vi kunde inte skapa mötesdokumentet i din Google Drive. Försök igen om en liten stund.");
 
@@ -391,7 +397,7 @@ async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile)
     // Throws AgendaShapeError before writing anything when the Doc has no agenda items.
     anchor = await anchorAgenda(ctx.auth, { meetingId: ctx.meetingId, orgId: ctx.orgId, docId, profile, startedAt: ctx.startedAt });
   } catch (err) {
-    if (err instanceof AgendaShapeError) return agendaNoItems();
+    if (err instanceof AgendaShapeError) return err.code === "several_agendas" ? agendaSeveral() : agendaNoItems();
     if (err instanceof GoogleAuthLostError) return authLost();
     console.error(`meetings: anchoring failed: ${(err as Error).message}`);
     return failed("doc_failed", 502, "Vi kunde inte förbereda dokumentet. Försök igen om en liten stund.");

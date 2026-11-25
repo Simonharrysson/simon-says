@@ -482,11 +482,111 @@ describe("anchorAgenda", () => {
     expect(res.scan.items).toHaveLength(6);
   });
 
+  it("a Doc with two agenda headings (several weeks) → AgendaShapeError several_agendas, nothing written", async () => {
+    api.get.mockResolvedValue({
+      data: docOf([paraEl("Agenda", { style: "HEADING_2" }), paraEl("Ekonomi", { level: 0 }), paraEl("Dagordning", { style: "HEADING_2" }), paraEl("Banbokning", { level: 0 })]),
+    });
+    const err = await anchorAgenda(auth, input).catch((e: unknown) => e);
+    expect((err as AgendaShapeError).code).toBe("several_agendas");
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("probe: a Doc used again keeps its bold items; the earlier meeting's bullet lines are no items", async () => {
+    const bold = (text: string) => paraEl(text, { bold: true });
+    const doc = docOf([
+      paraEl("Agenda", { style: "HEADING_2" }),
+      bold("Ekonomi"),
+      paraEl("Budgeten håller.", { level: 0, listId: "kix.ours" }),
+      paraEl("– Kassan stämmer."),
+      bold("Sommarfest"),
+      paraEl("Anteckningar", { style: "HEADING_2" }),
+    ]);
+    doc.tabs![0].documentTab!.lists!["kix.ours"] = { listProperties: { nestingLevels: [{ glyphSymbol: "●" }] } };
+    // Meeting A's ranges: its agenda anchors, its ● line (written before the fix) and a "– " line.
+    const t0 = tabOf(doc);
+    const at = (text: string) => t0.paragraphs.find((x) => x.text === `${text}\n`)!;
+    const nr = (name: string, text: string) => ({ createNamedRange: { name, range: { tabId: TAB, startIndex: at(text).start, endIndex: at(text).end - 1 } } });
+    apply(doc, [nr("ss-A-ag-1", "Ekonomi"), nr("ss-A-ag-2", "Sommarfest"), nr("ss-A-n1", "Budgeten håller."), nr("ss-A-n2", "– Kassan stämmer.")]);
+    // Without the strip the start rules would see a list and drop the bold items.
+    expect(scanAgenda(tabOf(doc), VECKOMOTE).items.map((i) => i.label)).toEqual(["Budgeten håller."]);
+    api.get.mockImplementation(async () => ({ data: clone(doc) }));
+    api.batchUpdate.mockResolvedValue({ data: { writeControl: { requiredRevisionId: "REV_2" } } });
+    const res = await anchorAgenda(auth, { ...input, meetingId: "B", roles: {} });
+    expect(res.scan.items.map((i) => [i.key, i.label, i.humanText])).toEqual([
+      ["ag-1", "Ekonomi", ""],
+      ["ag-2", "Sommarfest", ""],
+    ]);
+  });
+
   it("given roles are used as is (no Claude call)", async () => {
     api.get.mockResolvedValue({ data: fixtureDoc() });
     api.batchUpdate.mockResolvedValue({ data: { writeControl: { requiredRevisionId: "REV_2" } } });
     const res = await anchorAgenda(auth, { ...input, roles: { "ag-2": "checkin" } });
     expect(res.agendaRoles).toEqual({ "ag-2": "checkin" });
     expect(api.match).not.toHaveBeenCalled();
+  });
+});
+
+describe("removing our line next to a table (final review R1-I2)", () => {
+  const table2 = (): docs_v1.Schema$StructuralElement => ({
+    table: { rows: 1, columns: 2, tableRows: [{ tableCells: [{ content: [paraEl("Belopp")] }, { content: [paraEl("1 200 kr")] }] }] },
+  });
+  const meetingFor = (ranges: Record<string, string>) =>
+    ({ id: "m1", notes_tab_id: TAB, header_range: null, header_rendered: null, section_ranges: ranges, layout: "format" }) as unknown as MeetingRow;
+  const ours = (id: string, text: string, anchor: string): NoteItemRow =>
+    ({
+      meeting_id: "m1", id, section: "note", text, owner: null, due: null, locked: false, deleted_by_human: false,
+      last_rendered_text: text, range_name: `ss-m1-${id}`, position: 0, anchor, copy_of: null,
+    }) as NoteItemRow;
+  const nr = (doc: Doc, name: string, text: string) => {
+    const p = tabOf(doc).paragraphs.find((x) => x.text === `${text}\n`)!;
+    return { createNamedRange: { name, range: { tabId: TAB, startIndex: p.start, endIndex: p.end - 1 } } };
+  };
+
+  it("docsim refuses the newline before a table, as the API does (measured)", () => {
+    const doc = docOf([paraEl("Rubrik"), paraEl("Vår rad"), table2(), paraEl("Efter")]);
+    const p = tabOf(doc).paragraphs.find((x) => x.text === "Vår rad\n")!;
+    expect(() => apply(clone(doc), [{ deleteContentRange: { range: { tabId: TAB, startIndex: p.start, endIndex: p.end } } }])).toThrow(/newline before a table/);
+    const after = apply(clone(doc), [{ deleteContentRange: { range: { tabId: TAB, startIndex: p.start, endIndex: p.end - 1 } } }]);
+    expect(bodyLines(tabOf(after)).map(paraLine)).toEqual(["Rubrik", "", "Efter"]);
+    // Across paragraphs: merged, the first paragraph's style kept.
+    const two = docOf([paraEl("Rubrik", { style: "HEADING_3" }), paraEl("Mitten"), paraEl("Slut")]);
+    const [a, , c] = bodyLines(tabOf(two));
+    const merged = apply(two, [{ deleteContentRange: { range: { tabId: TAB, startIndex: a.end - 1, endIndex: c.start } } }]);
+    expect(bodyLines(tabOf(merged)).map((x) => [paraLine(x), paraStyle(x)])).toEqual([["RubrikSlut", "HEADING_3"]]);
+  });
+
+  it("our line right before a table: only its text goes; every later batch still applies", () => {
+    const doc = docOf([
+      paraEl("Agenda", { style: "HEADING_2" }),
+      paraEl("Ekonomi", { level: 0 }),
+      paraEl("– Gammal rad."),
+      table2(),
+      paraEl("Övrigt", { level: 0 }),
+      paraEl("Anteckningar", { style: "HEADING_2" }),
+    ]);
+    apply(doc, [nr(doc, "ss-m1-ag-1", "Ekonomi"), nr(doc, "ss-m1-ag-2", "Övrigt"), nr(doc, "ss-m1-sec-notes", "Anteckningar"), nr(doc, "ss-m1-n1", "– Gammal rad.")]);
+    const m = meetingFor({ "ag-1": "ss-m1-ag-1", "ag-2": "ss-m1-ag-2", notes: "ss-m1-sec-notes" });
+    const rows = [ours("n1", "– Gammal rad.", "ag-1")];
+    const p = planFormatRender(m, tabOf(doc), rows, [{ id: "n2", section: "note", text: "Ny rad", anchor: "ag-2" }], { profile: VECKOMOTE, ownerLabel: (o) => o });
+    expect(p.removed).toEqual(new Set(["n1"]));
+    const after = tabOf(apply(doc, p.requests));
+    expect(bodyLines(after).map(paraLine)).toEqual(["Agenda", "Ekonomi", "", "Övrigt", "– Ny rad.", "Anteckningar"]);
+    expect(after.ranges.has("ss-m1-n1")).toBe(false);
+  });
+
+  it("our last line right after a table at the end of the tab: only its text goes", () => {
+    const doc = docOf([
+      paraEl("Agenda", { style: "HEADING_2" }),
+      paraEl("Ekonomi", { level: 0 }),
+      paraEl("Anteckningar", { style: "HEADING_2" }),
+      table2(),
+      paraEl("Vår sista rad."),
+    ]);
+    apply(doc, [nr(doc, "ss-m1-ag-1", "Ekonomi"), nr(doc, "ss-m1-sec-notes", "Anteckningar"), nr(doc, "ss-m1-n1", "Vår sista rad.")]);
+    const m = meetingFor({ "ag-1": "ss-m1-ag-1", notes: "ss-m1-sec-notes" });
+    const p = planFormatRender(m, tabOf(doc), [ours("n1", "Vår sista rad.", "notes")], [], { profile: VECKOMOTE, ownerLabel: (o) => o });
+    const after = tabOf(apply(doc, p.requests));
+    expect(bodyLines(after).map(paraLine)).toEqual(["Agenda", "Ekonomi", "Anteckningar", ""]);
   });
 });

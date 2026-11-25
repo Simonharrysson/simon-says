@@ -1,4 +1,4 @@
-import { itemAt, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
+import { anchoredStarts, itemAt, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
 import type { MeetingRow, NoteItemRow } from "@/lib/db/types";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { replaceRange, type DocsRequest } from "@/lib/google/docs";
@@ -20,7 +20,7 @@ import {
   type Group,
   type RenderPlan,
 } from "./notes";
-import { paraBullet, paraInTable, paraLine, type NotesTab, type Paragraph } from "./tab";
+import { paraBullet, paraInTable, paraLine, paraStyle, type NotesTab, type Paragraph } from "./tab";
 
 // Rendering notes into a human's agenda Doc (meeting formats, spec "Rendering into a human Doc").
 // Every v1 guarantee holds: we write only inside our own named ranges or insert NEW paragraphs;
@@ -253,7 +253,14 @@ export function planFormatRender(
 
   // Where each new item goes.
   let scan: AgendaScan | null = null;
-  const scanned = () => (scan ??= scanAgenda(withoutOwnLines(tab, rows), opts.profile));
+  // Items from the anchors (and the ones created in this batch), the mode fixed at the start (R1-I1).
+  const anchoredAt = () => {
+    const created = (opts.newAnchors ?? [])
+      .map((a) => tab.paragraphs.find((x) => !paraInTable(x) && a.start >= x.start && a.start < x.end)?.start)
+      .filter((x): x is number => x !== undefined);
+    return [...anchoredStarts(tab, anchors, meeting.id), ...created];
+  };
+  const scanned = () => (scan ??= scanAgenda(withoutOwnLines(tab, rows), opts.profile, { anchors: anchoredAt() }));
   const anchorStart = (key: string): number | null => {
     const name = rangeOf(key);
     const span = name ? itemSpan(tab, name) : null;
@@ -302,12 +309,16 @@ export function planFormatRender(
       // our line would become a child of someone else's point → (c) instead.
       const bullet = paraBullet(after);
       const subLevel = agItem.kind === "list" ? agItem.level + 1 : 0;
+      // A new bullet list only under a HEADING_* item. Under a bold / typed-number / "<label>:"
+      // line our list would be the one list in a list-free agenda: "– " lines instead (R1-I1).
+      const itemPara = tab.paragraphs.find((x) => x.start === agItem.paraStart);
+      const headingItem = agItem.kind === "heading" && Boolean(itemPara && paraStyle(itemPara).startsWith("HEADING_"));
       const mode: Mode =
         bullet && after.start !== agItem.paraStart && bullet.level === subLevel
           ? "b"
-          : agItem.kind === "list" || bullet
-            ? "c"
-            : "bullet";
+          : headingItem && !bullet
+            ? "bullet"
+            : "c";
       slots.push({ at: after.end - 1, mode, after, rank: order, item, line: mode === "c" ? DASH + line : line });
       return;
     }
