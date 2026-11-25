@@ -4,6 +4,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import type { FormatKind } from "@/lib/formats/schema";
+import { MeetingFolderButton } from "./MeetingFolderButton";
 
 export interface FormatCardProps {
   orgId: string;
@@ -14,6 +15,8 @@ export interface FormatCardProps {
   formats: { id: string; kind: FormatKind; isDefault: boolean; createdAt: string }[];
   /** Admins: hidden `orgId`, `choice` = a standard kind or `id:<profile id>`. */
   changeFormat?: FormAction;
+  /** The Google Picker is configured: admins can pick the meeting folder. */
+  pickerEnabled?: boolean;
 }
 
 const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
@@ -21,7 +24,7 @@ const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
 const dateOf = (iso: string) => iso.slice(0, 10);
 
 /** The org's meeting format: current default, switch (admins), meeting folder, learn-a-format placeholder. */
-export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat }: FormatCardProps) {
+export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
   const learned = formats.filter((f) => f.kind === "learned");
   return (
     <Panel title="Mötesformat" titleId="format-title">
@@ -59,7 +62,15 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
             </div>
           </form>
         )}
-        <p className="subtle">Mötesmapp: {meetingFolder.id ? "vald" : "inte vald"}</p>
+        <div className="stack stack--2">
+          <p className="subtle">Mötesmapp: {meetingFolder.id ? "vald" : "inte vald"}</p>
+          {isAdmin &&
+            (pickerEnabled ? (
+              <MeetingFolderButton orgId={orgId} hasFolder={meetingFolder.id !== null} />
+            ) : (
+              <p className="hint">Google-väljaren är inte inställd än.</p>
+            ))}
+        </div>
         {isAdmin && (
           <div>
             <Button variant="ghost" disabled>

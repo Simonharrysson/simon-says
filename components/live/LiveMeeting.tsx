@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconPause } from "@/components/ui/icons";
@@ -67,6 +67,11 @@ export interface LiveMeetingProps {
   /** Consent step mic check: input level 0–1 while it runs (see ConsentStep). */
   micLevel?: number | null;
   onMicCheck?: () => void;
+  /** Consent step: the agenda step (AgendaStep) and its state; see ConsentStep. */
+  agenda?: ReactNode;
+  agendaConfirmed?: boolean;
+  agendaDoc?: { transcriptInDoc: boolean } | null;
+  onNewDocInstead?: () => void;
   /** A control request is in flight. */
   busy?: boolean;
   autoStopped?: boolean;
@@ -117,6 +122,10 @@ export function LiveMeeting(p: LiveMeetingProps) {
           errorText={p.startErrorText}
           micLevel={p.micLevel}
           onMicCheck={p.onMicCheck}
+          agenda={p.agenda}
+          agendaConfirmed={p.agendaConfirmed}
+          agendaDoc={p.agendaDoc}
+          onNewDocInstead={p.onNewDocInstead}
         />
         <PrivacyNote />
       </div>

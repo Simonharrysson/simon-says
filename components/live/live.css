@@ -905,3 +905,50 @@ a.doclink:hover {
   background: var(--board);
   border-bottom: 1px solid var(--line);
 }
+
+/* ---------- Agenda step (A11), under the consent checkbox ---------- */
+
+.agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-control);
+}
+
+.agenda__title {
+  font-size: var(--text-lg);
+}
+
+.agenda__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.agenda__line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+}
+
+.agenda__magnet {
+  transform: translateY(1px);
+}
+
+.agenda__name {
+  overflow-wrap: anywhere;
+}
+
+.agenda__message:empty {
+  display: none;
+}
+
+.agenda__format {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  max-width: 22rem;
+}

@@ -1,0 +1,394 @@
+"use client";
+
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { PickerError, usePicker } from "@/components/google/Picker";
+import { Button } from "@/components/ui/Button";
+import type { FormatKind } from "@/lib/formats/schema";
+
+// The start screen's agenda step (A11): which Doc the meeting runs in. Doc names are the
+// förening's own text: shown, never logged. Start stays disabled until the choice is confirmed
+// (Använd, a Picker pick, or "Skapa nytt dokument"); a suggestion is never used on its own.
+
+export interface AgendaFormatOption {
+  /** A format_profiles row; null: a standard format by `kind` (or the org's Enkel default without a row). */
+  id: string | null;
+  kind: FormatKind;
+  name: string;
+  isDefault: boolean;
+}
+
+export interface AgendaChoice {
+  agendaDocId: string | null;
+  agendaName: string | null;
+  formatProfileId: string | null;
+  formatKind: string | null;
+  transcriptInDoc: boolean;
+  confirmed: boolean;
+}
+
+export type AgendaViewState =
+  | { state: "loading" }
+  | { state: "suggestion"; suggestion: { id: string; name: string } }
+  | { state: "none" }
+  | { state: "folder-unreachable" }
+  | { state: "picker-off" };
+
+const optionValue = (f: AgendaFormatOption) => (f.id ? `id:${f.id}` : `kind:${f.kind}`);
+const defaultValue = (formats: AgendaFormatOption[]) => {
+  const def = formats.find((f) => f.isDefault) ?? formats[0];
+  return def ? optionValue(def) : "";
+};
+
+/** The start body's format fields for a select value: nothing for the default (the server reads it). */
+function formatFields(formats: AgendaFormatOption[], value: string): Pick<AgendaChoice, "formatProfileId" | "formatKind"> {
+  const f = formats.find((o) => optionValue(o) === value);
+  if (!f || f.isDefault) return { formatProfileId: null, formatKind: null };
+  return f.id ? { formatProfileId: f.id, formatKind: null } : { formatProfileId: null, formatKind: f.kind };
+}
+
+export interface AgendaStepViewProps {
+  view: AgendaViewState;
+  formats: AgendaFormatOption[];
+  formatValue: string;
+  /** The confirmed choice: an agenda Doc, a new Doc, or nothing yet. */
+  chosen: { kind: "agenda"; name: string } | { kind: "new" } | null;
+  /** Offer the "Transkript" tab checkbox (the förening shares transcripts). */
+  offerTranscript: boolean;
+  transcriptInDoc: boolean;
+  /** A Picker or request is in flight. */
+  busy?: boolean;
+  /** A short Swedish status/problem line (announced politely). */
+  message?: string | null;
+  disabled?: boolean;
+  onUseSuggestion: () => void;
+  onPickDoc: () => void;
+  onUseFolder: () => void;
+  onNewDoc: () => void;
+  onFormatChange: (value: string) => void;
+  onTranscriptChange: (on: boolean) => void;
+}
+
+/** Presentational: no fetching (the /design page renders every state with fake data). */
+export function AgendaStepView(p: AgendaStepViewProps) {
+  const id = useId();
+  const formatName = p.formats.find((f) => optionValue(f) === p.formatValue)?.name ?? "";
+  const off = p.view.state === "picker-off";
+  const lock = p.busy || p.disabled;
+
+  let body: ReactNode;
+  if (p.chosen?.kind === "agenda") {
+    body = (
+      <>
+        <p className="agenda__line">
+          <span className="magnet magnet--green agenda__magnet" aria-hidden="true" />
+          <span>
+            Dagordning: <strong className="agenda__name">{p.chosen.name}</strong>
+          </span>
+        </p>
+        <div className="cluster">
+          <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
+            Välj annan
+          </Button>
+          <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
+            Skapa nytt dokument
+          </Button>
+        </div>
+      </>
+    );
+  } else if (p.chosen?.kind === "new") {
+    body = (
+      <>
+        <p className="agenda__line">
+          <span className="magnet magnet--green agenda__magnet" aria-hidden="true" />
+          <span>
+            Nytt dokument i formatet <strong>{formatName}</strong>
+          </span>
+        </p>
+        {off ? (
+          <p className="hint">Google-väljaren är inte inställd än.</p>
+        ) : (
+          <div className="cluster">
+            <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
+              Välj dagordning
+            </Button>
+          </div>
+        )}
+      </>
+    );
+  } else if (p.view.state === "loading") {
+    body = <p className="agenda__line muted">Letar efter dagens dagordning…</p>;
+  } else if (p.view.state === "suggestion") {
+    body = (
+      <>
+        <p className="agenda__line">
+          <span className="magnet magnet--blue agenda__magnet" aria-hidden="true" />
+          <span>
+            Förslag: <strong className="agenda__name">{p.view.suggestion.name}</strong>
+          </span>
+        </p>
+        <div className="cluster">
+          <Button size="sm" variant="secondary" onClick={p.onUseSuggestion} disabled={lock}>
+            Använd
+          </Button>
+          <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
+            Välj annan
+          </Button>
+        </div>
+      </>
+    );
+  } else if (p.view.state === "folder-unreachable") {
+    body = (
+      <>
+        <p className="agenda__line">
+          Föreningen har en mötesmapp, men ditt Google-konto har inte öppnat den än. Välj den en gång, så hittar vi dagens
+          dagordning.
+        </p>
+        <div className="cluster">
+          <Button size="sm" variant="secondary" onClick={p.onUseFolder} disabled={lock}>
+            Använd mötesmappen
+          </Button>
+          <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
+            Välj dagordning
+          </Button>
+          <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
+            Skapa nytt dokument
+          </Button>
+        </div>
+      </>
+    );
+  } else {
+    // "none" (and picker-off before the fallback is set, which the container never shows)
+    body = (
+      <>
+        <p className="agenda__line">Ingen dagordning – skapa nytt dokument i formatet {formatName}</p>
+        <div className="cluster">
+          <Button size="sm" variant="secondary" onClick={p.onNewDoc} disabled={lock}>
+            Skapa nytt dokument
+          </Button>
+          {!off && (
+            <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
+              Välj dagordning
+            </Button>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <section className="agenda" aria-labelledby={`${id}-title`} aria-busy={p.busy || undefined}>
+      <h2 id={`${id}-title`} className="agenda__title">
+        Dagordning
+      </h2>
+      <div className="agenda__body">{body}</div>
+      <p className="agenda__message hint" aria-live="polite">
+        {p.message ?? ""}
+      </p>
+
+      {p.chosen?.kind === "agenda" && p.offerTranscript && (
+        <label className="check" htmlFor={`${id}-transcript`}>
+          <input
+            id={`${id}-transcript`}
+            type="checkbox"
+            checked={p.transcriptInDoc}
+            onChange={(e) => p.onTranscriptChange(e.target.checked)}
+            disabled={p.disabled}
+          />
+          <span className="check__title">Lägg transkriptet i dokumentet?</span>
+        </label>
+      )}
+
+      {p.formats.length > 1 && (
+        <div className="agenda__format">
+          <label className="label" htmlFor={`${id}-format`}>
+            Format
+          </label>
+          <select
+            id={`${id}-format`}
+            className="input"
+            value={p.formatValue}
+            onChange={(e) => p.onFormatChange(e.target.value)}
+            disabled={p.disabled}
+          >
+            {p.formats.map((f) => (
+              <option key={optionValue(f)} value={optionValue(f)}>
+                {f.name}
+                {f.isDefault ? " (förvalt)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </section>
+  );
+}
+
+export interface AgendaStepProps {
+  orgId: string;
+  formats: AgendaFormatOption[];
+  pickerEnabled: boolean;
+  onChange(choice: AgendaChoice): void;
+  /** The förening shares transcripts: only then is "Lägg transkriptet i dokumentet?" offered. */
+  shareTranscript?: boolean;
+  /** Start on "new Doc", confirmed (after an agenda_* start error: "Skapa nytt dokument i stället"). Remount by key to apply. */
+  startWithNewDoc?: boolean;
+  disabled?: boolean;
+}
+
+/** The container: reads the candidates, opens the Picker, reports the choice through `onChange`. */
+export function AgendaStep(props: AgendaStepProps) {
+  return props.pickerEnabled ? <AgendaStepOn {...props} /> : <AgendaStepOff {...props} />;
+}
+
+/** No Picker configured: the fallback, as before A11 (a new Doc), confirmed from the start. Loads nothing from Google. */
+function AgendaStepOff({ formats, onChange, disabled }: AgendaStepProps) {
+  const [formatValue, setFormatValue] = useState(() => defaultValue(formats));
+  useEffect(() => {
+    onChange({ agendaDocId: null, agendaName: null, ...formatFields(formats, formatValue), transcriptInDoc: false, confirmed: true });
+  }, [formats, formatValue, onChange]);
+  return (
+    <AgendaStepView
+      view={{ state: "picker-off" }}
+      formats={formats}
+      formatValue={formatValue}
+      chosen={{ kind: "new" }}
+      offerTranscript={false}
+      transcriptInDoc={false}
+      disabled={disabled}
+      onUseSuggestion={() => {}}
+      onPickDoc={() => {}}
+      onUseFolder={() => {}}
+      onNewDoc={() => {}}
+      onFormatChange={setFormatValue}
+      onTranscriptChange={() => {}}
+    />
+  );
+}
+
+interface Candidates {
+  folderId: string | null;
+  accessible: boolean;
+  candidates: { id: string; name: string }[];
+  suggestedId: string | null;
+}
+
+function AgendaStepOn({ orgId, formats, onChange, shareTranscript = false, startWithNewDoc = false, disabled }: AgendaStepProps) {
+  const picker = usePicker();
+  const [view, setView] = useState<AgendaViewState>({ state: "loading" });
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(startWithNewDoc ? { kind: "new" } : null);
+  const [agendaDocId, setAgendaDocId] = useState<string | null>(null);
+  const [formatValue, setFormatValue] = useState(() => defaultValue(formats));
+  const [transcriptInDoc, setTranscriptInDoc] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const loadSeq = useRef(0);
+
+  const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    setView({ state: "loading" });
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/agenda-candidates`, { cache: "no-store" });
+      const json = (await res.json().catch(() => null)) as (Candidates & { message?: string }) | null;
+      if (seq !== loadSeq.current) return;
+      if (!res.ok || !json) {
+        setView({ state: "none" });
+        setMessage(json?.message ?? "Vi kunde inte läsa mötesmappen just nu.");
+        return;
+      }
+      setFolderId(json.folderId);
+      const suggestion = json.candidates.find((c) => c.id === json.suggestedId);
+      if (json.folderId && !json.accessible) setView({ state: "folder-unreachable" });
+      else if (suggestion) setView({ state: "suggestion", suggestion: { id: suggestion.id, name: suggestion.name } });
+      else setView({ state: "none" });
+    } catch {
+      if (seq !== loadSeq.current) return;
+      setView({ state: "none" });
+      setMessage("Vi kunde inte läsa mötesmappen just nu.");
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    onChange({
+      agendaDocId: chosen?.kind === "agenda" ? agendaDocId : null,
+      agendaName: chosen?.kind === "agenda" ? chosen.name : null,
+      ...formatFields(formats, formatValue),
+      transcriptInDoc: chosen?.kind === "agenda" && shareTranscript ? transcriptInDoc : false,
+      confirmed: chosen !== null,
+    });
+  }, [chosen, agendaDocId, formats, formatValue, transcriptInDoc, shareTranscript, onChange]);
+
+  const chooseDoc = (doc: { id: string; name: string }) => {
+    setAgendaDocId(doc.id);
+    setChosen({ kind: "agenda", name: doc.name || "Valt dokument" });
+    setMessage(null);
+  };
+
+  const pickerFailed = (err: unknown) =>
+    setMessage(err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen.");
+
+  const onPickDoc = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const picked = await picker.open({ mode: "doc", parentId: folderId ?? undefined, title: "Välj dagordning" });
+      if (picked?.[0]) chooseDoc(picked[0]);
+    } catch (err) {
+      pickerFailed(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onUseFolder = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const picked = await picker.open({ mode: "folder", title: "Välj mötesmappen" });
+      if (!picked?.[0]) return;
+      const res = await fetch(`/api/orgs/${orgId}/meeting-folder`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folderId: picked[0].id }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { message?: string } | null;
+        setMessage(json?.message ?? "Mötesmappen kunde inte sparas. Försök igen.");
+        return;
+      }
+      await load();
+    } catch (err) {
+      pickerFailed(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AgendaStepView
+      view={view}
+      formats={formats}
+      formatValue={formatValue}
+      chosen={chosen}
+      offerTranscript={shareTranscript}
+      transcriptInDoc={transcriptInDoc}
+      busy={busy}
+      message={message}
+      disabled={disabled}
+      onUseSuggestion={() => view.state === "suggestion" && chooseDoc(view.suggestion)}
+      onPickDoc={() => void onPickDoc()}
+      onUseFolder={() => void onUseFolder()}
+      onNewDoc={() => {
+        setChosen({ kind: "new" });
+        setAgendaDocId(null);
+        setMessage(null);
+      }}
+      onFormatChange={setFormatValue}
+      onTranscriptChange={setTranscriptInDoc}
+    />
+  );
+}

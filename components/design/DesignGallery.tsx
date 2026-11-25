@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, type ReactNode } from "react";
+import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
 import type { Speaker } from "@/components/live/types";
 import { Badge } from "@/components/ui/Badge";
@@ -136,6 +137,43 @@ function MicCheckDemo() {
         setLevel(0);
         setTimeout(() => setLevel(0.62), 900);
       }}
+    />
+  );
+}
+
+const agendaFormats: AgendaFormatOption[] = [
+  { id: "f1", kind: "veckomote", name: "Veckomöte", isDefault: true },
+  { id: null, kind: "styrelseprotokoll", name: "Styrelseprotokoll", isDefault: false },
+  { id: null, kind: "enkel", name: "Enkel", isDefault: false },
+];
+
+/** Consent step with the agenda step in one state; Använd / Skapa nytt dokument work locally (no Picker). */
+function AgendaDemo({ view }: { view: AgendaViewState }) {
+  const off = view.state === "picker-off";
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off ? { kind: "new" } : null);
+  const [formatValue, setFormatValue] = useState("id:f1");
+  const [transcript, setTranscript] = useState(false);
+  return (
+    <LiveDemo
+      phase="consent"
+      agenda={
+        <AgendaStepView
+          view={view}
+          formats={agendaFormats}
+          formatValue={formatValue}
+          chosen={chosen}
+          offerTranscript
+          transcriptInDoc={transcript}
+          onUseSuggestion={() => view.state === "suggestion" && setChosen({ kind: "agenda", name: view.suggestion.name })}
+          onPickDoc={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
+          onUseFolder={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
+          onNewDoc={() => setChosen({ kind: "new" })}
+          onFormatChange={setFormatValue}
+          onTranscriptChange={setTranscript}
+        />
+      }
+      agendaConfirmed={chosen !== null}
+      agendaDoc={chosen?.kind === "agenda" ? { transcriptInDoc: transcript } : null}
     />
   );
 }
@@ -306,6 +344,10 @@ const render: Record<string, () => ReactNode> = {
   ),
   "live-consent": () => <MicCheckDemo />,
   "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" />,
+  "live-agenda-suggestion": () => <AgendaDemo view={{ state: "suggestion", suggestion: { id: "d1", name: "Möte 25/11" } }} />,
+  "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
+  "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable" }} />,
+  "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (
     <LiveDemo

@@ -35,6 +35,11 @@ const schema = z.object({
   ALARM_EMAIL: z.email(),
   // Comma list of emails allowed to run Testmöte; falls back to ALARM_EMAIL (see lib/testmeeting/admin.ts).
   ADMIN_EMAILS: optional,
+  // Google Picker (A11): an API key restricted to the Picker API + our referrers, and the Cloud
+  // project number (the Picker's appId, needed for drive.file grants). Both absent: the Picker is
+  // off and the start screen offers only "Skapa nytt dokument".
+  GOOGLE_PICKER_API_KEY: optional,
+  GOOGLE_PROJECT_NUMBER: optional,
   CRON_SECRET: required,
   APP_URL: z.url(),
   // finite(): "Infinity" would switch the global caps off.
@@ -62,6 +67,11 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
     throw new Error(`Invalid environment:\n${lines.join("\n")}`);
   }
   return result.data;
+}
+
+/** The Google Picker is configured (both of its env vars are set). */
+export function pickerEnabled(env: Pick<Env, "GOOGLE_PICKER_API_KEY" | "GOOGLE_PROJECT_NUMBER">): boolean {
+  return Boolean(env.GOOGLE_PICKER_API_KEY && env.GOOGLE_PROJECT_NUMBER);
 }
 
 let cached: Env | undefined;

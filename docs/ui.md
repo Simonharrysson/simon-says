@@ -156,8 +156,11 @@ or behind "Visa 1 varning till ▾" when something red is already on screen. Sta
 
 Building blocks (usable on their own):
 
-- `ConsentStep {orgName, shareTranscript, onStart, starting?, error?, micLevel?, onMicCheck?}` —
-  Start is disabled until "Alla i rummet vet att mötet transkriberas och kan be om paus" is ticked.
+- `ConsentStep {orgName, shareTranscript, onStart, starting?, error?, micLevel?, onMicCheck?, agenda?, agendaConfirmed?, agendaDoc?, onNewDocInstead?}` —
+  Start is disabled until "Alla i rummet vet att mötet transkriberas och kan be om paus" is ticked
+  and the agenda choice is confirmed. `agenda` (the `AgendaStep`) renders under the checkbox;
+  `agendaDoc` switches the Doc fact to "skrivs i den valda dagordningen"; `onNewDocInstead` puts
+  "Skapa nytt dokument i stället" in the error banner (the controller passes it for `agenda_*` errors).
 - `MeetingControls {status: live|paused|ending, onPause, onResume, onStop, busy?, canPause?}` —
   big Paus; Avsluta asks once (dialog) before `onStop`; `canPause={false}` leaves only Avsluta.
 - `MeetingTimer {elapsedMs, paused?, limitMs = 4 h, size?}` — mm:ss / h:mm:ss + allowance rail (red in the last 15 min).
@@ -213,6 +216,37 @@ the page. Automatic stops and the time banner name the limit (4 h, the förening
 the transcription service's quota). "N medlemmar fick inte åtkomst – dela dokumentet manuellt" when sharing failed.
 Sessions last at most an hour (Ruling 39): at the rollover new voices appear as "Vem är detta?" in the list; the
 name round never reopens.
+
+## Agenda step and the Google Picker (meeting formats A11)
+
+The consent step asks which Doc the meeting runs in. `AgendaStep` (`components/live/AgendaStep.tsx`)
+is the container: it reads `GET /api/orgs/<id>/agenda-candidates` (the förening's meeting folder,
+read with the starter's own Google grant; Docs already used by a meeting are left out), opens the
+Google Picker (`usePicker()` in `components/google/Picker.tsx`, token from
+`POST /api/google/picker-token`) and reports an `AgendaChoice` through `onChange`.
+`AgendaStepView` is the presentational part (no fetching), used by `/design`.
+
+| State | Shows | Confirms |
+|---|---|---|
+| suggestion | blue magnet "Förslag: <Doc-namn>" · **Använd** · Välj annan | Använd, or a Picker pick |
+| none (no folder, or nothing new in it) | "Ingen dagordning – skapa nytt dokument i formatet <X>" · **Skapa nytt dokument** · Välj dagordning | either |
+| folder not reachable (folder set, this starter's grant has never opened it) | explanation · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
+| picker off (`GOOGLE_PICKER_API_KEY`/`GOOGLE_PROJECT_NUMBER` unset) | green "Nytt dokument i formatet <X>" + "Google-väljaren är inte inställd än." | already confirmed (as before A11) |
+
+Start stays disabled until the choice is confirmed: a suggestion is never used on its own. Once
+confirmed, a green magnet line shows the choice ("Dagordning: <namn>" or "Nytt dokument i formatet
+<X>") with Välj annan / Skapa nytt dokument / Välj dagordning to change it. With an agenda Doc and a
+förening that shares transcripts, "Lägg transkriptet i dokumentet?" appears (default off). The
+"Format" `<select>` (default first, marked "(förvalt)") overrides the format; the default sends
+nothing, another standard format sends `formatKind`, a learned version `formatProfileId`. Picker
+and request problems show as one polite line under the step (`aria-live`). Doc names are the
+förening's text: shown in the UI, never logged. A failed start with an `agenda_*` code shows the
+server's Swedish message with "Skapa nytt dokument i stället", which remounts the step on a
+confirmed new Doc.
+
+`FormatCard`: admins get "Välj mötesmapp" / "Byt mötesmapp" (folder Picker →
+`POST /api/orgs/<id>/meeting-folder`), or "Google-väljaren är inte inställd än." with the Picker off.
+`/design`: `live-agenda-suggestion`, `live-agenda-none`, `live-agenda-folder`, `live-agenda-off`.
 
 ## Name round and speaker list (Task 11)
 

@@ -8,6 +8,7 @@ import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
+import { getEnv, pickerEnabled } from "@/lib/env";
 import { appOrigin } from "@/lib/origin";
 import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -81,6 +82,7 @@ export default async function OrgPage({
           meetingFolder={{ id: org.meeting_folder_id ?? null }}
           formats={formats}
           changeFormat={changeFormatAction}
+          pickerEnabled={pickerEnabled(getEnv())}
         />
       }
       liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}

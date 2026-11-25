@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { IconMic, IconMicOff } from "@/components/ui/icons";
@@ -24,10 +24,18 @@ const startErrors: Record<Exclude<StartError, null>, { title: string; text: stri
 };
 
 /** The banner for a start error; `text` replaces the default explanation (e.g. the server's own message). */
-export function StartErrorBanner({ error, text }: { error: Exclude<StartError, null>; text?: string | null }) {
+export function StartErrorBanner({
+  error,
+  text,
+  action,
+}: {
+  error: Exclude<StartError, null>;
+  text?: string | null;
+  action?: ReactNode;
+}) {
   const problem = startErrors[error];
   return (
-    <Banner tone="danger" icon={error.startsWith("mic") ? <IconMicOff /> : undefined} title={problem.title}>
+    <Banner tone="danger" icon={error.startsWith("mic") ? <IconMicOff /> : undefined} title={problem.title} action={action}>
       {text ?? problem.text}
     </Banner>
   );
@@ -39,7 +47,8 @@ const HEARD = 0.08;
 /**
  * Before Start. The runner confirms everyone in the room knows the meeting is transcribed
  * (logged per meeting); Start stays disabled until then. An optional mic check shows a level
- * meter, so a dead mic is found before Start, not in front of everyone.
+ * meter, so a dead mic is found before Start, not in front of everyone. `agenda` (the
+ * AgendaStep) renders under the consent checkbox; Start also waits for `agendaConfirmed`.
  */
 export function ConsentStep({
   orgName,
@@ -50,6 +59,10 @@ export function ConsentStep({
   errorText,
   micLevel,
   onMicCheck,
+  agenda,
+  agendaConfirmed = true,
+  agendaDoc = null,
+  onNewDocInstead,
 }: {
   orgName: string;
   /** Whether the transcript gets its own tab in the Doc (org setting). */
@@ -63,6 +76,14 @@ export function ConsentStep({
   micLevel?: number | null;
   /** Ask for the mic and start reporting `micLevel`. Without it, no mic check is shown. */
   onMicCheck?: () => void;
+  /** The agenda step (AgendaStep), shown under the consent checkbox. */
+  agenda?: ReactNode;
+  /** The agenda choice is confirmed (Använd, a Picker pick, or "Skapa nytt dokument"). */
+  agendaConfirmed?: boolean;
+  /** The meeting runs in the förening's own agenda Doc (the facts say so). */
+  agendaDoc?: { transcriptInDoc: boolean } | null;
+  /** After an agenda_* start error: "Skapa nytt dokument i stället" in the error banner. */
+  onNewDocInstead?: () => void;
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
@@ -85,10 +106,17 @@ export function ConsentStep({
 
       <ul className="consent__facts">
         <li>Laptopen lyssnar med sin egen mikrofon. Ställ den mitt på bordet.</li>
-        <li>
-          Anteckningarna skrivs i ett nytt Google-dokument i din Drive och delas med föreningens medlemmar
-          {shareTranscript ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
-        </li>
+        {agendaDoc ? (
+          <li>
+            Anteckningarna skrivs i den valda dagordningen
+            {agendaDoc.transcriptInDoc ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen läggs inte i dokumentet."}
+          </li>
+        ) : (
+          <li>
+            Anteckningarna skrivs i ett nytt Google-dokument i din Drive och delas med föreningens medlemmar
+            {shareTranscript ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
+          </li>
+        )}
         <li>Paus stoppar ljudet direkt.</li>
         <li>Låt locket vara öppet och sätt i laddaren – stängs locket slutar laptopen lyssna.</li>
       </ul>
@@ -118,7 +146,19 @@ export function ConsentStep({
         </div>
       )}
 
-      {error && <StartErrorBanner error={error} text={errorText} />}
+      {error && (
+        <StartErrorBanner
+          error={error}
+          text={errorText}
+          action={
+            onNewDocInstead ? (
+              <Button size="sm" onClick={onNewDocInstead}>
+                Skapa nytt dokument i stället
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
 
       <label className={`consent__check${confirmed ? " is-checked" : ""}`} htmlFor={`${id}-ok`}>
         <input
@@ -131,21 +171,23 @@ export function ConsentStep({
         <span>Alla i rummet vet att mötet transkriberas och kan be om paus</span>
       </label>
 
+      {agenda}
+
       <Button
         variant="primary"
         size="lg"
         block
         icon={<IconMic />}
-        disabled={!confirmed}
+        disabled={!confirmed || !agendaConfirmed}
         loading={starting}
         onClick={onStart}
-        aria-describedby={!confirmed ? `${id}-why` : undefined}
+        aria-describedby={!confirmed || !agendaConfirmed ? `${id}-why` : undefined}
       >
         {starting ? "Startar…" : "Starta mötet"}
       </Button>
-      {!confirmed && (
+      {(!confirmed || !agendaConfirmed) && (
         <p id={`${id}-why`} className="hint consent__why">
-          Kryssa i rutan ovan först.
+          {!confirmed ? "Kryssa i rutan ovan först." : "Välj dagordning eller skapa ett nytt dokument först."}
         </p>
       )}
     </section>

@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { testEnv } from "@/test/env";
 import { describe, expect, it } from "vitest";
 import * as envModule from "./env";
-import { getEnv, parseEnv } from "./env";
+import { getEnv, parseEnv, pickerEnabled } from "./env";
 
 const valid: Record<string, string> = { ...testEnv };
 
@@ -61,6 +61,18 @@ describe("parseEnv", () => {
   it("treats empty optional keys as missing", () => {
     const env = parseEnv({ ...valid, RESEND_API_KEY: "" });
     expect(env.RESEND_API_KEY).toBeUndefined();
+  });
+
+  it("GOOGLE_PICKER_API_KEY and GOOGLE_PROJECT_NUMBER are optional; the Picker needs both", () => {
+    const env = parseEnv(valid);
+    expect(env.GOOGLE_PICKER_API_KEY).toBeUndefined();
+    expect(env.GOOGLE_PROJECT_NUMBER).toBeUndefined();
+    expect(pickerEnabled(env)).toBe(false);
+    expect(pickerEnabled(parseEnv({ ...valid, GOOGLE_PICKER_API_KEY: "k", GOOGLE_PROJECT_NUMBER: "" }))).toBe(false);
+    const on = parseEnv({ ...valid, GOOGLE_PICKER_API_KEY: "k", GOOGLE_PROJECT_NUMBER: "123456789012" });
+    expect(on.GOOGLE_PICKER_API_KEY).toBe("k");
+    expect(on.GOOGLE_PROJECT_NUMBER).toBe("123456789012");
+    expect(pickerEnabled(on)).toBe(true);
   });
 
   it("requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET", () => {

@@ -6,6 +6,7 @@ import { MicCapture } from "@/lib/audio/capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import { runEndFlow } from "@/lib/live/end-flow";
 import { stopParam } from "@/lib/ui/limit-copy";
+import { AgendaStep, type AgendaChoice, type AgendaFormatOption } from "./AgendaStep";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
@@ -59,6 +60,10 @@ export interface LiveMeetingControllerProps {
   stopReason?: string | null;
   /** Members the Doc could not be shared with at start (from the `started` event); null: unknown. */
   shareFailed?: number | null;
+  /** New meeting: the formats the start screen offers (default first). */
+  formats?: AgendaFormatOption[];
+  /** The Google Picker is configured; off: only a new Doc (as before A11). */
+  pickerEnabled?: boolean;
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -67,6 +72,9 @@ function initialPhase(m: LiveMeetingInfo | null): LivePhase {
   if (m.resumable) return "resume";
   return "ended";
 }
+
+/** Stable: AgendaStep reports its choice in an effect that depends on `formats`. */
+const NO_FORMATS: AgendaFormatOption[] = [];
 
 const RUNNING: LivePhase[] = ["starting", "live", "paused", "name-round", "error"];
 
@@ -82,6 +90,11 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [phase, setPhase] = useState<LivePhase>(() => initialPhase(props.meeting));
   const [startError, setStartError] = useState<StartError>(null);
   const [startErrorText, setStartErrorText] = useState<string | null>(null);
+  /** The server's error code of a failed start (agenda_* offers "Skapa nytt dokument i stället"). */
+  const [startErrorCode, setStartErrorCode] = useState<string | null>(null);
+  const [agenda, setAgenda] = useState<AgendaChoice | null>(null);
+  /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
+  const [agendaKey, setAgendaKey] = useState(0);
   const [connection, setConnection] = useState<ConnectionState>("ok");
   const [partial, setPartial] = useState("");
   const [micLevel, setMicLevel] = useState<number | null>(null);
@@ -341,6 +354,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setPhase("starting");
     setStartError(null);
     setStartErrorText(null);
+    setStartErrorCode(null);
+    const choice = agenda;
     void (async () => {
       try {
         await opened;
@@ -354,13 +369,21 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         const res = await fetch("/api/meetings", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ orgId: props.orgId, consent: true }),
+          body: JSON.stringify({
+            orgId: props.orgId,
+            consent: true,
+            agendaDocId: choice?.agendaDocId ?? null,
+            formatProfileId: choice?.formatProfileId ?? null,
+            formatKind: choice?.formatKind ?? null,
+            transcriptInDoc: choice?.agendaDocId ? choice.transcriptInDoc : null,
+          }),
         });
-        const json = (await res.json().catch(() => null)) as ({ message?: string } & Partial<typeof created>) | null;
+        const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
         if (!res.ok || !json?.meetingId) {
           cap.stop();
           setStartError(res.status === 429 ? "limit" : "start-failed");
           setStartErrorText(json?.message ?? null);
+          setStartErrorCode(typeof json?.error === "string" ? json.error : null);
           setPhase("consent");
           return;
         }
@@ -685,6 +708,33 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       nameRoundBusy={nameRoundBusy}
       startError={startError}
       startErrorText={startErrorText}
+      agenda={
+        props.meeting === null ? (
+          <AgendaStep
+            key={agendaKey}
+            orgId={props.orgId}
+            formats={props.formats ?? NO_FORMATS}
+            pickerEnabled={props.pickerEnabled ?? false}
+            shareTranscript={props.shareTranscript}
+            startWithNewDoc={agendaKey > 0}
+            disabled={phase === "starting"}
+            onChange={setAgenda}
+          />
+        ) : undefined
+      }
+      agendaConfirmed={props.meeting === null ? agenda?.confirmed === true : true}
+      agendaDoc={agenda?.agendaDocId ? { transcriptInDoc: agenda.transcriptInDoc } : null}
+      onNewDocInstead={
+        startError === "start-failed" && startErrorCode?.startsWith("agenda_")
+          ? () => {
+              setStartError(null);
+              setStartErrorText(null);
+              setStartErrorCode(null);
+              setAgenda(null);
+              setAgendaKey((k) => k + 1);
+            }
+          : undefined
+      }
       micLevel={micLevel}
       onMicCheck={() => {
         setStartError(null);
