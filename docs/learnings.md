@@ -396,3 +396,11 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   titles, so an orphaned one is never offered as a real meeting's agenda.
 - **Vitest trap.** `beforeEach(() => m.fn.mockReset())` returns the mock, which vitest runs as a teardown after each test: a
   mock left rejecting then fails the test with its own error. Use a block body.
+
+## Meeting formats A13 — agenda Testmöte on prod (2026-11-25, controller)
+
+- Migrations: prod already had 0023–0025; 0026 (is_test backfill) dry-run flipped 4/5 meetings (all earlier Testmöten), applied via the Management API. Preview deploys use the same database (no Supabase branch).
+- Deployed v1 62e298a to prod and ran "Testmöte med dagordning" twice in Simon's own test förening. Each run ≈ 1–2 min wall time, 3 ticks + end pass.
+- Run A: notes under the right items; under an item with prepared sub-bullets ours nest at level 2 after them, elsewhere our "– " lines; Må-runda shows only "Må-runda genomförd." (no personal-plan traps became tasks); four tasks by role under the item and in "Vad ska vi göra till nästa gång?"; Närvarande filled from the name round, Sekreterare untouched; Tid "22:38–22:39"; LIVE line → "Simon Says · avslutat 22:39".
+- Run B: event `followup_prefilled` before the first tick; "Från förra veckan" pre-filled with run A's four open tasks by role; the two reported done got "✓ klart" in B and `done = true` on run A's source rows (propagateDone); new decisions/tasks under Ekonomi and Övrigt; tasks section lists only B's new tasks (open carried tasks carry again next week).
+- Observed: a task reported "not done" gets no note of its own; acceptable for now.
