@@ -46,7 +46,7 @@ const { NextRequest } = await import("next/server");
 const { planFormatRender } = await import("@/lib/docs/format-render");
 const { parseNotesTab } = await import("@/lib/docs/tab");
 const { planAnchoring, INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
-const { scanAgenda, newAgendaItems } = await import("@/lib/agenda/scan");
+const { scanAgenda, newAgendaItems, adoptedAgendaRanges } = await import("@/lib/agenda/scan");
 const { VECKOMOTE } = await import("@/lib/formats/standard");
 const { buildRequest, anchorRoles } = await import("@/lib/notes/engine");
 const { CHECKIN_PLACEHOLDER } = await import("@/lib/notes/checkin");
@@ -622,6 +622,85 @@ describe("format layout: the render list (F2) and Claude's view of own lines (F3
     expect(lines).toContain("Simon Says · avslutat 19:10");
     expect(lines).toContain("18:05–19:10");
     expect(ended.rows.find((r) => r.id === "info-tid")).toMatchObject({ text: "18:05–19:10", last_rendered_text: "18:05–19:10" });
+  });
+});
+
+
+describe("format layout: fix round 1 (pure)", () => {
+  const M = "m-fix1";
+  const emptyDiff = (rows: NoteItemRow[]) => ({ rows, locked: [] as NotesItem[], deletedIds: [] as string[] });
+  /** A human types `text` just before the final "." of our row's line (inside its range: the row locks). */
+  const humanEdit = (doc: Doc, id: string, text: string) => {
+    const span = itemSpan(parseNotesTab(doc, TAB), `ss-${M}-${id}`)!;
+    applyDoc(doc, [{ insertText: { text, location: { tabId: TAB, index: span.paraEnd - 2 } } }]);
+  };
+
+  it("R-A6: with the primary locked, Claude edits the tasks copy under the primary's id; done reaches the copy only", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    const n1: NotesItem = { id: "n1", section: "action", text: "Boka salen", owner: "Kassör", anchor: "ag-4" };
+    const rows = renderInto(doc, meeting, [], tick.formatDesired([n1], emptyDiff([]), [], VECKOMOTE)).rows;
+    expect(linesOf(doc).filter((l) => l === "Kassör: Boka salen.")).toHaveLength(2);
+    humanEdit(doc, "n1", " gärna");
+    const st = tick.readState(parseNotesTab(doc, TAB), rows);
+    expect(st.diff.locked.map((i) => i.id)).toEqual(["n1"]);
+    const { items, proxied } = tick.copyProxies(st.diff.rows);
+    expect(items).toEqual([{ id: "n1", section: "action", text: "Boka salen", owner: "Kassör", anchor: "ag-4" }]);
+    expect([...proxied]).toEqual(["n1"]);
+    // Claude: change n1 done:true.
+    const answer = items.map((i) => ({ ...i, done: true }));
+    expect(tick.unproxy(answer, proxied)).toEqual([
+      { id: "n1-t", section: "action", text: "Boka salen", owner: "Kassör", anchor: "tasks", copyOf: "n1", done: true },
+    ]);
+    const out = renderInto(doc, meeting, st.diff.rows, tick.formatDesired(tick.unproxy(answer, proxied), st.diff, [], VECKOMOTE));
+    const lines = linesOf(doc);
+    expect(lines).toContain("Kassör: Boka salen gärna."); // the human's primary, untouched
+    expect(lines).toContain("Kassör: Boka salen. ✓ klart"); // the copy keeps updating
+    expect(out.rows.find((r) => r.id === "n1")).toMatchObject({ locked: true });
+    expect(out.rows.find((r) => r.id === "n1-t")).toMatchObject({ done: true, locked: false, anchor: "tasks", copy_of: "n1" });
+    // A copy whose primary is not human-edited is never proxied; a locked copy neither.
+    expect(tick.copyProxies(rows).items).toEqual([]);
+    expect(tick.copyProxies(st.diff.rows.map((r) => (r.id === "n1-t" ? { ...r, locked: true } : r))).items).toEqual([]);
+  });
+
+  it("sentTicks: the first notes_sent_tick ticks, by tick number", () => {
+    const segs = [seg({ tick_no: 4 }), seg({ tick_no: 2 }), seg({ tick_no: 2, segment_index: 1 }), seg({ tick_no: 7 }), seg({ tick_no: null })];
+    expect([...tick.sentTicks(segs, 0)]).toEqual([]);
+    expect([...tick.sentTicks(segs, 2)]).toEqual([2, 4]);
+    expect([...tick.sentTicks(segs, 9)]).toEqual([2, 4, 7]);
+  });
+
+  it("endPassWindow: masks from the first unsent line to min(CHECKIN_MAX_MS, last + 1), closed as unsure (no Må-runda line)", () => {
+    const open = { startMs: null, endMs: null, closed: false, failures: 1 };
+    const w = tick.endPassWindow(open, { firstMs: 60_000, lastMs: 90_000 });
+    expect(w).toEqual({ startMs: 60_000, endMs: 90_001, closed: true, failures: 3 });
+    expect(tick.endPassWindow(open, { firstMs: 60_000, lastMs: 40 * 60_000 })).toMatchObject({ startMs: 60_000, endMs: 20 * 60_000 });
+    expect(tick.endPassWindow(open, { firstMs: 25 * 60_000, lastMs: 26 * 60_000 })).toEqual({ startMs: null, endMs: null, closed: true, failures: 3 });
+    const base = { attendees: "", checkinKey: "ag-2", tidRow: false, final: true, startedAt: FMT_STARTED, endedAt: FMT_ENDED };
+    expect(tick.serverItems({ ...base, window: w })).toEqual([]);
+    // Masked in the blocks like any closed window.
+    const blocks = tick.buildTranscript(
+      [seg({ start_ms: 30_000 }), seg({ start_ms: 60_000, segment_index: 1, text: "Jag mår bra" })],
+      [{ id: "sess-a", started_at: "2026-11-25T17:05:00Z" }],
+      [],
+      w,
+    ).blocks;
+    expect(blocks).toEqual([`[00:00:30] S1-speaker_0: hej\n[00:01:00] –: ${CHECKIN_PLACEHOLDER}`]);
+  });
+
+  it("adopts our ag-N range the anchor map lost, instead of making a second one", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    insertItemBeforeOvrigt(doc, "Budget 2027");
+    const tab0 = parseNotesTab(doc, TAB);
+    const fresh = newAgendaItems(scanAgenda(tab0, VECKOMOTE), tab0, plan.sectionRanges);
+    expect(fresh.map((f) => f.key)).toEqual(["ag-7"]);
+    renderInto(doc, meeting, [], [], { newAnchors: fresh }); // the range is made; the map is not stored
+    const tab = parseNotesTab(doc, TAB);
+    expect(adoptedAgendaRanges(tab, plan.sectionRanges, M)).toEqual({ "ag-7": `ss-${M}-ag-7` });
+    expect(newAgendaItems(scanAgenda(tab, VECKOMOTE), tab, plan.sectionRanges, M)).toEqual([]);
+    expect(adoptedAgendaRanges(tab, { ...plan.sectionRanges, "ag-7": `ss-${M}-ag-7` }, M)).toEqual({});
+    expect(adoptedAgendaRanges(tab, plan.sectionRanges, "another-meeting")).toEqual({});
   });
 });
 
@@ -1270,7 +1349,14 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
 
   type Found = import("@/lib/notes/checkin").CheckinFound | "failed";
   /** Fake Docs (the simulator, rendered by the planner the tick passes) and fake Claude calls. */
-  function fakes(doc: Doc, opts: { answer?: (input: UpdateNotesInput) => NotesItem[]; detect?: (lines: { atMs: number }[]) => Found } = {}) {
+  function fakes(
+    doc: Doc,
+    opts: {
+      answer?: (input: UpdateNotesInput) => NotesItem[];
+      detect?: (lines: { atMs: number }[]) => Found | "throw";
+      onDetect?: () => Promise<void>;
+    } = {},
+  ) {
     const calls: UpdateNotesInput[] = [];
     const detects: { lines: { atMs: number; text: string }[] }[] = [];
     const headers: (string | undefined)[] = [];
@@ -1295,7 +1381,10 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
       extractNames: async () => [],
       detectCheckin: async (input) => {
         detects.push(input);
-        return { found: opts.detect ? opts.detect(input.lines) : { startMs: null, endMs: null }, usage: null };
+        if (opts.onDetect) await opts.onDetect();
+        const found = opts.detect ? opts.detect(input.lines) : { startMs: null, endMs: null };
+        if (found === "throw") throw new Error("detector down");
+        return { found, usage: null };
       },
       updateNotes: async (input): Promise<UpdateNotesResult> => {
         calls.push(input);
@@ -1581,5 +1670,122 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     expect(lines[lines.indexOf("Tid") + 1]).toBe("18:05–19:10");
     expect((await noteRows(id)).find((r) => r.id === "info-tid")).toMatchObject({ text: "18:05–19:10", last_rendered_text: "18:05–19:10" });
     await adminClient().from("meetings").update({ status: "done" }).eq("id", id);
+  });
+
+  // Fix round 1 -------------------------------------------------------------------------------
+
+  it("detector skipped (deadline) while the start is unknown: no notes call, nothing sent; the next tick sends them masked", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN });
+    await say(id, sessionId, "Hej allihop", 1000);
+    await say(id, sessionId, "Jag mår bra idag", 2000);
+    const f = fakes(doc, { detect: (lines) => ({ startMs: lines[1].atMs, endMs: null }) });
+    // 60 s left: enough for the notes call (30 s), not for the detector (75 s).
+    const deadlineAt = new Date(f.deps.now!().getTime() + 60_000);
+    expect(await tick.runTick(id, { final: false, deadlineAt }, f.deps)).toBe("ok");
+    expect(f.detects).toHaveLength(0);
+    expect(f.calls).toHaveLength(0);
+    expect((await read(id)).notes_sent_tick ?? 0).toBe(0);
+    expect((await events(id, "tick_ok"))[0].detail).toMatchObject({ held: true });
+
+    await say(id, sessionId, "Lite trött", 3000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    // The detector reads every unsent line (the held tick's too) and finds the start in the held tick.
+    expect(f.detects[0].lines.map((l) => l.atMs)).toEqual([1000, 2000, 3000]);
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0].transcriptBlocks).toEqual([
+      `[00:00:01] S1-speaker_0: Hej allihop\n[00:00:02] –: ${CHECKIN_PLACEHOLDER}`,
+      `[00:00:03] –: ${CHECKIN_PLACEHOLDER}`,
+    ]);
+    expect((await read(id)).notes_sent_tick).toBe(2);
+  });
+
+  it("a detector that throws holds the notes too (start unknown)", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN });
+    await say(id, sessionId, "Jag mår bra idag", 1000);
+    const f = fakes(doc, { detect: () => "throw" });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.detects).toHaveLength(1);
+    expect(f.calls).toHaveLength(0);
+    expect((await read(id)).checkin_window).toEqual({ startMs: null, endMs: null, closed: false, failures: 1 });
+  });
+
+  it("end pass with the start still unknown and no detector answer: over-masks the unsent lines, closes, no Må-runda line", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN, status: "ending" });
+    await say(id, sessionId, "Hej allihop", 1000);
+    await say(id, sessionId, "Jag mår bra idag", 2000);
+    const f = fakes(doc, { detect: () => "throw" });
+    expect(await tick.runTick(id, { final: true }, f.deps)).toBe("ok");
+    expect(f.calls).toHaveLength(1);
+    expect(f.calls[0].transcriptBlocks).toEqual([`[00:00:01] –: ${CHECKIN_PLACEHOLDER}`]);
+    expect((await read(id)).checkin_window).toEqual({ startMs: 1000, endMs: 2001, closed: true, failures: 3 });
+    expect(linesOf(doc)).not.toContain("– Må-runda genomförd.");
+    expect(linesOf(doc)).toContain("Simon Says · avslutat 19:10");
+    await adminClient().from("meetings").update({ status: "done" }).eq("id", id);
+  });
+
+  it("R-A6: a human-edited task keeps its tasks copy updating ('✓ klart' there, the human's line untouched)", async () => {
+    const { id, sessionId, doc } = await formatMeeting();
+    await say(id, sessionId, "Anna bokar salen", 1000);
+    let round = 0;
+    const f = fakes(doc, {
+      answer: (input) =>
+        ++round === 1
+          ? [...input.items, { id: "n1", section: "action", text: "Boka salen", owner: "Anna Berg", anchor: "ag-4" }]
+          : input.items.map((i) => (i.id === "n1" ? { ...i, done: true } : i)),
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(linesOf(doc).filter((l) => l === "Kassör: Boka salen.")).toHaveLength(2);
+    // A human edits the primary (under Kommande event): it locks.
+    const span = itemSpan(parseNotesTab(doc, TAB), `ss-${id}-n1`)!;
+    applyDoc(doc, [{ insertText: { text: " gärna", location: { tabId: TAB, index: span.paraEnd - 2 } } }]);
+
+    await say(id, sessionId, "Salen är bokad", 2000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    const input = f.calls[1];
+    expect(input.items).toEqual([expect.objectContaining({ id: "n1", anchor: "ag-4", text: "Boka salen" })]);
+    expect(input.locked.map((i) => i.id)).not.toContain("n1");
+    expect(input.deletedIds).not.toContain("n1");
+    const lines = linesOf(doc);
+    expect(lines).toContain("Kassör: Boka salen gärna.");
+    expect(lines).toContain("Kassör: Boka salen. ✓ klart");
+    const rows = await noteRows(id);
+    expect(rows.find((r) => r.id === "n1")).toMatchObject({ locked: true, done: false });
+    expect(rows.find((r) => r.id === "n1-t")).toMatchObject({ locked: false, done: true, anchor: "tasks", copy_of: "n1" });
+  });
+
+  it("a tick whose lease moved on stores no check-in window (busy)", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN });
+    await say(id, sessionId, "Jag mår bra idag", 1000);
+    const f = fakes(doc, {
+      detect: () => ({ startMs: 1000, endMs: null }),
+      onDetect: async () => {
+        await adminClient().from("meetings").update({ tick_lease_id: randomUUID() }).eq("id", id);
+      },
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("busy");
+    expect((await read(id)).checkin_window).toEqual(OPEN);
+    expect(f.calls).toHaveLength(0);
+    await adminClient().from("meetings").update({ tick_lease_id: null, tick_lease_until: null }).eq("id", id);
+  });
+
+  it("an ag-N range of ours missing from the map is adopted, not duplicated", async () => {
+    const { id, sessionId, doc } = await formatMeeting();
+    insertItemBeforeOvrigt(doc, "Budget 2027");
+    const m0 = await read(id);
+    const tab0 = parseNotesTab(doc, TAB);
+    const fresh = newAgendaItems(scanAgenda(tab0, VECKOMOTE), tab0, m0.section_ranges);
+    // An earlier render made the range, but storing the map failed.
+    renderInto(doc, m0, [], [], { newAnchors: fresh });
+    await say(id, sessionId, "Budgeten", 1000);
+    const f = fakes(doc);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    const m = await read(id);
+    expect((m.section_ranges as Record<string, string>)["ag-7"]).toBe(`ss-${id}-ag-7`);
+    expect(m.agenda_roles?.["ag-7"]).toBe("topic");
+    expect(parseNotesTab(doc, TAB).ranges.get(`ss-${id}-ag-7`)).toHaveLength(1);
+    expect(f.calls[0].agenda?.anchors.find((a) => a.key === "ag-7")).toMatchObject({ label: "Budget 2027", role: "topic" });
+    expect((await events(id, "tick_ok"))[0].detail).toMatchObject({ anchorsAdded: 0 });
   });
 });

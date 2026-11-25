@@ -2,7 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
 import { propagateDone } from "@/lib/agenda/followup";
-import { itemAt, newAgendaItems, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
+import { adoptedAgendaRanges, itemAt, newAgendaItems, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
 import { recordClaudeUsage } from "@/lib/db/claude-usage";
 import { logEvent } from "@/lib/db/events";
 import type { CheckinWindow, ItemRole, MeetingRow, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/types";
@@ -23,7 +23,7 @@ import type { FormatProfile } from "@/lib/formats/schema";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import { profileFor } from "@/lib/formats/store";
 import type { AgendaContext } from "@/lib/notes/agenda-prompt";
-import { CHECKIN_PLACEHOLDER, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
+import { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
 import { ownerLabel, resolveOwner } from "@/lib/people/roles";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
 import { getEnv } from "@/lib/env";
@@ -418,7 +418,8 @@ export function serverItems(input: {
 }): NotesItem[] {
   const out: NotesItem[] = [];
   if (input.attendees) out.push({ id: ATTENDEES_ROW, section: "attendees", text: input.attendees, anchor: "info.narvarande" });
-  if (input.window?.closed && input.window.startMs !== null && input.checkinKey) {
+  // Not after a close without an answer (detector failures, or the end pass's over-mask).
+  if (input.window?.closed && input.window.startMs !== null && input.window.failures < CHECKIN_MAX_FAILURES && input.checkinKey) {
     out.push({ id: CHECKIN_DONE_ROW, section: "note", text: CHECKIN_DONE_TEXT, anchor: input.checkinKey });
   }
   if (input.final && input.tidRow) {
@@ -430,6 +431,11 @@ export function serverItems(input: {
 /**
  * New agenda items of a later read keyed as Claude was told: an item with the label of one found
  * in the tick's first read keeps that key; any other gets a key after every key in use.
+ *
+ * Note: the match is by label only (the indices move between reads). Two new items with one
+ * label, or an item renamed between the first read and the render read, can leave Claude's ag-N
+ * pointing at no anchor (or the other item): the planner then drops that item for this tick and
+ * Claude places it again on the next one (the new anchor is a stored key by then).
  */
 export function rekeyNewItems(
   items: { key: string; start: number; end: number }[],
@@ -463,6 +469,49 @@ export function checkinSpan(fresh: SegmentRead[], earlier: SegmentRead[]): { fir
   return { firstMs: Math.max(firstNew, floor), lastMs };
 }
 
+/** The tick numbers of the blocks already sent to the notes engine (the first `sentTick` ticks). */
+export function sentTicks(segments: SegmentRead[], sentTick: number): Set<number> {
+  const ticks = [...new Set(segments.map((s) => s.tick_no).filter((t): t is number => t !== null))].sort((a, b) => a - b);
+  return new Set(ticks.slice(0, Math.max(0, sentTick)));
+}
+
+/**
+ * The window for an end pass while the Må-runda start is still unknown and the detector gave no
+ * answer (ruling, fix round 1): mask from the first unsent segment up to the earlier of
+ * CHECKIN_MAX_MS after the meeting start and the end of the unsent segments. Over-masking is the
+ * safe side. Closed with `failures = CHECKIN_MAX_FAILURES`, so no "Må-runda genomförd." line
+ * claims a round nobody confirmed. Nothing left to mask → closed without a window.
+ */
+export function endPassWindow(prev: CheckinWindow, span: { firstMs: number; lastMs: number }): CheckinWindow {
+  const endMs = Math.min(CHECKIN_MAX_MS, span.lastMs + 1);
+  return span.firstMs < endMs
+    ? { startMs: span.firstMs, endMs, closed: true, failures: Math.max(prev.failures, CHECKIN_MAX_FAILURES) }
+    : { startMs: null, endMs: null, closed: true, failures: Math.max(prev.failures, CHECKIN_MAX_FAILURES) };
+}
+
+/**
+ * R-A6 with a human-edited primary: its tasks copy (`<id>-t`, still ours) keeps updating. Claude
+ * gets the copy as an editable item under the primary's id and anchor (its own text, owner, due
+ * and done); `proxied` are those primary ids, to be left out of `locked` and `deletedIds`.
+ */
+export function copyProxies(rows: NoteItemRow[]): { items: NotesItem[]; proxied: Set<string> } {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const items: NotesItem[] = [];
+  for (const copy of rows) {
+    if (!copy.copy_of || copy.locked || copy.deleted_by_human) continue;
+    const primary = byId.get(copy.copy_of);
+    if (!primary || !(primary.locked || primary.deleted_by_human)) continue;
+    const { copyOf: _c, ...base } = toNotesItem(copy);
+    items.push({ ...base, id: primary.id, ...(primary.anchor ? { anchor: primary.anchor } : {}) });
+  }
+  return { items, proxied: new Set(items.map((i) => i.id)) };
+}
+
+/** Claude's versions of proxied primaries back as their tasks copies (expandCopies' `given` branch renders them). */
+export function unproxy(items: NotesItem[], proxied: Set<string>): NotesItem[] {
+  return items.map((i) => (proxied.has(i.id) ? { ...i, id: `${i.id}-t`, anchor: "tasks", copyOf: i.id } : i));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Database
 
@@ -479,6 +528,15 @@ async function loadMeeting(id: string): Promise<MeetingRow | null> {
 
 async function updateMeeting(id: string, values: Record<string, unknown>): Promise<void> {
   must("tick: update meeting", await db().from("meetings").update(values).eq("id", id));
+}
+
+/** updateMeeting only while `leaseId` still holds the tick lease (like saveRows). False: it moved on, nothing written. */
+async function updateMeetingLeased(id: string, leaseId: string, values: Record<string, unknown>): Promise<boolean> {
+  const rows = must(
+    "tick: update meeting (lease)",
+    await db().from("meetings").update(values).eq("id", id).eq("tick_lease_id", leaseId).select("id"),
+  ) as unknown[];
+  return rows.length > 0;
 }
 
 /** Give every unassigned segment the next tick_no. Null when there was none. */
@@ -638,50 +696,70 @@ export function withOwnerIds(rows: NoteItemRow[], people: PersonRow[]): NoteItem
 }
 
 /**
- * The Må-runda detector for this tick (format layout): while the window is open, one Claude call
- * over the segments of tick `assigned` (20 earlier lines as context), then nextWindow. Skipped
- * without new lines or when `allowed` is false (kill switch, dollar cap, deadline). Usage is
- * recorded here; the window is stored when it changed and a `checkin` event (state and times
- * only) logged when it opened or closed. Returns the window to mask with.
+ * The Må-runda detector for this tick (format layout). While the window is open, one Claude call
+ * over every segment not yet sent to the notes engine (20 sent lines as context), then
+ * nextWindow; the span's floor is the last SENT segment, so no edge moves into a sent block.
+ * Skipped without unsent lines or when `allowed` is false (kill switch, dollar cap, deadline).
+ * `hold`: the start is still unknown and the detector gave no answer, so the unsent lines must
+ * not reach the notes engine yet (they wait for a later tick). The end pass never holds: it
+ * masks by `endPassWindow` instead. Usage is recorded here; the window is stored (lease-guarded)
+ * when it changed and a `checkin` event (state and times only) logged when it opened or closed.
+ * `lost`: the lease moved on, nothing stored.
  */
 async function checkinStep(
   meeting: MeetingRow,
+  leaseId: string,
   ctx: { segments: SegmentRead[]; sessions: SessionRead[]; speakers: SpeakerRead[] },
-  assigned: number | null,
+  sentTick: number,
   agenda: AgendaContext,
   allowed: boolean,
+  final: boolean,
   deps: TickDeps,
-): Promise<CheckinWindow | null> {
+): Promise<{ window: CheckinWindow | null; hold: boolean; lost: boolean }> {
   const prev = meeting.checkin_window ?? null;
-  if (!prev || prev.closed || assigned === null || !allowed) return prev;
+  if (!prev || prev.closed) return { window: prev, hold: false, lost: false };
   const r = resolver(ctx.sessions, ctx.speakers);
   const sorted = sortSegments(ctx.segments, r.numbers);
-  const fresh = sorted.filter((s) => s.tick_no === assigned);
-  if (!fresh.length) return prev;
-  const earlier = sorted.filter((s) => s.tick_no !== null && s.tick_no < assigned);
+  const sent = sentTicks(sorted, sentTick);
+  const unsent = sorted.filter((s) => s.tick_no !== null && !sent.has(s.tick_no));
+  if (!unsent.length) return { window: prev, hold: false, lost: false };
+  const earlier = sorted.filter((s) => s.tick_no !== null && sent.has(s.tick_no));
+  const span = checkinSpan(unsent, earlier);
   const line = (s: SegmentRead) => ({ atMs: s.start_ms, speaker: r.label(s.el_session_id, s.speaker), text: s.text });
-  let found: CheckinFound | "failed" = "failed";
-  try {
-    const res = await deps.detectCheckin(
-      {
-        lines: fresh.map(line),
-        context: earlier.slice(-CHECKIN_CONTEXT_LINES).map(line),
-        agenda: agenda.anchors.filter((a) => !a.gone).map(({ key, label, role }) => ({ key, label, role })),
-        window: prev,
-      },
-      { orgId: meeting.org_id },
-    );
-    found = res.found;
-    if (res.usage) await recordUsage(meeting.org_id, res.usage);
-  } catch (e) {
-    console.error(`tick ${meeting.id}: checkin: ${errorText(e)}`);
+  let next = prev;
+  let answered = false;
+  if (allowed) {
+    let found: CheckinFound | "failed" = "failed";
+    try {
+      const res = await deps.detectCheckin(
+        {
+          lines: unsent.map(line),
+          context: earlier.slice(-CHECKIN_CONTEXT_LINES).map(line),
+          agenda: agenda.anchors.filter((a) => !a.gone).map(({ key, label, role }) => ({ key, label, role })),
+          window: prev,
+        },
+        { orgId: meeting.org_id },
+      );
+      found = res.found;
+      if (res.usage) await recordUsage(meeting.org_id, res.usage);
+    } catch (e) {
+      console.error(`tick ${meeting.id}: checkin: ${errorText(e)}`);
+    }
+    answered = found !== "failed";
+    next = nextWindow(prev, found, span);
   }
-  const next = nextWindow(prev, found, checkinSpan(fresh, earlier));
-  if (JSON.stringify(next) !== JSON.stringify(prev)) await updateMeeting(meeting.id, { checkin_window: next });
+  let hold = false;
+  if (!answered && !next.closed && next.startMs === null) {
+    if (final) next = endPassWindow(next, span);
+    else hold = true;
+  }
+  if (JSON.stringify(next) !== JSON.stringify(prev)) {
+    if (!(await updateMeetingLeased(meeting.id, leaseId, { checkin_window: next }))) return { window: prev, hold: true, lost: true };
+  }
   if (next.closed !== prev.closed || next.startMs !== prev.startMs) {
     await logEvent(meeting.id, "checkin", { state: next.closed ? "closed" : "open", startMs: next.startMs, endMs: next.endMs });
   }
-  return next;
+  return { window: next, hold, lost: false };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -740,32 +818,51 @@ export async function runTick(
       agenda: AgendaContext;
       fresh: { key: string; start: number; end: number; label: string }[];
       window: CheckinWindow | null;
+      /** The Må-runda start is unknown and the detector gave no answer: no notes call this tick. */
+      hold: boolean;
+      /** Primaries whose (unlocked) tasks copy Claude edits under the primary's id (R-A6). */
+      proxied: Set<string>;
     } | null = null;
+    const sentTick = meeting.notes_sent_tick ?? 0;
     if (layout === "format") {
       const { profile, people } = await loadFormat(meeting);
       const tab = await deps.readNotes(auth, meeting);
+      // Our ag-* ranges the map lost (a render went through, storing the map did not): adopt them.
+      const adopted = adoptedAgendaRanges(tab, meeting.section_ranges ?? {}, meeting.id);
+      if (Object.keys(adopted).length) {
+        const section_ranges = { ...meeting.section_ranges, ...adopted };
+        const agenda_roles = { ...Object.fromEntries(Object.keys(adopted).map((k) => [k, "topic" as const])), ...meeting.agenda_roles };
+        if (!(await updateMeetingLeased(meetingId, leaseId, { section_ranges, agenda_roles }))) return "busy";
+        meeting.section_ranges = section_ranges;
+        meeting.agenda_roles = agenda_roles;
+      }
       const scan = scanAgenda(withoutOwnLines(tab, ctx.rows), profile);
-      const fresh = newAgendaItems(scan, tab, meeting.section_ranges ?? {}).map((n) => ({ ...n, label: itemAt(scan, n.start)?.label ?? "" }));
+      const fresh = newAgendaItems(scan, tab, meeting.section_ranges ?? {}, meeting.id).map((n) => ({ ...n, label: itemAt(scan, n.start)?.label ?? "" }));
       const agenda = agendaContext(tab, scan, meeting, profile, people, fresh);
-      // A8 carry: the detector runs only on a tick with new lines, within the spend caps and time.
+      // The detector runs on the lines not yet sent, within the spend caps and time.
       const detectOk = spendOk && left() >= NAME_ROUND_MIN_LEFT_MS;
-      const window = await checkinStep(meeting, ctx, assigned, agenda, detectOk, deps);
-      fmt = { profile, people, tab, agenda, fresh, window };
+      const step = await checkinStep(meeting, leaseId, ctx, sentTick, agenda, detectOk, final, deps);
+      if (step.lost) return "busy"; // a newer tick holds the lease: it does this tick's work
+      fmt = { profile, people, tab, agenda, fresh, window: step.window, hold: step.hold, proxied: new Set() };
     }
 
     const { blocks, speakerNames } = fmt
       ? buildTranscript(ctx.segments, ctx.sessions, ctx.speakers, fmt.window)
       : buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
     const timeLeft = left();
-    const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && spendOk;
-    const sentTick = meeting.notes_sent_tick ?? 0;
+    const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && spendOk && !fmt?.hold;
     const header = final
       ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now(), layout)
       : liveHeader(deps.now(), layout);
 
     // read → diff → Claude
     const first = readState(fmt ? fmt.tab : await deps.readNotes(auth, meeting), ctx.rows);
-    let items = fmt ? claudeItems(first.items) : first.items;
+    let items = first.items;
+    if (fmt) {
+      const proxies = copyProxies(first.diff.rows);
+      fmt.proxied = proxies.proxied;
+      items = [...claudeItems(first.items), ...proxies.items];
+    }
     let out: UpdateNotesResult | null = null;
     let claudeFailed = false;
     const send = blocksForCall(blocks, sentTick);
@@ -779,8 +876,8 @@ export async function runTick(
               speakerNames,
               notesTabText: first.text,
               items,
-              locked: claudeItems(first.diff.locked),
-              deletedIds: first.diff.deletedIds,
+              locked: claudeItems(first.diff.locked).filter((i) => !fmt.proxied.has(i.id)),
+              deletedIds: first.diff.deletedIds.filter((id) => !fmt.proxied.has(id)),
               final,
               nextId: meeting.notes_next_id ?? undefined,
               agenda: fmt.agenda,
@@ -845,10 +942,10 @@ export async function runTick(
         if (fmt) {
           const ranges = meeting.section_ranges ?? {};
           const scan = scanAgenda(withoutOwnLines(tab, st.diff.rows), fmt.profile);
-          newAnchors = rekeyNewItems(newAgendaItems(scan, tab, ranges), scan, fmt.fresh, agendaKeys(ranges));
+          newAnchors = rekeyNewItems(newAgendaItems(scan, tab, ranges, meetingId), scan, fmt.fresh, agendaKeys(ranges));
           const groupBy = fmt.profile.tasksSection?.groupBy ?? "person";
           const people = fmt.people;
-          res = await deps.render(auth, target, st.diff.rows, formatDesired(items, st.diff, server, fmt.profile), st.revisionId, header, {
+          res = await deps.render(auth, target, st.diff.rows, formatDesired(unproxy(items, fmt.proxied), st.diff, server, fmt.profile), st.revisionId, header, {
             plan: planFormatRender,
             profile: fmt.profile,
             ownerLabel: (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy),
@@ -861,11 +958,16 @@ export async function runTick(
           let rows = res.rows;
           if (fmt) {
             if (newAnchors.length) {
-              // The ranges exist in the Doc now: store them (role topic, F5) whatever happens next.
-              await updateMeeting(meetingId, {
+              // The ranges exist in the Doc now: store them (role topic, F5) under our lease. Lost
+              // lease: the newer tick adopts them from the Doc (adoptedAgendaRanges).
+              const stored = await updateMeetingLeased(meetingId, leaseId, {
                 section_ranges: { ...meeting.section_ranges, ...Object.fromEntries(newAnchors.map((a) => [a.key, itemRangeName(meetingId, a.key)])) },
                 agenda_roles: { ...meeting.agenda_roles, ...Object.fromEntries(newAnchors.map((a) => [a.key, "topic"])) },
               });
+              if (!stored) {
+                console.warn(`tick ${meetingId}: lease ${leaseId} moved on; not saving anchors or notes rows`);
+                return "busy";
+              }
               anchorsAdded = newAnchors.length;
             }
             rows = withOwnerIds(rows, fmt.people);
@@ -933,7 +1035,7 @@ export async function runTick(
       dropped: out?.dropped ?? 0,
       stopReason: out?.stopReason ?? null,
       usd: out?.usage.usd ?? 0,
-      ...(fmt ? { anchorsAdded } : {}),
+      ...(fmt ? { anchorsAdded, held: fmt.hold } : {}),
     });
     return "ok";
   } catch (err) {

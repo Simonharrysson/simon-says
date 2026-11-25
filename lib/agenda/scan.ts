@@ -252,10 +252,13 @@ export function newAgendaItems(
   scan: AgendaScan,
   tab: NotesTab,
   sectionRanges: Record<string, unknown>,
+  meetingId?: string,
 ): { key: string; start: number; end: number }[] {
-  const keys = Object.keys(sectionRanges).filter((k) => /^ag-\d+$/.test(k));
+  // Ranges of ours the map lost (see adoptedAgendaRanges) still count: never a second range.
+  const map = meetingId ? { ...adoptedAgendaRanges(tab, sectionRanges, meetingId), ...sectionRanges } : sectionRanges;
+  const keys = Object.keys(map).filter((k) => /^ag-\d+$/.test(k));
   const parts = keys
-    .map((k) => sectionRanges[k])
+    .map((k) => map[k])
     .filter((name): name is string => typeof name === "string")
     .flatMap((name) => (tab.ranges.get(name) ?? []).flat())
     .filter((p) => p.end > p.start);
@@ -263,4 +266,24 @@ export function newAgendaItems(
   return scan.items
     .filter((i) => !parts.some((p) => p.start < i.paraEnd && p.end > i.paraStart))
     .map((i) => ({ key: `ag-${++max}`, start: i.paraStart, end: i.paraEnd - 1 }));
+}
+
+/**
+ * This meeting's `ss-<meeting>-ag-<n>` ranges in the tab that the anchor map lacks (a render that
+ * created them went through but storing the map did not): key → range name, to adopt into
+ * `section_ranges` instead of creating a duplicate (an ambiguous range is never written through).
+ * Only ranges with text, and only keys the map does not hold yet.
+ */
+export function adoptedAgendaRanges(tab: NotesTab, sectionRanges: Record<string, unknown>, meetingId: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const prefix = `ss-${meetingId}-`;
+  const mapped = new Set(Object.values(sectionRanges).filter((v): v is string => typeof v === "string"));
+  for (const [name, entries] of tab.ranges) {
+    if (!name.startsWith(prefix)) continue;
+    const key = name.slice(prefix.length);
+    if (!/^ag-\d+$/.test(key) || key in sectionRanges || mapped.has(name)) continue;
+    if (!entries.flat().some((p) => p.end > p.start)) continue;
+    out[key] = name;
+  }
+  return out;
 }
