@@ -215,3 +215,14 @@ simulates a network drop; `npm run fake-el -- --session-limit 60` ends every ses
   Nassar" (one letter off, unique candidate). Intended (the list is the förening's spelling), but a wrong list entry
   wins too — rename in the speaker list.
 
+
+## 2026-11-25 · Goal 2 · Testmöte with the name round on prod (deploy f6bc2e4)
+
+- Two Testmöten after the final deploy (15:33 and 15:44): both `done` with "Avslutat", 70/70 transcript lines,
+  16 notes items, ≈ 3.5 min end to end. The name round (Claude, 2.9 s) named all four fictional speakers from the
+  transcript itself — no seeded names; the transcript tab waits for it, so every line carries a name.
+- The tuned prompt (Task Q) held on prod: the "no promises" grant item no longer becomes a to-do.
+- Claude per Testmöte ≈ $0.07 (4 ticks + name round).
+- Prod migrations 0014–0022 applied the same day; the first `vercel deploy --prod` after them answered
+  "Not authorized" once (CLI still logged in) and the retry worked — retry once before investigating.
+- The checklist for the day ElevenLabs credits return is `docs/checklist-11-28.md`.
