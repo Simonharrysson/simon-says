@@ -75,6 +75,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [health, setHealth] = useState<StreamHealth>({ audioStalled: false, postsFailing: false, authLost: false });
   /** Another tab (or laptop) took over this meeting's session. */
   const [superseded, setSuperseded] = useState(false);
+  /** The stream's last refusal code (e.g. "not_starter": signed in as someone else). */
+  const [refusal, setRefusal] = useState<string | null>(null);
 
   const capture = useRef<MicCapture | null>(null);
   const stream = useRef<LiveStream | null>(null);
@@ -151,6 +153,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
 
   const onStreamState = useCallback(
     (s: StreamStatus, id: string) => {
+      setRefusal(s.state === "error" ? (s.refusal ?? null) : null);
       setConnection(s.connection === "ok" && (s.state === "connecting" || s.state === "reconnecting") ? "reconnecting" : s.connection);
       switch (s.state) {
         case "connecting":
@@ -396,7 +399,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   // Silent failures the status line doesn't cover: say what happened and what to do.
   const notice: LiveNotice | null = !["live", "paused", "error"].includes(phase)
     ? null
-    : health.authLost
+    : refusal === "not_starter"
+      ? {
+          tone: "danger",
+          title: "Du är inloggad som någon annan",
+          text: "Bara den som startade mötet kan köra det. Logga in med det kontot igen; inget mer ljud skickas från den här fliken.",
+          action: { label: "Logga in igen", onClick: reLogin },
+        }
+      : health.authLost
       ? {
           tone: "danger",
           title: "Du är utloggad — logga in igen",

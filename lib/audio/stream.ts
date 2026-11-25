@@ -476,6 +476,7 @@ export class LiveStream {
       this.log(`socket: silent for ${now - this.lastMessageAt} ms while sending speech; reconnecting`);
       this.dropCurrent?.("silent");
     }
+    if (this.pending === 0) this.postFailingSince = null;
     this.setHealth({
       audioStalled: running && !this.paused && silentFor > AUDIO_STALL_NOTICE_MS,
       postsFailing: this.postFailingSince !== null && now - this.postFailingSince > POST_FAIL_NOTICE_MS,
@@ -813,6 +814,15 @@ export class LiveStream {
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
     const code = body?.error ?? `http_${res.status}`;
+    if (code === "not_starter") {
+      // Signed in as someone else than the meeting's starter: these runs can never be stored.
+      this.log(`segments: 403 not_starter; dropping ${this.queue.length} runs and stopping`);
+      this.queue = [];
+      this.merges = [];
+      this.postFailingSince = null;
+      this.notStarter();
+      return;
+    }
     if (res.status === 401 || res.status === 403) {
       // Signed out (or the session cookie is gone): keep everything and ask the user to log in.
       this.log(`segments: ${res.status} ${code}; keeping ${this.queue.length} runs until signed in again`);
@@ -857,6 +867,16 @@ export class LiveStream {
     drop();
   }
 
+  /** This browser is signed in as someone else than the meeting's starter. */
+  private notStarter(): void {
+    if (this.status.state === "error" && this.status.refusal === "not_starter") return;
+    this.o.audio.stop();
+    this.closeSocket();
+    this.queue = [];
+    this.merges = [];
+    this.fail("refused", "not_starter");
+  }
+
   private postFailed(): void {
     this.postFailingSince ??= Date.now();
   }
@@ -866,8 +886,10 @@ export class LiveStream {
   private async heartbeat(): Promise<void> {
     if (this.heartbeating) return;
     this.heartbeating = true;
-    // Our session as of now; compared with the server's only if no mint ran meanwhile.
-    const expected = this.connecting ? null : this.lastSessionId;
+    // Our session as of now, only while its socket is open. Without an open socket the server's
+    // current session may legitimately differ (a claimed session whose mint failed or whose
+    // token response was lost); the reconnect sorts that out (I1), so it is never "another tab".
+    const expected = this.socket && this.socket.readyState === OPEN && !this.connecting ? this.socketSessionId : null;
     try {
       const res = await this.fetch(this.url("heartbeat"), { method: "POST" });
       if (res.status === 409) {
@@ -875,6 +897,11 @@ export class LiveStream {
         return;
       }
       if (res.status === 401 || res.status === 403) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        if (body?.error === "not_starter") {
+          this.notStarter();
+          return;
+        }
         this.authLost = true;
         this.watchdogs(Date.now());
         return;
@@ -888,7 +915,8 @@ export class LiveStream {
         return;
       }
       const current = info.currentElSessionId;
-      if (current && expected && !this.connecting && this.lastSessionId === expected && current !== expected && this.active()) {
+      const stillOpen = this.socket !== null && this.socket.readyState === OPEN && this.socketSessionId === expected;
+      if (current && expected && stillOpen && !this.connecting && current !== expected && this.active()) {
         this.log(`session ${expected} is no longer current (${current}): another tab took over`);
         void this.stop({ superseded: true });
       }

@@ -616,4 +616,93 @@ describe("LiveStream", () => {
     expect(t.of("token")).toHaveLength(2);
     expect(t.sockets).toHaveLength(1);
   });
+
+  // --- fix round 2 ---------------------------------------------------------------------------
+
+  it("a failed mint (server current moved on) + a heartbeat with another current id → NOT superseded, reconnects", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    // The socket drops; the next mint is claimed on the server (current = "claimed-y") but fails.
+    t.sockets[0].drop();
+    t.replies.token.push(json(502, { error: "mint_failed" }));
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(t.of("token")).toHaveLength(2);
+    // While we wait to retry, the heartbeat reports the claimed (closed) session as current.
+    t.replies.heartbeat.push(json(200, { warn: false, stop: false, currentElSessionId: "claimed-y" }));
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    expect(t.stream.state.superseded).toBeUndefined();
+    expect(t.stream.state.state).not.toBe("stopped");
+    expect(t.audio.stopped).toBe(false);
+    expect(t.sockets).toHaveLength(2); // reconnected after the backoff
+    t.sockets[1].open();
+    expect(t.stream.state.state).toBe("live");
+  });
+
+  it("a lost token response + a heartbeat naming that session → NOT superseded; the 409 adoption reconnects", async () => {
+    const t = setup({ initialClosingSessionId: "x" }); // resumed after a reload: we hold "x"
+    t.replies.token.push("network"); // the server claimed "lost-y", the response never arrived
+    t.replies.token.push(json(409, { error: "session_open", openSessionId: "lost-y" }));
+    t.replies.heartbeat.push(json(200, { warn: false, stop: false, currentElSessionId: "lost-y" }));
+    await t.stream.start();
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    await vi.advanceTimersByTimeAsync(2000);
+    await settle();
+    expect(t.stream.state.superseded).toBeUndefined();
+    expect(t.of("token").map((c) => c.body)).toEqual([
+      { closingSessionId: "x" },
+      { closingSessionId: "x" },
+      { closingSessionId: "lost-y" },
+    ]);
+    expect(t.sockets).toHaveLength(1);
+  });
+
+  it("403 not_starter on segments drops the runs and stops sending (not authLost)", async () => {
+    const t = setup();
+    const health: { authLost: boolean }[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    t.replies.segments.push(json(403, { error: "not_starter" }));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["x", "s"]]));
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    await settle();
+    expect(t.stream.pending).toBe(0);
+    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_starter" });
+    expect(t.audio.stopped).toBe(true);
+    expect(health.some((h) => h.authLost)).toBe(false);
+  });
+
+  it("postsFailing clears when the queue empties, not only on a successful post", async () => {
+    const t = setup();
+    const health: { postsFailing: boolean }[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    for (let i = 0; i < 30; i++) t.replies.segments.push(json(500));
+    t.replies.segments.push(json(400, { error: "bad_request" }));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["x", "s"]]));
+    for (let i = 0; i < 25; i++) {
+      t.audio.push(i);
+      await vi.advanceTimersByTimeAsync(FLUSH_MS);
+      await settle();
+    }
+    expect(health.at(-1)).toMatchObject({ postsFailing: true });
+    t.replies.segments.length = 0;
+    t.replies.segments.push(json(400, { error: "bad_request" })); // the single run is dropped
+    t.audio.push(0);
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    await settle();
+    t.audio.push(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(t.stream.pending).toBe(0);
+    expect(health.at(-1)).toMatchObject({ postsFailing: false });
+  });
 });
