@@ -9,8 +9,9 @@ import { IconMic } from "@/components/ui/icons";
 /**
  * "Starta möte" on the org page. Starting leads to the live page's consent step
  * (`/meetings/ny/<orgId>`): the consent checkbox, the mic and the Doc are handled there, so the
- * mic can start from that click. Service admins also get the quiet "Testmöte", which starts a
- * server-side replay here (POST /api/meetings/test) and refreshes the page.
+ * mic can start from that click. Service admins also get the quiet "Testmöte" and "Testmöte med
+ * dagordning", which start a server-side replay here (POST /api/meetings/test, mode "new" or
+ * "agenda") and refresh the page.
  */
 export function StartMeetingForm({
   orgId,
@@ -19,21 +20,21 @@ export function StartMeetingForm({
 }: {
   orgId: string;
   shareTranscript: boolean;
-  /** Admins of the service only (decided on the server): the quiet "Testmöte" button. */
+  /** Admins of the service only (decided on the server): the quiet Testmöte buttons. */
   showTestMeeting?: boolean;
 }) {
   const router = useRouter();
-  const [starting, setStarting] = useState(false);
+  const [starting, setStarting] = useState<null | "new" | "agenda">(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function startTest() {
-    setStarting(true);
+  async function startTest(mode: "new" | "agenda") {
+    setStarting(mode);
     setError(null);
     try {
       const res = await fetch("/api/meetings/test", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orgId }),
+        body: JSON.stringify({ orgId, mode }),
       });
       if (res.ok) {
         router.refresh();
@@ -44,7 +45,7 @@ export function StartMeetingForm({
     } catch {
       setError("Vi nådde inte servern. Kontrollera nätet och försök igen.");
     }
-    setStarting(false);
+    setStarting(null);
   }
 
   return (
@@ -65,13 +66,17 @@ export function StartMeetingForm({
       </div>
       {showTestMeeting && (
         <div className="stack stack--2">
-          <div>
-            <Button disabled={starting} loading={starting} onClick={() => startTest()}>
+          <div className="cluster">
+            <Button disabled={starting !== null} loading={starting === "new"} onClick={() => startTest("new")}>
               Testmöte
+            </Button>
+            <Button disabled={starting !== null} loading={starting === "agenda"} onClick={() => startTest("agenda")}>
+              Testmöte med dagordning
             </Button>
           </div>
           <p className="hint">
-            Spelar upp ett påhittat 10-minutersmöte i ett nytt dokument — ca 3–8 min. Du kan stänga fliken.
+            Spelar upp ett påhittat möte — ca 3–8 min. Du kan stänga fliken. Med dagordning: ett påhittat veckomöte i
+            ett nytt dagordningsdokument; andra gången följer det upp förra testmötets uppgifter.
           </p>
         </div>
       )}

@@ -34,7 +34,7 @@ const m = vi.hoisted(() => ({
   guard: vi.fn(async (_fn: string, _args: unknown) => ({ data: "ok" as string, error: null })),
   /** Rows of other tables, as the admin client sees them. */
   docMeetings: [] as { id: string; doc_id: string; status: string }[],
-  prevMeetings: [] as { id: string; org_id: string; is_test: boolean; status: string; started_at: string }[],
+  prevMeetings: [] as { id: string; org_id: string; is_test: boolean; status: string; started_at: string; agenda_doc?: boolean }[],
   profiles: [] as { id: string; org_id: string; kind: string; profile: unknown; is_default: boolean; created_at?: string }[],
   people: [] as { id: string; name: string; role: string | null; org_id: string }[],
   noteRows: [] as Record<string, unknown>[],
@@ -66,6 +66,7 @@ async function adminAnswer(q: Query): Promise<{ data: unknown; error: null }> {
       return ok(
         m.prevMeetings
           .filter((r) => r.org_id === val(q, "org_id") && r.is_test === val(q, "is_test") && r.status === "done")
+          .filter((r) => !has(q, "eq", "agenda_doc") || (r.agenda_doc ?? false) === val(q, "agenda_doc"))
           .sort((a, b) => b.started_at.localeCompare(a.started_at)),
       );
     }
@@ -756,5 +757,50 @@ describe("startMeeting options", () => {
     const supabase = (await (await import("@/lib/supabase/server")).createSupabaseServerClient()) as never;
     await startMeeting(supabase, { id: "u1", email: "s@x.se" }, ORG, "test_started");
     expect(insertedRow().is_test).toBe(true);
+  });
+
+  it("an agenda Testmöte (A13) carries only from agenda Testmöten, with the fixture's people: no people rows read, no owner ids", async () => {
+    const { startMeeting } = await import("@/lib/meetings/start");
+    m.prevMeetings = [
+      { id: "agendaTest", org_id: ORG, is_test: true, status: "done", started_at: ago(2 * 86400), agenda_doc: true },
+      // Newer, but an old-style Testmöte (its fictional board meeting): never carried into the agenda run.
+      { id: "oldTest", org_id: ORG, is_test: true, status: "done", started_at: ago(86400), agenda_doc: false },
+    ];
+    const task = (id: string, owner: string, meeting = "agendaTest") => ({
+      meeting_id: meeting, id, section: "action", kind: "task", text: `Uppgift ${id}`, owner, due: null,
+      locked: false, deleted_by_human: false, done: false, copy_of: null, position: 0,
+    });
+    m.noteRows = [task("n1", "Oskar Berglund"), task("n2", "Fatima"), task("n9", "Karin Ek", "oldTest")];
+    // A real person of the test förening with a clashing name must never be used.
+    m.people = [{ id: "real-oskar", name: "Oskar Berglund", role: "Ordförande", org_id: ORG }];
+    const supabase = (await (await import("@/lib/supabase/server")).createSupabaseServerClient()) as never;
+    const r = await startMeeting(supabase, { id: "u1", email: "s@x.se" }, ORG, "test_started", {
+      agendaDocId: AGENDA_DOC,
+      formatKind: "veckomote",
+      transcriptInDoc: false,
+      isTest: true,
+    });
+    expect(r).toMatchObject({ ok: true, carried: 2 });
+    expect(m.queries.some((q) => q.table === "people")).toBe(false);
+    const carried = (m.noteInsert.mock.calls[0][0] as Record<string, unknown>[]).filter((x) => x.carried_from_meeting);
+    // Grouped by the fixture roles: Eventansvarig (Fatima) before Kassör (Oskar).
+    expect(carried.map((x) => [x.id, x.carried_from_meeting, x.carried_from_id, x.owner_person_id])).toEqual([
+      ["c1", "agendaTest", "n2", null],
+      ["c2", "agendaTest", "n1", null],
+    ]);
+    const format = m.renderItems.mock.calls[0][6];
+    expect(format.ownerLabel("Oskar Berglund")).toBe("Kassör");
+    expect(format.ownerLabel("Kassören")).toBe("Kassör");
+  });
+
+  it("a real agenda meeting still reads the förening's people and ignores agenda_doc when picking the previous meeting", async () => {
+    m.prevMeetings = [{ id: "prev1", org_id: ORG, is_test: false, status: "done", started_at: ago(86400), agenda_doc: false }];
+    m.noteRows = [{ meeting_id: "prev1", id: "n1", section: "action", kind: "task", text: "Boka hall", owner: "Kalle Fiktiv", due: null, locked: false, deleted_by_human: false, done: false, position: 0 }];
+    m.people = [{ id: "pk", name: "Kalle Fiktiv", role: "Kassör", org_id: ORG }];
+    const res = await call({ orgId: ORG, consent: true, agendaDocId: AGENDA_DOC });
+    expect((await res.json()).carried).toBe(1);
+    expect(m.queries.some((q) => q.table === "meetings" && has(q, "eq", "agenda_doc"))).toBe(false);
+    expect(m.queries.some((q) => q.table === "people")).toBe(true);
+    expect((m.noteInsert.mock.calls[0][0] as Record<string, unknown>[]).find((x) => x.id === "c1")?.owner_person_id).toBe("pk");
   });
 });

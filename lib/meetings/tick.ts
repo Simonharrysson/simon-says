@@ -25,6 +25,7 @@ import { profileFor } from "@/lib/formats/store";
 import type { AgendaContext } from "@/lib/notes/agenda-prompt";
 import { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
 import { ownerLabel, resolveOwner } from "@/lib/people/roles";
+import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
 import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
@@ -674,8 +675,13 @@ async function nameRounds(meeting: MeetingRow, deps: TickDeps, final: boolean, d
   return hold;
 }
 
-/** A format meeting's profile and the org's people (owner labels, owner ids, Claude's people list). */
+/**
+ * A format meeting's profile and the org's people (owner labels, owner ids, Claude's people list).
+ * An agenda Testmöte uses the fixture's fictional people instead, and never reads people rows
+ * (Ruling 38); their ids are not stored (see the save below).
+ */
 async function loadFormat(meeting: MeetingRow): Promise<{ profile: FormatProfile; people: PersonRow[] }> {
+  if (usesTestPeople(meeting)) return { profile: await profileFor(meeting), people: testPeople(meeting.org_id) };
   const [profile, people] = await Promise.all([
     profileFor(meeting),
     db().from("people").select("id, org_id, name, member_user_id, role").eq("org_id", meeting.org_id),
@@ -970,7 +976,8 @@ export async function runTick(
               }
               anchorsAdded = newAnchors.length;
             }
-            rows = withOwnerIds(rows, fmt.people);
+            // Test people are not people rows: an agenda Testmöte stores no owner ids.
+            rows = withOwnerIds(rows, usesTestPeople(meeting) ? [] : fmt.people);
           }
           if (!(await saveRows(meetingId, leaseId, rows))) {
             // A newer tick holds the lease now (ours expired): it owns the rows and the transcript.

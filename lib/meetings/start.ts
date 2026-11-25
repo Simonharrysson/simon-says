@@ -21,6 +21,7 @@ import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { MAX_STARTS_PER_HOUR } from "@/lib/limits";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { docUrl } from "@/lib/ui/meetings";
 
 export type StandardKind = "veckomote" | "styrelseprotokoll" | "enkel";
@@ -286,6 +287,7 @@ export async function startMeeting(
         anchorRows: anchor.rows,
         profile: format.profile,
         isTest,
+        agendaDoc: agendaMode,
         startedAt,
         log,
       });
@@ -497,6 +499,7 @@ async function prefill(input: {
   anchorRows: NoteItemRow[];
   profile: FormatProfile;
   isTest: boolean;
+  agendaDoc: boolean;
   startedAt: Date;
   log: (kind: MeetingEventKind, detail: Record<string, unknown>) => Promise<unknown>;
 }): Promise<number> {
@@ -508,19 +511,28 @@ async function prefill(input: {
 
   let carried: NoteItemRow[] = [];
   let people: RolePerson[] = [];
+  // An agenda Testmöte: the fixture's fictional people, no people rows read or referenced (Ruling 38).
+  const fictional = usesTestPeople({ is_test: input.isTest, agenda_doc: input.agendaDoc });
   if (followup) {
-    // Testmöten pull only from Testmöten, real meetings only from real ones (answer 7).
-    const prev = await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db);
+    // Testmöten pull only from Testmöten, real meetings only from real ones (answer 7); an agenda
+    // Testmöte only from agenda Testmöten.
+    const prev = await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc);
     if (prev) {
       const [prevRows, ppl] = await Promise.all([
         db.from("note_items").select("*").eq("meeting_id", prev.id),
-        db.from("people").select("id, name, role").eq("org_id", meeting.org_id),
+        fictional
+          ? Promise.resolve({ data: testPeople(meeting.org_id), error: null })
+          : db.from("people").select("id, name, role").eq("org_id", meeting.org_id),
       ]);
       if (prevRows.error) throw new Error(`prefill: previous rows: ${prevRows.error.message}`);
       if (ppl.error) throw new Error(`prefill: people: ${ppl.error.message}`);
       people = (ppl.data ?? []) as RolePerson[];
       const open = openTasks((prevRows.data ?? []) as NoteItemRow[]);
-      carried = carriedItems(prev.id, open, followup, people, groupBy).map((r) => ({ ...r, meeting_id: meeting.id }));
+      carried = carriedItems(prev.id, open, followup, people, groupBy).map((r) => ({
+        ...r,
+        meeting_id: meeting.id,
+        ...(fictional ? { owner_person_id: null } : {}),
+      }));
     }
   }
 

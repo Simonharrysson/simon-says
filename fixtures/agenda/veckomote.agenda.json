@@ -1,0 +1,12 @@
+{
+  "source": "Fictional agenda for Task A13 (Testmöte med dagordning). Invented förening (Ekdala Padelklubb), invented people and events; not from any real förening's minutes.",
+  "sekreterare": "Elin Sjöberg",
+  "items": [
+    { "label": "Godkänn dagordning" },
+    { "label": "Må-runda" },
+    { "label": "Från förra veckan" },
+    { "label": "Kommande event", "sub": ["Prova-på-kväll för nybörjare", "Klubbmästerskapet i maj"] },
+    { "label": "Ekonomi" },
+    { "label": "Övrigt" }
+  ]
+}

@@ -1638,6 +1638,30 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     expect(linesOf(doc).filter((l) => l.includes("Kassör: Boka salen."))).toHaveLength(2);
   });
 
+  it("an agenda Testmöte (A13) uses the fixture's people: roles reach Claude and the Doc, no people rows, no owner ids", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ isTest: true });
+    await say(id, sessionId, "Oskar betalar hyran", 1000);
+    const f = fakes(doc, {
+      answer: (input) => [...input.items, { id: "n1", section: "action", text: "Betala hyran", owner: "Oskar Berglund", anchor: "ag-5" }],
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    // The fixture's five people, not the förening's (Anna Berg, Erik Lund).
+    expect(f.calls[0].agenda?.people).toEqual([
+      { name: "Maja Lindqvist", role: "Ordförande" },
+      { name: "Oskar Berglund", role: "Kassör" },
+      { name: "Elin Sjöberg", role: "Sekreterare" },
+      { name: "Sam Carter", role: "PR-ansvarig" },
+      { name: "Fatima Rahimi", role: "Eventansvarig" },
+    ]);
+    const rows = await noteRows(id);
+    expect(rows.find((r) => r.id === "n1")).toMatchObject({ owner_person_id: null, kind: "task", anchor: "ag-5" });
+    expect(rows.find((r) => r.id === "n1-t")).toMatchObject({ anchor: "tasks", copy_of: "n1", owner_person_id: null });
+    expect(linesOf(doc).filter((l) => l.includes("Kassör: Betala hyran."))).toHaveLength(2);
+    // Nothing was added to the förening's people.
+    const { data: people } = await adminClient().from("people").select("name").eq("org_id", orgId);
+    expect((people ?? []).map((p) => p.name)).not.toContain("Oskar Berglund");
+  });
+
   it("two named speakers fill the Närvarande cell: 'Anna Berg, Erik Lund'", async () => {
     const { id, sessionId, doc } = await formatMeeting();
     await sayAs(id, sessionId, "speaker_1", "Hej, Anna här", 1000);

@@ -67,6 +67,21 @@ describe.skipIf(!hasLocalSupabase)("followup (db)", () => {
     ).toBeNull();
   });
 
+  it("an agenda Testmöte picks only agenda Testmöten; real meetings ignore agenda_doc (A13)", async () => {
+    const db = adminClient();
+    const agendaTest = (await seedMeeting(orgId, userId, "done")).meetingId;
+    await db
+      .from("meetings")
+      .update({ started_at: "2026-01-15T10:00:00Z", is_test: true, agenda_doc: true })
+      .eq("id", agendaTest);
+    // `test` (2026-02-01) is newer but not an agenda Testmöte.
+    expect((await previousMeeting(orgId, true, now, db, true))?.id).toBe(agendaTest);
+    expect((await previousMeeting(orgId, true, now, db, false))?.id).toBe(test);
+    expect((await previousMeeting(orgId, true, now, db))?.id).toBe(test);
+    expect((await previousMeeting(orgId, false, now, db, true))?.id).toBe(real);
+    await db.from("meetings").delete().eq("id", agendaTest);
+  });
+
   it("propagates done once to the source row", async () => {
     const carried = {
       meeting_id: "x",

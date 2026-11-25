@@ -67,19 +67,21 @@ export function carriedItems(
   }));
 }
 
-/** Latest finished meeting of the org with the same is_test, started before `before`. */
+/**
+ * Latest finished meeting of the org with the same is_test, started before `before`. A Testmöte
+ * given `agendaDoc` also needs the same agenda_doc: the agenda Testmöte (A13) carries only from
+ * agenda Testmöten, never from an old-style Testmöte's fictional meeting. Real meetings ignore it.
+ */
 export async function previousMeeting(
   orgId: string,
   isTest: boolean,
   before: Date,
   db: SupabaseClient = supabaseAdmin(),
+  agendaDoc?: boolean,
 ): Promise<{ id: string } | null> {
-  const { data, error } = await db
-    .from("meetings")
-    .select("id")
-    .eq("org_id", orgId)
-    .eq("is_test", isTest)
-    .eq("status", "done")
+  let query = db.from("meetings").select("id").eq("org_id", orgId).eq("is_test", isTest).eq("status", "done");
+  if (isTest && agendaDoc !== undefined) query = query.eq("agenda_doc", agendaDoc);
+  const { data, error } = await query
     .lt("started_at", before.toISOString())
     .order("started_at", { ascending: false })
     .limit(1);

@@ -2,13 +2,24 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { IngestError } from "@/lib/segments/ingest";
 import { dueMs, END_DEADLINE_MS, planBatches, runFeed, SPEED, TICK_DEADLINE_MS, TICK_WAIT_MS, type FeedDeps } from "./feed";
-import { FIXTURE_LINES, FIXTURE_SPEAKER_NAMES, stripSessionPrefix, toSegments } from "./fixture";
+import { validRole } from "@/lib/people/roles";
+import {
+  AGENDA_FIXTURE_LINES,
+  AGENDA_TEST_PEOPLE,
+  FIXTURE_LINES,
+  FIXTURE_SPEAKER_NAMES,
+  stripSessionPrefix,
+  testPeople,
+  toSegments,
+  usesTestPeople,
+} from "./fixture";
 
-const jsonl = () =>
-  readFileSync("fixtures/notes/synthetic.jsonl", "utf8")
+const jsonl = (name = "synthetic") =>
+  readFileSync(`fixtures/notes/${name}.jsonl`, "utf8")
     .split("\n")
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l));
+const expectedOf = (name: string) => JSON.parse(readFileSync(`fixtures/notes/${name}.expected.json`, "utf8"));
 
 describe("fixture module", () => {
   it("is identical to fixtures/notes/synthetic.jsonl", () => {
@@ -31,6 +42,61 @@ describe("fixture module", () => {
   it("seeds names for every speaker the fixture uses, keyed by the stored (unprefixed) label", () => {
     expect(FIXTURE_SPEAKER_NAMES.speaker_0).toBe("Karin Ek");
     for (const l of FIXTURE_LINES) expect(FIXTURE_SPEAKER_NAMES[stripSessionPrefix(l.speaker)]).toBeTruthy();
+  });
+});
+
+describe("agenda Testmöte fixtures (A13)", () => {
+  it("the bundled line files are identical to fixtures/notes/veckomote-a/-b.jsonl", () => {
+    expect(AGENDA_FIXTURE_LINES.a).toEqual(jsonl("veckomote-a"));
+    expect(AGENDA_FIXTURE_LINES.b).toEqual(jsonl("veckomote-b"));
+  });
+
+  it("every agenda fixture ends by 540 000 ms: the replay is at most 135 s at 4x (plus one batch interval)", () => {
+    for (const lines of Object.values(AGENDA_FIXTURE_LINES)) {
+      expect(lines.at(-1)!.startMs).toBeLessThanOrEqual(540_000);
+      expect(planBatches(lines, "s").at(-1)!.atMs).toBeLessThanOrEqual(135_000 + 5000);
+      // Session-relative times only grow.
+      lines.forEach((l, i) => i > 0 && expect(l.startMs).toBeGreaterThan(lines[i - 1].startMs));
+    }
+  });
+
+  it("every fixture says it is fictional", () => {
+    for (const name of ["veckomote-a", "veckomote-b"]) expect(expectedOf(name).source).toMatch(/fictional/i);
+    expect(JSON.parse(readFileSync("fixtures/agenda/veckomote.agenda.json", "utf8")).source).toMatch(/fictional/i);
+  });
+
+  it("five people with unique first names and valid, unique roles; the name round can find each of them", () => {
+    const a = expectedOf("veckomote-a");
+    expect(AGENDA_TEST_PEOPLE).toEqual(a.people);
+    expect(expectedOf("veckomote-b").people).toEqual(a.people);
+    expect(AGENDA_TEST_PEOPLE.map((p) => p.role)).toEqual(["Ordförande", "Kassör", "Sekreterare", "PR-ansvarig", "Eventansvarig"]);
+    for (const p of AGENDA_TEST_PEOPLE) expect(validRole(p.role)).toBe(p.role);
+    expect(new Set(AGENDA_TEST_PEOPLE.map((p) => p.name.split(" ")[0])).size).toBe(5);
+    expect(Object.values(a.speakerNames).sort()).toEqual(AGENDA_TEST_PEOPLE.map((p) => p.name).sort());
+    for (const lines of Object.values(AGENDA_FIXTURE_LINES)) {
+      const opening = lines.slice(0, 5).map((l) => l.text).join(" ");
+      for (const p of AGENDA_TEST_PEOPLE) expect(opening).toContain(p.name);
+    }
+  });
+
+  it("expected tasks and carried items name people the test people resolve to their role", async () => {
+    const { ownerLabel, resolveOwner } = await import("@/lib/people/roles");
+    const people = testPeople("org1");
+    for (const name of ["veckomote-a", "veckomote-b"]) {
+      for (const t of expectedOf(name).action_items) expect(ownerLabel(resolveOwner(t.owner, people), t.owner, "role")).toBe(t.ownerLabel);
+    }
+    expect(ownerLabel(resolveOwner("Kassören", people), "Kassören", "role")).toBe("Kassör");
+    expect(expectedOf("veckomote-b").carried.map((c: { done: boolean }) => c.done)).toEqual([true, true, false, false]);
+  });
+
+  it("test people only for agenda Testmöten, with ids that are never stored", () => {
+    expect(usesTestPeople({ is_test: true, agenda_doc: true })).toBe(true);
+    expect(usesTestPeople({ is_test: true, agenda_doc: false })).toBe(false);
+    expect(usesTestPeople({ is_test: false, agenda_doc: true })).toBe(false);
+    expect(usesTestPeople({ is_test: null, agenda_doc: null })).toBe(false);
+    const people = testPeople("org1");
+    expect(people).toHaveLength(5);
+    for (const p of people) expect(p).toMatchObject({ org_id: "org1", member_user_id: null, id: expect.stringMatching(/^test-person-/) });
   });
 });
 

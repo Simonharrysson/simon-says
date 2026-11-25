@@ -1,0 +1,256 @@
+{
+  "source": "Fictional weekly meeting (run A, the first week) written for Task A13 (lib/testmeeting/agenda.ts, Testmöte med dagordning). Invented förening, invented people and events; no line, name or event from any real förening's minutes.",
+  "orgName": "Ekdala Padelklubb",
+  "speakerNames": {
+    "S1-speaker_0": "Maja Lindqvist",
+    "S1-speaker_1": "Oskar Berglund",
+    "S1-speaker_2": "Elin Sjöberg",
+    "S1-speaker_3": "Sam Carter",
+    "S1-speaker_4": "Fatima Rahimi"
+  },
+  "languages": [
+    "sv",
+    "en"
+  ],
+  "agenda": {
+    "profile": "veckomote",
+    "items": [
+      {
+        "key": "ag-1",
+        "label": "Godkänn dagordning",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-2",
+        "label": "Må-runda",
+        "role": "checkin"
+      },
+      {
+        "key": "ag-3",
+        "label": "Från förra veckan",
+        "role": "followup"
+      },
+      {
+        "key": "ag-4",
+        "label": "Kommande event",
+        "role": "topic",
+        "sub": [
+          "Prova-på-kväll för nybörjare",
+          "Klubbmästerskapet i maj"
+        ]
+      },
+      {
+        "key": "ag-5",
+        "label": "Ekonomi",
+        "role": "topic"
+      },
+      {
+        "key": "ag-6",
+        "label": "Övrigt",
+        "role": "other"
+      }
+    ]
+  },
+  "people": [
+    {
+      "name": "Maja Lindqvist",
+      "role": "Ordförande"
+    },
+    {
+      "name": "Oskar Berglund",
+      "role": "Kassör"
+    },
+    {
+      "name": "Elin Sjöberg",
+      "role": "Sekreterare"
+    },
+    {
+      "name": "Sam Carter",
+      "role": "PR-ansvarig"
+    },
+    {
+      "name": "Fatima Rahimi",
+      "role": "Eventansvarig"
+    }
+  ],
+  "traps": [
+    "Må-runda: everyone shares personal plans (tandläkaren, vinterdäck, tenta, cleaning the apartment, ringa mormor). None of it is a task, decision or note; at most 'Må-runda genomförd.'",
+    "Från förra veckan: 'inget sedan sist' (first meeting): nothing carried, nothing under the item.",
+    "Klubbmästerskapet is explicitly postponed to next month: not a decision, not a task.",
+    "The ball tubes are put aside by the hall's shop: no task for anyone.",
+    "Sam's remark about the hall's opening hours is a loose note for Anteckningar, not a task."
+  ],
+  "checkin": {
+    "match": [
+      [
+        "tandläkar*",
+        "vinterdäck*",
+        "tenta*",
+        "plugga*",
+        "apartment*",
+        "clean*",
+        "mormor*",
+        "springa*",
+        "nittio*"
+      ]
+    ]
+  },
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "The dentist booking (Må-runda) as a task",
+      "sections": [
+        "action"
+      ],
+      "match": [
+        [
+          "tandläkar*"
+        ]
+      ]
+    },
+    {
+      "key": "M2",
+      "text": "Klubbmästerskapet as a decision or task (postponed)",
+      "sections": [
+        "decision",
+        "action"
+      ],
+      "match": [
+        [
+          "klubbmästerskap*"
+        ]
+      ],
+      "unless": [
+        [
+          "nästa månad",
+          "senare",
+          "skjut*",
+          "vänta*"
+        ]
+      ]
+    },
+    {
+      "key": "M3",
+      "text": "Ordering the ball tubes as a task (the shop puts them aside)",
+      "sections": [
+        "action"
+      ],
+      "match": [
+        [
+          "bollrör*",
+          "*bollar*"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Prova-på-kväll torsdag 12 mars kl 18–20, max 16 deltagare, gratis.",
+      "anchor": "ag-4",
+      "match": [
+        [
+          "12",
+          "tolfte*"
+        ],
+        [
+          "mars*"
+        ]
+      ]
+    },
+    {
+      "key": "D2",
+      "text": "Klubben köper 20 nya bollrör för högst 3 000 kr.",
+      "anchor": "ag-5",
+      "match": [
+        [
+          "bollrör*",
+          "*bollar*"
+        ],
+        [
+          "3 000",
+          "3000",
+          "3 000",
+          "tretusen*"
+        ]
+      ]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Fatima Rahimi",
+      "ownerLabel": "Eventansvarig",
+      "anchor": "ag-4",
+      "text": "Boka bana 3 och 4 för prova-på-kvällen med hallen",
+      "due": "senast fredag",
+      "match": [
+        [
+          "*ban*"
+        ],
+        [
+          "bok*"
+        ]
+      ]
+    },
+    {
+      "key": "A2",
+      "owner": "Sam Carter",
+      "ownerLabel": "PR-ansvarig",
+      "anchor": "ag-4",
+      "text": "Lägga ut prova-på-kvällen på Instagram och hemsidan",
+      "due": "senast måndag",
+      "match": [
+        [
+          "instagram*",
+          "*hemsida*",
+          "website*",
+          "*webb*"
+        ]
+      ]
+    },
+    {
+      "key": "A3",
+      "owner": "Oskar Berglund",
+      "ownerLabel": "Kassör",
+      "anchor": "ag-5",
+      "text": "Betala februarihyran för banorna",
+      "due": "senast den 28:e",
+      "match": [
+        [
+          "*hyra*"
+        ]
+      ]
+    },
+    {
+      "key": "A4",
+      "owner": "Elin Sjöberg",
+      "ownerLabel": "Sekreterare",
+      "anchor": "ag-6",
+      "text": "Uppdatera medlemslistan och skicka den till styrelsen",
+      "due": "senast söndag",
+      "match": [
+        [
+          "medlemslista*",
+          "medlemsregist*"
+        ]
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "key": "N1",
+      "text": "Hallen öppnar kl 7 på helgerna nu (nya öppettider).",
+      "anchor": "notes",
+      "match": [
+        [
+          "öppet*",
+          "opening*",
+          "öppnar*",
+          "7",
+          "sju"
+        ]
+      ]
+    }
+  ]
+}

@@ -61,11 +61,12 @@ export function meetingTitle(orgName: string, startedAt: Date): string {
   return `${orgName} möte ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
-const folderName = (orgName: string) => `Simon Says – ${orgName}`;
+/** The starter's own folder for the org's Docs. */
+export const folderName = (orgName: string) => `Simon Says – ${orgName}`;
 const escapeQuery = (s: string) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 
 /** The starter's folder for the org: an existing one the app made (drive.file only sees those), or a new one. */
-async function findOrCreateFolder(auth: OAuth2Client, name: string): Promise<string> {
+export async function findOrCreateFolder(auth: OAuth2Client, name: string): Promise<string> {
   const drive = driveApi(auth);
   const found = await drive.files.list({
     q: `mimeType='${FOLDER_MIME}' and name='${escapeQuery(name)}' and trashed=false and 'me' in owners`,
