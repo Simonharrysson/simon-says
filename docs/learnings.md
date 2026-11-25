@@ -317,8 +317,10 @@ a note in `notes`, Närvarande in the empty cell):
 - `tick` without human edits (rewording every item, one new note under ag-4 and ag-5): all replaced in place (levels and the
   `"– "` prefix kept), the new ag-4 line became f. after our e., the new ag-5 line a third `"– "` line; numbering unchanged,
   0 requests on re-plan.
-- Known consequence of (b): a new line inherits the level of the block's LAST paragraph. If a human Tabs our last line to level 2,
-  the next line under that item is level 2 as well (we never set levels). Accepted: the alternative needs a level change request.
+- (b) inherits the level of the block's LAST paragraph, so (fix round 1) it is used only when that paragraph is exactly one level
+  below the item; after a deeper point (a human's sub-sub-point, or ours after a human Tab) the line is written (c)-style instead.
+  Every new line of ours also gets an `updateTextStyle` clearing bold/italic/underline/strikethrough/link (inserted text inherits
+  the previous character's style), and a run of ours deleted at the end of the tab after a human paragraph keeps that newline.
 - Human stage (sub-bullet under ag-5, edit a copy, Tab on one of ours, then `tick`): run by the controller — result below.
 
 **A6 human stage (controller typed in the Docs editor, 2026-11-25):** on the A6 render Doc — Enter+Tab after "Ekonomi" (human

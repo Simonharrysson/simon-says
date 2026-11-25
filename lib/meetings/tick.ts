@@ -510,6 +510,11 @@ export async function runTick(
           notes = "ok";
           break;
         }
+        if (res.status === "skipped") {
+          // Nothing written, nothing saved (rows stay as they were): not a conflict to retry.
+          notes = "skipped";
+          break;
+        }
         notes = "conflict";
       }
       if (notes === "conflict") await logEvent(meetingId, "tick_conflict", { tick: assigned, attempts: CONFLICT_RETRIES + 1 });

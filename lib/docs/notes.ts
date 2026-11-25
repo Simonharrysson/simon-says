@@ -278,7 +278,12 @@ export const tabEnd = (tab: NotesTab) => (tab.paragraphs.length ? tab.paragraphs
  * adjacent paragraphs become one run, so deletes never overlap; a run reaching the end of the tab
  * takes the newline before it instead (the final newline cannot be deleted).
  */
-export function deleteRuns(tab: NotesTab, rows: NoteItemRow[], removed: Set<string>): Group[] {
+export function deleteRuns(
+  tab: NotesTab,
+  rows: NoteItemRow[],
+  removed: Set<string>,
+  opts: { keepHumanNewline?: boolean } = {},
+): Group[] {
   const tabId = tab.tabId;
   const lastIndex = tabEnd(tab);
   const doomed: { start: number; end: number; name: string }[] = [];
@@ -298,9 +303,18 @@ export function deleteRuns(tab: NotesTab, rows: NoteItemRow[], removed: Set<stri
     } else runs.push({ start: d.start, end: d.end, names: [d.name] });
   }
   const groups: Group[] = [];
+  // Paragraphs of our rows that stay (their newline may be taken by a run at the end of the tab).
+  const kept = rows
+    .filter((r) => r.range_name && !removed.has(r.id) && !r.deleted_by_human)
+    .map((r) => itemSpan(tab, r.range_name!))
+    .filter((x): x is ItemSpan => x !== null);
   for (const run of runs) {
     const isLast = run.end >= lastIndex;
-    const start = isLast ? Math.max(1, run.start - 1) : run.start;
+    // Format layout: the newline before the run belongs to a human paragraph → leave it (and our
+    // now-empty last paragraph) rather than merge the human's text into our paragraph.
+    const prevIsHuman =
+      opts.keepHumanNewline && run.start > 1 && !kept.some((sp) => run.start - 1 >= sp.paraStart && run.start - 1 < sp.paraEnd);
+    const start = isLast && !prevIsHuman ? Math.max(1, run.start - 1) : run.start;
     const end = isLast ? lastIndex - 1 : run.end;
     const requests: DocsRequest[] = run.names.map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
     if (end > start) requests.push({ deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } });
@@ -500,7 +514,11 @@ export function renderedRows(
 
 export type RenderResult =
   | { status: "ok"; rows: NoteItemRow[]; headerRendered: string | null }
-  | { status: "conflict" };
+  | { status: "conflict" }
+  /** Nothing written and nothing to persist: a format meeting rendered without its planner. */
+  | { status: "skipped"; reason: "format-planner-missing" };
+
+let warnedPlannerMissing = false;
 
 /**
  * One batchUpdate guarded by `revisionId` (from readItems) that renders `desired` and, with
@@ -519,7 +537,13 @@ export async function renderItems(
 ): Promise<RenderResult> {
   // A format meeting rendered by code that does not know formats (e.g. a tick deployed before
   // A12): write nothing rather than v1 lines at the end of a human's Doc.
-  if (meeting.layout === "format" && !format) return { status: "ok", rows, headerRendered: null };
+  if (meeting.layout === "format" && !format) {
+    if (!warnedPlannerMissing) {
+      warnedPlannerMissing = true;
+      console.error(`renderItems: format meeting ${meeting.id} rendered without a format planner; nothing written`);
+    }
+    return { status: "skipped", reason: "format-planner-missing" };
+  }
   const tab =
     snapshots.get(snapshotKey(meeting.doc_id, meeting.notes_tab_id, revisionId)) ??
     (await fetchTab(auth, meeting.doc_id, meeting.notes_tab_id));

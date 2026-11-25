@@ -203,6 +203,15 @@ const inserts = (p: { requests: docs_v1.Schema$Request[] }) =>
 const named = (p: { requests: docs_v1.Schema$Request[] }) =>
   Object.fromEntries(p.requests.filter((r) => r.createNamedRange).map((r) => [r.createNamedRange!.name, [r.createNamedRange!.range!.startIndex, r.createNamedRange!.range!.endIndex]]));
 
+/** The style reset sent over every line of ours (inserted text inherits the previous character's style). */
+const plainText = (startIndex: number, endIndex: number) => ({
+  updateTextStyle: {
+    range: { tabId: TAB, startIndex, endIndex },
+    textStyle: { bold: false, italic: false, underline: false, strikethrough: false },
+    fields: "bold,italic,underline,strikethrough,link",
+  },
+});
+
 const note = (id: string, anchor: string, text: string): NotesItem => ({ id, section: "note", text, anchor });
 const task = (id: string, anchor: string, text: string, owner?: string, due?: string): NotesItem => ({
   id, section: "action", text, anchor, ...(owner ? { owner } : {}), ...(due ? { due } : {}),
@@ -242,6 +251,7 @@ describe("planFormatRender under agenda items", () => {
       },
       { insertText: { text: "– ", location: { tabId: TAB, index: 205 } } },
       { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 205, endIndex: 227 } } },
+      plainText(205, 227),
     ]);
     const rows = renderedRows("m1", [], [n1], p);
     expect(rows[0]).toMatchObject({ id: "n1", last_rendered_text: "– Budgeten är godkänd.", anchor: "ag-5", kind: "note", range_name: "ss-m1-n1" });
@@ -271,6 +281,7 @@ describe("planFormatRender under agenda items", () => {
     expect(p1.requests).toEqual([
       { insertText: { text: "\nSommarfesten blir 14 juni.", location: { tabId: TAB, index: 196 } } },
       { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 197, endIndex: 223 } } },
+      plainText(197, 223),
     ]);
     const rows1 = renderedRows("m1", [], [n1], p1);
     expect(rows1[0].last_rendered_text).toBe("Sommarfesten blir 14 juni.");
@@ -297,7 +308,7 @@ describe("planFormatRender under agenda items", () => {
     const p3 = plan(doc3, rows2, [n1, n2, n3]);
     const human = parseNotesTab(doc3, TAB).paragraphs.find((x) => x.text === "Fråga Bo om lokalen\n")!;
     expect(inserts(p3)).toEqual([[human.end - 1, "\nAffischer behövs."]]);
-    expect(p3.requests).toHaveLength(2);
+    expect(p3.requests).toHaveLength(3);
   });
 
   it("a human Tab on one of ours changes only its level: not locked, nothing rewritten, no level request", () => {
@@ -315,6 +326,16 @@ describe("planFormatRender under agenda items", () => {
     expect(plan(doc, rows, [n1]).requests).toEqual([]);
   });
 
+  it("block ending in a human level-2 point → our line is (c), never a level-2 child of their point", () => {
+    const doc = anchored((d) => insertAfter(d, "Workshop om sponsring", "Fråga om pris", { level: 2 }));
+    const tab = parseNotesTab(doc, TAB);
+    const deep = tab.paragraphs.find((x) => x.text === "Fråga om pris\n")!;
+    const p = plan(doc, [], [note("n1", "ag-4", "Workshopen flyttas")]);
+    expect(inserts(p)).toEqual([[deep.end - 1, "\nWorkshopen flyttas."], [deep.end, "– "]]);
+    expect(p.requests.some((r) => r.deleteParagraphBullets)).toBe(true);
+    expect(renderedRows("m1", [], [note("n1", "ag-4", "Workshopen flyttas")], p)[0].last_rendered_text).toBe("– Workshopen flyttas.");
+  });
+
   it("a heading item gets NORMAL_TEXT and a new bullet list", () => {
     const doc = anchored((d) => {
       const el = elByText(d, "Ekonomi");
@@ -327,6 +348,7 @@ describe("planFormatRender under agenda items", () => {
       { updateParagraphStyle: { range: { tabId: TAB, startIndex: 205, endIndex: 225 }, paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
       { createParagraphBullets: { range: { tabId: TAB, startIndex: 205, endIndex: 225 }, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } },
       { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 205, endIndex: 225 } } },
+      plainText(205, 225),
     ]);
   });
 
@@ -399,7 +421,7 @@ describe("planFormatRender on a bold-only agenda (no lists, no HEADING_* items)"
       { updateParagraphStyle: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
       { createParagraphBullets: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } },
       { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: 17, endIndex: 33 } } },
-      { updateTextStyle: { range: { tabId: TAB, startIndex: 17, endIndex: 33 }, textStyle: { bold: false }, fields: "bold" } },
+      plainText(17, 33),
     ]);
     const rows = renderedRows("m1", [], [n1], p1);
     // Next render: ours is a bullet in a new list. Both items are still found.
@@ -496,7 +518,7 @@ describe("planFormatRender tasks and their copies", () => {
     ]);
   });
 
-  it("primary locked → the copy row is kept as it was and no request touches it", () => {
+  it("primary locked (R-A6) → the tasks copy keeps updating, incl. ✓ klart; also when the primary is deleted", () => {
     const copy = "Kassör: Mejla klubben om avgiften (fre).";
     const doc = withRanges(
       tasksDoc((d) => {
@@ -508,17 +530,97 @@ describe("planFormatRender tasks and their copies", () => {
     const rows = [row(anna, `– ${copy}`), row({ ...anna, id: "n1-t", anchor: "tasks", copyOf: "n1" }, copy)];
     const state = readState(parseNotesTab(doc, TAB), rows);
     expect(state.diff.rows.find((r) => r.id === "n1")!.locked).toBe(true);
-    const desired = expandCopies(state.diff.locked, state.diff.rows, VECKOMOTE);
-    expect(desired.map((d) => d.id)).toEqual(["n1", "n1-t"]);
-    const p = plan(doc, state.diff.rows, desired);
-    expect(p.requests).toEqual([]);
-    const out = renderedRows("m1", state.diff.rows, desired, p);
-    expect(out.find((r) => r.id === "n1-t")).toEqual(state.diff.rows.find((r) => r.id === "n1-t"));
-    // Also when the primary is gone from desired entirely (deleted by a human): the copy stays.
-    const deleted = state.diff.rows.map((r) => (r.id === "n1" ? { ...r, locked: false, deleted_by_human: true } : r));
+    const replaceCopy = (text: string) => ({
+      replaceNamedRangeContent: { namedRangeName: "ss-m1-n1-t", text, tabsCriteria: { tabIds: [TAB] } },
+    });
+    // Nothing new: the copy is rendered from its row, unchanged → no request, nothing removed.
+    const same = plan(doc, state.diff.rows, expandCopies(state.diff.locked, state.diff.rows, VECKOMOTE));
+    expect(same.requests).toEqual([]);
+    expect(same.removed.size).toBe(0);
+    // The copy given by the caller (Claude's own item for it) is reworded in place.
+    const copyItem = { ...toNotesItem(state.diff.rows.find((r) => r.id === "n1-t")!), due: "mån" };
+    expect(plan(doc, state.diff.rows, expandCopies([...state.diff.locked, copyItem], state.diff.rows, VECKOMOTE)).requests).toEqual([
+      replaceCopy("Kassör: Mejla klubben om avgiften (mån)."),
+    ]);
+    // Done reported on the (locked) primary reaches the copy.
+    const doneRows = state.diff.rows.map((r) => (r.id === "n1" ? { ...r, done: true } : r));
+    const doneDesired = expandCopies(state.diff.locked.map((i) => ({ ...i, done: true })), doneRows, VECKOMOTE);
+    const p = plan(doc, doneRows, doneDesired);
+    expect(p.requests).toEqual([replaceCopy(`${copy} ✓ klart`)]);
+    expect(renderedRows("m1", doneRows, doneDesired, p).find((r) => r.id === "n1-t")).toMatchObject({ done: true, last_rendered_text: `${copy} ✓ klart` });
+    // Primary deleted by a human: the copy stays and still updates.
+    const deleted = state.diff.rows.map((r) => (r.id === "n1" ? { ...r, locked: false, deleted_by_human: true, done: true } : r));
     const p2 = plan(doc, deleted, expandCopies([], deleted, VECKOMOTE));
-    expect(p2.requests).toEqual([]);
+    expect(p2.requests).toEqual([replaceCopy(`${copy} ✓ klart`)]);
     expect(p2.removed.size).toBe(0);
+  });
+
+  it("copy locked (R-A6) → the primary keeps updating, incl. ✓ klart, the copy is never touched", () => {
+    const copy = "Kassör: Mejla klubben om avgiften (fre).";
+    const doc = withRanges(
+      tasksDoc((d) => {
+        insertAfter(d, "Ekonomi", `– ${copy}`);
+        insertAfter(d, "Ordförande: Boka lokal.", "Anna har redan mejlat.");
+      }),
+      [...ANCHORS, ["ss-m1-n1", `– ${copy}`], ["ss-m1-n1-t", "Anna har redan mejlat."]],
+    );
+    const rows = [row(anna, `– ${copy}`), row({ ...anna, id: "n1-t", anchor: "tasks", copyOf: "n1" }, copy)];
+    const state = readState(parseNotesTab(doc, TAB), rows);
+    expect(state.diff.rows.find((r) => r.id === "n1-t")!.locked).toBe(true);
+    const p = plan(doc, state.diff.rows, expandCopies([{ ...anna, done: true }, ...state.diff.locked], state.diff.rows, VECKOMOTE));
+    expect(p.requests).toEqual([
+      { replaceNamedRangeContent: { namedRangeName: "ss-m1-n1", text: `– ${copy} ✓ klart`, tabsCriteria: { tabIds: [TAB] } } },
+    ]);
+  });
+});
+
+describe("planFormatRender never merges a human paragraph into ours", () => {
+  it("our removed line at the end of the tab right after a human line: its newline stays", () => {
+    const n1 = note("n1", "notes", "Gammal anteckning");
+    const doc = anchored(
+      (d) => {
+        insertAfter(d, LIVE, "Mänsklig rad.");
+        insertAfter(d, "Mänsklig rad.", "Gammal anteckning.");
+      },
+      [["ss-m1-n1", "Gammal anteckning."]],
+    );
+    const ours = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Gammal anteckning.\n")!;
+    const p = plan(doc, [row(n1, "Gammal anteckning.")], []);
+    expect(p.requests).toEqual([
+      { deleteNamedRange: { name: "ss-m1-n1", tabsCriteria: { tabIds: [TAB] } } },
+      { deleteContentRange: { range: { tabId: TAB, startIndex: ours.start, endIndex: ours.end - 1 } } },
+    ]);
+  });
+
+  it("after one of our own kept lines the v1 rule applies (that newline is ours)", () => {
+    const n1 = note("n1", "notes", "Kvar");
+    const n2 = note("n2", "notes", "Bort");
+    const doc = anchored(
+      (d) => {
+        insertAfter(d, LIVE, "Kvar.");
+        insertAfter(d, "Kvar.", "Bort.");
+      },
+      [["ss-m1-n1", "Kvar."], ["ss-m1-n2", "Bort."]],
+    );
+    const bort = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Bort.\n")!;
+    const p = plan(doc, [row(n1, "Kvar."), row(n2, "Bort.")], [n1]);
+    expect(p.requests).toContainEqual({ deleteContentRange: { range: { tabId: TAB, startIndex: bort.start - 1, endIndex: bort.end - 1 } } });
+  });
+
+  it("a plain line after a human bulleted line drops the inherited bullet and indent", () => {
+    const doc = anchored((d) => {
+      elByText(d, "Ordförande: Boka lokal.").paragraph!.bullet = { listId: "kix.tasks", nestingLevel: 0 };
+    });
+    const p = plan(doc, [], [task("n1-t", "tasks", "Ring banken", "Lisa Holm")]);
+    const at = parseNotesTab(doc, TAB).paragraphs.find((x) => x.text === "Ordförande: Boka lokal.\n")!.end;
+    expect(p.requests).toContainEqual({ deleteParagraphBullets: { range: { tabId: TAB, startIndex: at, endIndex: at + 20 } } });
+    expect(p.requests).toContainEqual({
+      updateParagraphStyle: {
+        range: { tabId: TAB, startIndex: at, endIndex: at + 20 },
+        paragraphStyle: { namedStyleType: "NORMAL_TEXT", indentStart: { magnitude: 0, unit: "PT" }, indentFirstLine: { magnitude: 0, unit: "PT" } },
+        fields: "namedStyleType,indentStart,indentFirstLine",
+      },
+    });
   });
 });
 
@@ -531,6 +633,7 @@ describe("planFormatRender notes and info cells", () => {
       { insertText: { text: "\nNästa möte hålls i Kårallen.", location: { tabId: TAB, index: live.end - 1 } } },
       { updateParagraphStyle: { range: { tabId: TAB, startIndex: live.end, endIndex: live.end + 28 }, paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
       { createNamedRange: { name: "ss-m1-n1", range: { tabId: TAB, startIndex: live.end, endIndex: live.end + 28 } } },
+      plainText(live.end, live.end + 28),
     ]);
   });
 
@@ -541,6 +644,7 @@ describe("planFormatRender notes and info cells", () => {
     expect(p.requests).toEqual([
       { insertText: { text: "Anna Berg, Erik Lund", location: { tabId: TAB, index: 51 } } },
       { createNamedRange: { name: "ss-m1-info-narvarande", range: { tabId: TAB, startIndex: 51, endIndex: 71 } } },
+      plainText(51, 71),
     ]);
   });
 
@@ -626,10 +730,14 @@ describe("renderItems with layout 'format'", () => {
     api.batchUpdate.mockReset();
   });
 
-  it("without `format` writes nothing (a tick deployed before A12)", async () => {
+  it("without `format` writes nothing and says so (a tick deployed before A12)", async () => {
     const rows = [row(note("n1", "ag-4", "x"), "x.")];
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = await renderItems(auth, meeting, rows, [note("n2", "ag-4", "y")], "REV_ID");
-    expect(res).toEqual({ status: "ok", rows, headerRendered: null });
+    expect(res).toEqual({ status: "skipped", reason: "format-planner-missing" });
+    await renderItems(auth, meeting, rows, [], "REV_ID");
+    expect(err).toHaveBeenCalledTimes(1);
+    err.mockRestore();
     expect(api.batchUpdate).not.toHaveBeenCalled();
     expect(api.get).not.toHaveBeenCalled();
   });

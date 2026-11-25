@@ -99,8 +99,11 @@ const isTaskPrimary = (item: NotesItem) =>
 /**
  * Desired items plus the tasks-section copies: each unlocked task primary (not carried, not
  * already in the tasks section) gets `{ ...item, id: "<id>-t", anchor: "tasks", copyOf: id }`
- * when the profile has a tasks section. A copy whose primary is locked or deleted is kept exactly
- * as its row is (planFormatRender never touches it) and no new copy is made.
+ * when the profile has a tasks section. Each copy locks on its own (Ruling R-A6): a copy whose
+ * primary is locked or deleted by a human keeps rendering on its own — from the copy item when the
+ * caller passes one (A12 gives the copy to Claude then), else from its row — and takes the
+ * primary's `done` (so "✓ klart" still reaches the tasks section). No new copy is made for a
+ * primary that is locked or deleted without one.
  */
 export function expandCopies(items: NotesItem[], rows: NoteItemRow[], profile: FormatProfile): NotesItem[] {
   if (!profile.tasksSection) return items;
@@ -112,13 +115,21 @@ export function expandCopies(items: NotesItem[], rows: NoteItemRow[], profile: F
     have.add(item.id);
     out.push(item);
   };
+  const itemById = new Map(items.map((i) => [i.id, i]));
+  /** The copy of a human-edited primary: its own item or row, with the primary's done. */
+  const ownCopy = (copy: NoteItemRow, primaryDone: boolean) => {
+    const base = toNotesItem(copy);
+    add(primaryDone && !base.done ? { ...base, done: true } : base);
+  };
   for (const item of items) {
     if (!isTaskPrimary(item)) continue;
     const row = rowById.get(item.id);
     const copyId = `${item.id}-t`;
     if (row?.locked || row?.deleted_by_human) {
       const copy = rowById.get(copyId);
-      if (copy) add(toNotesItem(copy));
+      const given = itemById.get(copyId);
+      if (given && item.done && !given.done) out[out.indexOf(given)] = { ...given, done: true };
+      else if (copy) ownCopy(copy, item.done === true || row.done === true);
       continue;
     }
     add({ ...item, id: copyId, anchor: "tasks", copyOf: item.id });
@@ -127,7 +138,7 @@ export function expandCopies(items: NotesItem[], rows: NoteItemRow[], profile: F
   for (const r of rows) {
     if (!r.copy_of) continue;
     const primary = rowById.get(r.copy_of);
-    if (primary?.locked || primary?.deleted_by_human) add(toNotesItem(r));
+    if (primary?.locked || primary?.deleted_by_human) ownCopy(r, primary.done === true);
   }
   return out;
 }
@@ -145,13 +156,6 @@ export function withoutOwnLines(tab: NotesTab, rows: NoteItemRow[]): NotesTab {
     .filter((x): x is NonNullable<typeof x> => x !== null && !tab.paragraphs.some((p) => p.start === x.paraStart && paraInTable(p)));
   if (!spans.length) return tab;
   return { ...tab, paragraphs: tab.paragraphs.filter((p) => !spans.some((sp) => p.start >= sp.paraStart && p.start < sp.paraEnd)) };
-}
-
-/** A tasks copy frozen because its primary is locked or deleted: never written, never removed. */
-function isFrozenCopy(copyOf: string | null | undefined, byId: Map<string, NoteItemRow>): boolean {
-  if (!copyOf) return false;
-  const primary = byId.get(copyOf);
-  return Boolean(primary && (primary.locked || primary.deleted_by_human));
 }
 
 /** The placement prefix a rendered row carries in front of its formatLine. */
@@ -209,13 +213,13 @@ export function planFormatRender(
 
   // Removals (v1 rules). Never a cell row: deleting a cell's paragraph would take its newline.
   for (const row of rows) {
-    if (desiredIds.has(row.id) || isFrozenCopy(row.copy_of, byId) || row.anchor?.startsWith("info.")) continue;
+    if (desiredIds.has(row.id) || row.anchor?.startsWith("info.")) continue;
     const span = ownedSpan(tab, row);
     if (!span || span.paraText !== row.last_rendered_text) continue;
     if (tab.paragraphs.some((p) => p.start === span.paraStart && paraInTable(p))) continue;
     removed.add(row.id);
   }
-  groups.push(...deleteRuns(tab, rows, removed));
+  groups.push(...deleteRuns(tab, rows, removed, { keepHumanNewline: true }));
   const doomed: { start: number; end: number }[] = [];
   for (const id of removed) {
     const span = itemSpan(tab, byId.get(id)!.range_name!);
@@ -229,7 +233,6 @@ export function planFormatRender(
   for (const item of desired) {
     const row = byId.get(item.id);
     if (row?.locked || row?.deleted_by_human || isEmptyItem(item)) continue;
-    if (isFrozenCopy(item.copyOf ?? row?.copy_of, byId)) continue;
     if (!row?.range_name) {
       // Already in the Doc (a render whose rows were not saved): never insert a second copy.
       if (tab.ranges.has(itemRangeName(meeting.id, item.id))) continue;
@@ -290,9 +293,17 @@ export function planFormatRender(
       const block = agItem.blocks[agItem.blocks.length - 1];
       const after = usable(block.start, block.limit).at(-1);
       if (!after) return;
+      // (b) only into a sub-point exactly one level below the item (heading items: level 0 of a
+      // sub-point list); after a deeper point (a human's sub-sub-point, or ours after a human Tab)
+      // our line would become a child of someone else's point → (c) instead.
       const bullet = paraBullet(after);
+      const subLevel = agItem.kind === "list" ? agItem.level + 1 : 0;
       const mode: Mode =
-        bullet && after.start !== agItem.paraStart ? "b" : agItem.kind === "list" ? "c" : "bullet";
+        bullet && after.start !== agItem.paraStart && bullet.level === subLevel
+          ? "b"
+          : agItem.kind === "list" || bullet
+            ? "c"
+            : "bullet";
       slots.push({ at: after.end - 1, mode, after, rank: order, item, line: mode === "c" ? DASH + line : line });
       return;
     }
@@ -381,10 +392,23 @@ function insertGroup(tabId: string, meetingId: string, at: number, slots: Slot[]
     createNamedRange: { name: itemRangeName(meetingId, s.item.id), range: range(start, start + s.line.length) },
   });
 
+  // Inserted text takes the previous character's style (bold label, link, …): ours is plain.
+  const plainText = (start: number, end: number): DocsRequest => ({
+    updateTextStyle: {
+      range: range(start, end),
+      textStyle: { bold: false, italic: false, underline: false, strikethrough: false },
+      fields: "bold,italic,underline,strikethrough,link",
+    },
+  });
+
   if (mode === "cell") {
     // One attendee row at most; an empty cell's paragraph is [at, at+1).
     const s = slots[0];
-    return { index: at, kind: INSERT, requests: [{ insertText: { text: s.line, location: { tabId, index: at } } }, named(s, at)] };
+    return {
+      index: at,
+      kind: INSERT,
+      requests: [{ insertText: { text: s.line, location: { tabId, index: at } } }, named(s, at), plainText(at, at + s.line.length)],
+    };
   }
 
   // The text without placement prefixes: (c) inserts its "– " after the bullets are gone.
@@ -401,9 +425,23 @@ function insertGroup(tabId: string, meetingId: string, at: number, slots: Slot[]
   if (mode === "b") {
     slots.forEach((s, i) => requests.push(named(s, starts[i])));
   } else if (mode === "plain" || mode === "bullet") {
-    requests.push({
-      updateParagraphStyle: { range: range(at + 1, end), paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" },
-    });
+    const afterBullet = mode === "plain" && slots[0].after && paraBullet(slots[0].after);
+    if (afterBullet) {
+      // After a human's bulleted line our plain line would inherit the bullet: remove it and the
+      // list indent it leaves behind.
+      requests.push({ deleteParagraphBullets: { range: range(at + 1, end) } });
+      requests.push({
+        updateParagraphStyle: {
+          range: range(at + 1, end),
+          paragraphStyle: { namedStyleType: "NORMAL_TEXT", indentStart: { magnitude: 0, unit: "PT" }, indentFirstLine: { magnitude: 0, unit: "PT" } },
+          fields: "namedStyleType,indentStart,indentFirstLine",
+        },
+      });
+    } else {
+      requests.push({
+        updateParagraphStyle: { range: range(at + 1, end), paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" },
+      });
+    }
     if (mode === "bullet") {
       requests.push({ createParagraphBullets: { range: range(at + 1, end), bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } });
     }
@@ -428,10 +466,6 @@ function insertGroup(tabId: string, meetingId: string, at: number, slots: Slot[]
     }
     slots.forEach((s, i) => requests.push(named(s, starts[i] + DASH.length * i)));
   }
-  // Text typed after a bold run inherits bold (a bold-only Doc's item lines): ours is plain.
-  if (slots[0].after?.bold) {
-    const finalEnd = mode === "c" ? end + DASH.length * slots.length : end;
-    requests.push({ updateTextStyle: { range: range(at + 1, finalEnd), textStyle: { bold: false }, fields: "bold" } });
-  }
+  requests.push(plainText(at + 1, mode === "c" ? end + DASH.length * slots.length : end));
   return { index: at, kind: INSERT, requests };
 }
