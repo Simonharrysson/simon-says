@@ -556,6 +556,8 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(f.calls).toHaveLength(0);
     expect(await events(id, "final_without_claude")).toHaveLength(1);
     expect(await events(id, "tick_ok")).toHaveLength(0);
+    // Don't leave an `ending` meeting for later sweeps in this org.
+    await adminClient().from("meetings").update({ status: "done" }).eq("id", id);
   });
 
   it("GoogleAuthLostError → paused, segments untouched; resumed by cron after a token update", async () => {
@@ -735,7 +737,8 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     const other = randomUUID();
     await adminClient().from("meetings").update({ tick_lease_id: other }).eq("id", id);
     open();
-    expect(await running).toBe("ok");
+    // B2: the stale tick saves no rows (the newer tick owns them) and reports busy.
+    expect(await running).toBe("busy");
     const m = await read(id);
     expect(m.tick_lease_id).toBe(other);
     expect(m.tick_lease_until).not.toBeNull();
