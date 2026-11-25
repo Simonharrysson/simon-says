@@ -14,7 +14,7 @@ vi.mock("@/lib/google/docs", async (importOriginal) => ({
 
 import { readState } from "@/lib/meetings/tick";
 import { expandCopies, formatLine, planFormatRender, type LineCtx } from "./format-render";
-import { currentItems, diffHumanEdits, ownedSpan, parseNotesTab, renderedRows, renderItems, toNotesItem } from "./notes";
+import { currentItems, dedupeById, diffHumanEdits, ownedSpan, parseNotesTab, renderedRows, renderItems, toNotesItem } from "./notes";
 
 // Fictional agenda Doc from Task A1 (fixtures/agenda/veckomote.doc.json):
 //   [91,110) Godkänn dagordning · [110,119) Må-runda · [119,137) Från förra veckan ·
@@ -571,6 +571,39 @@ describe("planFormatRender tasks and their copies", () => {
     expect(p.requests).toEqual([
       { replaceNamedRangeContent: { namedRangeName: "ss-m1-n1", text: `– ${copy} ✓ klart`, tabsCriteria: { tabIds: [TAB] } } },
     ]);
+  });
+});
+
+describe("duplicate ids in desired", () => {
+  it("last one wins: one replace, and the stored line equals what was written", () => {
+    const n1 = note("n1", "ag-5", "Budgeten är godkänd");
+    const doc = anchored((d) => insertAfter(d, "Ekonomi", "– Budgeten är godkänd."), [["ss-m1-n1", "– Budgeten är godkänd."]]);
+    const rows = [row(n1, "– Budgeten är godkänd.")];
+    const desired = [{ ...n1, text: "Första" }, { ...n1, text: "Andra" }];
+    const p = plan(doc, rows, desired);
+    expect(p.requests).toEqual([
+      { replaceNamedRangeContent: { namedRangeName: "ss-m1-n1", text: "– Andra.", tabsCriteria: { tabIds: [TAB] } } },
+    ]);
+    expect(renderedRows("m1", rows, dedupeById(desired), p)[0].last_rendered_text).toBe("– Andra.");
+    expect(expandCopies([task("n2", "ag-5", "A", "Anna Berg"), task("n2", "ag-5", "B", "Anna Berg")], [], VECKOMOTE).map((i) => [i.id, i.text])).toEqual([
+      ["n2", "B"],
+      ["n2-t", "B"],
+    ]);
+  });
+
+  it("renderItems dedupes before planning and before building rows (v1 path too)", async () => {
+    api.get.mockReset();
+    api.batchUpdate.mockReset();
+    const doc = anchored();
+    doc.revisionId = "rev7";
+    api.get.mockResolvedValue({ data: doc });
+    api.batchUpdate.mockResolvedValue({ data: {} });
+    const a = note("n1", "notes", "Första");
+    const res = await renderItems(auth, meeting, [], [a, { ...a, text: "Andra" }], "rev7", undefined, { plan: planFormatRender, profile: VECKOMOTE, ownerLabel: ctx.ownerLabel });
+    expect(res.status).toBe("ok");
+    if (res.status === "ok") expect(res.rows.map((r) => [r.id, r.text, r.last_rendered_text])).toEqual([["n1", "Andra", "Andra."]]);
+    const sent = api.batchUpdate.mock.calls[0][0].requestBody.requests;
+    expect(sent.filter((r: docs_v1.Schema$Request) => r.insertText)).toHaveLength(1);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   INSERT,
   REPLACE,
   clean,
+  dedupeById,
   deleteRuns,
   headerGroup,
   isEmptyItem,
@@ -106,6 +107,7 @@ const isTaskPrimary = (item: NotesItem) =>
  * primary that is locked or deleted without one.
  */
 export function expandCopies(items: NotesItem[], rows: NoteItemRow[], profile: FormatProfile): NotesItem[] {
+  items = dedupeById(items);
   if (!profile.tasksSection) return items;
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const out = [...items];
@@ -200,6 +202,7 @@ export function planFormatRender(
   desired: NotesItem[],
   opts: FormatRenderOpts,
 ): RenderPlan {
+  desired = dedupeById(desired);
   const tabId = meeting.notes_tab_id;
   const ctx: LineCtx = { profile: opts.profile, ownerLabel: opts.ownerLabel };
   const byId = new Map(rows.map((r) => [r.id, r]));

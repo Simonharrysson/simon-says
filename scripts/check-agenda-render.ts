@@ -12,7 +12,8 @@
  *             and saved to .check-notes/agenda-results.json. Needs `build` first.
  *   human     a fresh copy with three of our bullets under item 4, a named range on the filled
  *             Narvarande cell, then prints the URL and what to type.
- *   inspect   after the human edit: paragraphs, bullets, ranges and itemSpan per range.
+ *   inspect   after the human edit: paragraphs, bullets, ranges and itemSpan per range
+ *             (`inspect a6`: the same for the A6 render Doc).
  *   render    (Task A6) a fresh copy, anchored by hand-made ranges (ss-a6-ag-1..6, sec-tasks, sec-notes,
  *             live) plus a LIVE line, then ONE planFormatRender batch through renderItems: notes under
  *             ag-4 and ag-5, a decision, two Kassör tasks (+ their tasks copies), a note in `notes`,
@@ -882,10 +883,12 @@ async function tick() {
   const items: NotesItem[] = diff.rows
     .filter((r) => !off.has(r.id) && !r.copy_of)
     .map((r) => ({ ...n.toNotesItem(r), ...(r.anchor?.startsWith("info.") ? {} : { text: `${r.text.replace(/[.]$/, "")} (uppdaterad)` }) }));
-  items.push(
+  // New lines only on the first tick (a second tick must not offer n7/n8 again as duplicates).
+  const extra: NotesItem[] = [
     { id: "n7", section: "note", anchor: "ag-4", text: "Affischer behövs till festen" },
     { id: "n8", section: "note", anchor: "ag-5", text: "Revisorn kommer i mars" },
-  );
+  ];
+  items.push(...extra.filter((e) => !diff.rows.some((r) => r.id === e.id)));
   const desired = fr.expandCopies([...items, ...diff.locked], diff.rows, profile);
   const res = await a6Render(st.meeting, diff.rows, desired, "Simon Says antecknar live · uppdaterad 18:20");
   if (res.status !== "ok") throw new Error("tick render failed");
@@ -904,7 +907,7 @@ async function tick() {
 async function main(): Promise<void> {
   const [userArg, stage] = process.argv.slice(2);
   if (!userArg || !stage) {
-    console.error("usage: npm run check-agenda-render -- <userId|email> <build|auto|human|inspect|render|tick>");
+    console.error("usage: npm run check-agenda-render -- <userId|email> <build|auto|human|inspect [a6]|render|tick>");
     process.exit(2);
   }
   await prepareEnv();
@@ -923,8 +926,14 @@ async function main(): Promise<void> {
       return auto(state());
     case "human":
       return human(state());
-    case "inspect":
+    case "inspect": {
+      // `inspect a6`: the A6 render Doc (from .check-notes/agenda-a6.json) instead of the A1 human Doc.
+      if (process.argv[4] === "a6") {
+        const a6 = JSON.parse(readFileSync(A6_STATE, "utf8")) as A6State;
+        return inspect({ ...state(), tabId: a6.meeting.notes_tab_id, humanId: a6.docId });
+      }
       return inspect(state());
+    }
     case "render":
       return render(state());
     case "tick":

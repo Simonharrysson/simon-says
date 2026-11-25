@@ -270,6 +270,13 @@ export type FormatPlanner = (
 /** An item we refuse to render: nothing visible left after cleaning. */
 export const isEmptyItem = (item: NotesItem) => clean(item.text) === "";
 
+/** One item per id, the last occurrence winning (at the first occurrence's place). Same array when there is no duplicate. */
+export function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const item of items) byId.set(item.id, item);
+  return byId.size === items.length ? items : [...byId.values()];
+}
+
 /** End of the tab's last paragraph (a Doc never ends in a table). */
 export const tabEnd = (tab: NotesTab) => (tab.paragraphs.length ? tab.paragraphs[tab.paragraphs.length - 1].end : 1);
 
@@ -535,6 +542,7 @@ export async function renderItems(
   headerText?: string,
   format?: Omit<FormatPlanOpts, "headerText"> & { plan: FormatPlanner },
 ): Promise<RenderResult> {
+  desired = dedupeById(desired);
   // A format meeting rendered by code that does not know formats (e.g. a tick deployed before
   // A12): write nothing rather than v1 lines at the end of a human's Doc.
   if (meeting.layout === "format" && !format) {
