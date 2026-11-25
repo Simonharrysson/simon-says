@@ -8,8 +8,8 @@ import type { TranscriptLine } from "@/lib/docs/transcript";
 import type { UpdateNotesInput, UpdateNotesResult } from "@/lib/notes/engine";
 import type { NotesItem } from "@/lib/notes/schema";
 import type { docs_v1 } from "@googleapis/docs";
-import fixture from "@/fixtures/agenda/veckomote.doc.json";
-import { apply, TAB } from "@/test/docsim";
+import { TAB } from "@/test/docsim";
+import { anchoredDoc, applyDoc, docText, FMT_ENDED, FMT_STARTED, fmtMeeting, insertItemBeforeOvrigt, linesOf, renderInto, ROLES } from "@/test/formatdoc";
 
 // after() needs a Next request scope: record the scheduled work and run it in the test.
 const scheduled = vi.hoisted(() => [] as (() => unknown)[]);
@@ -239,95 +239,6 @@ describe("cron route", () => {
 type Doc = docs_v1.Schema$Document;
 type Req = docs_v1.Schema$Request;
 type MeetingInput = Parameters<typeof tick.agendaContext>[2];
-
-// Fixture items: ag-1 Godkänn dagordning · ag-2 Må-runda · ag-3 Från förra veckan · ag-4 Kommande
-// event (two sub-points) · ag-5 Ekonomi · ag-6 Övrigt; tasks heading, "Ordförande: Boka lokal.", Anteckningar.
-const ROLES = {
-  "ag-1": "procedural",
-  "ag-2": "checkin",
-  "ag-3": "followup",
-  "ag-4": "topic",
-  "ag-5": "topic",
-  "ag-6": "other",
-} as const;
-const FMT_STARTED = new Date("2026-11-25T17:05:00Z"); // 18:05 in Stockholm
-const FMT_ENDED = new Date("2026-11-25T18:10:00Z"); // 19:10
-
-const docText = (doc: Doc) => parseNotesTab(doc, TAB).paragraphs.map((p) => p.text).join("");
-const linesOf = (doc: Doc) => parseNotesTab(doc, TAB).paragraphs.map((p) => p.text.replace(/\n$/, ""));
-
-/** docsim's apply, plus replaceNamedRangeContent (delete the range's text, insert, re-create the range); bumps the revision. */
-function applyDoc(doc: Doc, requests: Req[]): Doc {
-  for (const r of requests) {
-    const rep = r.replaceNamedRangeContent;
-    if (!rep) {
-      apply(doc, [r]);
-      continue;
-    }
-    const name = rep.namedRangeName!;
-    const parts = (parseNotesTab(doc, TAB).ranges.get(name) ?? []).flat().filter((x) => x.end > x.start);
-    if (parts.length !== 1) throw new Error(`replace ${name}: ${parts.length} parts`);
-    const { start, end } = parts[0];
-    const text = rep.text ?? "";
-    apply(doc, [
-      { deleteContentRange: { range: { tabId: TAB, startIndex: start, endIndex: end } } },
-      { insertText: { text, location: { tabId: TAB, index: start } } },
-      { deleteNamedRange: { name, tabsCriteria: { tabIds: [TAB] } } },
-      { createNamedRange: { name, range: { tabId: TAB, startIndex: start, endIndex: start + text.length } } },
-    ]);
-  }
-  doc.revisionId = `REV_${Number(String(doc.revisionId ?? "").replace(/\D/g, "") || 0) + 1}`;
-  return doc;
-}
-
-/** The fixture agenda Doc as the start leaves it for meeting `id` (anchors, LIVE line, Tid "18:05"). */
-function anchoredDoc(id: string) {
-  const doc = JSON.parse(JSON.stringify(fixture)) as Doc;
-  const tab = parseNotesTab(doc, TAB);
-  const plan = planAnchoring(scanAgenda(tab, VECKOMOTE), tab, { meetingId: id, profile: VECKOMOTE, startedAt: FMT_STARTED });
-  applyDoc(doc, plan.requests);
-  return { doc, plan };
-}
-
-function fmtMeeting(id: string, plan: ReturnType<typeof anchoredDoc>["plan"], over: Partial<MeetingRow> = {}): MeetingRow {
-  return {
-    id,
-    org_id: "o",
-    notes_tab_id: TAB,
-    header_range: plan.headerRange,
-    header_rendered: INITIAL_LIVE_LINE,
-    section_ranges: plan.sectionRanges,
-    agenda_roles: { ...ROLES },
-    layout: "format",
-    started_at: FMT_STARTED.toISOString(),
-    ...over,
-  } as MeetingRow;
-}
-
-/** One render as the tick does it (planFormatRender), applied to the simulated Doc. */
-function renderInto(
-  doc: Doc,
-  meeting: MeetingRow,
-  rows: NoteItemRow[],
-  desired: NotesItem[],
-  opts: { header?: string; newAnchors?: { key: string; start: number; end: number }[] } = {},
-) {
-  const tab = parseNotesTab(doc, TAB);
-  const plan = planFormatRender(meeting, tab, rows, desired, {
-    profile: VECKOMOTE,
-    ownerLabel: (o) => o,
-    headerText: opts.header,
-    newAnchors: opts.newAnchors,
-  });
-  applyDoc(doc, plan.requests);
-  return { rows: renderedRows(meeting.id, rows, desired, plan), plan };
-}
-
-/** Insert a new top-level agenda item right before "Övrigt" (inherits its list and level). */
-function insertItemBeforeOvrigt(doc: Doc, label: string) {
-  const ovrigt = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Övrigt\n")!;
-  applyDoc(doc, [{ insertText: { text: `${label}\n`, location: { tabId: TAB, index: ovrigt.start } } }]);
-}
 
 describe("format layout: transcript masking (Må-runda)", () => {
   const sessions = [{ id: "sess-a", started_at: "2026-11-25T17:05:00Z" }];
