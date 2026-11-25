@@ -295,40 +295,105 @@ describe("signature lines as humans type them (fix I1)", () => {
     expect(req.createNamedRange!.range!.startIndex).toBe(first.start);
   });
 
+  it("names with particles, and a filled line without a colon", () => {
+    expect(taskLands(styrelse(["Mötesordförande: Bo af Klint", "Justerare: Anna von der Linden"])).p.sectionRanges.signatures).toBeDefined();
+    const doc = styrelse(["Ordförande Anna Svensson", "Sekreterare Bo Karlsson"]);
+    const { p, at, boka } = taskLands(doc);
+    expect(p.sectionRanges.signatures).toBeDefined();
+    expect(at).toBe(boka.end - 1);
+  });
+
+  it("a single capitalised word is no name: 'Justerare: Kallelse' as the last line is not anchored", () => {
+    expect(plan(styrelse(["Justerare: Kallelse"]), STYRELSEPROTOKOLL).plan.sectionRanges.signatures).toBeUndefined();
+  });
+
+  it("a lone signature line is anchored, also when re-anchored after our appended heading and status line", () => {
+    const single: FormatProfile = { ...STYRELSEPROTOKOLL, signatures: ["Justerare"] };
+    const doc = docOf([
+      paraEl("Dagordning", { style: "HEADING_2" }),
+      paraEl("§1 Mötets öppnande", { style: "HEADING_3" }),
+      paraEl("Justerare: ____________________"),
+    ]);
+    const first = plan(doc, single).plan;
+    expect(first.appended).toEqual(["Att göra"]);
+    expect(first.sectionRanges.signatures).toBeDefined();
+    apply(doc, first.requests);
+    const tab = tabOf(doc);
+    expect(bodyLines(tab).slice(-3).map(paraLine)).toEqual(["Justerare: ____________________", "Att göra", INITIAL_LIVE_LINE]);
+    const again = planAnchoring(scanAgenda(tab, single), tab, { meetingId: "m2", profile: single, startedAt: STARTED });
+    expect(again.sectionRanges.signatures).toBe("ss-m2-sec-signatures");
+  });
+
   it("role-first task lines are not signatures", () => {
     const doc = styrelse(["Sekreterare: Skicka kallelsen.", "Justerare: läsa protokollet"]);
     expect(plan(doc, STYRELSEPROTOKOLL).plan.sectionRanges.signatures).toBeUndefined();
   });
 });
 
-describe("anchoring twice (fix I2)", () => {
+describe("anchoring twice (fix I2, round 2)", () => {
   const statusLines = (tab: NotesTab) => bodyLines(tab).filter((x) => paraLine(x).startsWith("Simon Says"));
-
-  it("a Doc anchored and ended by an earlier meeting: one status line, reused; Tid ranged again", () => {
-    const doc = fixtureDoc();
-    apply(doc, plan(doc).plan.requests);
-    // The earlier meeting ended: its status line and Tid as the final pass leaves them.
-    const els = (function walk(c: docs_v1.Schema$StructuralElement[]): docs_v1.Schema$StructuralElement[] {
+  const allEls = (doc: Doc) =>
+    (function walk(c: docs_v1.Schema$StructuralElement[]): docs_v1.Schema$StructuralElement[] {
       return c.flatMap((el) => [el, ...(el.table?.tableRows ?? []).flatMap((r) => (r.tableCells ?? []).flatMap((cell) => walk(cell.content ?? [])))]);
     })(doc.tabs![0].documentTab!.body!.content!);
-    const set = (from: string, to: string) => {
-      const el = els.find((e) => e.paragraph?.elements?.[0]?.textRun?.content === `${from}\n`)!;
-      el.paragraph!.elements = [{ textRun: { content: `${to}\n`, textStyle: {} } }];
-    };
-    set(INITIAL_LIVE_LINE, "Simon Says · avslutat 19:10");
-    set("18:05", "18:05–19:10");
-    doc.tabs![0].documentTab!.namedRanges = {}; // a different meeting's ranges are irrelevant here
+  const elOf = (doc: Doc, text: string) => allEls(doc).find((e) => e.paragraph?.elements?.[0]?.textRun?.content === `${text}\n`)!;
+  /** Set a paragraph's text and put one named range over [offset, offset+len) of it (indices recomputed). */
+  function rewrite(doc: Doc, from: string, to: string, range?: { name: string; offset: number; len: number }) {
+    const el = elOf(doc, from);
+    el.paragraph!.elements = [{ textRun: { content: `${to}\n`, textStyle: {} } }];
     reindex(doc);
-
+    if (range) {
+      const start = el.startIndex! + range.offset;
+      doc.tabs![0].documentTab!.namedRanges![range.name] = {
+        name: range.name,
+        namedRanges: [{ name: range.name, namedRangeId: `id-${range.name}`, ranges: [{ startIndex: start, endIndex: start + range.len }] }],
+      };
+    }
+  }
+  /** The fixture as an ended earlier meeting "old" left it: status line and Tid in our ranges. */
+  function endedDoc(status = "Simon Says · avslutat 19:10", statusLen = status.length) {
+    const doc = fixtureDoc();
+    apply(doc, plan(doc).plan.requests);
+    doc.tabs![0].documentTab!.namedRanges = {};
+    rewrite(doc, "18:05", "18:05–19:10", { name: "ss-old-info-tid", offset: 0, len: "18:05–19:10".length });
+    rewrite(doc, INITIAL_LIVE_LINE, status, { name: "ss-old-header", offset: 0, len: statusLen });
+    return doc;
+  }
+  const anchorAs = (doc: Doc, meetingId: string, startedAt = new Date("2026-12-02T17:00:00Z")) => {
     const tab = tabOf(doc);
-    const p2 = planAnchoring(scanAgenda(tab, VECKOMOTE), tab, { meetingId: "m2", profile: VECKOMOTE, startedAt: new Date("2026-12-02T17:00:00Z") });
-    const after = tabOf(apply(doc, p2.requests));
+    return { tab, p: planAnchoring(scanAgenda(tab, VECKOMOTE), tab, { meetingId, profile: VECKOMOTE, startedAt }) };
+  };
+
+  it("a Doc left by an ended meeting: one status line, reset; our old Tid rewritten with this start (18:00)", () => {
+    const doc = endedDoc();
+    const { p } = anchorAs(doc, "m2");
+    const after = tabOf(apply(doc, p.requests));
     expect(statusLines(after).map(paraLine)).toEqual([INITIAL_LIVE_LINE]);
     expect(rangeText(after, "ss-m2-header")).toBe(INITIAL_LIVE_LINE);
-    expect(p2.rows).toEqual([expect.objectContaining({ id: "info-tid", text: "18:05–19:10", last_rendered_text: "18:05–19:10", range_name: "ss-m2-info-tid" })]);
-    expect(rangeText(after, "ss-m2-info-tid")).toBe("18:05–19:10");
-    // Datum (filled) untouched; no insert into the Tid cell.
-    expect(scanAgenda(after, VECKOMOTE).info.map((c) => c.valueCell.text)).toEqual(["2026-11-25", "18:05–19:10", "", "Elin Berglund"]);
+    expect(p.rows).toEqual([expect.objectContaining({ id: "info-tid", text: "18:00", last_rendered_text: "18:00", range_name: "ss-m2-info-tid" })]);
+    expect(rangeText(after, "ss-m2-info-tid")).toBe("18:00");
+    // Datum (a human may have changed it; no range proves it ours) untouched.
+    expect(scanAgenda(after, VECKOMOTE).info.map((c) => c.valueCell.text)).toEqual(["2026-11-25", "18:00", "", "Elin Berglund"]);
+  });
+
+  it("text a human added after our status range survives; only the range's text is replaced", () => {
+    const doc = endedDoc("Simon Says · avslutat 19:10 (bra möte!)", "Simon Says · avslutat 19:10".length);
+    const { p } = anchorAs(doc, "m2");
+    const after = tabOf(apply(doc, p.requests));
+    expect(statusLines(after).map(paraLine)).toEqual([`${INITIAL_LIVE_LINE} (bra möte!)`]);
+    expect(rangeText(after, "ss-m2-header")).toBe(INITIAL_LIVE_LINE);
+  });
+
+  it("without a range: reused only when the paragraph is exactly a status form", () => {
+    const exact = endedDoc();
+    exact.tabs![0].documentTab!.namedRanges = {};
+    const a = tabOf(apply(exact, anchorAs(exact, "m2").p.requests));
+    expect(statusLines(a).map(paraLine)).toEqual([INITIAL_LIVE_LINE]);
+
+    const edited = endedDoc("Simon Says · avslutat 19:10 – Anna tog över");
+    edited.tabs![0].documentTab!.namedRanges = {};
+    const b = tabOf(apply(edited, anchorAs(edited, "m2").p.requests));
+    expect(statusLines(b).map(paraLine)).toEqual([INITIAL_LIVE_LINE, "Simon Says · avslutat 19:10 – Anna tog över"]);
   });
 
   it("the same meeting anchored twice: every range once, one status line, Tid still ours", () => {
@@ -345,14 +410,20 @@ describe("anchoring twice (fix I2)", () => {
     ITEMS.forEach((label, i) => expect(rangeText(after, `ss-m1-ag-${i + 1}`)).toBe(label));
   });
 
-  it("a typed HH:mm in Tid is ranged, never rewritten", () => {
-    // OUR_TID cannot tell a human's "18:00" from ours; anchoring only ranges it.
+  it("a human's typed Tid ('18:00', no range of ours) is never claimed nor rewritten", () => {
     const doc = fixtureDoc();
     const tidCell = doc.tabs![0].documentTab!.body!.content!.find((e) => e.table)!.table!.tableRows![1].tableCells![1];
     tidCell.content = [paraEl("18:00")];
     reindex(doc);
     const { plan: p } = plan(doc);
-    expect(p.requests.some((r) => r.insertText && r.insertText.location!.index! > 30 && r.insertText.location!.index! < 45)).toBe(false);
+    expect(p.rows).toEqual([]);
+    expect(p.requests.some((r) => r.createNamedRange?.name?.endsWith("info-tid"))).toBe(false);
+    const cell = tabOf(doc).paragraphs.find((x) => x.text === "18:00\n")!;
+    for (const r of p.requests) {
+      const at = r.insertText?.location?.index ?? r.deleteContentRange?.range?.startIndex;
+      if (at != null) expect(at < cell.start || at >= cell.end).toBe(true);
+    }
+    expect(scanAgenda(tabOf(apply(doc, p.requests)), VECKOMOTE).info[1].valueCell.text).toBe("18:00");
   });
 });
 

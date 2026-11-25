@@ -17,8 +17,9 @@ import { itemAt, normLabel, scanAgenda, type AgendaScan } from "./scan";
 //   "18:05–19:10"); every non-empty cell, and Sekreterare always, is left alone;
 // - ranges the first signature line (Styrelseprotokoll), so the tasks block ends above it.
 // Anchoring the same Doc again (a start retry, a Doc used by an earlier meeting) is safe: an
-// existing status line of ours is reused, a Tid we wrote ("18:05", "18:05–19:10") is ranged
-// again as is, and this meeting's own old ranges are deleted before they are re-created.
+// existing status line of ours is reused (only its range's text replaced), a Tid an earlier
+// meeting of ours wrote (our ss-*-info-tid range over exactly the cell text) is rewritten with
+// this start, and this meeting's own old ranges are deleted before they are re-created.
 // Inserts only ever go before a paragraph's newline or into an empty cell: never inside a human's
 // text (pre-flight F6). Requests run from the highest index down, so no index needs adjusting.
 
@@ -65,64 +66,100 @@ function stockholm(at: Date): { date: string; time: string } {
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
 }
 
-/** A Tid value we write: "18:05" at start, "18:05–19:10" after the final pass. */
-const OUR_TID = /^\d{2}:\d{2}(–\d{2}:\d{2})?$/;
-/** Our status line, as a previous meeting may have left it in the Doc. */
+/** Our status line's exact forms, as a previous meeting may have left it in the Doc. */
+const STATUS_EXACT = /^Simon Says (antecknar live · uppdaterad (–|\d{2}:\d{2})|· avslutat \d{2}:\d{2})$/;
 const isStatusText = (line: string) => line.startsWith("Simon Says antecknar live") || line.startsWith("Simon Says · avslutat");
 
+/** The single part of a named range, or null when it is split or empty. */
+function onePart(entries: { start: number; end: number }[][]): { start: number; end: number } | null {
+  const parts = entries.flat().filter((x) => x.end > x.start);
+  return entries.length === 1 && parts.length === 1 ? parts[0] : null;
+}
+
 /**
- * Our status line from an earlier anchoring of this Doc: a paragraph under an `ss-*-header` range
- * or starting with our status text, one plain body paragraph outside every agenda item. Null when none.
+ * Our status line from an earlier anchoring of this Doc, as the span to replace:
+ * - the text of an `ss-*-header` range (a human's text after it in the same paragraph survives);
+ * - else a whole paragraph whose text is exactly one of our status forms.
+ * Always one plain body paragraph outside every agenda item. Null when none.
  */
-function statusLine(tab: NotesTab, body: Paragraph[], scan: AgendaScan): Paragraph | null {
-  const ok = (p: Paragraph | undefined): p is Paragraph =>
-    Boolean(p) && !paraBullet(p!) && isStatusText(paraLine(p!)) && itemAt(scan, p!.start) === null;
+function statusSpan(tab: NotesTab, body: Paragraph[], scan: AgendaScan): { start: number; end: number } | null {
+  const plain = (p: Paragraph | undefined): p is Paragraph => Boolean(p) && !paraBullet(p!) && itemAt(scan, p!.start) === null;
   for (const [name, entries] of tab.ranges) {
     if (!/^ss-.+-header$/.test(name)) continue;
-    const start = entries.flat()[0]?.start;
-    const p = body.find((x) => start !== undefined && start >= x.start && start < x.end);
-    if (ok(p)) return p;
+    const r = onePart(entries);
+    if (!r) continue;
+    const p = body.find((x) => r.start >= x.start && r.end <= x.end - 1);
+    if (!plain(p)) continue;
+    const text = p.text.slice(r.start - p.start, r.end - p.start);
+    if (isStatusText(text)) return r;
   }
-  return body.find((p) => ok(p)) ?? null;
+  const p = body.find((x) => plain(x) && STATUS_EXACT.test(paraLine(x)));
+  return p ? { start: p.start, end: p.end - 1 } : null;
+}
+
+/** Is the whole text of the Tid cell paragraph `p` covered exactly by one of our `ss-*-info-tid` ranges? */
+function ownTid(tab: NotesTab, p: Paragraph): boolean {
+  const end = p.end - 1;
+  if (end <= p.start) return false;
+  for (const [name, entries] of tab.ranges) {
+    if (!/^ss-.+-info-tid$/.test(name)) continue;
+    const r = onePart(entries);
+    if (r && r.start === p.start && r.end === end) return true;
+  }
+  return false;
 }
 
 const BLANK = /^[\s_.…-]*$/;
-/** A typed name: one to four capitalised words ("Anna Svensson", "Bo af Klint" is not covered). */
-const NAME = /^\p{Lu}[\p{L}'’-]*(\s+\p{Lu}[\p{L}'’-]*){0,3}$/u;
+const PARTICLE = "(?:von|af|de|van|der|la|du|di|da)";
+const CAP = "\\p{Lu}[\\p{L}'’-]*";
+/** A typed name: first and last name (2–4 capitalised words), lowercase particles between ("Bo af Klint"). */
+const NAME = new RegExp(`^${CAP}(?:\\s+(?:${PARTICLE}\\s+)*${CAP}){1,3}$`, "u");
 
-/** "<role>: <blank or name>" or "<role> ____", for one of the profile's signature roles. */
+/** "<role>: <blank or name>", "<role> ____" or "<role> <name>", for one of the profile's signature roles. */
 function isSignatureLine(p: Paragraph, roles: string[]): boolean {
   if (paraBullet(p)) return false;
   const line = paraLine(p).trim();
-  let label: string;
-  let value: string;
+  // "Ordförande" signs for "Mötesordförande", "Sekreterare" for "Mötessekreterare".
+  const isRole = (label: string) => {
+    const l = normLabel(label);
+    return l.length >= 4 && roles.some((r) => r === l || r.endsWith(l));
+  };
   const colon = line.indexOf(":");
   if (colon >= 0) {
-    label = line.slice(0, colon);
-    value = line.slice(colon + 1).trim();
-  } else {
-    const m = /^([^_]+?)\s*(_[\s_.…-]*)$/.exec(line);
-    if (!m) return false;
-    label = m[1];
-    value = "";
+    const value = line.slice(colon + 1).trim();
+    return isRole(line.slice(0, colon)) && (BLANK.test(value) || NAME.test(value));
   }
-  const l = normLabel(label);
-  // "Ordförande" signs for "Mötesordförande", "Sekreterare" for "Mötessekreterare".
-  const isRole = l.length >= 4 && roles.some((r) => r === l || r.endsWith(l));
-  return isRole && (BLANK.test(value) || NAME.test(value));
+  const blank = /^([^_]+?)\s*(_[\s_.…-]*)$/.exec(line);
+  if (blank) return isRole(blank[1]);
+  // No colon, filled: a one- or two-word role, then the name.
+  const words = line.split(/\s+/);
+  for (const k of [1, 2]) {
+    if (words.length > k && isRole(words.slice(0, k).join(" ")) && NAME.test(words.slice(k).join(" "))) return true;
+  }
+  return false;
 }
 
 /**
  * The first line of the trailing run of signature lines after the agenda: the last run (empty
- * paragraphs allowed inside) that holds at least two such lines or is followed only by empty
- * paragraphs and our status line. A lone "Justerare: Skicka protokollet." never qualifies.
+ * paragraphs allowed inside) that holds at least two such lines or is followed only by
+ * paragraphs that are ours or empty (our status line, our appended headings, anything our ranges
+ * cover). A lone "Justerare: Skicka protokollet." never qualifies.
  */
-function signatureStart(body: Paragraph[], scan: AgendaScan, profile: FormatProfile): Paragraph | null {
+function signatureStart(tab: NotesTab, body: Paragraph[], scan: AgendaScan, profile: FormatProfile): Paragraph | null {
   const roles = (profile.signatures ?? []).map((r) => normLabel(r)).filter(Boolean);
   if (!roles.length) return null;
   const after = scan.items[scan.items.length - 1]?.paraEnd ?? 0;
   const rest = body.filter((p) => p.start >= after);
   const isEmpty = (p: Paragraph) => paraLine(p).trim() === "";
+  const ourLabels = new Set(
+    [profile.tasksSection?.label, profile.notesSection?.label, DEFAULT_NOTES_LABEL].filter((x): x is string => Boolean(x)).map(normLabel),
+  );
+  const ourRanges = [...tab.ranges].filter(([name]) => name.startsWith("ss-")).flatMap(([, e]) => e.flat());
+  const transparent = (p: Paragraph) =>
+    isEmpty(p) ||
+    isStatusText(paraLine(p)) ||
+    ourLabels.has(normLabel(paraLine(p))) ||
+    ourRanges.some((r) => r.end > r.start && r.start >= p.start && r.start < p.end);
   let found: Paragraph | null = null;
   for (let i = 0; i < rest.length; i++) {
     if (!isSignatureLine(rest[i], roles)) continue;
@@ -132,8 +169,7 @@ function signatureStart(body: Paragraph[], scan: AgendaScan, profile: FormatProf
       if (!isEmpty(rest[j])) count++;
       j++;
     }
-    const trailing = rest.slice(j).every((p) => isEmpty(p) || isStatusText(paraLine(p)));
-    if (count >= 2 || trailing) found = rest[i];
+    if (count >= 2 || rest.slice(j).every(transparent)) found = rest[i];
     i = j - 1;
   }
   return found;
@@ -186,7 +222,7 @@ export function planAnchoring(
   // the first line of the trailing run of them, so neither the tasks nor the notes block runs into
   // them (format-render's block boundaries include it).
   const body = tab.paragraphs.filter((p) => !paraInTable(p));
-  const sig = signatureStart(body, scan, profile);
+  const sig = signatureStart(tab, body, scan, profile);
   if (sig) {
     const name = `ss-${m}-sec-signatures`;
     sectionRanges.signatures = name;
@@ -204,11 +240,10 @@ export function planAnchoring(
 
   // A status line from an earlier anchoring of this Doc (a start retry, a Doc used again): reuse
   // it (our own text, replaced) rather than adding a second one.
-  const old = statusLine(tab, body, scan);
+  const old = statusSpan(tab, body, scan);
   if (old) {
-    const end = old.end - 1;
     push(old.start, [
-      ...(end > old.start ? [{ deleteContentRange: { range: range(old.start, end) } }] : []),
+      { deleteContentRange: { range: range(old.start, old.end) } },
       { insertText: { text: INITIAL_LIVE_LINE, location: { index: old.start, tabId } } },
       plainText(old.start, old.start + INITIAL_LIVE_LINE.length),
       namedRange(headerRange, old.start, old.start + INITIAL_LIVE_LINE.length),
@@ -274,13 +309,16 @@ export function planAnchoring(
     const p = tab.paragraphs.find((x) => x.start === s && paraInTable(x));
     if (!p) continue;
     const empty = cell.valueCell.text === "" && p.text === "\n";
-    // A Tid we rendered before ("18:05", "18:05–19:10", one paragraph): ours again, ranged as is.
-    const earlier = field === "tid" && !empty && OUR_TID.test(cell.valueCell.text) && p.text === `${cell.valueCell.text}\n`;
+    // A Tid an earlier meeting of ours wrote (proven by our ss-*-info-tid range over exactly the
+    // cell text): ours to rewrite with this meeting's start. Any other text is a human's.
+    const earlier = field === "tid" && !empty && p.text === `${cell.valueCell.text}\n` && ownTid(tab, p);
     if (!empty && !earlier) continue;
-    const text = earlier ? cell.valueCell.text : field === "datum" ? date : time;
-    const requests: DocsRequest[] = earlier
-      ? []
-      : [{ insertText: { text, location: { index: s, tabId } } }, plainText(s, s + text.length)];
+    const text = field === "datum" ? date : time;
+    const requests: DocsRequest[] = [
+      ...(earlier ? [{ deleteContentRange: { range: range(s, p.end - 1) } }] : []),
+      { insertText: { text, location: { index: s, tabId } } },
+      plainText(s, s + text.length),
+    ];
     if (field === "tid") {
       const name = `ss-${m}-info-tid`;
       requests.push(namedRange(name, s, s + text.length));

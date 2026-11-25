@@ -353,3 +353,6 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   again as the same meeting): one status line each time (the old "uppdaterad 19:24" line reused and reset to "uppdaterad –" in the
   new range), Tid "19:24" ranged again as `info-tid`, no ambiguous range, Styrelseprotokoll signatures still anchored on
   "Mötesordförande: ____" with our task copies above them.
+- Fix round 2 (`reanchor` again, real Docs): Tid is ours only when one of our `ss-*-info-tid` ranges covers exactly the cell text;
+  then it is rewritten at anchoring (here "19:24" → "19:48"). The status line is replaced through its `ss-*-header` range only;
+  one status line, no ambiguous range, signatures still anchored.
