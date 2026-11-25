@@ -841,3 +841,16 @@ describe("renderItems with layout 'format'", () => {
     if (res.status === "ok") expect(res.rows[0]).toMatchObject({ id: "n1", anchor: "ag-4", last_rendered_text: "Sommarfesten blir 14 juni." });
   });
 });
+
+describe("a tasks copy carries its primary's source (final review N3)", () => {
+  it("renderedRows gives a new -t row the primary's carried_from_meeting and carried_from_id", () => {
+    const primary = { ...row(task("c1", "ag-3", "Mejla klubben", "Anna Berg"), "– Kassör: Mejla klubben."), carried_from_meeting: "W1", carried_from_id: "n4" };
+    const copy: NotesItem = { ...task("c1-t", "tasks", "Mejla klubben", "Anna Berg"), copyOf: "c1" };
+    const out = renderedRows("m1", [primary], [toNotesItem(primary), copy], {
+      applied: new Set(["c1-t"]),
+      removed: new Set(),
+      lines: new Map([["c1-t", "Kassör: Mejla klubben."]]),
+    });
+    expect(out.find((r) => r.id === "c1-t")).toMatchObject({ copy_of: "c1", carried_from_meeting: "W1", carried_from_id: "n4" });
+  });
+});

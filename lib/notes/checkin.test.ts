@@ -9,7 +9,7 @@ vi.mock("@/lib/env", () => ({ getEnv: () => ({ KILL_SWITCH: false, GLOBAL_DAILY_
 vi.mock("@/lib/db/usage", () => ({ dayUsd: async () => (spendChecks.n++, 0) }));
 vi.mock("@/lib/db/claude-usage", () => ({ recordClaudeUsage: async (...a: unknown[]) => void recorded.push(a) }));
 
-const { CHECKIN_MAX_CALLS, CHECKIN_MAX_CALLS_NO_START, CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, CHECKIN_SEARCH_MS, countCall, detectCheckin, maskCheckin, nextWindow } =
+const { CHECKIN_LATER_EVERY, CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, CHECKIN_SEARCH_MS, countCall, detectCheckin, detectorDue, skipTick, maskCheckin, nextWindow } =
   await import("./checkin");
 
 const OPEN: CheckinWindow = { startMs: null, endMs: null, closed: false, failures: 0 };
@@ -249,20 +249,55 @@ describe("detectCheckin", () => {
   });
 });
 
-describe("countCall: the detector's cost cap (final review R2-M1)", () => {
-  const open = { startMs: null, endMs: null, closed: false, failures: 0 };
-  it("counts calls; no start after CHECKIN_MAX_CALLS_NO_START calls closes without a window", () => {
-    expect(countCall(open, 0, 1000)).toEqual({ ...open, calls: 1 });
-    expect(countCall(open, CHECKIN_MAX_CALLS_NO_START - 2, 1000)).toMatchObject({ closed: false });
-    expect(countCall(open, CHECKIN_MAX_CALLS_NO_START - 1, 1000)).toEqual({ ...open, closed: true, endMs: null, calls: CHECKIN_MAX_CALLS_NO_START });
+describe("detector schedule (Ruling R-F1: privacy over cost)", () => {
+  const open: CheckinWindow = { startMs: null, endMs: null, closed: false, failures: 0 };
+
+  it("every tick for 10 minutes, then every 3rd; skipped ticks are no failures; countCall resets the wait", () => {
+    expect(detectorDue(open, 599_000)).toBe(true);
+    expect(detectorDue(open, 600_000)).toBe(false);
+    let w = skipTick(open, { firstMs: 600_000, lastMs: 600_000 });
+    w = skipTick(w, { firstMs: 600_000, lastMs: 645_000 });
+    expect(w).toEqual({ ...open, waited: CHECKIN_LATER_EVERY - 1 });
+    expect(detectorDue(w, 690_000)).toBe(true);
+    expect(countCall({ ...w, failures: 0 }, 13)).toEqual({ ...open, calls: 14 });
+    // The time limits still close a window on a skipped tick.
+    expect(skipTick(open, { firstMs: 1_700_000, lastMs: CHECKIN_SEARCH_MS })).toEqual({ ...open, closed: true, endMs: null });
   });
-  it("a started window runs on, up to CHECKIN_MAX_CALLS, then ends at the tick's first line", () => {
-    const started = { ...open, startMs: 5000 };
-    expect(countCall(started, CHECKIN_MAX_CALLS_NO_START + 3, 9000)).toMatchObject({ closed: false });
-    expect(countCall(started, CHECKIN_MAX_CALLS - 1, 9000)).toEqual({ ...started, closed: true, endMs: 9000, calls: CHECKIN_MAX_CALLS });
+
+  /** 30 minutes of 45 s ticks, one line each; lines are held while the start is unknown and no answer came. */
+  function simulate(startAt: number | null) {
+    let w: CheckinWindow = open;
+    let unsent: number[] = [];
+    let calls = 0;
+    for (let t = 45_000; t <= CHECKIN_SEARCH_MS; t += 45_000) {
+      unsent.push(t);
+      if (w.closed) {
+        unsent = [];
+        continue;
+      }
+      const span = { firstMs: unsent[0], lastMs: t };
+      let answered = false;
+      if (detectorDue(w, t)) {
+        calls++;
+        answered = true;
+        const begun = startAt !== null && unsent.some((x) => x >= startAt);
+        w = countCall(nextWindow(w, { startMs: begun && w.startMs === null ? startAt : null, endMs: null }, span), w.calls ?? 0);
+      } else w = skipTick(w, span);
+      if (answered || w.closed || w.startMs !== null) unsent = [];
+    }
+    return { w, calls };
+  }
+
+  it("a Må-runda starting at minute 12 is still found and masked from its first line", () => {
+    const { w, calls } = simulate(720_000);
+    expect(w.startMs).toBe(720_000);
+    expect(calls).toBeLessThanOrEqual(22);
   });
-  it("a window that closed on this call keeps its own end", () => {
-    const closed = { startMs: 5000, endMs: 7000, closed: true, failures: 0 };
-    expect(countCall(closed, 3, 9000)).toEqual({ ...closed, calls: 4 });
+
+  it("no Må-runda: the search runs its full 30 minutes in at most 22 calls", () => {
+    const { w, calls } = simulate(null);
+    expect(w).toMatchObject({ closed: true, startMs: null });
+    expect(calls).toBeLessThanOrEqual(22);
+    expect(calls).toBeGreaterThan(13);
   });
 });

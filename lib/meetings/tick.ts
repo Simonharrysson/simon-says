@@ -23,7 +23,7 @@ import type { FormatProfile } from "@/lib/formats/schema";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import { profileFor } from "@/lib/formats/store";
 import type { AgendaContext } from "@/lib/notes/agenda-prompt";
-import { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, countCall, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
+import { CHECKIN_MAX_FAILURES, CHECKIN_MAX_MS, CHECKIN_PLACEHOLDER, countCall, detectCheckin, detectorDue, skipTick, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
 import { ownerLabel, resolveOwner } from "@/lib/people/roles";
 import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
@@ -738,6 +738,8 @@ export function withOwnerIds(rows: NoteItemRow[], people: PersonRow[]): NoteItem
  * over every segment not yet sent to the notes engine (20 sent lines as context), then
  * nextWindow; the span's floor is the last SENT segment, so no edge moves into a sent block.
  * Skipped without unsent lines or when `allowed` is false (kill switch, dollar cap, deadline).
+ * Schedule (Ruling R-F1): every tick in the first 10 minutes, then every 3rd tick with new lines
+ * (skipped ticks hold the lines like an unanswered one, and are no failures); the end pass always.
  * `hold`: the start is still unknown and the detector gave no answer, so the unsent lines must
  * not reach the notes engine yet (they wait for a later tick). The end pass never holds: it
  * masks by `endPassWindow` instead. Usage is recorded here; the window is stored (lease-guarded)
@@ -766,7 +768,10 @@ async function checkinStep(
   const line = (s: SegmentRead) => ({ atMs: s.start_ms, speaker: r.label(s.el_session_id, s.speaker), text: s.text });
   let next = prev;
   let answered = false;
-  if (allowed) {
+  // R-F1: every tick for the first 10 minutes, then every 3rd tick with new lines (the end pass always).
+  const due = final || detectorDue(prev, span.lastMs);
+  if (allowed && !due) next = skipTick(prev, span);
+  if (allowed && due) {
     let found: CheckinFound | "failed" = "failed";
     try {
       const res = await deps.detectCheckin(
@@ -784,7 +789,7 @@ async function checkinStep(
       console.error(`tick ${meeting.id}: checkin: ${errorText(e)}`);
     }
     answered = found !== "failed";
-    next = countCall(nextWindow(prev, found, span), prev.calls ?? 0, span.firstMs);
+    next = countCall(nextWindow(prev, found, span), prev.calls ?? 0);
   }
   let hold = false;
   if (!answered && !next.closed && next.startMs === null) {

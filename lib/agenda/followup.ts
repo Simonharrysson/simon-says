@@ -160,7 +160,13 @@ export async function propagateDone(
   db: SupabaseClient = supabaseAdmin(),
 ): Promise<number> {
   const bySource = new Map<string, Set<string>>();
-  for (const r of rows) {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const row of rows) {
+    // A done tasks copy (`-t`) reaches its primary's source as well (final review N3).
+    const primary = row.copy_of ? byId.get(row.copy_of) : undefined;
+    const r = row.carried_from_id == null && primary?.carried_from_id != null
+      ? { ...row, carried_from_meeting: primary.carried_from_meeting, carried_from_id: primary.carried_from_id }
+      : row;
     if (!r.done || !r.carried_from_meeting || !r.carried_from_id) continue;
     const ids = bySource.get(r.carried_from_meeting) ?? new Set<string>();
     ids.add(r.carried_from_id);

@@ -517,6 +517,13 @@ export function renderedRows(
       updated.anchor = item.anchor ?? row?.anchor ?? null;
       updated.done = item.done === true;
       updated.copy_of = item.copyOf ?? row?.copy_of ?? null;
+      // A tasks copy stands for its primary's source too: done set through it reaches that
+      // source (propagateDone, final review N3).
+      const primary = updated.copy_of ? byId.get(updated.copy_of) : undefined;
+      if (primary?.carried_from_id != null && updated.carried_from_id == null) {
+        updated.carried_from_meeting = primary.carried_from_meeting ?? null;
+        updated.carried_from_id = primary.carried_from_id;
+      }
     }
     if (!row?.range_name) nextPos.set(section, updated.position);
     const i = out.findIndex((r) => r.id === item.id);

@@ -12,8 +12,10 @@ export type CheckinWindow = {
   endMs: number | null;
   closed: boolean;
   failures: number;
-  /** Detector calls made so far (cost cap, final review R2-M1); absent = 0. */
+  /** Detector calls made so far; absent = 0. */
   calls?: number;
+  /** Ticks with new lines the detector schedule skipped since its last call (R-F1); absent = 0. */
+  waited?: number;
 };
 
 export function kindOfSection(section: NoteSection): NoteKind {

@@ -20,24 +20,40 @@ export const CHECKIN_SEARCH_MS = 30 * 60_000;
 /** After this many failed detector calls the window closes. */
 export const CHECKIN_MAX_FAILURES = 3;
 
-/** Cost cap (final review R2-M1): no start after this many detector calls (~9 min of ticks) → no Må-runda. */
-export const CHECKIN_MAX_CALLS_NO_START = 12;
-/** Cost cap: the window closes after this many detector calls whatever else holds. */
-export const CHECKIN_MAX_CALLS = 30;
+/** Ruling R-F1 (privacy over cost): the detector runs on every tick with new lines this long into the meeting… */
+export const CHECKIN_EVERY_TICK_MS = 10 * 60_000;
+/** …then on every this-many-th tick with new lines, until the window closes (≈ 20 calls in 30 min). */
+export const CHECKIN_LATER_EVERY = 3;
 
 export type CheckinFound = { startMs: number | null; endMs: number | null };
 
 /**
- * One more detector call on `w` (the window after nextWindow for that call, pure): counted in
- * `calls`; an open window without a start closes (no window) at CHECKIN_MAX_CALLS_NO_START calls,
- * any open window at CHECKIN_MAX_CALLS (ended at `firstMs`, never inside a sent block).
+ * Does the detector run on this tick with new lines (`lastMs` = the newest line's meeting time)?
+ * Every tick in the first CHECKIN_EVERY_TICK_MS, then every CHECKIN_LATER_EVERY-th (counted in
+ * `waited`, the ticks skipped since the last call).
  */
-export function countCall(w: CheckinWindow, prevCalls: number, firstMs: number): CheckinWindow {
-  const calls = prevCalls + 1;
-  if (w.closed) return { ...w, calls };
-  if (w.startMs === null && calls >= CHECKIN_MAX_CALLS_NO_START) return { ...w, calls, closed: true, endMs: null };
-  if (calls >= CHECKIN_MAX_CALLS) return { ...w, calls, closed: true, endMs: w.startMs === null ? null : Math.max(w.startMs, firstMs) };
-  return { ...w, calls };
+export function detectorDue(w: CheckinWindow, lastMs: number): boolean {
+  return lastMs < CHECKIN_EVERY_TICK_MS || (w.waited ?? 0) + 1 >= CHECKIN_LATER_EVERY;
+}
+
+/**
+ * A tick the schedule skips (pure): not a failure. Counted in `waited`; only the time limits
+ * apply (no start by CHECKIN_SEARCH_MS: closed without a window; a started window closes at
+ * `startMs + CHECKIN_MAX_MS`, never inside a sent block).
+ */
+export function skipTick(w: CheckinWindow, span: { firstMs: number; lastMs: number }): CheckinWindow {
+  if (w.closed) return w;
+  if (w.startMs === null && span.lastMs >= CHECKIN_SEARCH_MS) return { ...w, endMs: null, closed: true };
+  if (w.startMs !== null && span.lastMs >= w.startMs + CHECKIN_MAX_MS) {
+    return { ...w, endMs: Math.max(w.startMs + CHECKIN_MAX_MS, span.firstMs), closed: true };
+  }
+  return { ...w, waited: (w.waited ?? 0) + 1 };
+}
+
+/** One more detector call on `w` (the window after nextWindow for that call): counted in `calls`, `waited` reset. */
+export function countCall(w: CheckinWindow, prevCalls: number): CheckinWindow {
+  const { waited: _waited, ...rest } = w;
+  return { ...rest, calls: prevCalls + 1 };
 }
 
 /**

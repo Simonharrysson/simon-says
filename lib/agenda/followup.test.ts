@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NoteItemRow } from "@/lib/db/types";
-import { carriedItems, carryPlan, openTasks } from "./followup";
+import { carriedItems, carryPlan, openTasks, propagateDone } from "./followup";
 
 const row = (o: Partial<NoteItemRow> & { id: string }): NoteItemRow => ({
   meeting_id: "m1",
@@ -168,5 +168,36 @@ describe("carryPlan: a false start on the same Doc (final review R1/R2)", () => 
     const b = carryPlan({ prev: { id: "W1", rows: prev }, sameDoc: { id: "W1", rows: prev }, intact: () => false });
     expect(b.adopted).toEqual([]);
     expect(b.open.map((r) => r.id)).toEqual(["c1"]);
+  });
+});
+
+describe("propagateDone through a tasks copy (final review N3)", () => {
+  /** A PostgREST stand-in: the source meeting exists; records which source ids are set done. */
+  function fakeDb(updated: string[][]) {
+    const chain = (table: string, op: "select" | "update") => {
+      let ids: string[] = [];
+      const b: Record<string, unknown> = {
+        select: () => b,
+        eq: () => b,
+        in: (col: string, v: string[]) => ((col === "id" ? (ids = v) : null), b),
+        then: (res: (v: unknown) => unknown) => {
+          if (table === "meetings") return res({ data: [{ id: "W1" }], error: null });
+          if (op === "update") updated.push(ids);
+          return res({ data: ids.map((id) => ({ id })), error: null });
+        },
+      };
+      return b;
+    };
+    return { from: (table: string) => ({ select: () => chain(table, "select"), update: () => chain(table, "update") }) } as never;
+  }
+
+  it("done set on the -t copy reaches the primary's source row", async () => {
+    const updated: string[][] = [];
+    const rows = [
+      row({ id: "c1", locked: true, carried_from_meeting: "W1", carried_from_id: "n4" }),
+      row({ id: "c1-t", copy_of: "c1", done: true }),
+    ];
+    expect(await propagateDone(rows, "org", false, fakeDb(updated))).toBe(1);
+    expect(updated).toEqual([["n4"]]);
   });
 });
