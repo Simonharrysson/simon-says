@@ -177,6 +177,30 @@ describe("feature: transcription (how people name each other)", () => {
   });
 });
 
+describe("feature: transcription (the paid fixture owner-styles, replayed for $0)", () => {
+  it("a perfect scripted answer scores every bar: recall, placement, roles (one owner per naming style)", async () => {
+    const { join } = await import("node:path");
+    const { loadExpected, loadLines, runReplay, score, scorePasses, ticksOf } = await import("@/scripts/lib/notes-run");
+    const dir = join("fixtures", "notes");
+    const expected = loadExpected(join(dir, "owner-styles.expected.json"));
+    const lines = loadLines(join(dir, "owner-styles.jsonl"));
+    // Owners as Claude should write them: the person's name (also for "jag" and roles), else as said.
+    const owners: Record<string, string> = { A3: "Per Olsson" };
+    const ops = [
+      ...(expected.decisions ?? []).map((d, i) => ({ op: "add", id: `d${i}`, kind: "decision", anchor: d.anchor, text: d.text })),
+      ...(expected.action_items ?? []).map((a, i) => ({ op: "add", id: `a${i}`, kind: "task", anchor: a.anchor ?? "notes", text: a.text, owner: a.owner ?? owners[a.key], due: a.due })),
+    ];
+    const { client, calls } = scriptedClient({ notes: (_c, n) => ({ ops: n === 0 ? ops : [] }) });
+    const r = await runReplay({ lines, expected, tickMs: 45_000, agenda: true, client });
+    expect(calls.every((c) => c.kind === "notes")).toBe(true); // no Må-runda item: no detector call
+    expect(calls[0].text).toContain("Leo Martin");
+    const s = score(r.items, expected, ticksOf(r));
+    expect(s.recall.filter((l) => !l.startsWith("FOUND"))).toEqual([]);
+    expect([s.found, s.total, s.placement, s.roles]).toEqual([9, 9, { ok: 8, total: 8 }, { ok: 6, total: 6 }]);
+    expect(scorePasses(s)).toBe(true);
+  });
+});
+
 describe.skipIf(!hasLocalSupabase)("feature: transcription (runTick on the local stack)", () => {
   let starter: TestUser;
   let orgId: string;

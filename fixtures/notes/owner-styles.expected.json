@@ -1,0 +1,243 @@
+{
+  "source": "Fictional weekly meeting written for the feature test suite (feature 2, transcription style): tasks are given by full name, first name, role, 'jag', in English and to someone outside the people list, with filler and a false start. Invented förening, people and places.",
+  "orgName": "Lindås Kanotklubb",
+  "speakerNames": {
+    "S1-speaker_0": "Karin Dahl",
+    "S1-speaker_1": "Johan Ek",
+    "S1-speaker_2": "Sofia Nyström",
+    "S1-speaker_3": "Leo Martin",
+    "S1-speaker_4": "Amir Haddad"
+  },
+  "languages": [
+    "sv",
+    "en"
+  ],
+  "agenda": {
+    "profile": "veckomote",
+    "items": [
+      {
+        "key": "ag-1",
+        "label": "Godkänn dagordning",
+        "role": "procedural"
+      },
+      {
+        "key": "ag-2",
+        "label": "Från förra veckan",
+        "role": "followup"
+      },
+      {
+        "key": "ag-3",
+        "label": "Sommarpaddlingen",
+        "role": "topic",
+        "sub": [
+          "Datum och buss",
+          "Flytvästar och kanoter"
+        ]
+      },
+      {
+        "key": "ag-4",
+        "label": "Ekonomi",
+        "role": "topic"
+      },
+      {
+        "key": "ag-5",
+        "label": "Övrigt",
+        "role": "other"
+      }
+    ]
+  },
+  "people": [
+    {
+      "name": "Karin Dahl",
+      "role": "Ordförande"
+    },
+    {
+      "name": "Johan Ek",
+      "role": "Kassör"
+    },
+    {
+      "name": "Sofia Nyström",
+      "role": "Sekreterare"
+    },
+    {
+      "name": "Leo Martin",
+      "role": "PR-ansvarig"
+    },
+    {
+      "name": "Amir Haddad",
+      "role": null
+    }
+  ],
+  "traps": [
+    "Owner switch with a false start: 'Johan, kan du– nej förresten, Sofia … Kan du boka bussen?' The bus is Sofia's task, never Johan's.",
+    "Self: Amir says 'Jag fixar flytvästarna' and Sofia 'jag bokar bussen': the owner is the speaker (from speakerNames), shown by role when the person has one.",
+    "Role: 'Kassören betalar hyran' is Johan Ek's task, shown as 'Kassör'.",
+    "'Ordföranden, det vill säga jag' is Karin Dahl's task, shown as 'Ordförande'.",
+    "Per Olsson is a neighbour, not in the people list: the task is his by name, with no role.",
+    "Leo speaks English: his Instagram task is his (PR-ansvarig), the notes stay in tidy sentences.",
+    "Raising the membership fee is asked and rejected: the decision is that it stays at 300 kr."
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "The bus booking as Johan's task (owner switch after a false start)",
+      "sections": [
+        "action"
+      ],
+      "match": [
+        [
+          "buss*"
+        ]
+      ],
+      "owner": "Johan Ek"
+    },
+    {
+      "key": "M2",
+      "text": "Raising the membership fee as a decision",
+      "sections": [
+        "decision"
+      ],
+      "match": [
+        [
+          "höj*",
+          "raise*",
+          "higher"
+        ]
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Sommarpaddlingen blir lördag 14 juni.",
+      "anchor": "ag-3",
+      "match": [
+        [
+          "14",
+          "fjorton*"
+        ],
+        [
+          "juni"
+        ]
+      ]
+    },
+    {
+      "key": "D2",
+      "text": "Medlemsavgiften stannar på 300 kr.",
+      "anchor": "ag-4",
+      "match": [
+        [
+          "medlemsavgift*",
+          "avgift*"
+        ],
+        [
+          "300",
+          "trehundra"
+        ]
+      ]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Sofia Nyström",
+      "ownerLabel": "Sekreterare",
+      "anchor": "ag-3",
+      "text": "Boka bussen till Sjöviken",
+      "due": "senast fredag",
+      "match": [
+        [
+          "buss*"
+        ],
+        [
+          "bok*"
+        ]
+      ]
+    },
+    {
+      "key": "A2",
+      "owner": "Amir Haddad",
+      "ownerLabel": "Amir Haddad",
+      "anchor": "ag-3",
+      "text": "Hämta flytvästarna från förrådet",
+      "due": "till lördag",
+      "match": [
+        [
+          "flytväst*"
+        ]
+      ]
+    },
+    {
+      "key": "A3",
+      "anchor": "ag-3",
+      "text": "Per Olsson hämtar kanoterna med släpvagnen",
+      "due": "fredag",
+      "match": [
+        [
+          "kanot*",
+          "släp*"
+        ],
+        [
+          "per"
+        ]
+      ]
+    },
+    {
+      "key": "A4",
+      "owner": "Leo Martin",
+      "ownerLabel": "PR-ansvarig",
+      "anchor": "ag-3",
+      "text": "Lägga ut paddlingen på Instagram och hemsidan",
+      "due": "söndag",
+      "match": [
+        [
+          "instagram*",
+          "*hemsida*",
+          "website*"
+        ]
+      ]
+    },
+    {
+      "key": "A5",
+      "owner": "Johan Ek",
+      "ownerLabel": "Kassör",
+      "anchor": "ag-3",
+      "text": "Ta fram en budget för paddlingen",
+      "due": "till nästa möte",
+      "match": [
+        [
+          "budget*"
+        ]
+      ]
+    },
+    {
+      "key": "A6",
+      "owner": "Johan Ek",
+      "ownerLabel": "Kassör",
+      "anchor": "ag-4",
+      "text": "Betala hyran för kanothallen",
+      "due": "före sista november",
+      "match": [
+        [
+          "*hyra*",
+          "*hyran*"
+        ]
+      ]
+    },
+    {
+      "key": "A7",
+      "owner": "Karin Dahl",
+      "ownerLabel": "Ordförande",
+      "text": "Mejla kommunen om den trasiga bryggan",
+      "due": "i veckan",
+      "match": [
+        [
+          "kommun*"
+        ],
+        [
+          "brygg*"
+        ]
+      ]
+    }
+  ]
+}
