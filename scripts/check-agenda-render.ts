@@ -13,6 +13,14 @@
  *   human     a fresh copy with three of our bullets under item 4, a named range on the filled
  *             Narvarande cell, then prints the URL and what to type.
  *   inspect   after the human edit: paragraphs, bullets, ranges and itemSpan per range.
+ *   render    (Task A6) a fresh copy, anchored by hand-made ranges (ss-a6-ag-1..6, sec-tasks, sec-notes,
+ *             live) plus a LIVE line, then ONE planFormatRender batch through renderItems: notes under
+ *             ag-4 and ag-5, a decision, two Kassör tasks (+ their tasks copies), a note in `notes`,
+ *             Närvarande in the empty cell. Checks numbering, ownership, and that a re-render is a no-op.
+ *             State: .check-notes/agenda-a6.json. Then prints what the human types.
+ *   tick      (Task A6) after the human edits: read + diff (locks), reword every unlocked item, add one
+ *             more note under ag-4 and ag-5, render again; checks the human text, the edited copy, the
+ *             numbering, the re-indented line's level and lock state.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
  */
@@ -26,6 +34,7 @@ type Doc = docs_v1.Schema$Document;
 type Req = docs_v1.Schema$Request;
 type G = typeof import("@/lib/google/docs");
 type Notes = typeof import("@/lib/docs/notes");
+type FR = typeof import("@/lib/docs/format-render");
 
 const STATE_DIR = join(process.cwd(), ".check-notes");
 const STATE = join(STATE_DIR, "agenda.json");
@@ -42,6 +51,7 @@ interface State {
 let auth: OAuth2Client;
 let g: G;
 let n: Notes;
+let fr: FR;
 let tabId = "";
 
 // ---------------------------------------------------------------------------------------------
@@ -741,15 +751,166 @@ async function inspect(s: State) {
   console.log(`  distinct listIds: ${new Set(paragraphs(doc).map((p) => p.listId).filter(Boolean)).size}`);
 }
 
+// ---------------------------------------------------------------------------------------------
+// render / tick (Task A6)
+
+const A6_STATE = join(STATE_DIR, "agenda-a6.json");
+const A6_LIVE = "Simon Says antecknar live · uppdaterad –";
+const A6_PEOPLE: Record<string, string> = { "Anna Berg": "Kassör", "Lisa Holm": "Kassör", "Erik Lund": "Ordförande" };
+const a6Label = (owner: string) => A6_PEOPLE[owner] ?? owner;
+
+type MeetingRow = import("@/lib/db/types").MeetingRow;
+type NoteItemRow = import("@/lib/db/types").NoteItemRow;
+type NotesItem = import("@/lib/notes/schema").NotesItem;
+interface A6State {
+  docId: string;
+  meeting: MeetingRow;
+  rows: NoteItemRow[];
+  numbering: Record<string, string>;
+}
+
+async function a6Render(m: MeetingRow, rows: NoteItemRow[], desired: NotesItem[], headerText: string) {
+  const profile = (await import("@/lib/formats/standard")).VECKOMOTE;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const tab = await n.readNotesTab(auth, m.doc_id, m.notes_tab_id);
+    const res = await n.renderItems(auth, m, rows, desired, tab.revisionId, headerText, { plan: fr.planFormatRender, profile, ownerLabel: a6Label });
+    if (res.status === "ok") return res;
+    console.log("  revision conflict, retrying");
+    await sleep(150 + Math.random() * 450);
+  }
+  throw new Error("render: 4 conflicts");
+}
+
+/** Every rendered row still ours (ownedSpan), and an immediate re-plan writes nothing. */
+async function a6Checks(s: A6State, desired: NotesItem[], label: string) {
+  const profile = (await import("@/lib/formats/standard")).VECKOMOTE;
+  const doc = await get(s.docId);
+  const tab = n.parseNotesTab(doc, tabId);
+  console.log(show(doc, (p) => p.start > 83).join("\n"));
+  const unowned = s.rows.filter((r) => r.range_name && !r.locked && !r.deleted_by_human && !n.ownedSpan(tab, r)).map((r) => r.id);
+  rec(`${label}.unownedRows`, unowned);
+  const again = fr.planFormatRender(s.meeting, tab, s.rows, desired, { profile, ownerLabel: a6Label });
+  rec(`${label}.rerenderRequests`, again.requests.length);
+  rec(`${label}.numberingUnchanged`, sameNumbering(s.numbering, topNumbers(doc)));
+  rec(`${label}.numbering`, topNumbers(doc));
+  rec(`${label}.listIds`, new Set(paragraphs(doc).map((p) => p.listId).filter(Boolean)).size);
+  const lines = paragraphs(doc).filter((p) => s.rows.some((r) => r.last_rendered_text === p.text));
+  rec(`${label}.ourLines`, lines.map((p) => ({ text: p.text, listId: p.listId ? (p.listId === find(doc, "Ekonomi").listId ? "human" : "other") : null, level: p.level, indent: [p.indentStart, p.indentFirst] })));
+  return doc;
+}
+
+async function render(s: State) {
+  tabId = s.tabId;
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const docId = await copyDoc(s.baseId, `Simon Says A6 · rendering (fiktivt) ${stamp}`);
+  let doc = await get(docId);
+  const numbering = topNumbers(doc);
+  // Hand-made anchors (what A7 will do): item text ranges, both headings, a LIVE line after "Anteckningar:".
+  const mid = "a6";
+  const notesH = find(doc, "Anteckningar:");
+  const reqs: Req[] = [
+    { insertText: { text: `\n${A6_LIVE}`, location: loc(notesH.end - 1) } },
+    { updateParagraphStyle: { range: rng(notesH.end, notesH.end + A6_LIVE.length), paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
+    { createNamedRange: { name: `ss-${mid}-live`, range: rng(notesH.end, notesH.end + A6_LIVE.length) } },
+    { createNamedRange: { name: `ss-${mid}-sec-notes`, range: rng(notesH.start, notesH.end - 1) } },
+  ];
+  const tasksH = find(doc, "Vad ska vi göra till nästa gång?");
+  reqs.push({ createNamedRange: { name: `ss-${mid}-sec-tasks`, range: rng(tasksH.start, tasksH.end - 1) } });
+  ITEMS.forEach((label, i) => {
+    const p = find(doc, label);
+    reqs.push({ createNamedRange: { name: `ss-${mid}-ag-${i + 1}`, range: rng(p.start, p.end - 1) } });
+  });
+  await batch(docId, reqs);
+
+  const meeting: MeetingRow = {
+    id: mid, org_id: "fiktiv", started_by: null, doc_id: docId, notes_tab_id: tabId, transcript_tab_id: null,
+    header_range: `ss-${mid}-live`, header_rendered: A6_LIVE,
+    section_ranges: {
+      ...Object.fromEntries(ITEMS.map((_, i) => [`ag-${i + 1}`, `ss-${mid}-ag-${i + 1}`])),
+      tasks: `ss-${mid}-sec-tasks`, notes: `ss-${mid}-sec-notes`, live: `ss-${mid}-live`,
+    },
+    status: "live", consent_confirmed_at: null, started_at: new Date().toISOString(), ended_at: null,
+    last_heartbeat_at: null, last_tick_at: null, last_tick_ok_at: null, failed_ticks: 0, tick_lease_until: null,
+    doc_paused_at: null, current_el_session_id: null, layout: "format", agenda_doc: true,
+  };
+  const items: NotesItem[] = [
+    { id: "n1", section: "note", anchor: "ag-4", text: "Sommarfesten blir lördag 14 juni" },
+    { id: "n2", section: "note", anchor: "ag-5", text: "Kassan ser bra ut inför våren" },
+    { id: "n3", section: "decision", anchor: "ag-4", text: "Vi köper nya flaggor för 2 000 kr" },
+    { id: "n4", section: "action", anchor: "ag-5", text: "Mejla klubben om avgiften.", owner: "Anna Berg", due: "fre" },
+    { id: "n5", section: "action", anchor: "ag-4", text: "Betala hyran för lokalen", owner: "Lisa Holm" },
+    { id: "n6", section: "note", anchor: "notes", text: "Nästa möte hålls i Kårallen" },
+    { id: "info-narvarande", section: "attendees", anchor: "info.narvarande", text: "Anna Berg, Lisa Holm, Erik Lund" },
+  ];
+  const profile = (await import("@/lib/formats/standard")).VECKOMOTE;
+  const desired = fr.expandCopies(items, [], profile);
+  const res = await a6Render(meeting, [], desired, "Simon Says antecknar live · uppdaterad 18:10");
+  if (res.status !== "ok") throw new Error("render failed");
+  const st: A6State = { docId, meeting: { ...meeting, header_rendered: res.headerRendered ?? A6_LIVE }, rows: res.rows, numbering };
+  mkdirSync(STATE_DIR, { recursive: true });
+  writeFileSync(A6_STATE, JSON.stringify(st, null, 2));
+  rec("render.rows", res.rows.map((r) => ({ id: r.id, anchor: r.anchor, last: r.last_rendered_text })));
+  rec("render.header", res.headerRendered);
+  await a6Checks(st, desired, "render");
+  doc = await get(docId);
+  rec("render.narvarandeCell", cells(doc).find((c) => c.r === 2 && c.c === 1)?.text);
+  writeFileSync(RESULTS.replace(".json", "-a6-render.json"), JSON.stringify(R, null, 2));
+  console.log(`
+Doc: ${urlOf(docId)}
+
+Do exactly this in the Docs editor (Chrome), in order, one action at a time:
+  1. Click at the very END of the agenda line "Ekonomi", press Enter, press Tab, type: Mänsklig underpunkt
+  2. In the tasks section, click at the very END of the line "Kassör: Mejla klubben om avgiften (fre)." and type:  Klart!
+  3. Click in our line "Sommarfesten blir lördag 14 juni." (under "Kommande event") and press Tab once, nothing else.
+Then run:  npm run check-agenda-render -- <user> tick`);
+}
+
+async function tick() {
+  const st = JSON.parse(readFileSync(A6_STATE, "utf8")) as A6State;
+  tabId = st.meeting.notes_tab_id;
+  const profile = (await import("@/lib/formats/standard")).VECKOMOTE;
+  const before = await get(st.docId);
+  const tab = n.parseNotesTab(before, tabId);
+  const diff = n.diffHumanEdits(st.rows, n.currentItems(tab, st.rows), n.suggestedItems(tab, st.rows));
+  rec("tick.locked", diff.locked.map((i) => ({ id: i.id, text: i.text })));
+  rec("tick.deleted", diff.deletedIds);
+  const levelOf = (doc: Doc, text: string) => paragraphs(doc).find((p) => p.text === text)?.level ?? null;
+  const tabbed = st.rows.find((r) => r.id === "n1")!;
+  rec("tick.tabbedBefore", { level: levelOf(before, tabbed.last_rendered_text!), locked: diff.rows.find((r) => r.id === "n1")!.locked });
+  // Simulated Claude: reword every unlocked item (primaries; copies follow via expandCopies), add two.
+  const off = new Set([...diff.locked.map((i) => i.id), ...diff.deletedIds]);
+  const items: NotesItem[] = diff.rows
+    .filter((r) => !off.has(r.id) && !r.copy_of)
+    .map((r) => ({ ...n.toNotesItem(r), ...(r.anchor?.startsWith("info.") ? {} : { text: `${r.text.replace(/[.]$/, "")} (uppdaterad)` }) }));
+  items.push(
+    { id: "n7", section: "note", anchor: "ag-4", text: "Affischer behövs till festen" },
+    { id: "n8", section: "note", anchor: "ag-5", text: "Revisorn kommer i mars" },
+  );
+  const desired = fr.expandCopies([...items, ...diff.locked], diff.rows, profile);
+  const res = await a6Render(st.meeting, diff.rows, desired, "Simon Says antecknar live · uppdaterad 18:20");
+  if (res.status !== "ok") throw new Error("tick render failed");
+  const next: A6State = { ...st, meeting: { ...st.meeting, header_rendered: res.headerRendered ?? st.meeting.header_rendered }, rows: res.rows };
+  writeFileSync(A6_STATE, JSON.stringify(next, null, 2));
+  const doc = await a6Checks(next, desired, "tick");
+  const has = (t: string) => paragraphs(doc).some((p) => p.text === t);
+  rec("tick.humanSubbulletIntact", has("Mänsklig underpunkt"));
+  rec("tick.editedCopyIntact", has("Kassör: Mejla klubben om avgiften (fre). Klart!"));
+  const n1 = res.rows.find((r) => r.id === "n1")!;
+  rec("tick.tabbedAfter", { text: n1.last_rendered_text, level: levelOf(doc, n1.last_rendered_text!), locked: n1.locked });
+  writeFileSync(RESULTS.replace(".json", "-a6-tick.json"), JSON.stringify(R, null, 2));
+  console.log(`\nDoc: ${urlOf(st.docId)}`);
+}
+
 async function main(): Promise<void> {
   const [userArg, stage] = process.argv.slice(2);
   if (!userArg || !stage) {
-    console.error("usage: npm run check-agenda-render -- <userId|email> <build|auto|human|inspect>");
+    console.error("usage: npm run check-agenda-render -- <userId|email> <build|auto|human|inspect|render|tick>");
     process.exit(2);
   }
   await prepareEnv();
   n = await import("@/lib/docs/notes");
   g = await import("@/lib/google/docs");
+  fr = await import("@/lib/docs/format-render");
   const a = await authFor(userArg);
   auth = a.auth;
   console.log(`user ${a.userId}`);
@@ -764,6 +925,10 @@ async function main(): Promise<void> {
       return human(state());
     case "inspect":
       return inspect(state());
+    case "render":
+      return render(state());
+    case "tick":
+      return tick();
     default:
       throw new Error(`unknown stage ${stage}`);
   }

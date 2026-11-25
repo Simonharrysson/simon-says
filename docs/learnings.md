@@ -305,3 +305,18 @@ A5's `Paragraph`-based scan needs table cell paragraphs separately; cell anchors
   cell anchors need a **whole-cell text diff** against what we rendered (lock on any difference); `itemSpan`/`parseNotesTab` skip
   tables, so A5/A7 need a cell-aware span reader.
 - One list id throughout (`distinct listIds: 1`): human Enter and Tab stay in the ordförande's list.
+
+**Task A6 render check (automated part, 2026-11-25; `check-agenda-render … render` then `tick`, fresh copies of the A1 Doc):**
+One `planFormatRender` batch through `renderItems` (revision-guarded), 9 rows (2 notes, a decision, 2 Kassör tasks + 2 `-t` copies,
+a note in `notes`, Närvarande in the empty cell):
+- (b) under "Kommande event" (has sub-bullets): our three lines became `list1/lvl1` c., d., e. in the human list, indent 72/54
+  like the human's a./b. (c) under "Ekonomi" (no sub-bullets): plain paragraphs, no list, indent 54/36, `"– "` inside our range.
+  Copies: plain `NORMAL_TEXT` after "Ordförande: Boka lokal.", the two Kassör copies together. Närvarande cell filled, range = cell.
+- Top-level numbering unchanged (1.–6.), one `listId` in the whole Doc, every row `ownedSpan` non-null, and an immediate re-plan
+  gives **0 requests**. The header replace worked.
+- `tick` without human edits (rewording every item, one new note under ag-4 and ag-5): all replaced in place (levels and the
+  `"– "` prefix kept), the new ag-4 line became f. after our e., the new ag-5 line a third `"– "` line; numbering unchanged,
+  0 requests on re-plan.
+- Known consequence of (b): a new line inherits the level of the block's LAST paragraph. If a human Tabs our last line to level 2,
+  the next line under that item is level 2 as well (we never set levels). Accepted: the alternative needs a level change request.
+- Human stage (sub-bullet under ag-5, edit a copy, Tab on one of ours, then `tick`): run by the controller — result below.
