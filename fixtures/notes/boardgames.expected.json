@@ -25,12 +25,12 @@
     {
       "key": "D1",
       "text": "Spring kick-off on Tuesday 3 February at 18:00 in the library basement.",
-      "match": [["3 feb", "3rd", "third", "3/2", "february 3", "feb 3", "tredje"]]
+      "match": [["3 feb*", "3rd", "third*", "3/2", "february 3", "feb 3", "tredje*"]]
     },
     {
       "key": "D2",
       "text": "New games for up to 2 400 kr.",
-      "match": [["game"], ["2 400", "2400", "2,400", "two thousand four hundred", "2.4"]]
+      "match": [["game*"], ["2 400", "2400", "2,400", "two thousand four hundred", "2.4*"]]
     }
   ],
   "action_items": [
@@ -39,26 +39,26 @@
       "owner": "Wei Chen",
       "text": "Announce the kick-off on Instagram and the mailing list",
       "due": "Friday",
-      "match": [["instagram", "mailing", "announce", "post"]]
+      "match": [["instagram*", "mailing*", "announce*", "post*"]]
     },
     {
       "key": "A2",
       "owner": "Sofia Lindqvist",
       "text": "Make a wishlist poll for the new games",
-      "match": [["poll", "wishlist", "wish list", "vote"]]
+      "match": [["poll*", "wishlist*", "wish list", "vote*"]]
     },
     {
       "key": "A3",
       "owner": "Sofia Lindqvist",
       "text": "Fill in the reimbursement forms",
       "due": "Wednesday",
-      "match": [["reimburs", "receipt", "expense"]]
+      "match": [["reimburs*", "receipt*", "expense*"]]
     },
     {
       "key": "A4",
       "owner": "Wei Chen",
       "text": "Make an interest form for hoodies",
-      "match": [["interest", "form"]]
+      "match": [["interest*", "form*"]]
     }
   ],
   "must_not": [
@@ -66,7 +66,7 @@
       "key": "M1",
       "text": "Kick-off on Monday 2 February (the first proposal) as a decision",
       "sections": ["decision"],
-      "match": [["2nd", "second of february", "2 feb", "feb 2", "february 2", "2/2"]]
+      "match": [["2nd", "second of february", "2 feb*", "feb 2", "february 2", "2/2"]]
     },
     {
       "key": "M2",
@@ -78,33 +78,33 @@
       "key": "M3",
       "text": "Reimbursement forms with the old owner (Jamal)",
       "sections": ["action"],
-      "match": [["reimburs", "receipt", "expense"]],
+      "match": [["reimburs*", "receipt*", "expense*"]],
       "owner": "Jamal Osei"
     },
     {
       "key": "M4",
       "text": "Asking the student union about a bigger room ('no guarantees') as an action",
       "sections": ["action"],
-      "match": [["union", "bigger room", "larger room"]]
+      "match": [["union*", "bigger room", "larger room"]]
     },
     {
       "key": "M5",
       "text": "A decision on hoodies (only a deferral to the next meeting is allowed)",
       "sections": ["decision"],
-      "match": [["hoodie", "merch"]],
-      "unless": [["next meeting", "nästa möte", "postpon", "defer", "tabled", "later meeting"]]
+      "match": [["hoodie*", "merch*"]],
+      "unless": [["next meeting", "nästa möte", "postpon*", "defer*", "tabled*", "later meeting"]]
     },
     {
       "key": "M6",
       "text": "Duplicate of the human-typed room booking action",
       "sections": ["action", "decision"],
-      "match": [["room booking", "renew", "book the room"]]
+      "match": [["room booking", "renew*", "book the room"]]
     },
     {
       "key": "M7",
       "text": "Bank card (already ordered) as an action",
       "sections": ["action"],
-      "match": [["bank card", "card"]]
+      "match": [["bank card", "card", "cards"]]
     }
   ]
 }

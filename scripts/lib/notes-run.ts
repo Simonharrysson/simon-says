@@ -1,6 +1,7 @@
 // Shared by scripts/notes-replay.ts (one transcript, verbose) and scripts/notes-eval.ts (every
 // fixture, a table): replay a transcript tick by tick through the real notes engine, then score the
-// notes against the fixture's expected file. Scoring is pure, so saved runs can be rescored for $0.
+// notes against the fixture's expected file. Scoring (notes-score.ts) is pure, so saved runs can be
+// rescored for $0.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -10,35 +11,14 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import { formatItem } from "@/lib/docs/notes";
 import { churn, churnStrict, updateNotes, type NotesClient, type NotesUsage } from "@/lib/notes/engine";
 import type { NotesItem, NotesOp, NotesSection } from "@/lib/notes/schema";
+import type { Expected, TickItems } from "./notes-score";
+
+export * from "./notes-score";
 
 export interface Line {
   speaker: string;
   startMs: number;
   text: string;
-}
-
-/** Groups of alternatives; every group must hit (case-insensitive substring, numbers normalised). */
-export type Match = string[][];
-
-export interface Expected {
-  source?: string;
-  orgName?: string;
-  speakerNames?: Record<string, string>;
-  languages?: string[];
-  traps?: string[];
-  decisions?: { key: string; text: string; match: Match }[];
-  action_items?: { key: string; owner?: string; text: string; due?: string; match: Match }[];
-  /**
-   * Items that must NOT be in the final notes: in one of `sections`, text (plus owner) matching
-   * `match`, and, when `owner` is set, only if the item's owner field contains that name (an
-   * owner-switch check: the task with the old owner). Covers "no promises", proposals changed
-   * before they were decided, items tabled to a later meeting, and duplicates of human-typed lines.
-   * `unless`: an item that also matches these groups is allowed (a tabled question recorded only as
-   * deferred, e.g. "tas upp på nästa möte").
-   */
-  must_not?: { key: string; text: string; sections: NotesSection[]; match: Match; owner?: string; unless?: Match }[];
-  /** Lines a person typed into the notes tab themselves, visible from meeting time `atMs` on. */
-  human_lines?: { atMs: number; section: NotesSection; line: string }[];
 }
 
 export interface TickLog {
@@ -266,96 +246,9 @@ export async function runReplay(opts: {
   };
 }
 
-// ---------------------------------------------------------------------------------------------
-// Scoring
-
-export const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[   ]/g, " ")
-    .replace(/(\d)[ .](?=\d{3}\b)/g, "$1");
-
-export function matches(text: string, groups: Match): boolean {
-  const t = norm(text);
-  return groups.every((alts) => alts.some((a) => t.includes(norm(a))));
-}
-
-const firstName = (name: string) => norm(name.split(" ")[0]);
-
-export interface Score {
-  found: number;
-  total: number;
-  recall: string[];
-  /** must_not entries hit in the final notes. */
-  mustNot: string[];
-  /** must_not entries that were in the notes at some tick before the end (visible live). */
-  mustNotLive: string[];
-}
-
-function mustNotHit(items: NotesItem[], m: NonNullable<Expected["must_not"]>[number]): NotesItem | undefined {
-  return items.find(
-    (i) =>
-      m.sections.includes(i.section) &&
-      matches(`${i.text} ${i.owner ?? ""}`, m.match) &&
-      !(m.unless && matches(i.text, m.unless)) &&
-      (!m.owner || norm(i.owner ?? "").includes(firstName(m.owner))),
-  );
-}
-
-export function score(items: NotesItem[], expected: Expected, log: { items: NotesItem[] }[] = []): Score {
-  let found = 0;
-  let total = 0;
-  const recall: string[] = [];
-  for (const d of expected.decisions ?? []) {
-    total++;
-    const hit = items.find((i) => i.section === "decision" && matches(i.text, d.match));
-    if (hit) found++;
-    recall.push(`${hit ? "FOUND  " : "MISSING"} ${d.key} ${d.text}${hit ? `  ← ${hit.id} "${hit.text}"` : ""}`);
-  }
-  for (const a of expected.action_items ?? []) {
-    total++;
-    const hit = items.find(
-      (i) =>
-        i.section === "action" &&
-        matches(`${i.text} ${i.owner ?? ""}`, a.match) &&
-        (!a.owner || norm(`${i.owner ?? ""} ${i.text}`).includes(firstName(a.owner))),
-    );
-    if (hit) found++;
-    recall.push(`${hit ? "FOUND  " : "MISSING"} ${a.key} ${a.owner ?? "–"}: ${a.text}${hit ? `  ← ${hit.id} ${formatItem(hit)}` : ""}`);
-  }
-  const mustNot: string[] = [];
-  const mustNotLive: string[] = [];
-  for (const m of expected.must_not ?? []) {
-    const hit = mustNotHit(items, m);
-    if (hit) mustNot.push(`${m.key} ${m.text}  ← ${hit.id} ${formatItem(hit)}`);
-    const live = log.map((t) => mustNotHit(t.items, m)).find(Boolean);
-    if (live) mustNotLive.push(`${m.key} ${m.text}  ← ${live.id} ${formatItem(live)}`);
-  }
-  return { found, total, recall, mustNot, mustNotLive };
-}
-
-/**
- * $0 sanity check of a fixture's expected file: each expected item satisfies its own match, no
- * must_not matches an expected item, human lines are caught by some must_not. Returns problems.
- */
-export function checkExpected(expected: Expected): string[] {
-  const problems: string[] = [];
-  const names = Object.values(expected.speakerNames ?? {});
-  for (const d of expected.decisions ?? []) if (!matches(d.text, d.match)) problems.push(`${d.key}: text does not satisfy its match`);
-  for (const a of expected.action_items ?? []) {
-    if (!matches(`${a.text} ${a.owner ?? ""}`, a.match)) problems.push(`${a.key}: text does not satisfy its match`);
-    if (a.owner && !names.includes(a.owner)) problems.push(`${a.key}: owner ${a.owner} not in speakerNames`);
-  }
-  for (const m of expected.must_not ?? []) {
-    for (const d of expected.decisions ?? [])
-      if (m.sections.includes("decision") && matches(d.text, m.match)) problems.push(`${m.key} matches expected ${d.key}`);
-    for (const a of expected.action_items ?? [])
-      if (m.sections.includes("action") && matches(`${a.text} ${a.owner ?? ""}`, m.match) && (!m.owner || norm(a.owner ?? "").includes(firstName(m.owner))))
-        problems.push(`${m.key} matches expected ${a.key}`);
-  }
-  for (const h of expected.human_lines ?? [])
-    if (!(expected.must_not ?? []).some((m) => matches(h.line, m.match))) problems.push(`human line "${h.line}" has no must_not guarding a duplicate`);
-  return problems;
+/** Each tick's items with the meeting time its transcript reaches (the final pass: the end). */
+export function ticksOf(r: Pick<ReplayResult, "log" | "tickMs" | "tickCount" | "endMs">): TickItems[] {
+  return r.log.map((t) => ({ items: t.items, atMs: t.final ? r.endMs : Math.min(t.tick, r.tickCount) * r.tickMs }));
 }
 
 // ---------------------------------------------------------------------------------------------

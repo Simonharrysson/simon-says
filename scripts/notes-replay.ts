@@ -22,7 +22,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { ledgerAdd, loadExpected, loadLines, mmss, opLine, runReplay, score, tabText } from "./lib/notes-run";
+import { ledgerAdd, loadExpected, loadLines, mmss, opLine, runReplay, score, tabText, ticksOf } from "./lib/notes-run";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -67,12 +67,13 @@ async function main() {
   console.log(`churn per tick (plan metric, text, 'now' incl.): ${pct(r.churns)}  median ${(r.medianChurn * 100).toFixed(1)}%`);
   console.log(`strict churn per tick (text/owner/due/removals, 'now' excl.): ${pct(r.strictChurns)}  median ${(r.medianStrictChurn * 100).toFixed(1)}%`);
   console.log(`cache hit rate per tick: ${pct(r.log.map((l) => l.hit))}`);
-  const s = score(r.items, expected, r.log);
+  const s = score(r.items, expected, ticksOf(r));
   console.log(`recall: ${s.found}/${s.total}`);
   for (const line of s.recall) console.log(`  ${line}`);
   console.log(`must_not hits (final): ${s.mustNot.length}/${expected.must_not?.length ?? 0}`);
   for (const line of s.mustNot) console.log(`  HIT ${line}`);
-  for (const line of s.mustNotLive) console.log(`  live ${line}`);
+  for (const line of s.mustNotPersistent) console.log(`  LIVE ${line}`);
+  for (const line of s.mustNotLive) console.log(`  (warning, one tick) ${line}`);
 
   console.log(`\n══ gate`);
   const pass = (ok: boolean) => (ok ? "PASS" : "FAIL");
@@ -80,6 +81,7 @@ async function main() {
   console.log(`${pass(r.medianChurn <= 0.15)} median churn ${(r.medianChurn * 100).toFixed(1)}% ≤ 15%`);
   if (s.total) console.log(`${pass(s.found === s.total)} all expected items found (${s.found}/${s.total})`);
   if (expected.must_not?.length) console.log(`${pass(s.mustNot.length === 0)} no must_not item in the final notes`);
+  if (expected.must_not?.length) console.log(`${pass(s.mustNotPersistent.length === 0)} no must_not item live for 2+ ticks in a row`);
   console.log(`${pass(r.perHour <= 1.5)} $${r.perHour.toFixed(2)} per meeting-hour ≤ $1.50`);
   if (tick2) console.log(`${pass(tick2.usage.cacheRead > 0)} cache_read_input_tokens > 0 from tick 2 (${tick2.usage.cacheRead})`);
 

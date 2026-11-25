@@ -29,7 +29,7 @@
     {
       "key": "D2",
       "text": "Lägeravgiften blir 1 500 kr per barn, 200 kr syskonrabatt.",
-      "match": [["1500", "femtonhundra"], ["200", "tvåhundra"]]
+      "match": [["1500", "femtonhundra*"], ["200", "tvåhundra*"]]
     }
   ],
   "action_items": [
@@ -38,28 +38,28 @@
       "owner": "Lisa Holmgren",
       "text": "Ändra bokningen av lägergården",
       "due": "imorgon",
-      "match": [["lägergård", "vecka 30", "v. 30"]]
+      "match": [["lägergård*", "vecka 30", "v. 30"]]
     },
     {
       "key": "A2",
       "owner": "Erik Sandberg",
       "text": "Lägga in lägeravgiften i medlemssystemet",
       "due": "nästa vecka",
-      "match": [["avgift", "medlemssystem"]]
+      "match": [["*avgift*", "medlemssystem*"]]
     },
     {
       "key": "A3",
       "owner": "Lisa Holmgren",
       "text": "Boka bussen",
       "due": "senast sista mars",
-      "match": [["buss"]]
+      "match": [["*buss*"]]
     },
     {
       "key": "A4",
       "owner": "Lisa Holmgren",
       "text": "Titta på de gamla tälten i förrådet",
       "due": "innan nästa möte",
-      "match": [["tält"]]
+      "match": [["*tält*"]]
     }
   ],
   "must_not": [
@@ -67,39 +67,39 @@
       "key": "M1",
       "text": "Week 28 (the first booking) as a decision",
       "sections": ["decision"],
-      "match": [["vecka 28", "v. 28", "v 28", "v28", "tjugoåtta", "week 28"]]
+      "match": [["vecka 28", "v. 28", "v 28", "v28", "tjugoåtta*", "week 28"]]
     },
     {
       "key": "M2",
       "text": "The 1 800 kr fee as a decision",
       "sections": ["decision"],
-      "match": [["1800", "artonhundra"]]
+      "match": [["1800", "artonhundra*"]]
     },
     {
       "key": "M3",
       "text": "Sponsoring from the grocery store ('räkna inte med det') as an action",
       "sections": ["action"],
-      "match": [["matbutik", "sponsr"]]
+      "match": [["matbutik*", "*sponsr*"]]
     },
     {
       "key": "M4",
       "text": "The bus with the old owner (Noor)",
       "sections": ["action"],
-      "match": [["buss"]],
+      "match": [["*buss*"]],
       "owner": "Noor Haddad"
     },
     {
       "key": "M5",
       "text": "A decision on new tents (only a deferral to the next meeting is allowed)",
       "sections": ["decision"],
-      "match": [["tält"]],
-      "unless": [["nästa möte", "bordl", "senare möte"]]
+      "match": [["*tält*"]],
+      "unless": [["nästa möte", "bordl*", "senare möte"]]
     },
     {
       "key": "M6",
       "text": "Duplicate of the human-typed invitation action",
       "sections": ["action", "decision"],
-      "match": [["inbjudan", "inbjudn", "inbjuda"]]
+      "match": [["inbjudan*", "inbjudn*", "inbjuda*"]]
     }
   ]
 }

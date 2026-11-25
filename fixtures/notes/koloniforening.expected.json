@@ -1,0 +1,94 @@
+{
+  "source": "Fictional allotment association (koloniförening) board meeting written for Task Q fix round 1 as the HARD fixture (scripts/notes-eval.ts): ASR-like transcript (lower case, misheard names, cut-off lines, cross-talk), an interleaved topic, a decision reversed ~5 minutes later and a hedge that firms up. Fictional association and people; no real meeting.",
+  "orgName": "Koloniföreningen Äppellunden",
+  "speakerNames": {
+    "S1-speaker_0": "Birgitta Wall",
+    "S1-speaker_1": "Göran Lilja",
+    "S1-speaker_2": "Johanna Persson",
+    "S1-speaker_3": "Reza Tehrani"
+  },
+  "languages": ["sv"],
+  "traps": [
+    "Decided, then reversed: 'Tjugoåttatusen, vi köper åkgräsklipparen från maskinfirman. Klart.' (01:36) is a real decision and Göran commits to ordering it; at 06:16–06:32 a second quote is coming and the chair strikes the decision ('Då stryker vi beslutet') and moves it to the next meeting. From then on no decision may say the mower is bought (only reversed/deferred), and the order action must go. Must be fixed within one tick of the reversal.",
+    "Hedge that firms up: Reza 'skulle kanske kunna titta på vattenledningen, jag vet inte riktigt', the chair asks 'så kan du titta på det?', Reza 'okej, ja' — a real action for Reza.",
+    "Hedge that stays hedged: Johanna 'jag kanske frågar min granne om släpkärran, vi får se' (not an action).",
+    "Already done: the chair has already called the locksmith (not an action). Johanna found the key (not an action).",
+    "ASR noise: speakers say 'Göran Lija', 'Johana', 'Resa Tehrani'; the speaker map has the right names, owners must use them.",
+    "Cross-talk and cut-off lines ('ja men alltså om vi', 'jag har en fråga om'); an interleaved topic (the fence raised during the water item, handled later).",
+    "Ideas without a decision: compost rules (newsletter), an information evening for the queue ('kanske i höst')."
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Vattnet sätts på 1 maj.",
+      "match": [["*vatten*", "*vattnet*"], ["1 maj", "första maj", "1:a maj"]]
+    },
+    {
+      "key": "D2",
+      "text": "Arbetsdagen är lördag 9 maj kl 10.",
+      "match": [["*arbetsdag*"], ["9 maj", "nionde maj", "9:e maj"]]
+    },
+    {
+      "key": "D3",
+      "text": "Staketet vid norra grinden lagas på arbetsdagen.",
+      "match": [["*staket*"]]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Reza Tehrani",
+      "text": "Titta på vattenledningen vid lott 14 innan vattnet sätts på",
+      "due": "innan vattnet sätts på",
+      "match": [["*ledning*", "*läck*", "lott 14", "lott fjorton", "*kran*"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Johanna Persson",
+      "text": "Skicka kallelse till arbetsdagen till alla lottägare",
+      "due": "nästa vecka",
+      "match": [["*kallelse*"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Göran Lilja",
+      "text": "Skicka den nya offerten på gräsklippare till styrelsen när den kommer",
+      "match": [["*offert*"]]
+    },
+    {
+      "key": "A4",
+      "owner": "Johanna Persson",
+      "text": "Kolla adresserna i registret för lotterna som inte betalat hyran",
+      "match": [["adress*", "*register*", "*registret"]]
+    }
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "The reversed mower decision still standing (only 'struck / reversed / next meeting' is allowed after 06:16)",
+      "sections": ["decision"],
+      "match": [["*klippare*", "maskinfirma*"]],
+      "unless": [["stryk*", "struk*", "upphäv*", "ångr*", "reversed", "nästa möte", "vänta*", "väntar", "andra offert*", "ingenting", "inget", "inte"]],
+      "fromMs": 377530
+    },
+    {
+      "key": "M2",
+      "text": "Ordering the mower as an action after the reversal",
+      "sections": ["action"],
+      "match": [["*klippare*", "maskinfirma*"], ["beställ*", "köp*"]],
+      "fromMs": 377530
+    },
+    {
+      "key": "M3",
+      "text": "Borrowing the neighbour's trailer ('kanske… vi får se') as an action",
+      "sections": ["action"],
+      "match": [["släpkärr*", "granne*"]]
+    },
+    {
+      "key": "M4",
+      "text": "The broken toilet lock (already reported) as an action",
+      "sections": ["action"],
+      "match": [["lås*", "*låset", "låssmed*", "toalett*"]]
+    }
+  ]
+}

@@ -20,22 +20,22 @@
     {
       "key": "D1",
       "text": "Open day on Sunday 15 March, 10–16.",
-      "match": [["15", "fifteenth"], ["march", "mars"]]
+      "match": [["15", "15th", "fifteenth*"], ["march*", "mars*"]]
     },
     {
       "key": "D2",
       "text": "Buddy check before every climb is a club rule.",
-      "match": [["buddy", "partner check"]]
+      "match": [["buddy*", "partner check"]]
     },
     {
       "key": "D3",
       "text": "Up to 12 500 kr for new ropes and quickdraws.",
-      "match": [["rope"], ["12 500", "12500", "12,500", "twelve thousand five hundred", "12.5", "twelve and a half"]]
+      "match": [["rope*"], ["12 500", "12500", "12,500", "twelve thousand five hundred", "12.5*", "twelve and a half"]]
     },
     {
       "key": "D4",
       "text": "The membership fee stays the same next year.",
-      "match": [["fee"], ["same", "unchanged", "no change", "not change", "stays", "remains", "kept"]]
+      "match": [["fee*"], ["same*", "unchanged*", "no change", "not change", "stays*", "remains*", "kept*"]]
     }
   ],
   "action_items": [
@@ -44,34 +44,34 @@
       "owner": "Lena Vogel",
       "text": "Make the open day poster",
       "due": "next Friday",
-      "match": [["poster"]]
+      "match": [["poster*"]]
     },
     {
       "key": "A2",
       "owner": "Marcus Doyle",
       "text": "Print the buddy check sign",
-      "match": [["sign"]]
+      "match": [["sign*"]]
     },
     {
       "key": "A3",
       "owner": "Marcus Doyle",
       "text": "Order the ropes and quickdraws",
       "due": "this week",
-      "match": [["rope", "quickdraw"]]
+      "match": [["rope*", "quickdraw*"]]
     },
     {
       "key": "A4",
       "owner": "Priya Shah",
       "text": "Email last year's sponsors",
       "due": "end of the month",
-      "match": [["sponsor"]]
+      "match": [["sponsor*"]]
     },
     {
       "key": "A5",
       "owner": "Lena Vogel",
       "text": "Send the logo drafts to the committee",
       "due": "tomorrow",
-      "match": [["draft"]]
+      "match": [["draft*"]]
     }
   ],
   "must_not": [
@@ -79,27 +79,27 @@
       "key": "M1",
       "text": "Open day on the 7th (the first proposal) as a decision",
       "sections": ["decision"],
-      "match": [["7th", "seventh", "7 march", "march 7", "7 mars"]]
+      "match": [["7th", "seventh*", "7 march", "march 7", "7 mars"]]
     },
     {
       "key": "M2",
       "text": "Sponsor emails with the old owner (Tom)",
       "sections": ["action"],
-      "match": [["sponsor"]],
+      "match": [["sponsor*"]],
       "owner": "Tom Reeves"
     },
     {
       "key": "M3",
       "text": "Council youth sports fund ('can't promise anything') as an action",
       "sections": ["action"],
-      "match": [["council", "sports fund", "grant"]]
+      "match": [["council*", "sports fund", "grant*"]]
     },
     {
       "key": "M4",
       "text": "A logo choice as a decision (only a deferral to the next meeting is allowed)",
       "sections": ["decision"],
-      "match": [["logo"]],
-      "unless": [["next meeting", "postpon", "defer", "tabled", "later meeting"]]
+      "match": [["logo*"]],
+      "unless": [["next meeting", "postpon*", "defer*", "tabled*", "later meeting"]]
     }
   ]
 }
