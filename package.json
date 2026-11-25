@@ -19,7 +19,8 @@
     "notes-eval": "tsx --conditions=react-server scripts/notes-eval.ts",
     "check-start-meeting": "tsx --conditions=react-server scripts/check-start-meeting.ts",
     "demo-live": "tsx --conditions=react-server scripts/demo-live.ts",
-    "fake-el": "tsx scripts/fake-elevenlabs.ts"
+    "fake-el": "tsx scripts/fake-elevenlabs.ts",
+    "check-names": "tsx --conditions=react-server scripts/check-names.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.13.0",

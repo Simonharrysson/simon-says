@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
+import { recordClaudeUsage } from "@/lib/db/claude-usage";
 import { logEvent } from "@/lib/db/events";
 import type { MeetingRow, MeetingStatus, NoteItemRow } from "@/lib/db/types";
 import { closeElSession, dayUsd } from "@/lib/db/usage";
@@ -15,13 +16,14 @@ import {
   type NotesTab,
 } from "@/lib/docs/notes";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
-import { spendAlarmInBackground } from "@/lib/alarm";
 import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { defaultMailer, type Mailer } from "@/lib/mail";
 import { updateNotes, type NotesClient, type UpdateNotesInput, type UpdateNotesResult } from "@/lib/notes/engine";
 import type { NotesItem } from "@/lib/notes/schema";
+import { extractNames } from "@/lib/names/extract";
+import { pendingNameRounds, runNameRound, type ExtractFn } from "@/lib/names/round";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -53,6 +55,9 @@ const MIN_CLAUDE_MS = 30_000;
 const CLAUDE_TIMEOUT_MS = 90_000;
 /** The cron stops starting work with less time than this left of its budget. */
 const SWEEP_MIN_LEFT_MS = 60_000;
+/** Name round (Task 11) inside a tick: Claude timeout (measured ≈ 2–3 s), and the time it needs left. */
+const NAME_ROUND_TIMEOUT_MS = 30_000;
+const NAME_ROUND_MIN_LEFT_MS = 75_000;
 
 /** `not_found`: no such meeting. `busy`: not run (lease held, too soon, or not live for a normal tick). */
 export type TickResult = "ok" | "busy" | "doc_paused" | "conflict" | "failed" | "not_found";
@@ -65,6 +70,8 @@ export interface TickDeps {
   appendTranscript: typeof appendTranscript;
   /** `timeoutMs`: one attempt with that timeout (deadline-bound final passes); else the engine's client. */
   updateNotes(input: UpdateNotesInput, opts?: { timeoutMs?: number }): Promise<UpdateNotesResult>;
+  /** The name round's Claude call (lib/names/extract). */
+  extractNames: ExtractFn;
   mailer: Mailer;
   now(): Date;
   sleep(ms: number): Promise<void>;
@@ -84,6 +91,7 @@ function defaultDeps(): TickDeps {
           ? { client: new Anthropic({ apiKey: getEnv().ANTHROPIC_API_KEY, timeout: opts.timeoutMs, maxRetries: 0 }) as unknown as NotesClient }
           : {},
       ),
+    extractNames,
     mailer: defaultMailer(),
     now: () => new Date(),
     sleep,
@@ -338,21 +346,7 @@ async function saveRows(meetingId: string, rows: NoteItemRow[]): Promise<void> {
   must("tick: drop notes", await del);
 }
 
-async function recordUsage(orgId: string, u: UpdateNotesResult["usage"]): Promise<void> {
-  if (!u.input && !u.output && !u.cacheRead && !u.cacheWrite && !u.usd) return;
-  must(
-    "tick: usage",
-    await db().rpc("record_claude_usage", {
-      p_org_id: orgId,
-      p_input: u.input,
-      p_output: u.output,
-      p_cache_read: u.cacheRead,
-      p_cache_write: u.cacheWrite,
-      p_usd: u.usd,
-    }),
-  );
-  spendAlarmInBackground(); // never blocks or throws
-}
+const recordUsage = recordClaudeUsage;
 
 async function alarmIfNeeded(meeting: MeetingRow, failed: number, deps: TickDeps): Promise<void> {
   if (failed < ALARM_AFTER_FAILED) return;
@@ -377,6 +371,28 @@ const errorText = (e: unknown) => {
   const err = e as Error | undefined;
   return `${err?.name ?? "Error"}: ${String(err?.message ?? e).slice(0, 300)}`;
 };
+
+/**
+ * Run the name round of every session that has speech and is due (any, on the final pass) and
+ * has the time; never throws for a failed round. True while some session's round is still to
+ * come (not due yet): the caller holds back the transcript append for this tick.
+ */
+async function nameRounds(meeting: MeetingRow, deps: TickDeps, final: boolean, deadlineAt?: Date): Promise<boolean> {
+  let hold = false;
+  for (const p of await pendingNameRounds(meeting.id, deps.now())) {
+    if (!p.due && !final) {
+      hold = true;
+      continue;
+    }
+    const left = deadlineAt ? deadlineAt.getTime() - deps.now().getTime() : Infinity;
+    if (left < NAME_ROUND_MIN_LEFT_MS) continue;
+    await runNameRound(meeting, p.sessionId, {
+      extract: deps.extractNames,
+      timeoutMs: Math.min(NAME_ROUND_TIMEOUT_MS, left - (NAME_ROUND_MIN_LEFT_MS - NAME_ROUND_TIMEOUT_MS)),
+    });
+  }
+  return hold;
+}
 
 // ---------------------------------------------------------------------------------------------
 // The tick
@@ -418,11 +434,14 @@ export async function runTick(
     const auth = await deps.getAuth(meeting.started_by);
 
     assigned = await assignTick(meetingId);
+    const env = getEnv();
+    const spendOk = !env.KILL_SWITCH && (await dayUsd()) < env.GLOBAL_DAILY_USD;
+    // Name rounds first, so this tick's transcript lines and speakerNames already have the names.
+    const holdTranscript = spendOk ? await nameRounds(meeting, deps, final, opts.deadlineAt) : false;
     const ctx = await loadContext(meeting);
     const { blocks, speakerNames } = buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
-    const env = getEnv();
     const timeLeft = opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity;
-    const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && !env.KILL_SWITCH && (await dayUsd()) < env.GLOBAL_DAILY_USD;
+    const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && spendOk;
     const sentTick = meeting.notes_sent_tick ?? 0;
     const header = final ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now()) : liveHeader(deps.now());
 
@@ -479,8 +498,9 @@ export async function runTick(
       if (notes === "conflict") await logEvent(meetingId, "tick_conflict", { tick: assigned, attempts: CONFLICT_RETRIES + 1 });
     }
 
-    // Transcript after the notes write (it bumps the Doc revision).
-    if (meeting.transcript_tab_id) {
+    // Transcript after the notes write (it bumps the Doc revision). Held back while a session's
+    // name round is still to come, so its first lines are written with names, not labels.
+    if (meeting.transcript_tab_id && !holdTranscript) {
       const lines = transcriptLines(ctx.segments, ctx.sessions, ctx.speakers);
       if (lines.length) {
         await deps.appendTranscript(auth, meeting.doc_id, meeting.transcript_tab_id, lines);

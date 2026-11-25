@@ -274,6 +274,8 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
       readFails?: () => boolean;
       claudeError?: boolean;
       onUpdate?: (input: UpdateNotesInput) => Promise<void>;
+      /** The name round's Claude call (default: no names). */
+      names?: import("@/lib/names/round").ExtractFn;
     } = {},
   ) {
     // A clock that fake sleeps move forward (deadline loops end without real waiting).
@@ -311,6 +313,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
       appendTranscript: async (_auth, _doc, _tab, lines) => {
         appended.push(lines);
       },
+      extractNames: opts.names ?? (async () => []),
       updateNotes: async (input): Promise<UpdateNotesResult> => {
         calls.push(input);
         if (opts.gate) await opts.gate;
