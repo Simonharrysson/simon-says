@@ -233,7 +233,7 @@ Measured with `npm run check-agenda-render -- simon.harrysson@gmail.com build|au
 Veckomöte Doc, each measurement on a fresh Drive copy. A measurement script, not a test. Fixtures:
 `fixtures/agenda/veckomote.doc.json` (item 5 "Ekonomi" is a list item) and `veckomote-h3.doc.json` (item 5 is a
 `HEADING_3` "5. Banbokning", not a list item). Both are `documents.get` dumps (`includeTabsContent`, `SUGGESTIONS_INLINE`).
-**The human-editor stage (Enter / Tab / cell edit on our bullets) is pending: see the end of this entry.**
+The human-editor stage is at the end of this entry. Glyphs/numbers quoted below ("6.", "c.") are computed by the script from list order, level and the list's glyph format (same `listId`); the API returns no rendered number.
 
 **Doc shape.** The list is one list: `NUMBERED_DECIMAL_ALPHA_ROMAN`, level 0 `DECIMAL "%0."` (indentStart 36, firstLine 18), level 1
 `ALPHA "%1."` (72/54), level 2 `ROMAN "%2."` (108/90). Items 1-6 level 0, "Kommande event" has two level-1 sub-bullets (a., b.), same
@@ -254,8 +254,8 @@ from the list order and level.
 - **Decision (NESTED_INSERT):** (b) when the item already has a nested sub-bullet (insert after the last one, text = `"\n<line>"`, no tabs, no
   bullet request); (a) never works on a bulleted paragraph, so skip it; (c) for an item with no sub-bullet (for those the line is a plain
   paragraph with a `"– "` prefix and indent 54/36, written as the sequence above). Once our first line exists under an item via (c), the next
-  line goes after it the same way (the item then has no list sub-bullet). The API has no request that changes the `nestingLevel` of an existing
-  list paragraph, and none that adds a paragraph to an existing list other than inserting a newline inside it.
+  line goes after it the same way (the item then has no list sub-bullet). No request that changes the `nestingLevel` of an existing
+  list paragraph was found (only M2a was tried; not exhaustively searched).
 - **Tab handling elsewhere:** `createParagraphBullets` on a **non-list** paragraph does remove leading tabs and uses them as the nesting level
   (`"\t\tdjup"` after `"rot"` gave `rot` level 0 and `djup` level 2: N tabs = level N), but it always makes a
   **new list** (different `listId`, glyph `1.`). That is useless for joining the human's list.
@@ -289,7 +289,7 @@ from the list order and level.
 
 **What this changes in the plan:** A6's nested insert must not use tabs + `createParagraphBullets` on a list paragraph; use (b) / (c) above. A7's
 info-table prefill must read cell indices from the table element and re-read between inserts (or fill from the last cell backwards).
-A5's `Paragraph`-based scan needs table cell paragraphs separately.
+A5's `Paragraph`-based scan needs table cell paragraphs separately; cell anchors need a whole-cell text diff and a cell-aware span reader. Sub-items in a skeleton need tabs + ONE `createParagraphBullets` (removes the tabs, one new list; create ranges after it, M7c). `insertTable` leaves an undeletable empty paragraph before the table. Our `"– "` lines (c): range covers the whole paragraph including the prefix (Ruling R-A1); a human re-indent changes no text, so never re-apply levels; find "after the item's last paragraph" by list position/level.
 
 **Human stage (controller typed in the Docs editor, 2026-11-25):**
 - **Enter at the end of our bullet + typing** ("Manniska 1" after "Claude A"): the new paragraph is a human sibling at the same level
