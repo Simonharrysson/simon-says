@@ -100,6 +100,8 @@ const TERMINAL_REFUSALS = new Set([
   "global_usd",
   "kill_switch",
   "mint_cap",
+  // A Testmöte replays a fictional meeting: no live session, ever (final review, small).
+  "test_meeting",
 ]);
 const LIMIT_REFUSALS = new Set(["meeting_length", "org_month", "global_day", "global_usd", "kill_switch"]);
 

@@ -49,9 +49,13 @@ export function firstNames(names: string[]): Set<string> {
   return new Set(names.map((n) => words(n)[0]?.toLowerCase()).filter((x): x is string => Boolean(x && x.length >= 2)));
 }
 
-/** A label that holds one of `names` as a whole word (case-insensitive). */
+/** A label that holds one of `names` as a whole word, also in the genitive ("Majas"), case-insensitive. */
 const hasName = (s: string, names: Set<string>) =>
-  names.size > 0 && collapse(s).toLowerCase().split(/[^\p{L}'’-]+/u).some((w) => names.has(w));
+  names.size > 0 &&
+  collapse(s)
+    .toLowerCase()
+    .split(/[^\p{L}'’-]+/u)
+    .some((w) => names.has(w) || (w.endsWith("s") && names.has(w.slice(0, -1))) || names.has(w.replace(/['’]s?$/, "")));
 
 /** An agenda label that may leave the Doc: at most 8 words, no digit, not a name. */
 const safeItemLabel = (s: string, names: Set<string>) =>

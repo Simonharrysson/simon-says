@@ -241,7 +241,15 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
       if (!l) lists.set(b.listId, { first: p.start, minLevel: b.level });
       else l.minLevel = Math.min(l.minLevel, b.level);
     }
-    const early = [...lists.values()].filter((l) => l.first < boundary);
+    // A bulleted list that starts after an early numbered list's first item is that item's
+    // sub-points, not items (final review R1-I1 probe at the start; glyph known as a bullet only).
+    const firstNumbered = Math.min(
+      ...[...lists].filter(([id, l]) => l.first < boundary && isNumberedGlyph(listGlyph(tab, id, l.minLevel))).map(([, l]) => l.first),
+    );
+    const subLists = new Set(
+      [...lists].filter(([id, l]) => l.first < boundary && l.first > firstNumbered && listGlyph(tab, id, l.minLevel) === "BULLET").map(([id]) => id),
+    );
+    const early = [...lists].filter(([id, l]) => l.first < boundary && !subLists.has(id)).map(([, l]) => l);
     const earlyMin = early.length ? Math.min(...early.map((l) => l.minLevel)) : 0;
     const isListItem = (p: Paragraph) => {
       const b = paraBullet(p)!;
@@ -251,6 +259,7 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
         if (level !== undefined) return b.level === level;
         return l.minLevel === 0 && b.level === 0 && isNumberedGlyph(listGlyph(tab, b.listId, 0));
       }
+      if (subLists.has(b.listId)) return false;
       if (l.first < boundary) return b.level === earlyMin;
       const glyph = listGlyph(tab, b.listId, 0);
       return l.minLevel === 0 && b.level === 0 && isNumberedGlyph(glyph);

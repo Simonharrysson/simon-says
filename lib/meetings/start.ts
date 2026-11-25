@@ -227,10 +227,13 @@ export async function startMeeting(
   // Re-check after the insert, atomically (0027: per starter, per org and per Doc): of concurrent
   // starts exactly one survives; the guard deletes a losing row itself (its Doc stays in Drive; an
   // agenda Doc keeps the loser's anchor ranges, which change no text, docs/learnings.md A10).
-  const { data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start_v2", {
-    p_meeting_id: meetingId,
-    p_max_per_hour: MAX_STARTS_PER_HOUR,
-  });
+  const guardArgs = { p_meeting_id: meetingId, p_max_per_hour: MAX_STARTS_PER_HOUR };
+  let { data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start_v2", guardArgs);
+  // A database without 0027 yet (deploy order): the 0021 guard, so a start never fails on it.
+  if (guardError && (guardError.code === "PGRST202" || guardError.code === "42883")) {
+    console.warn("meetings: guard_meeting_start_v2 missing; using guard_meeting_start (0021)");
+    ({ data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start", guardArgs));
+  }
   if (guardError) throw new Error(`meetings: start guard: ${guardError.message}`);
   if (guard === "starter_busy") return startBusy();
   if (guard === "start_rate") return startRate();

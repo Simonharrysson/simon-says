@@ -389,6 +389,15 @@ describe("POST /api/meetings", () => {
     expect([res2.status, (await res2.json()).error]).toEqual([409, "agenda_used"]);
     expect(m.logEvent).not.toHaveBeenCalled();
   });
+
+  it("a database without 0027: falls back to the 0021 guard", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    m.guard
+      .mockResolvedValueOnce({ data: null, error: { code: "PGRST202", message: "Could not find the function" } } as never)
+      .mockResolvedValueOnce({ data: "ok", error: null });
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+    expect(m.guard.mock.calls.map((c) => c[0])).toEqual(["guard_meeting_start_v2", "guard_meeting_start"]);
+  });
 });
 
 describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {

@@ -726,6 +726,37 @@ describe("format layout: fix round 1 (pure)", () => {
   });
 });
 
+describe("a false start's carried line taken over by the next meeting (final review R1/R2)", () => {
+  it("renders twice under the new meeting without a second line, a lock or a lost range", async () => {
+    const { toNotesItem } = await import("@/lib/docs/notes");
+    const { withoutEarlierLines } = await import("@/lib/agenda/scan");
+    // False start A carried "Mejla klubben" into the Doc under Från förra veckan.
+    const a = anchoredDoc("m-A");
+    const doc = a.doc;
+    const c1: NoteItemRow = {
+      meeting_id: "m-A", id: "c1", section: "action", kind: "task", text: "Mejla klubben om avgiften", owner: null, due: null,
+      locked: false, deleted_by_human: false, last_rendered_text: null, range_name: null, position: 0, anchor: "ag-3",
+      done: false, carried_from_meeting: "W1", carried_from_id: "n1", copy_of: null,
+    };
+    const fromA = renderInto(doc, fmtMeeting("m-A", a.plan), [c1], [toNotesItem(c1)]).rows.find((r) => r.id === "c1")!;
+    expect(fromA.range_name).toBe("ss-m-A-c1");
+    // B anchors the same Doc (as anchorAgenda: earlier lines left out of the scan) and takes c1 over.
+    const tab = parseNotesTab(doc, TAB);
+    const planB = planAnchoring(scanAgenda(withoutEarlierLines(tab), VECKOMOTE), tab, { meetingId: "m-B", profile: VECKOMOTE, startedAt: FMT_STARTED });
+    applyDoc(doc, planB.requests);
+    const meetingB = fmtMeeting("m-B", planB);
+    let rows: NoteItemRow[] = [{ ...fromA, meeting_id: "m-B", anchor: "ag-3" }, ...planB.rows.map((r) => ({ ...r, meeting_id: "m-B" }))];
+    for (let i = 0; i < 2; i++) {
+      const st = tick.readState(parseNotesTab(doc, TAB), rows);
+      const row = st.diff.rows.find((r) => r.id === "c1")!;
+      expect([row.locked, row.deleted_by_human]).toEqual([false, false]);
+      rows = renderInto(doc, meetingB, st.diff.rows, st.items).rows;
+      expect(rows.find((r) => r.id === "c1")!.range_name).toBe("ss-m-A-c1");
+    }
+    expect(linesOf(doc).filter((l) => l.includes("Mejla klubben om avgiften"))).toHaveLength(1);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 // Against the local stack (CI)
 

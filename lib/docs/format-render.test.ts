@@ -394,8 +394,8 @@ describe("probe (final review R1-I1): a separate bulleted list under a numbered 
     expect(scan.items.map((i) => i.label)).toEqual(ITEMS);
     expect(scan.items[4].humanText).toBe("Fakturan från hallen\nMedlemsavgifter");
     expect(newAgendaItems(scan, tab, meeting.section_ranges, "m1")).toEqual([]);
-    // The start-time rules would have made the bullets items (the regression the anchors fix).
-    expect(scanAgenda(tab, VECKOMOTE).items.map((i) => i.label)).toContain("Medlemsavgifter");
+    // Already in the Doc at the start: the start rules keep them sub-points too.
+    expect(scanAgenda(tab, VECKOMOTE).items.map((i) => i.label)).toEqual(ITEMS);
     const last = tab.paragraphs.find((x) => x.text === "Medlemsavgifter\n")!;
     const ovrigt = tab.paragraphs.find((x) => x.text === "Övrigt\n")!;
     const p = plan(doc, [], [note("n1", "ag-5", "Fakturan är betald"), note("n2", "ag-6", "Nästa möte i januari")]);

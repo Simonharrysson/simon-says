@@ -136,7 +136,7 @@ describe("docStructure privacy (final review I1)", () => {
       paraEl("Majas förslag", { level: 0 }),
       paraEl("Maja: kollar hallen", {}),
     ]);
-    const s = docStructure(d, { names: firstNames(["Maja Ek", "Majas Bror"]) });
+    const s = docStructure(d, { names: firstNames(["Maja Ek"]) }); // "Majas" is Maja in the genitive
     expect(s.topItems).toEqual(["Ekonomi"]);
     expect(JSON.stringify(s)).not.toContain("Maja");
   });
