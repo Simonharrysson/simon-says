@@ -400,6 +400,14 @@ describe("renderItems", () => {
     ]);
   });
 
+  it("the 'now' item is not rewritten when a human pressed Enter inside it and typed a paragraph (B3)", async () => {
+    const { requests } = await tick(tabText({ 8: R("n4", "Diskussion om sponsorer\nMin egen anteckning") }), (rs) =>
+      desiredFrom(rs).map((d) => (d.id === "n4" ? { ...d, text: "Nytt ämne" } : d)),
+    );
+    // Replacing the range would erase the human's paragraph.
+    expect(requests).toEqual([]);
+  });
+
   it("adds, changes and removes in one batch: descending indices, every request has its tabId", async () => {
     const { requests } = await tick(
       tabText(),

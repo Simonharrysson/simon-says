@@ -98,6 +98,7 @@ describe("updateNotes", () => {
       { op: "change", id: "n2", due: "torsdag" },
     ]);
     expect(out.dropped).toBe(3);
+    expect(out.failure).toBeNull(); // some ops went through
     expect(out.items.map((i) => i.id)).toEqual(["n1", "n2", "n4", "n6"]);
     expect(out.items.find((i) => i.id === "n1")?.text).toBe("Hackathon 14 mars i Kårhuset");
     expect(out.nextId).toBe("n7");
@@ -119,6 +120,15 @@ describe("updateNotes", () => {
     const out = await updateNotes(input({ items: [...items, locked[0]] }), { client });
     expect(out.ops).toEqual([]);
     expect(out.dropped).toBe(1);
+    // Ops came back, every one rejected: a non-answer for tick health (B1).
+    expect(out.failure).toBe("all_dropped");
+  });
+
+  it("an end_turn answer with zero ops is a usable answer (a quiet stretch), not a failure", async () => {
+    const { client } = fakeClient(message({ text: opsText([]) }));
+    const out = await updateNotes(input(), { client });
+    expect(out.ops).toEqual([]);
+    expect(out.failure).toBeNull();
   });
 
   it("refusal → no ops, content not read", async () => {
@@ -128,6 +138,7 @@ describe("updateNotes", () => {
     expect(out.ops).toEqual([]);
     expect(out.items).toEqual(items);
     expect(out.stopReason).toBe("refusal");
+    expect(out.failure).toBe("refusal");
     expect(warn).toHaveBeenCalledWith("notes engine: refusal", null);
     expect(out.usage.output).toBe(500);
   });
@@ -137,6 +148,7 @@ describe("updateNotes", () => {
     const { client } = fakeClient(message({ stop_reason: "max_tokens", text: '{"ops":[{"op":"remove","id":"n1"}' }));
     const out = await updateNotes(input(), { client });
     expect(out.ops).toEqual([]);
+    expect(out.failure).toBe("stop:max_tokens");
   });
 
   it.each([
@@ -150,6 +162,7 @@ describe("updateNotes", () => {
     expect(out.ops).toEqual([]);
     expect(out.items).toEqual(items);
     expect(out.stopReason).toBe("error");
+    expect(out.failure).toBe("error");
     expect(out.usage).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, estimated: true });
     expect(log).toHaveBeenCalledWith("notes engine: request failed", err.constructor.name, err.message);
   });
@@ -165,6 +178,7 @@ describe("updateNotes", () => {
     expect(out.ops).toEqual([]);
     expect(out.items).toEqual(items);
     expect(err).toHaveBeenCalledWith("notes engine: malformed output", expect.any(String));
+    expect(out.failure).toBe("malformed");
     expect(JSON.stringify(err.mock.calls)).not.toContain(text); // never logs the content
   });
 

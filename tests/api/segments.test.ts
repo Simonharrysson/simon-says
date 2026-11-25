@@ -17,7 +17,13 @@ vi.mock("next/server", async (importOriginal) => ({
   },
 }));
 const ticked = vi.hoisted(() => [] as string[]);
-vi.mock("@/lib/meetings/tick", () => ({ maybeTick: async (id: string) => void ticked.push(id) }));
+const tickDeadlines = vi.hoisted(() => [] as (Date | undefined)[]);
+vi.mock("@/lib/meetings/tick", () => ({
+  maybeTick: async (id: string, _o: unknown, opts?: { deadlineAt?: Date }) => {
+    ticked.push(id);
+    tickDeadlines.push(opts?.deadlineAt);
+  },
+}));
 
 type EnvOverride = { KILL_SWITCH?: boolean; GLOBAL_DAILY_HOURS?: number; GLOBAL_DAILY_USD?: number };
 const envOverride = vi.hoisted(() => ({}) as EnvOverride);
@@ -323,6 +329,11 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
       expect(scheduled).toHaveLength(1);
       await scheduled[0]();
       expect(ticked).toContain(m);
+      // B2: the tick gets a deadline (request start + 270 s), inside the 300 s maxDuration.
+      const d = tickDeadlines[ticked.indexOf(m)];
+      expect(d).toBeInstanceOf(Date);
+      expect(d!.getTime() - Date.now()).toBeGreaterThan(200_000);
+      expect(d!.getTime() - Date.now()).toBeLessThanOrEqual(270_000);
     });
 
     it("segments: maps ingest errors to status codes", async () => {

@@ -331,19 +331,20 @@ async function loadContext(meeting: MeetingRow) {
   };
 }
 
-async function saveRows(meetingId: string, rows: NoteItemRow[]): Promise<void> {
-  if (rows.length) {
-    must(
-      "tick: save notes",
-      await db()
-        .from("note_items")
-        .upsert(rows.map((r) => ({ ...r, meeting_id: meetingId })), { onConflict: "meeting_id,id" }),
-    );
-  }
-  // Ids are server-made (`n<k>`), safe inside the filter list.
-  let del = db().from("note_items").delete().eq("meeting_id", meetingId);
-  if (rows.length) del = del.not("id", "in", `(${rows.map((r) => `"${r.id}"`).join(",")})`);
-  must("tick: drop notes", await del);
+/**
+ * Store the tick's note_items (upsert, drop the rest) atomically, only while `leaseId` is still
+ * the meeting's tick lease (0020). False: the lease moved on to a newer tick; nothing written.
+ */
+async function saveRows(meetingId: string, leaseId: string, rows: NoteItemRow[]): Promise<boolean> {
+  const saved = must(
+    "tick: save notes",
+    await db().rpc("save_note_rows", {
+      p_meeting_id: meetingId,
+      p_lease_id: leaseId,
+      p_rows: rows.map(({ meeting_id: _m, ...r }) => r),
+    }),
+  );
+  return saved === true;
 }
 
 const recordUsage = recordClaudeUsage;
@@ -474,8 +475,10 @@ export async function runTick(
         },
         Number.isFinite(timeLeft) ? { timeoutMs: Math.min(CLAUDE_TIMEOUT_MS, timeLeft - 20_000) } : undefined,
       );
+      // The call came back (even as a refusal, max_tokens or malformed output): its blocks count
+      // as sent, so they aren't resent forever. Health-wise any non-answer is a failed tick (B1).
       answered = out.stopReason !== "error";
-      claudeFailed = !answered;
+      claudeFailed = out.failure !== null;
       // Spent tokens and handed-out ids count whatever happens to the write.
       await recordUsage(meeting.org_id, out.usage);
       await updateMeeting(meetingId, {
@@ -484,6 +487,9 @@ export async function runTick(
       });
       if (answered) items = out.items;
     }
+
+    // Final pass that had to skip Claude although transcript was unsent (time or spend caps).
+    const finalWithoutClaude = final && out === null && send.length > sentTick;
 
     // read + diff again right before writing; on a revision conflict wait, re-read, retry.
     // After a Claude error only the final pass still writes (unchanged items, `Avslutat` header).
@@ -495,7 +501,11 @@ export async function runTick(
         const st = readState(await deps.readNotes(auth, target), ctx.rows);
         const res = await deps.render(auth, target, st.diff.rows, desiredItems(items, st.diff), st.revisionId, header);
         if (res.status === "ok") {
-          await saveRows(meetingId, res.rows);
+          if (!(await saveRows(meetingId, leaseId, res.rows))) {
+            // A newer tick holds the lease now (ours expired): it owns the rows and the transcript.
+            console.warn(`tick ${meetingId}: lease ${leaseId} moved on; not saving notes rows`);
+            return "busy";
+          }
           if (res.headerRendered !== null) await updateMeeting(meetingId, { header_rendered: res.headerRendered });
           notes = "ok";
           break;
@@ -525,13 +535,15 @@ export async function runTick(
       }
     }
 
-    if (claudeFailed) throw new Error("notes engine request failed");
+    if (claudeFailed) {
+      throw new Error(out?.failure === "error" ? "notes engine request failed" : `notes engine: no usable answer (${out?.failure})`);
+    }
     if (notes === "conflict") {
       await updateMeeting(meetingId, { doc_paused_at: null });
       return "conflict";
     }
     await updateMeeting(meetingId, { last_tick_ok_at: new Date().toISOString(), failed_ticks: 0, doc_paused_at: null });
-    await logEvent(meetingId, "tick_ok", {
+    await logEvent(meetingId, finalWithoutClaude ? "final_without_claude" : "tick_ok", {
       tick: assigned,
       final,
       claude: out !== null,
@@ -722,7 +734,8 @@ export async function finishMeeting(
     console.error(`end ${meetingId}: attempt ${attempt}: ${errorText(e)}`);
     return "pending";
   } finally {
-    await db().from("meetings").update({ end_lease_until: null }).eq("id", meetingId);
+    // Only our own attempt's lease: a later attempt (ours ran past it) holds a newer one.
+    await db().from("meetings").update({ end_lease_until: null }).eq("id", meetingId).eq("end_attempts", attempt);
   }
 }
 

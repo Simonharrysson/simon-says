@@ -81,6 +81,13 @@ export interface UpdateNotesResult {
   stopReason: string | null;
   /** Ops Claude returned that were rejected by validation. */
   dropped: number;
+  /**
+   * Why this call gave no usable answer, or null when it did (an end_turn answer with zero ops is
+   * a usable answer: nothing new to note). "error": the request failed; "refusal"; "stop:<reason>"
+   * (e.g. max_tokens); "malformed": unparseable output; "all_dropped": every op was rejected.
+   * The tick counts any non-null value as a failed tick for health (B1).
+   */
+  failure: string | null;
   /** The id counter after this tick: store it and pass it back as `nextId`. */
   nextId: string;
 }
@@ -353,27 +360,36 @@ export async function updateNotes(
       stopReason: "error",
       dropped: 0,
       nextId,
+      failure: "error",
     };
   }
 
   const usage = messageUsage(message.usage, message.model ?? NOTES_MODEL);
-  const nothing = (): UpdateNotesResult => ({ ops: [], items, usage, stopReason: message.stop_reason, dropped: 0, nextId });
+  const nothing = (failure: string): UpdateNotesResult => ({
+    ops: [],
+    items,
+    usage,
+    stopReason: message.stop_reason,
+    dropped: 0,
+    nextId,
+    failure,
+  });
 
   // stop_reason before content: a refusal (after any fallback) or a truncated answer gives no ops.
   if (message.stop_reason === "refusal") {
     console.warn("notes engine: refusal", message.stop_details?.category ?? null);
-    return nothing();
+    return nothing("refusal");
   }
   if (message.stop_reason !== "end_turn") {
     console.error("notes engine: unexpected stop_reason", message.stop_reason);
-    return nothing();
+    return nothing(`stop:${message.stop_reason}`);
   }
 
   const parsed = parseOutput(message);
   if (!parsed.ok) {
     // Log the shape problem only, never the content (it may quote the meeting).
     console.error("notes engine: malformed output", parsed.why);
-    return nothing();
+    return nothing("malformed");
   }
 
   const ops: NotesOp[] = [];
@@ -386,5 +402,8 @@ export async function updateNotes(
   const applied = applyOps(items, ops, { protectedIds: [...lockedIds, ...input.deletedIds], final: input.final, nextId });
   const dropped = invalid + applied.dropped;
   if (dropped) console.warn(`notes engine: dropped ${dropped} of ${parsed.ops.length} ops`);
-  return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId };
+  // Ops came back but validation rejected every one: the notes didn't move although Claude meant
+  // them to. Zero ops returned is fine (a quiet stretch).
+  const failure = parsed.ops.length > 0 && applied.ops.length === 0 ? "all_dropped" : null;
+  return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId, failure };
 }

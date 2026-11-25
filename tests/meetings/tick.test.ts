@@ -273,6 +273,10 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
       authLost?: () => boolean;
       readFails?: () => boolean;
       claudeError?: boolean;
+      /** Claude answers without usable ops: "refusal", "stop:max_tokens", "malformed", "all_dropped". */
+      nonAnswer?: () => string | null;
+      /** An end_turn answer with zero ops. */
+      quiet?: boolean;
       onUpdate?: (input: UpdateNotesInput) => Promise<void>;
       /** The name round's Claude call (default: no names). */
       names?: import("@/lib/names/round").ExtractFn;
@@ -326,6 +330,19 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
             stopReason: "error",
             dropped: 0,
             nextId: input.nextId ?? "n1",
+            failure: "error",
+          };
+        }
+        const non = opts.nonAnswer?.() ?? null;
+        if (non || opts.quiet) {
+          return {
+            ops: [],
+            items: input.items,
+            usage: { input: 1000, output: 10, cacheRead: 0, cacheWrite: 0, usd: 0.005 },
+            stopReason: non === "refusal" ? "refusal" : non?.startsWith("stop:") ? non.slice(5) : "end_turn",
+            dropped: non === "all_dropped" ? 2 : 0,
+            nextId: input.nextId ?? "n1",
+            failure: non,
           };
         }
         const n = Number((input.nextId ?? "n1").slice(1));
@@ -337,6 +354,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
           stopReason: "end_turn",
           dropped: 0,
           nextId: `n${n + 1}`,
+          failure: null,
         };
       },
       mailer: {
@@ -460,6 +478,84 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     // Failed before Claude answered: the tick number is given back.
     const { data: segs } = await adminClient().from("segments").select("tick_no").eq("meeting_id", id);
     expect(segs?.[0].tick_no).toBeNull();
+  });
+
+  it.each(["refusal", "stop:max_tokens", "malformed", "all_dropped"])(
+    "Claude non-answer (%s) is a failed tick: no last_tick_ok_at, failed_ticks++, alarm at 3; transcript still written, blocks not resent",
+    async (reason) => {
+      const { id, sessionId } = await meeting();
+      await say(id, sessionId, "hej", 1000);
+      const f = fakes({ nonAnswer: () => reason });
+      for (let i = 0; i < 3; i++) {
+        await backdate(id);
+        if (i > 0) await say(id, sessionId, `mer ${i}`, 2000 + i * 1000);
+        expect(await tick.runTick(id, { final: false }, f.deps)).toBe("failed");
+      }
+      const m = await read(id);
+      expect(m.last_tick_ok_at).toBeNull();
+      expect(m.failed_ticks).toBe(3);
+      const failed = await events(id, "tick_failed");
+      expect(failed).toHaveLength(3);
+      expect(JSON.stringify(failed[0].detail)).toContain(reason);
+      expect(await events(id, "tick_ok")).toHaveLength(0);
+      expect(await events(id, "alarm")).toHaveLength(1);
+      // The blocks were sent: notes_sent_tick moved on, so each call only carries one new block.
+      expect(f.calls.map((c) => c.transcriptBlocks.length)).toEqual([1, 2, 3]);
+      expect((await read(id)).notes_sent_tick).toBe(3);
+      // The transcript keeps flowing; the notes write (and its LIVE header) is skipped.
+      expect(f.appended.flat().map((l) => l.text)).toEqual(["hej", "mer 1", "mer 2"]);
+      expect(f.renders()).toBe(0);
+    },
+  );
+
+  it("an end_turn answer with zero ops is an ok tick (a quiet stretch)", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "hej", 1000);
+    const f = fakes({ quiet: true });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    const m = await read(id);
+    expect(m.last_tick_ok_at).not.toBeNull();
+    expect(m.failed_ticks).toBe(0);
+  });
+
+  it("a stale tick whose lease moved on saves no rows (B2)", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "hej", 1000);
+    await adminClient()
+      .from("note_items")
+      .insert({ meeting_id: id, id: "n9", section: "decision", text: "Nyare ticks rad", range_name: itemRangeName(id, "n9") });
+    // While Claude thinks, the lease expires and a newer tick takes it.
+    const f = fakes({
+      onUpdate: async () => {
+        await adminClient().from("meetings").update({ tick_lease_id: randomUUID() }).eq("id", id);
+      },
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("busy");
+    const { data: items } = await adminClient().from("note_items").select("id").eq("meeting_id", id);
+    expect(items).toEqual([{ id: "n9" }]);
+  });
+
+  it("the tick lease is 6 minutes", async () => {
+    const { id } = await meeting();
+    const { data } = await adminClient().rpc("claim_tick_lease", { p_meeting_id: id, p_min_interval_secs: 0 });
+    expect(data[0].result).toBe("ok");
+    const m = await read(id);
+    const ms = Date.parse(m.tick_lease_until!) - Date.now();
+    expect(ms).toBeGreaterThan(5.5 * 60_000);
+    expect(ms).toBeLessThanOrEqual(6 * 60_000 + 5000);
+  });
+
+  it("a final pass that must skip Claude with transcript unsent logs final_without_claude", async () => {
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "hej", 1000);
+    const f = fakes();
+    await adminClient().from("meetings").update({ status: "ending" }).eq("id", id);
+    // 10 s left: below the 30 s Claude needs.
+    const deadlineAt = new Date(Date.now() + 10_000);
+    expect(await tick.runTick(id, { final: true, deadlineAt }, f.deps)).toBe("ok");
+    expect(f.calls).toHaveLength(0);
+    expect(await events(id, "final_without_claude")).toHaveLength(1);
+    expect(await events(id, "tick_ok")).toHaveLength(0);
   });
 
   it("GoogleAuthLostError → paused, segments untouched; resumed by cron after a token update", async () => {

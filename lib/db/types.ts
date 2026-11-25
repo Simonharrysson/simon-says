@@ -20,7 +20,8 @@ export type MeetingEventKind =
   | "test_started"
   | "paused"
   | "unpaused"
-  | "name_round";
+  | "name_round"
+  | "final_without_claude";
 
 export interface OrgRow {
   id: string;

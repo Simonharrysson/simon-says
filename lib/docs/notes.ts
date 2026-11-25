@@ -279,6 +279,9 @@ function ownedSpan(tab: NotesTab, row: NoteItemRow): ItemSpan | null {
   const span = itemSpan(tab, row.range_name);
   if (!span || span.ambiguous || span.suggested || span.rangeText !== span.paraText) return null;
   if (row.section !== "now" && span.paraText !== row.last_rendered_text) return null;
+  // "now" is never locked, but a paragraph a human typed after Enter inside its range is theirs:
+  // replacing the range would erase it. (Our "now" text is always one paragraph.)
+  if (row.section === "now" && span.paraText.includes("\n")) return null;
   return span;
 }
 

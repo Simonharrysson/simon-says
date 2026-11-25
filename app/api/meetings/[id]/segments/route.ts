@@ -7,6 +7,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 // A notes tick (Claude + Docs) may run after the response, in after().
 export const maxDuration = 300;
+/** The tick must finish inside maxDuration (and so inside its 6-min lease, 0020). */
+const TICK_BUDGET_MS = 270_000;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status, headers: noStore });
@@ -16,6 +18,7 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
  * validation is in ingestSegments; resending a batch is safe (stored once).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const deadlineAt = new Date(Date.now() + TICK_BUDGET_MS);
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
   const {
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const result = await ingestSegments(meeting.id, body.segments, body.merges);
     // Due notes tick after the response; maybeTick never throws.
-    after(() => maybeTick(meeting.id));
+    after(() => maybeTick(meeting.id, {}, { deadlineAt }));
     return NextResponse.json(result, { headers: noStore });
   } catch (e) {
     if (e instanceof IngestError) return fail(e.code, e.status);
