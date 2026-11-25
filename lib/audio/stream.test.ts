@@ -3,7 +3,12 @@ import { base64ToPcm16 } from "./resample";
 import {
   AUDIO_STALL_MS,
   AUDIO_STALL_NOTICE_MS,
+  ERROR_RETRY_MS,
+  FETCH_TIMEOUT_MS,
   FLUSH_MS,
+  QUIET_NOTICE_MS,
+  SESSION_START_WAIT_MS,
+  STOP_FLUSH_MAX_MS,
   HEARTBEAT_MS,
   LiveStream,
   STOP_DRAIN_MS,
@@ -31,7 +36,13 @@ class FakeSocket implements SocketLike {
     this.readyState = 3;
     this.onclose?.({ code: 1000, reason: "client" });
   }
+  /** Open and start the session (session_started), as ElevenLabs does. */
   open() {
+    this.openOnly();
+    this.emit({ message_type: "session_started", session_id: "el" });
+  }
+  /** Open without session_started (C12). */
+  openOnly() {
     this.readyState = 1;
     this.onopen?.({});
   }
@@ -50,6 +61,7 @@ class FakeSocket implements SocketLike {
 
 class FakeAudio implements AudioSource {
   onChunk: ((pcm: Int16Array) => void) | null = null;
+  onProblem: ((why: string) => void) | null = null;
   stopped = false;
   error: Error | null = null;
   async start(onChunk: (pcm: Int16Array) => void) {
@@ -71,7 +83,7 @@ class FakeAudio implements AudioSource {
   }
 }
 
-type Reply = { status: number; body?: unknown } | "network";
+type Reply = { status: number; body?: unknown } | "network" | "hang";
 const json = (status: number, body?: unknown) => ({ status, body });
 
 function makeFetch() {
@@ -89,13 +101,21 @@ function makeFetch() {
       else reply = json(200, { stored: 1, received: 1 });
     }
     if (reply === "network") throw new TypeError("Failed to fetch");
+    if (reply === "hang") {
+      // Never answers; only the request's abort signal ends it (C1).
+      return new Promise<Response>((_res, rej) => {
+        const sig = init?.signal;
+        if (!sig) return;
+        sig.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+      });
+    }
     const r = reply;
     return new Response(r.body === undefined ? null : JSON.stringify(r.body), { status: r.status });
   });
   return { fetchFn, replies, calls, of: (path: string) => calls.filter((c) => c.path === path) };
 }
 
-function setup(opts: { initialClosingSessionId?: string | null } = {}) {
+function setup(opts: { initialClosingSessionId?: string | null; log?: (m: string) => void } = {}) {
   const f = makeFetch();
   const audio = new FakeAudio();
   const sockets: FakeSocket[] = [];
@@ -110,6 +130,7 @@ function setup(opts: { initialClosingSessionId?: string | null } = {}) {
       return s;
     },
     initialClosingSessionId: opts.initialClosingSessionId,
+    log: opts.log,
   });
   stream.on("state", (s) => states.push(s));
   return { stream, audio, sockets, states, ...f };
@@ -585,7 +606,7 @@ describe("LiveStream", () => {
     await t.stream.start();
     await settle();
     t.sockets[0].open();
-    for (let s = 0; s < 21; s++) {
+    for (let s = 0; s < 61; s++) {
       for (let i = 0; i < 10; i++) t.audio.push(i, true);
       await vi.advanceTimersByTimeAsync(1000);
     }
@@ -704,5 +725,178 @@ describe("LiveStream", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(t.stream.pending).toBe(0);
     expect(health.at(-1)).toMatchObject({ postsFailing: false });
+  });
+
+  describe("final fix wave (C1–C5, C12, D)", () => {
+    it("C1: a hung segments POST times out after 15 s and is retried; the queue is kept", async () => {
+      const t = setup();
+      t.replies.segments.push("hang");
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      t.sockets[0].emit(diarized(0, [["Hej", "speaker_0"]]));
+      await vi.advanceTimersByTimeAsync(FLUSH_MS);
+      await settle();
+      expect(t.of("segments")).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(FETCH_TIMEOUT_MS + FLUSH_MS);
+      await settle();
+      expect(t.of("segments").length).toBeGreaterThanOrEqual(2);
+      expect(t.stream.pending).toBe(0);
+    });
+
+    it("C1/C6: Stopp with posts hanging resolves within the stop deadline and reports what is left", async () => {
+      const t = setup();
+      for (let i = 0; i < 20; i++) t.replies.segments.push("hang");
+      const pending: number[] = [];
+      t.stream.on("pending", (n) => pending.push(n));
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      t.sockets[0].emit(diarized(0, [["Hej", "speaker_0"]]));
+      let done = false;
+      void t.stream.stop().then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(STOP_DRAIN_MS + STOP_FLUSH_MAX_MS + FETCH_TIMEOUT_MS + 2000);
+      await settle();
+      expect(done).toBe(true);
+      expect(t.stream.state.state).toBe("stopped");
+      expect(t.stream.pending).toBe(1);
+      expect(pending.at(-1)).toBe(1);
+      // The page keeps draining afterwards; once the net answers, nothing is left.
+      t.replies.segments.length = 0;
+      expect(await t.stream.drain(5000)).toBe(0);
+    });
+
+    it("C1: a hung heartbeat does not block later heartbeats", async () => {
+      const t = setup();
+      t.replies.heartbeat.push("hang");
+      await t.stream.start();
+      await settle();
+      await vi.advanceTimersByTimeAsync(FETCH_TIMEOUT_MS + HEARTBEAT_MS);
+      await settle();
+      expect(t.of("heartbeat").length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("C2: from 'error' (token) it retries every 30 s and keeps the audio meanwhile", async () => {
+      const t = setup();
+      t.replies.token.push(json(502, {}), json(502, {}), json(502, {}), json(502, {}));
+      await t.stream.start();
+      await vi.advanceTimersByTimeAsync(10_000);
+      await settle();
+      expect(t.stream.state).toMatchObject({ state: "error", error: "token" });
+      const before = t.of("token").length;
+      t.audio.push(41);
+      t.audio.push(42);
+      await vi.advanceTimersByTimeAsync(ERROR_RETRY_MS);
+      await settle();
+      expect(t.of("token").length).toBe(before + 1); // still failing: back to error, no storm
+      expect(t.stream.state.state).toBe("error");
+      await vi.advanceTimersByTimeAsync(ERROR_RETRY_MS);
+      await settle();
+      expect(t.sockets).toHaveLength(1);
+      t.sockets[0].open();
+      expect(t.stream.state.state).toBe("live");
+      expect(t.sockets[0].audioTags.slice(0, 2)).toEqual([41, 42]);
+    });
+
+    it("C3: loud audio long ago doesn't count; only speech within the last 60 s trips the silent-socket watchdog", async () => {
+      const t = setup();
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      for (let i = 0; i < 60; i++) t.audio.push(i, true); // 6 s of speech, then a quiet room
+      for (let s = 0; s < 70; s++) {
+        for (let i = 0; i < 10; i++) t.audio.push(i);
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+      expect(t.sockets).toHaveLength(1);
+    });
+
+    it("C4: a muted/ended mic track asks for recovery at once; 2 min below the heard level → quiet", async () => {
+      const t = setup();
+      const health: boolean[] = [];
+      t.stream.on("health", (h) => health.push(h.quiet));
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      t.audio.onProblem?.("ended");
+      await settle();
+      expect(t.audio.recovers).toEqual([1]);
+      for (let s = 0; s < QUIET_NOTICE_MS / 1000 + 2; s++) {
+        for (let i = 0; i < 10; i++) t.audio.push(i);
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+      expect(health.at(-1)).toBe(true);
+      t.audio.push(1, true);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(health.at(-1)).toBe(false);
+    });
+
+    it("C5: quota_exceeded stops with error 'limit' (el_service); one auth_error doesn't, two in a row do", async () => {
+      const a = setup();
+      await a.stream.start();
+      await settle();
+      a.sockets[0].open();
+      a.sockets[0].emit({ message_type: "quota_exceeded", error: "Quota exceeded" });
+      expect(a.stream.state).toMatchObject({ state: "error", error: "limit", refusal: "el_service" });
+
+      const b = setup();
+      await b.stream.start();
+      await settle();
+      b.sockets[0].open();
+      b.sockets[0].emit({ message_type: "auth_error", error: "bad token" });
+      expect(b.stream.state.state).toBe("live");
+      b.sockets[0].drop();
+      await vi.advanceTimersByTimeAsync(1000);
+      await settle();
+      b.sockets[1].open();
+      b.sockets[1].emit({ message_type: "auth_error", error: "bad token" });
+      expect(b.stream.state).toMatchObject({ state: "error", error: "limit", refusal: "el_service" });
+    });
+
+    it("C12: audio waits for session_started (then goes in order); without it, after 3 s", async () => {
+      const t = setup();
+      await t.stream.start();
+      await settle();
+      t.sockets[0].openOnly();
+      t.audio.push(1);
+      t.audio.push(2);
+      expect(t.sockets[0].audioTags).toEqual([]);
+      t.sockets[0].emit({ message_type: "session_started", session_id: "x" });
+      t.audio.push(3);
+      expect(t.sockets[0].audioTags).toEqual([1, 2, 3]);
+
+      t.sockets[0].drop();
+      await vi.advanceTimersByTimeAsync(1000);
+      await settle();
+      t.sockets[1].openOnly();
+      t.audio.push(4);
+      await vi.advanceTimersByTimeAsync(SESSION_START_WAIT_MS);
+      t.audio.push(5);
+      expect(t.sockets[1].audioTags).toEqual([4, 5]);
+    });
+
+    it("D: an unknown message type is logged once", async () => {
+      const lines: string[] = [];
+      const t = setup({ log: (m) => lines.push(m) });
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      for (let i = 0; i < 3; i++) t.sockets[0].emit({ message_type: "speaker_names", names: {} });
+      expect(lines.filter((l) => l.includes("speaker_names"))).toHaveLength(1);
+    });
+
+    it("D: flushOnExit posts committed-but-undiarized segments too, with keepalive", async () => {
+      const t = setup();
+      await t.stream.start();
+      await settle();
+      t.sockets[0].open();
+      t.sockets[0].emit({ message_type: "committed_transcript", segment_index: 3, text: "Sista meningen" });
+      t.stream.flushOnExit();
+      await settle();
+      const posted = t.of("segments").flatMap((c) => c.body.segments);
+      expect(posted).toEqual([expect.objectContaining({ segmentIndex: 3, speaker: "unknown", text: "Sista meningen" })]);
+      const init = t.fetchFn.mock.calls.find((c) => String(c[0]).endsWith("/segments"))![1] as RequestInit;
+      expect(init.keepalive).toBe(true);
+    });
   });
 });

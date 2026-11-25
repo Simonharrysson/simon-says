@@ -15,6 +15,8 @@ export type LivePhaseForStatus =
 export interface LiveStatusInput {
   phase: LivePhaseForStatus;
   connection: "ok" | "reconnecting" | "offline";
+  /** The first connection of this page (not a reconnect): "Ansluter…", no "Anslutningen bröts". */
+  firstConnect?: boolean;
   docPaused?: boolean;
   staleMinutes?: number | null;
   minutesLeft?: number | null;
@@ -48,14 +50,15 @@ export interface LiveStatus {
 }
 
 export function liveStatus(input: LiveStatusInput): LiveStatus {
-  const { phase, connection, docPaused = false, staleMinutes = null, minutesLeft = null } = input;
+  const { phase, connection, firstConnect = false, docPaused = false, staleMinutes = null, minutesLeft = null } = input;
   const connected = connection === "ok";
 
   const banners: LiveBannerKind[] = [];
   if (phase === "error") banners.push("error");
   if (docPaused && phase !== "ending") banners.push("doc");
   if (minutesLeft != null && phase !== "error" && phase !== "ending") banners.push("time");
-  if (!connected && phase !== "error" && phase !== "ending") banners.push("connection");
+  // No "audio is held" banner while paused (nothing is sent, nothing held) or on the first connect.
+  if (!connected && !firstConnect && phase !== "error" && phase !== "ending" && phase !== "paused") banners.push("connection");
 
   const doc: DocHealth = docPaused ? "paused" : staleMinutes != null ? "stale" : "ok";
   const base = { banners, doc };
@@ -74,7 +77,7 @@ export function liveStatus(input: LiveStatusInput): LiveStatus {
       ...base,
       kind: "reconnecting",
       tone: "waiting",
-      label: "Ansluter igen…",
+      label: firstConnect ? "Ansluter…" : "Ansluter igen…",
       detail: null,
       listening: false,
       partial: "last-heard",

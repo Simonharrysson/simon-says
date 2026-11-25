@@ -95,6 +95,7 @@ describe("POST /api/meetings", () => {
     const json = await res.json();
     expect(json.docUrl).toBe("https://docs.google.com/document/d/doc1/edit");
     expect(json.title).toBe("Styrelsen möte");
+    expect(json.shareFailed).toBe(0); // C10: the page warns when members didn't get access
     const input = m.createMeetingDoc.mock.calls[0][1];
     expect(input).toMatchObject({ orgName: "Styrelsen", shareTranscript: true, meetingId: json.meetingId });
     expect(input.memberEmails).toEqual(["b@x.se"]); // the starter is not shared with

@@ -1,6 +1,7 @@
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { IconChevronDown, IconClock, IconDoc, IconRefresh, IconWifiOff } from "@/components/ui/icons";
+import { limitWarningText } from "@/lib/ui/limit-copy";
 import type { LiveBannerKind } from "@/lib/ui/live-status";
 import type { ConnectionState } from "./types";
 
@@ -8,8 +9,14 @@ export interface LiveBannersProps {
   /** From `liveStatus()`: most urgent first. Only the first is shown in full. */
   banners: LiveBannerKind[];
   connection: ConnectionState;
-  /** Minutes left before the 4 h automatic stop, from 3 h 45 on. */
+  /** Minutes left before a cap stops the meeting, from 15 min before. */
   minutesLeft?: number | null;
+  /** The cap behind `minutesLeft` (heartbeat `reason`): meeting_length, org_month, global_day… */
+  limitReason?: string | null;
+  /** Why the stream stopped (state 'error'): token, mic…, refused. */
+  streamError?: string | null;
+  /** The token route's refusal code, if any (e.g. mint_cap). */
+  refusal?: string | null;
   onReLogin?: () => void;
   onRetry?: () => void;
 }
@@ -19,31 +26,41 @@ export interface LiveBannersProps {
  * waits behind "Visa 1 varning till". Red only when the user must act (stopped, Doc paused,
  * time running out); things that fix themselves are ink.
  */
-export function LiveBanners({ banners, connection, minutesLeft, onReLogin, onRetry }: LiveBannersProps) {
+export function LiveBanners({ banners, connection, minutesLeft, limitReason, streamError, refusal, onReLogin, onRetry }: LiveBannersProps) {
   if (banners.length === 0) return null;
   const connected = connection === "ok";
 
   const render = (kind: LiveBannerKind) => {
     switch (kind) {
-      case "error":
+      case "error": {
+        // Retrying can't help once the meeting has used all its sessions (mint_cap).
+        const final = refusal === "mint_cap";
+        const text = final
+          ? "Anslutningen till transkriberingen har brutits för många gånger i det här mötet. Avsluta och starta ett nytt möte. Det som redan sagts finns kvar i dokumentet."
+          : streamError === "token"
+            ? "Vi fick ingen kontakt med transkriberingen efter tre försök. Vi försöker igen var 30:e sekund och håller kvar det som sägs i upp till en minut. Det som redan sagts finns kvar i dokumentet."
+            : streamError?.startsWith("mic")
+              ? "Mikrofonen kunde inte startas. Kontrollera att den är på och att ingen annan app använder den. Det som redan sagts finns kvar i dokumentet."
+              : "Inget ljud skickas just nu. Det som redan sagts finns kvar i dokumentet.";
         return (
           <Banner
             key="error"
             tone="danger"
             className="banner--loud"
-            title="Transkriptionen har stannat"
+            title={final ? "Starta ett nytt möte" : "Transkriberingen har stannat"}
             action={
-              onRetry && (
+              onRetry &&
+              !final && (
                 <Button variant="primary" icon={<IconRefresh size={18} />} onClick={onRetry}>
                   Försök igen
                 </Button>
               )
             }
           >
-            Vi fick ingen kontakt med transkriberingen efter tre försök. Inget ljud skickas just nu. Det som redan sagts finns
-            kvar i dokumentet.
+            {text}
           </Banner>
         );
+      }
       case "doc":
         return (
           <Banner
@@ -60,14 +77,14 @@ export function LiveBanners({ banners, connection, minutesLeft, onReLogin, onRet
             }
           >
             {connected
-              ? "Google tog tillbaka behörigheten. Transkriptionen fortsätter, och allt skrivs in i dokumentet när du loggat in."
+              ? "Google tog tillbaka behörigheten. Transkriberingen fortsätter, och allt skrivs in i dokumentet när du loggat in."
               : "Google tog tillbaka behörigheten. Allt skrivs in i dokumentet när du loggat in."}
           </Banner>
         );
       case "time":
         return (
           <Banner key="time" tone="danger" icon={<IconClock />} title={`Mötet avslutas automatiskt om ${minutesLeft} min`}>
-            Ett möte kan vara högst 4 timmar. Behöver ni mer tid, avsluta och starta ett nytt möte.
+            {limitWarningText(limitReason)}
           </Banner>
         );
       case "connection":

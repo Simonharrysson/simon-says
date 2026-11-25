@@ -10,7 +10,11 @@
 // - Runs are posted every 3 s; a failed POST is retried, never dropped (a closed session's
 //   runs are still accepted by the server). 429 → back off and keep the batch.
 // - 3 failed token requests in a row → state 'error'. A network failure (offline) does not
-//   count: we keep trying every 5 s while the laptop is off the net.
+//   count: we keep trying every 5 s while the laptop is off the net. From 'error' (token) we
+//   keep trying every 30 s and keep filling the ring buffer, so it recovers on its own.
+// - Fatal ElevenLabs errors (quota, terms; auth twice in a row) stop the meeting (state 'error',
+//   error 'limit', refusal 'el_service').
+// - Every fetch has a 15 s timeout, so a hung request never freezes the page (or Avsluta).
 // - Pause sends no audio and buffers none; it is logged on the server.
 // - Heartbeat every 10 s; the server answers {warn, stop}; on stop it ends the meeting itself.
 //   It also names the server's current session: if another tab took over, this one stops.
@@ -42,6 +46,20 @@ const POST_BACKOFF_MAX_MS = 30_000;
 /** 401/403 on posts: wait this long before trying again (the user may sign in again). */
 const AUTH_BACKOFF_MS = 10_000;
 export const TOKEN_TIMEOUT_MS = 15_000;
+/** Every other fetch (segments, heartbeat, pause) gives up after this long (C1). */
+export const FETCH_TIMEOUT_MS = 15_000;
+/** Stopp: keep posting what is left for at most this long; the page then takes over (C6). */
+export const STOP_FLUSH_MAX_MS = 60_000;
+/** In state 'error' after token failures: try a new session this often (C2). */
+export const ERROR_RETRY_MS = 30_000;
+/** No session_started within this long after open: send the held audio anyway (C12). */
+export const SESSION_START_WAIT_MS = 3000;
+/** The mic level counts as "hearing the room" from here (same bar as the consent mic check). */
+export const HEARD_LEVEL = 0.08;
+/** Level below HEARD_LEVEL this long while live → tell the page (C4). */
+export const QUIET_NOTICE_MS = 120_000;
+/** Message gaps longer than this are logged, to tune SILENT_SOCKET_MS on 11-28 (C3). */
+const LOG_GAP_MS = 10_000;
 export const MAX_SPEAKER_CHARS = 100;
 /** No audio block from the mic for this long → ask the mic to recover (resume / reopen). */
 export const AUDIO_STALL_MS = 5000;
@@ -51,14 +69,16 @@ export const AUDIO_STALL_NOTICE_MS = 10_000;
 export const POST_FAIL_NOTICE_MS = 60_000;
 /**
  * A socket that sent nothing for this long while we sent at least SILENT_SOCKET_LOUD_CHUNKS of
- * speech is treated as dropped. Provisional (Verify on 11-28): with vad, ElevenLabs sends
- * partials about every second of speech, so 20 s is far above 2× its interval; in a silent room
- * nothing is expected, hence the speech condition.
+ * speech within the last SILENT_SOCKET_MS is treated as dropped. Provisional (Verify on 11-28):
+ * with vad, ElevenLabs sends partials about every second of speech; 60 s and a loud bar of 0.15
+ * keep a quiet room or a fan from causing reconnect storms. Message gaps > 10 s are logged.
  */
-export const SILENT_SOCKET_MS = 20_000;
+export const SILENT_SOCKET_MS = 60_000;
 export const SILENT_SOCKET_LOUD_CHUNKS = 50;
 /** rmsLevel above this counts as speech for the silent-socket watchdog. */
-const LOUD_LEVEL = 0.05;
+export const LOUD_LEVEL = 0.15;
+/** ElevenLabs errors that no reconnect can fix: the service account itself (C5). */
+const FATAL_EL_ERROR = /quota|terms|payment|billing|insufficient_funds|subscription/;
 
 /** Refusals from the token route that will not go away by retrying. */
 const TERMINAL_REFUSALS = new Set([
@@ -72,6 +92,7 @@ const TERMINAL_REFUSALS = new Set([
   "global_day",
   "global_usd",
   "kill_switch",
+  "mint_cap",
 ]);
 const LIMIT_REFUSALS = new Set(["meeting_length", "org_month", "global_day", "global_usd", "kill_switch"]);
 
@@ -87,6 +108,8 @@ export interface StreamStatus {
   refusal?: string;
   /** Stopped because the server said stop (4 h, caps, kill switch) or ended the meeting. */
   autoStopped?: boolean;
+  /** Why it stopped on its own: a limit reason from the heartbeat or token route (C9). */
+  stopReason?: string;
   /** Stopped because another tab (or laptop) took over the meeting's session. */
   superseded?: boolean;
 }
@@ -99,6 +122,8 @@ export interface StreamHealth {
   postsFailing: boolean;
   /** The server answered 401/403: signed out. Runs are kept until a post succeeds. */
   authLost: boolean;
+  /** Blocks arrive, but the level stayed below HEARD_LEVEL for QUIET_NOTICE_MS while live (C4). */
+  quiet: boolean;
 }
 
 export interface HeartbeatInfo {
@@ -106,6 +131,8 @@ export interface HeartbeatInfo {
   stop: boolean;
   /** Minutes until a cap stops the meeting, while `warn`. */
   minutesLeft?: number | null;
+  /** The cap that warns or stops: meeting_length | org_month | global_day | global_usd | kill_switch. */
+  reason?: string | null;
   docPaused?: boolean;
   lastTickOkAt?: string | null;
   /** The session the server considers current (another tab may have taken over). */
@@ -130,6 +157,8 @@ export interface AudioSource {
   stop(): void;
   /** No blocks are arriving: try to get them going again (resume the context, reopen the mic). */
   recover?(attempt: number): Promise<void>;
+  /** Set by the stream: the source calls it when the mic track ended or was muted (C4). */
+  onProblem?: ((why: string) => void) | null;
 }
 
 export interface WakeLockLike {
@@ -165,6 +194,8 @@ type Events = {
   /** Runs the server acknowledged (for the "notes are stale" check). */
   posted: (count: number) => void;
   health: (health: StreamHealth) => void;
+  /** Runs and merges still waiting for the server (Stopp shows it). */
+  pending: (count: number) => void;
 };
 
 const OPEN = 1;
@@ -192,6 +223,7 @@ export class LiveStream {
     level: new Set(),
     posted: new Set(),
     health: new Set(),
+    pending: new Set(),
   };
 
   private status: StreamStatus = { state: "idle", connection: "ok" };
@@ -215,7 +247,16 @@ export class LiveStream {
   private socketAudioMs = 0;
   private lastCommitAudioMs = 0;
   private lastMessageAt = 0;
-  private loudSinceMessage = 0;
+  /** Times of loud chunks sent since the socket's last message, newest last (sliding window). */
+  private loudAt: number[] = [];
+  /** The current socket's session has started (session_started, a first message, or the wait ran out). */
+  private sessionStarted = false;
+  private startWaitTimer: ReturnType<typeof setTimeout> | null = null;
+  /** auth_error from ElevenLabs on consecutive fresh sessions (2 → fatal). */
+  private elAuthErrors = 0;
+  private errorRetryAt = 0;
+  private lastHeardAt = 0;
+  private readonly ignoredTypes = new Set<string>();
   private dropCurrent: ((why: string) => void) | null = null;
 
   private lastChunkAt = 0;
@@ -225,7 +266,7 @@ export class LiveStream {
   private authLost = false;
   /** After a 400 on a batch, send this many runs one by one so only the bad one is dropped. */
   private singlesLeft = 0;
-  private health: StreamHealth = { audioStalled: false, postsFailing: false, authLost: false };
+  private health: StreamHealth = { audioStalled: false, postsFailing: false, authLost: false, quiet: false };
 
   private runSeq = 0;
   private queue: QueuedRun[] = [];
@@ -265,6 +306,7 @@ export class LiveStream {
   async start(): Promise<void> {
     if (this.status.state !== "idle" && this.status.state !== "error") return;
     this.setStatus({ state: "connecting", connection: "ok" });
+    this.o.audio.onProblem = (why) => this.micProblem(why);
     try {
       await this.o.audio.start((pcm) => this.onChunk(pcm));
     } catch (e) {
@@ -276,6 +318,7 @@ export class LiveStream {
     this.attempt = 0;
     const now = Date.now();
     this.lastChunkAt = now;
+    this.lastHeardAt = now;
     this.nextFlushAt = now + FLUSH_MS;
     this.nextHeartbeatAt = now;
     this.intervals.push(setInterval(() => this.tick(), 1000));
@@ -332,7 +375,7 @@ export class LiveStream {
    * Stopp: the mic stops, the last audio is committed, trailing diarized events get up to
    * STOP_DRAIN_MS, then every pending run is posted. The caller then POSTs /end.
    */
-  async stop(opts: { autoStopped?: boolean; superseded?: boolean } = {}): Promise<void> {
+  async stop(opts: { autoStopped?: boolean; superseded?: boolean; reason?: string } = {}): Promise<void> {
     if (this.status.state === "stopped" || this.status.state === "stopping") return;
     this.setStatus({ ...this.status, state: "stopping" });
     this.o.audio.stop();
@@ -352,21 +395,38 @@ export class LiveStream {
       });
     }
     this.closeSocket();
-    for (let i = 0; i < 5 && this.pending > 0; i++) {
-      await this.flush(true);
-      if (this.pending > 0) await sleep(1000);
-    }
+    // Each post is bounded by FETCH_TIMEOUT_MS; the whole drain by STOP_FLUSH_MAX_MS. What is
+    // still left is the page's to show ("N rader väntar på nätet") and retry with drain().
+    await this.drain(STOP_FLUSH_MAX_MS);
     this.teardown();
     this.setStatus({
       state: "stopped",
       connection: "ok",
       ...(opts.autoStopped ? { autoStopped: true } : {}),
+      ...(opts.reason ? { stopReason: opts.reason } : {}),
       ...(opts.superseded ? { superseded: true } : {}),
     });
   }
 
+  /**
+   * Post what is waiting until nothing is left or `maxMs` passed (works after stop too).
+   * Emits `pending` as the count changes. Resolves with what is still waiting.
+   */
+  async drain(maxMs: number): Promise<number> {
+    const until = Date.now() + maxMs;
+    this.emit("pending", this.pending);
+    while (this.pending > 0 && Date.now() < until) {
+      await this.flush(true);
+      this.emit("pending", this.pending);
+      if (this.pending > 0) await sleep(1000);
+    }
+    return this.pending;
+  }
+
   /** Page is going away (pagehide): post what we have with keepalive, best effort. */
   flushOnExit(): void {
+    // Committed but not yet diarized segments would be lost with the page: post them as "unknown".
+    if (this.socketSessionId) this.queueUndiarized(this.socketSessionId);
     void this.flush(true, true);
   }
 
@@ -407,21 +467,25 @@ export class LiveStream {
   private onChunk(pcm: Int16Array): void {
     const level = rmsLevel(pcm);
     this.emit("level", level);
-    this.lastChunkAt = Date.now();
+    const now = Date.now();
+    this.lastChunkAt = now;
+    if (level >= HEARD_LEVEL) this.lastHeardAt = now;
     this.recoverAttempts = 0;
     // Timers are throttled in hidden tabs; the audio thread keeps calling, so check here too.
     this.tick();
-    if (this.paused || !this.active() || this.status.state === "error") return;
+    if (this.paused || !this.active()) return;
+    // In 'error' only a token failure is worth holding audio for: we keep retrying (C2).
+    if (this.status.state === "error" && this.status.error !== "token") return;
     const msg = JSON.stringify({
       message_type: "input_audio_chunk",
       audio_base_64: pcm16ToBase64(pcm),
       commit: false,
       sample_rate: TARGET_RATE,
     });
-    if (this.socket && this.socket.readyState === OPEN) {
+    if (this.socket && this.socket.readyState === OPEN && this.sessionStarted) {
       this.socket.send(msg);
       this.socketAudioMs += CHUNK_MS;
-      if (level > LOUD_LEVEL) this.loudSinceMessage++;
+      if (level > LOUD_LEVEL) this.loudAt.push(now);
     } else {
       this.ring.push(msg);
       if (this.ring.length > this.ringMax) this.ring.splice(0, this.ring.length - this.ringMax);
@@ -452,6 +516,12 @@ export class LiveStream {
 
   private watchdogs(now: number): void {
     const running = this.active() && this.status.state !== "error";
+    // C2: after token failures keep trying for a new session every 30 s.
+    if (this.status.state === "error" && this.status.error === "token" && !this.connecting && !this.paused && now >= this.errorRetryAt) {
+      this.errorRetryAt = now + ERROR_RETRY_MS;
+      this.log("token: retrying from the error state");
+      void this.connect();
+    }
     // Mic: no blocks (laptop slept, Safari interrupted the AudioContext, mic unplugged).
     const silentFor = now - this.lastChunkAt;
     if (running && !this.paused && silentFor > AUDIO_STALL_MS * (this.recoverAttempts + 1) && !this.recovering && this.o.audio.recover) {
@@ -465,30 +535,54 @@ export class LiveStream {
           this.recovering = false;
         });
     }
-    // Socket: open, we sent speech, nothing came back.
+    // Socket: open, we sent speech recently, nothing came back for SILENT_SOCKET_MS.
+    while (this.loudAt.length && this.loudAt[0] < now - SILENT_SOCKET_MS) this.loudAt.shift();
     if (
       running &&
       this.socket &&
       this.socket.readyState === OPEN &&
       now - this.lastMessageAt > SILENT_SOCKET_MS &&
-      this.loudSinceMessage >= SILENT_SOCKET_LOUD_CHUNKS
+      this.loudAt.length >= SILENT_SOCKET_LOUD_CHUNKS
     ) {
       this.log(`socket: silent for ${now - this.lastMessageAt} ms while sending speech; reconnecting`);
       this.dropCurrent?.("silent");
     }
     if (this.pending === 0) this.postFailingSince = null;
+    const audioStalled = running && !this.paused && silentFor > AUDIO_STALL_NOTICE_MS;
     this.setHealth({
-      audioStalled: running && !this.paused && silentFor > AUDIO_STALL_NOTICE_MS,
+      audioStalled,
       postsFailing: this.postFailingSince !== null && now - this.postFailingSince > POST_FAIL_NOTICE_MS,
       authLost: this.authLost,
+      quiet: running && !this.paused && !audioStalled && now - this.lastHeardAt > QUIET_NOTICE_MS,
     });
   }
 
   private setHealth(next: StreamHealth): void {
     const h = this.health;
-    if (h.audioStalled === next.audioStalled && h.postsFailing === next.postsFailing && h.authLost === next.authLost) return;
+    if (
+      h.audioStalled === next.audioStalled &&
+      h.postsFailing === next.postsFailing &&
+      h.authLost === next.authLost &&
+      h.quiet === next.quiet
+    ) {
+      return;
+    }
     this.health = next;
     this.emit("health", next);
+  }
+
+  /** The mic track ended or was muted (unplugged, OS mute, another app took it): recover now. */
+  private micProblem(why: string): void {
+    if (!this.active() || this.paused || this.recovering || !this.o.audio.recover) return;
+    this.recovering = true;
+    const attempt = ++this.recoverAttempts;
+    this.log(`audio: mic ${why}; recover attempt ${attempt}`);
+    this.o.audio
+      .recover(attempt)
+      .catch((e) => this.log("audio: recover failed", e))
+      .finally(() => {
+        this.recovering = false;
+      });
   }
 
   // --- token + socket ------------------------------------------------------------------------
@@ -582,11 +676,14 @@ export class LiveStream {
     this.socketAudioMs = 0;
     this.lastCommitAudioMs = 0;
     this.lastMessageAt = Date.now();
-    this.loudSinceMessage = 0;
+    this.loudAt = [];
+    this.sessionStarted = false;
+    this.clearStartWait();
     let dropped = false;
     const drop = (why: string) => {
       if (dropped || gen !== this.generation) return;
       dropped = true;
+      this.clearStartWait();
       this.socket = null;
       this.dropCurrent = null;
       this.queueUndiarized(sessionId);
@@ -601,24 +698,36 @@ export class LiveStream {
       this.onDrop(why);
     };
     this.dropCurrent = drop;
-    socket.onopen = () => {
-      if (gen !== this.generation) return;
-      this.attempt = 0;
-      this.lastMessageAt = Date.now();
-      // Audio held during the reconnect goes first, in order.
+    // Audio held during the reconnect goes first, in order, once the session has started (C12).
+    const begin = (how: string) => {
+      if (gen !== this.generation || this.sessionStarted) return;
+      this.clearStartWait();
+      this.sessionStarted = true;
+      if (how !== "session_started") this.log(`socket: no session_started; sending held audio (${how})`);
       const held = this.ring;
       this.ring = [];
       for (const msg of held) socket.send(msg);
       this.socketAudioMs += held.length * CHUNK_MS;
+    };
+    socket.onopen = () => {
+      if (gen !== this.generation) return;
+      this.attempt = 0;
+      this.lastMessageAt = Date.now();
+      this.startWaitTimer = setTimeout(() => begin("waited"), SESSION_START_WAIT_MS);
       if (this.status.state !== "stopping") {
         this.setStatus({ state: this.paused ? "paused" : "live", connection: "ok" });
       }
     };
     socket.onmessage = (ev) => {
       if (gen !== this.generation) return;
-      this.lastMessageAt = Date.now();
-      this.loudSinceMessage = 0;
-      this.onMessage(typeof ev.data === "string" ? ev.data : String(ev.data), sessionId);
+      const now = Date.now();
+      if (now - this.lastMessageAt > LOG_GAP_MS) this.log(`socket: message gap ${now - this.lastMessageAt} ms`);
+      this.lastMessageAt = now;
+      this.loudAt = [];
+      const raw = typeof ev.data === "string" ? ev.data : String(ev.data);
+      const parsed = parseEvent(raw);
+      begin(parsed.kind === "started" ? "session_started" : `first message ${parsed.kind}`);
+      this.onMessage(parsed, sessionId);
     };
     socket.onerror = (ev) => {
       if (gen !== this.generation) return;
@@ -655,6 +764,11 @@ export class LiveStream {
     }, delay);
   }
 
+  private clearStartWait(): void {
+    if (this.startWaitTimer) clearTimeout(this.startWaitTimer);
+    this.startWaitTimer = null;
+  }
+
   private clearReconnect(): void {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
@@ -662,10 +776,13 @@ export class LiveStream {
 
   private fail(error: StreamError, refusal?: string): void {
     this.clearReconnect();
+    // A first automatic retry ERROR_RETRY_MS from now (not on a repeated failure from a retry).
+    if (this.status.state !== "error") this.errorRetryAt = Date.now() + ERROR_RETRY_MS;
     this.setStatus({ state: "error", connection: "ok", error, ...(refusal ? { refusal } : {}) });
   }
 
   private closeSocket(): void {
+    this.clearStartWait();
     const s = this.socket;
     if (s && this.socketSessionId) this.queueUndiarized(this.socketSessionId);
     this.generation++;
@@ -680,13 +797,16 @@ export class LiveStream {
     }
   }
 
-  private onMessage(raw: string, sessionId: string): void {
-    const ev = parseEvent(raw);
+  private onMessage(ev: ReturnType<typeof parseEvent>, sessionId: string): void {
     switch (ev.kind) {
+      case "started":
+        return;
       case "partial":
+        this.elAuthErrors = 0;
         this.emit("partial", ev.text);
         return;
       case "committed": {
+        this.elAuthErrors = 0;
         if (ev.lang) this.langBySegment.set(ev.segmentIndex, ev.lang);
         const prev = this.undiarized.get(ev.segmentIndex);
         const text = ev.text.trim() || prev?.text || "";
@@ -716,10 +836,30 @@ export class LiveStream {
         return;
       case "error":
         this.log(`elevenlabs: ${ev.code}${ev.message ? `: ${ev.message}` : ""}`);
+        this.onElError(ev.code);
+        return;
+      case "ignored":
+        // Each unknown type once, so 11-28 shows what ElevenLabs really sends without flooding.
+        if (!this.ignoredTypes.has(ev.type)) {
+          this.ignoredTypes.add(ev.type);
+          this.log(`elevenlabs: ignoring message type ${ev.type}`);
+        }
         return;
       default:
         return;
     }
+  }
+
+  /**
+   * Fatal service errors stop the meeting (C5): quota / terms / billing at once; auth_error only
+   * on two fresh sessions in a row (a single one may be a token that waited too long, e.g. over a
+   * sleep, and a new token fixes it).
+   */
+  private onElError(code: string): void {
+    const fatal = FATAL_EL_ERROR.test(code) || (code === "auth_error" && ++this.elAuthErrors >= 2);
+    if (!fatal) return;
+    this.log(`elevenlabs: fatal ${code}; stopping`);
+    this.fail("limit", "el_service");
   }
 
   /** Sanitize and queue runs (the ingest rejects a whole batch over one bad field). */
@@ -792,6 +932,7 @@ export class LiveStream {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ segments: batch.map((b) => b.run), ...(merges.length ? { merges: merges.map((m) => m.merge) } : {}) }),
         keepalive,
+        signal: timeoutSignal(FETCH_TIMEOUT_MS),
       });
     } catch (e) {
       this.log("segments: network error; retrying", e);
@@ -891,7 +1032,7 @@ export class LiveStream {
     // token response was lost); the reconnect sorts that out (I1), so it is never "another tab".
     const expected = this.socket && this.socket.readyState === OPEN && !this.connecting ? this.socketSessionId : null;
     try {
-      const res = await this.fetch(this.url("heartbeat"), { method: "POST" });
+      const res = await this.fetch(this.url("heartbeat"), { method: "POST", signal: timeoutSignal(FETCH_TIMEOUT_MS) });
       if (res.status === 409) {
         this.onNotLive();
         return;
@@ -911,7 +1052,7 @@ export class LiveStream {
       this.authLost = false;
       this.emit("heartbeat", info);
       if (info.stop) {
-        void this.stop({ autoStopped: true });
+        void this.stop({ autoStopped: true, ...(info.reason ? { reason: info.reason } : {}) });
         return;
       }
       const current = info.currentElSessionId;
@@ -939,6 +1080,7 @@ export class LiveStream {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ paused }),
+        signal: timeoutSignal(FETCH_TIMEOUT_MS),
       });
     } catch (e) {
       this.log("pause log failed", e);
@@ -957,6 +1099,8 @@ export class LiveStream {
   }
 
   private teardown(): void {
+    this.clearStartWait();
+    this.o.audio.onProblem = null;
     for (const i of this.intervals) clearInterval(i);
     this.intervals = [];
     this.unsubscribeVisibility?.();
@@ -975,3 +1119,10 @@ function micError(e: unknown): StreamError {
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** An abort signal that fires after `ms` (a plain timer, so tests' fake clocks drive it too). */
+function timeoutSignal(ms: number): AbortSignal {
+  const c = new AbortController();
+  setTimeout(() => c.abort(new DOMException("timed out", "TimeoutError")), ms);
+  return c.signal;
+}

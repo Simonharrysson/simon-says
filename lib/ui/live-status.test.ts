@@ -32,11 +32,20 @@ describe("liveStatus", () => {
     expect(liveStatus({ phase: "error", connection: "ok", docPaused: true }).banners).toEqual(["error", "doc"]);
   });
 
-  it("paused wins the headline over a dropped connection", () => {
+  it("paused wins the headline over a dropped connection, and shows no 'audio is held' banner (nothing is sent)", () => {
     const s = liveStatus({ phase: "paused", connection: "offline" });
     expect(s.kind).toBe("paused");
     expect(s.listening).toBe(false);
-    expect(s.banners).toEqual(["connection"]);
+    expect(s.banners).toEqual([]);
+  });
+
+  it("the first connect says Ansluter… without a connection banner; a reconnect says Ansluter igen…", () => {
+    const first = liveStatus({ phase: "live", connection: "reconnecting", firstConnect: true });
+    expect(first.label).toBe("Ansluter…");
+    expect(first.banners).toEqual([]);
+    const again = liveStatus({ phase: "live", connection: "reconnecting" });
+    expect(again.label).toBe("Ansluter igen…");
+    expect(again.banners).toEqual(["connection"]);
   });
 
   it("Doc paused and reconnecting: the action (log in) comes first", () => {

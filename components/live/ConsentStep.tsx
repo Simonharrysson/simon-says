@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/Button";
 import { IconMic, IconMicOff } from "@/components/ui/icons";
@@ -69,6 +69,11 @@ export function ConsentStep({
   const testing = micLevel != null;
   const heard = testing && micLevel >= HEARD;
   const bars = testing ? Math.min(5, Math.ceil(micLevel * 5)) : 0;
+  // Screen readers hear the check's result once, not every flip of the meter (D).
+  const [everHeard, setEverHeard] = useState(false);
+  useEffect(() => {
+    if (heard) setEverHeard(true);
+  }, [heard]);
   return (
     <section className="consent" aria-labelledby={`${id}-title`}>
       <div className="consent__head">
@@ -85,10 +90,11 @@ export function ConsentStep({
           {shareTranscript ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
         </li>
         <li>Paus stoppar ljudet direkt.</li>
+        <li>Låt locket vara öppet och sätt i laddaren – stängs locket slutar laptopen lyssna.</li>
       </ul>
 
       {(onMicCheck || testing) && (
-        <div className="miccheck" aria-live="polite">
+        <div className="miccheck">
           <span className="miccheck__label">Mikrofon</span>
           {testing ? (
             <>
@@ -97,7 +103,12 @@ export function ConsentStep({
                   <span key={n} className={`miccheck__bar${n <= bars ? " is-on" : ""}`} />
                 ))}
               </span>
-              <span className={`miccheck__state${heard ? " is-heard" : ""}`}>{heard ? "Hör dig" : "Hör inget än. Säg något."}</span>
+              <span className={`miccheck__state${heard ? " is-heard" : ""}`} aria-hidden="true">
+                {heard ? "Hör dig" : "Hör inget än. Säg något."}
+              </span>
+              <span className="visually-hidden" aria-live="polite">
+                {everHeard ? "Mikrofonen fungerar, vi hör dig." : "Testar mikrofonen. Säg något."}
+              </span>
             </>
           ) : (
             <Button icon={<IconMic size={18} />} onClick={onMicCheck}>

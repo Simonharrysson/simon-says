@@ -38,6 +38,8 @@ export interface LimitResult {
   reason?: LimitReason;
   /** Seconds left before the first cap is reached (whole seconds, ≥ 0). */
   remainingSeconds: number;
+  /** The cap behind a warn or stop (the stop reason, or the closest cap while warning). */
+  limit?: LimitReason;
 }
 
 export interface LimitInput {
@@ -60,6 +62,7 @@ export function decideLimits(i: LimitInput): LimitResult {
     global_day: Math.floor(i.globalDailyHours * 3600 - i.globalDaySeconds),
   };
   const remainingSeconds = Math.max(0, Math.min(...Object.values(remaining)));
+  const closest = (Object.entries(remaining) as [LimitReason, number][]).reduce((a, b) => (b[1] < a[1] ? b : a))[0];
 
   let reason: LimitReason | undefined;
   if (i.killSwitch) reason = "kill_switch";
@@ -70,12 +73,14 @@ export function decideLimits(i: LimitInput): LimitResult {
   else if (remaining.global_day <= 0) reason = "global_day";
 
   const stop = reason !== undefined;
+  const warn = !stop && remainingSeconds <= WARN_BEFORE_SECONDS;
   return {
     ok: !stop,
-    warn: !stop && remainingSeconds <= WARN_BEFORE_SECONDS,
+    warn,
     stop,
     ...(reason ? { reason } : {}),
     remainingSeconds: stop ? 0 : remainingSeconds,
+    ...(stop ? { limit: reason } : warn ? { limit: closest } : {}),
   };
 }
 

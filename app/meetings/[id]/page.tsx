@@ -44,6 +44,16 @@ export default async function MeetingPage({
   if (m.started_by !== user.id) redirect(`/orgs/${org.id}`);
 
   const status = m.status as MeetingStatus;
+  // How many members the Doc couldn't be shared with at start (logged on the started event).
+  const { data: started } = await db
+    .from("meeting_events")
+    .select("detail")
+    .eq("meeting_id", m.id)
+    .in("kind", ["started", "test_started"])
+    .order("at", { ascending: true })
+    .limit(1);
+  const shareFailedRaw = (started?.[0]?.detail as { shareFailed?: unknown } | undefined)?.shareFailed;
+  const shareFailed = typeof shareFailedRaw === "number" ? shareFailedRaw : null;
   return (
     <main id="innehall">
       <LiveMeetingController
@@ -51,7 +61,9 @@ export default async function MeetingPage({
         orgName={org.name}
         orgHref={`/orgs/${org.id}`}
         shareTranscript={org.share_transcript}
-        autoStopped={stoppat === "1"}
+        autoStopped={stoppat !== undefined}
+        stopReason={stoppat && stoppat !== "1" && /^[a-z_]{1,30}$/.test(stoppat) ? stoppat : null}
+        shareFailed={shareFailed}
         meeting={{
           id: m.id,
           status,

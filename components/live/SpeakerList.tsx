@@ -84,7 +84,7 @@ export function SpeakerList({
                         {`Byt namn på ${speaker.label}`}
                       </Button>
                     ) : (
-                      <Button onClick={toggle} aria-expanded={open}>
+                      <Button onClick={toggle} aria-expanded={open} aria-label={open ? `Stäng namnvalet för ${speaker.label}` : `Välj namn för ${speaker.label}`}>
                         {open ? "Stäng" : "Välj"}
                       </Button>
                     )}

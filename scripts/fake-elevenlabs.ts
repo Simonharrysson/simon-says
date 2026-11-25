@@ -16,6 +16,8 @@
  *   ELEVENLABS_WS_URL=ws://localhost:8787/v1/speech-to-text/realtime npm run dev
  *
  * Simulate a network drop: `curl localhost:8787/drop` (closes every socket without a close frame).
+ * Simulate a fatal service error: `curl 'localhost:8787/fatal?type=quota_exceeded'` (also
+ * auth_error, unaccepted_terms): every open session gets that error message, then closes.
  */
 import { createServer, type Server } from "node:http";
 import { pathToFileURL } from "node:url";
@@ -40,6 +42,8 @@ export interface FakeServer {
   sessions: () => number;
   /** Drop every open socket without a close handshake (like Wi-Fi going away). */
   dropAll: () => void;
+  /** Send a fatal error message (e.g. quota_exceeded) on every open socket, then close it. */
+  fatal: (type?: string) => void;
   close: () => Promise<void>;
 }
 
@@ -69,7 +73,28 @@ export async function startFakeElevenLabs(opts: FakeOptions = {}): Promise<FakeS
   let line = 0; // continues across sessions, like a meeting would
   const sockets = new Set<WebSocket>();
 
+  const fatal = (type = "quota_exceeded") => {
+    const n = sockets.size;
+    for (const s of sockets) {
+      if (s.readyState === s.OPEN) s.send(JSON.stringify({ message_type: type, error: `fake ${type}` }));
+      s.close(1008, type);
+    }
+    log(`[fake-el] sent ${type} to ${n} socket(s)`);
+    return n;
+  };
+
   const http: Server = createServer((req, res) => {
+    const reqUrl = new URL(req.url ?? "/", "http://localhost");
+    if (reqUrl.pathname === "/fatal") {
+      const type = reqUrl.searchParams.get("type") ?? "quota_exceeded";
+      if (!/^[a-z_]{1,40}$/.test(type)) {
+        res.statusCode = 400;
+        res.end("type must be a message_type like quota_exceeded\n");
+        return;
+      }
+      res.end(`sent ${type} to ${fatal(type)}\n`);
+      return;
+    }
     if (req.url === "/drop") {
       const n = sockets.size;
       for (const s of sockets) s.terminate();
@@ -224,6 +249,7 @@ export async function startFakeElevenLabs(opts: FakeOptions = {}): Promise<FakeS
     dropAll: () => {
       for (const s of sockets) s.terminate();
     },
+    fatal: (type?: string) => void fatal(type),
     close: () =>
       new Promise<void>((resolve) => {
         for (const s of sockets) s.terminate();
@@ -247,4 +273,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log(`fake ElevenLabs listening on ${server.url}`);
   console.log(`run the app with: ELEVENLABS_WS_URL=${server.url.replace("127.0.0.1", "localhost")} npm run dev`);
   console.log(`simulate a network drop: curl localhost:${server.port}/drop`);
+  console.log(`simulate a fatal error: curl 'localhost:${server.port}/fatal?type=quota_exceeded'`);
 }

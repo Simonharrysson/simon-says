@@ -39,5 +39,9 @@ export async function POST(request: NextRequest) {
   const result = await startMeeting(supabase, user, orgId);
   if (!result.ok) return fail(result.error, result.status, result.message);
 
-  return NextResponse.json({ meetingId: result.meetingId, docUrl: result.docUrl, title: result.title }, { headers: noStore });
+  return NextResponse.json(
+    // shareFailed: members the Doc could not be shared with (the page asks to share manually).
+    { meetingId: result.meetingId, docUrl: result.docUrl, title: result.title, shareFailed: result.shareFailed },
+    { headers: noStore },
+  );
 }

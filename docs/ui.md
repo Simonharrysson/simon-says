@@ -189,6 +189,11 @@ links (only the starter can run a meeting).
 page's consent step `/meetings/ny/<orgId>`, plus the admins' Testmöte); while a meeting is live/ending it is
 replaced by an info banner with the Doc link.
 
+Members panel (final fix wave A2): each member's email with "admin" / "du". Admins get a ghost "Ta bort" per other
+member, everyone a ghost "Lämna" on their own row; both open a `ConfirmAction` dialog whose copy says that Docs
+already shared stay shared (and, for Ta bort, that the invite link still works until a new one is made). The last
+admin can't leave or be removed (the notice suggests deleting the förening instead).
+
 ## The live page (Task 7)
 
 Routes outside the `(app)` layout: `/meetings/ny/<orgId>` (consent step; Start asks for the mic from the click,
@@ -197,6 +202,17 @@ then `POST /api/meetings` creates the Doc, the address becomes `/meetings/<id>` 
 the mic from that click; ending → polls until done; done → ended). `LiveMeetingController` maps `LiveStream`
 (`lib/audio/stream.ts`) onto `LiveMeeting`; heartbeat answers feed `minutesLeft`, `docPaused` and
 `lastTickOkAt`.
+
+Final fix wave: the first connection says "Ansluter…" (no banner); a paused meeting never shows the "Ljudet väntar"
+banner. The mic ring follows the real level (still when the mic hears nothing; opacity only with reduced motion), and
+2 min below the heard level shows "Hör inget ljud sedan 2 min". A stopped page (`error`) retries by itself every 30 s,
+says "efter tre försök" only after three token failures, says "Starta ett nytt möte" (no Försök igen) when the
+meeting has used all its sessions, and puts "⚠ Stannat – Simon Says" in the tab title. After Avsluta, lines still
+unsent show "N rader väntar på nätet – stäng inte fliken"; a failed `/end` shows "Försök igen" instead of leaving
+the page. Automatic stops and the time banner name the limit (4 h, the förening's month, the service's day,
+the transcription service's quota). "N medlemmar fick inte åtkomst – dela dokumentet manuellt" when sharing failed.
+Sessions last at most an hour (Ruling 39): at the rollover new voices appear as "Vem är detta?" in the list; the
+name round never reopens.
 
 ## Name round and speaker list (Task 11)
 

@@ -58,6 +58,9 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       stop: limits.stop,
       // Minutes until the first cap stops the meeting (the page's "avslutas om N min").
       minutesLeft: limits.warn ? Math.ceil(limits.remainingSeconds / 60) : null,
+      // Which cap warns or stops (meeting_length, org_month, global_day, global_usd, kill_switch),
+      // so the page can say which limit it is (C9).
+      reason: limits.limit ?? null,
       docPaused: Boolean(meeting.doc_paused_at),
       lastTickOkAt: meeting.last_tick_ok_at ?? null,
       // The session the server considers current: a tab whose session isn't it stops (another tab took over).

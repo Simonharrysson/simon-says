@@ -12,7 +12,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 
 export type StartResult =
-  | { ok: true; meetingId: string; docUrl: string; orgName: string; title: string }
+  | { ok: true; meetingId: string; docUrl: string; orgName: string; title: string; shareFailed: number }
   | { ok: false; error: string; status: number; message: string };
 
 const failed = (error: string, status: number, message: string): StartResult => ({ ok: false, error, status, message });
@@ -122,7 +122,14 @@ export async function startMeeting(
   }).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
 
 
-  return { ok: true, meetingId, docUrl: docUrl(doc.docId), orgName: org.name, title: meetingTitle(org.name, startedAt) };
+  return {
+    ok: true,
+    meetingId,
+    docUrl: docUrl(doc.docId),
+    orgName: org.name,
+    title: meetingTitle(org.name, startedAt),
+    shareFailed: doc.shareFailed.length,
+  };
 }
 
 type MeetingKey = { id: string; startedAt: string };

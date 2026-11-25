@@ -36,9 +36,23 @@ export interface LiveMeetingProps {
   partialText: string;
   partialSpeaker?: string | null;
   connection: ConnectionState;
+  /** The page's first connection (not a reconnect): "Ansluter…". */
+  firstConnect?: boolean;
   docPaused?: boolean;
   staleMinutes?: number | null;
   minutesLeft?: number | null;
+  /** The cap behind `minutesLeft` or an automatic stop (heartbeat reason / refusal). */
+  limitReason?: string | null;
+  /** In phase "error": the stream's error kind and refusal code. */
+  streamError?: string | null;
+  refusal?: string | null;
+  /** Members the Doc couldn't be shared with at start (null: unknown). */
+  shareFailed?: number | null;
+  /** After Avsluta: lines still waiting for the net. */
+  pendingRuns?: number;
+  /** After Avsluta: POST /end failed. */
+  endFailed?: boolean;
+  onRetryEnd?: () => void;
   speakers: Speaker[];
   people: PersonOption[];
   nameRound: NameRoundEntry[];
@@ -124,7 +138,14 @@ export function LiveMeeting(p: LiveMeetingProps) {
   if (p.phase === "ended") {
     return (
       <div className="live live--centered">
-        <MeetingEnded docUrl={p.docUrl} durationSeconds={p.elapsedMs / 1000} orgHref={p.orgHref} autoStopped={p.autoStopped} />
+        <MeetingEnded
+          docUrl={p.docUrl}
+          durationSeconds={p.elapsedMs / 1000}
+          orgHref={p.orgHref}
+          autoStopped={p.autoStopped}
+          stopReason={p.limitReason}
+          shareFailed={p.shareFailed}
+        />
       </div>
     );
   }
@@ -159,6 +180,9 @@ export function LiveMeeting(p: LiveMeetingProps) {
         banners={status.banners}
         connection={p.connection}
         minutesLeft={p.minutesLeft}
+        limitReason={p.limitReason}
+        streamError={p.streamError}
+        refusal={p.refusal}
         onReLogin={p.onReLogin}
         onRetry={p.onRetry}
       />
@@ -179,7 +203,19 @@ export function LiveMeeting(p: LiveMeetingProps) {
       )}
 
       {ending ? (
-        <MeetingEnded docUrl={p.docUrl} durationSeconds={p.elapsedMs / 1000} orgHref={p.orgHref} finalizing autoStopped={p.autoStopped} />
+        <MeetingEnded
+          docUrl={p.docUrl}
+          durationSeconds={p.elapsedMs / 1000}
+          orgHref={p.orgHref}
+          finalizing
+          autoStopped={p.autoStopped}
+          stopReason={p.limitReason}
+          shareFailed={p.shareFailed}
+          pendingRuns={p.pendingRuns}
+          endFailed={p.endFailed}
+          onRetryEnd={p.onRetryEnd}
+          focusOnMount
+        />
       ) : (
         <div className={`live__grid${nameRound ? " live__grid--single" : ""}`}>
           <div className="live__main">
@@ -191,7 +227,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
               updatedMinutesAgo={p.updatedMinutesAgo}
               health={status.doc}
             />
-            <PartialStrip text={p.partialText} speaker={p.partialSpeaker} mode={status.partial} />
+            <PartialStrip text={p.partialText} speaker={p.partialSpeaker} mode={status.partial} level={p.micLevel} />
           </div>
           {!nameRound && (
             <aside className="live__aside">

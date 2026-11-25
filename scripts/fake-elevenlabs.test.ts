@@ -85,6 +85,27 @@ describe("LiveStream ↔ fake ElevenLabs", () => {
     expect(stream.pending).toBe(0);
   });
 
+  it("fatal(): a quota error stops the stream with error 'limit' (C5)", { timeout: 10_000 }, async () => {
+    fake = await startFakeElevenLabs({ port: 0, log: () => {} });
+    const fetchFn = vi.fn(async (url: string) => {
+      const path = url.split("/").at(-1);
+      if (path === "token") return Response.json({ token: "fake-1", wsUrl: `${fake!.url}?model_id=scribe_v3_live&audio_format=pcm_16000`, sessionId: "s1" });
+      return Response.json({ warn: false, stop: false });
+    });
+    const stream = new LiveStream({
+      meetingId: "m",
+      audio: new PushAudio(),
+      fetch: fetchFn as unknown as typeof fetch,
+      createSocket: (u) => new WebSocket(u) as unknown as SocketLike,
+    });
+    await stream.start();
+    await waitFor(() => stream.state.state === "live");
+    fake.fatal("quota_exceeded");
+    await waitFor(() => stream.state.state === "error");
+    expect(stream.state).toMatchObject({ error: "limit", refusal: "el_service" });
+    await stream.stop();
+  });
+
   it("refuses a connection without a token or with the wrong format", async () => {
     fake = await startFakeElevenLabs({ port: 0, log: () => {} });
     const msgs: string[] = [];

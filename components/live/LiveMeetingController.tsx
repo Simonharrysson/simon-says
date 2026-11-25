@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MicCapture } from "@/lib/audio/capture";
-import { LiveStream, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
+import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
+import { stopParam } from "@/lib/ui/limit-copy";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
@@ -16,6 +17,9 @@ const ENDING_POLL_MS = 5000;
 /** How often the speaker list is re-read: often during the name round, calmly after. */
 const SPEAKERS_POLL_NAME_ROUND_MS = 4000;
 const SPEAKERS_POLL_MS = 15_000;
+/** POST /end must answer within this long, or the page offers a retry (C6). */
+const END_TIMEOUT_MS = 15_000;
+const TITLE_STOPPED = "⚠ Stannat – Simon Says";
 
 /** GET/POST/PATCH /api/meetings/[id]/speakers answer this. */
 interface SpeakerView {
@@ -48,8 +52,12 @@ export interface LiveMeetingControllerProps {
   shareTranscript: boolean;
   /** null: a new meeting (consent step first). */
   meeting: LiveMeetingInfo | null;
-  /** The meeting was stopped by a limit (4 h, caps), not by a person (`?stoppat=1`). */
+  /** The meeting was stopped by a limit (4 h, caps), not by a person (`?stoppat=<reason>`). */
   autoStopped?: boolean;
+  /** Which limit (from `?stoppat=`), for the copy. */
+  stopReason?: string | null;
+  /** Members the Doc could not be shared with at start (from the `started` event); null: unknown. */
+  shareFailed?: number | null;
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -84,7 +92,16 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [docPaused, setDocPaused] = useState(props.meeting?.docPaused ?? false);
   const [lastTickOkAt, setLastTickOkAt] = useState<string | null>(props.meeting?.lastTickOkAt ?? null);
   const [now, setNow] = useState(() => Date.now());
-  const [health, setHealth] = useState<StreamHealth>({ audioStalled: false, postsFailing: false, authLost: false });
+  const [health, setHealth] = useState<StreamHealth>({ audioStalled: false, postsFailing: false, authLost: false, quiet: false });
+  /** The page's first connection is still being made (not a reconnect). */
+  const [firstConnect, setFirstConnect] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  /** The cap behind a warning or an automatic stop. */
+  const [limitReason, setLimitReason] = useState<string | null>(props.stopReason ?? null);
+  const [shareFailed, setShareFailed] = useState<number | null>(props.shareFailed ?? null);
+  /** After Avsluta: lines still waiting for the net, and whether POST /end failed. */
+  const [pendingRuns, setPendingRuns] = useState(0);
+  const [endFailed, setEndFailed] = useState(false);
   /** Another tab (or laptop) took over this meeting's session. */
   const [superseded, setSuperseded] = useState(false);
   /** The stream's last refusal code (e.g. "not_starter": signed in as someone else). */
@@ -120,6 +137,16 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return () => clearInterval(t);
   }, []);
 
+  // A stopped page says so in the tab title too: the laptop is often in another tab (C2).
+  useEffect(() => {
+    if (phase !== "error") return;
+    const before = document.title;
+    document.title = TITLE_STOPPED;
+    return () => {
+      document.title = before === TITLE_STOPPED ? "Möte – Simon Says" : before;
+    };
+  }, [phase]);
+
   // While the final pass runs on the server, re-read the meeting until it is done.
   useEffect(() => {
     if (phase !== "ending" || busy) return;
@@ -127,9 +154,11 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return () => clearInterval(t);
   }, [phase, busy, router]);
 
-  // Leaving while the mic runs loses audio: ask first, and post what we have.
+  // Leaving while the mic runs (or lines still wait for the net after Avsluta) loses them: ask
+  // first, and post what we have.
+  const holding = RUNNING.includes(phase) || pendingRuns > 0;
   useEffect(() => {
-    if (!RUNNING.includes(phase)) return;
+    if (!holding) return;
     const warn = (e: BeforeUnloadEvent) => {
       if (leaving.current) return;
       e.preventDefault();
@@ -142,7 +171,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       window.removeEventListener("beforeunload", warn);
       window.removeEventListener("pagehide", exit);
     };
-  }, [phase]);
+  }, [holding]);
 
   // Stop the mic if the component goes away (client navigation).
   useEffect(
@@ -154,24 +183,44 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   );
 
   /**
-   * POST /end, then load the meeting's own page: the server decides what it shows (finalizing
-   * while `ending`, then ended). That also leaves `/meetings/ny/…`'s tree, which has no meeting.
+   * Post every waiting line (C6: "N rader väntar på nätet" meanwhile), then POST /end, then
+   * load the meeting's own page: the server decides what it shows (finalizing while `ending`,
+   * then ended). That also leaves `/meetings/ny/…`'s tree, which has no meeting. A failed /end
+   * keeps the page here with a retry instead of navigating away from unsent work.
    */
-  const endOnServer = useCallback(async (id: string, auto: boolean) => {
-    leaving.current = true;
+  const endOnServer = useCallback(async (id: string, auto: boolean, reason?: string | null) => {
     setPhase("ending");
     setStoppedAt((t) => t ?? Date.now());
-    try {
-      await fetch(`/api/meetings/${id}/end`, { method: "POST" });
-    } catch {
-      // The cron ends it anyway (abandon after 15 min without a heartbeat).
+    setEndFailed(false);
+    const s = stream.current;
+    // Each round is bounded (15 s per post, 60 s per round). The server drops our queue once the
+    // meeting is over (meeting_not_live), so this ends even if the laptop never gets back online.
+    while (s && s.pending > 0) {
+      setPendingRuns(s.pending);
+      await s.drain(STOP_FLUSH_MAX_MS);
     }
-    window.location.replace(`/meetings/${id}${auto ? "?stoppat=1" : ""}`);
+    setPendingRuns(0);
+    let ok = false;
+    try {
+      const res = await fetch(`/api/meetings/${id}/end`, { method: "POST", signal: AbortSignal.timeout(END_TIMEOUT_MS) });
+      ok = res.ok || res.status === 404;
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      setEndFailed(true);
+      setBusy(false);
+      return;
+    }
+    leaving.current = true;
+    window.location.replace(`/meetings/${id}${auto ? `?stoppat=${stopParam(reason)}` : ""}`);
   }, []);
 
   const onStreamState = useCallback(
     (s: StreamStatus, id: string) => {
       setRefusal(s.state === "error" ? (s.refusal ?? null) : null);
+      setStreamError(s.state === "error" ? (s.error ?? null) : null);
+      setFirstConnect(s.state === "connecting");
       setConnection(s.connection === "ok" && (s.state === "connecting" || s.state === "reconnecting") ? "reconnecting" : s.connection);
       switch (s.state) {
         case "connecting":
@@ -195,19 +244,21 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           }
           if (userStopped.current) return; // onStop posts /end itself
           setAutoStopped(Boolean(s.autoStopped));
+          if (s.stopReason) setLimitReason(s.stopReason);
           setBusy(true);
-          void endOnServer(id, Boolean(s.autoStopped));
+          void endOnServer(id, Boolean(s.autoStopped), s.stopReason);
           return;
         case "error":
           if (s.error === "limit" || s.error === "not_live") {
             // A cap or the meeting ended elsewhere: stop cleanly (posts what we have), then end.
             setAutoStopped(true);
+            if (s.refusal) setLimitReason(s.refusal);
             userStopped.current = true;
             setBusy(true);
             void (async () => {
-              await stream.current?.stop({ autoStopped: true });
+              await stream.current?.stop({ autoStopped: true, ...(s.refusal ? { reason: s.refusal } : {}) });
               capture.current?.stop();
-              await endOnServer(id, true);
+              await endOnServer(id, true, s.refusal);
             })();
             return;
           }
@@ -240,6 +291,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       s.on("partial", setPartial);
       s.on("heartbeat", (h: HeartbeatInfo) => {
         setMinutesLeft(h.minutesLeft ?? null);
+        if (h.reason !== undefined) setLimitReason(h.reason ?? null);
         if (h.docPaused !== undefined) setDocPaused(h.docPaused);
         if (h.lastTickOkAt !== undefined) {
           setLastTickOkAt(h.lastTickOkAt);
@@ -284,7 +336,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         setPhase("consent");
         return;
       }
-      let created: { meetingId: string; docUrl: string; title: string };
+      let created: { meetingId: string; docUrl: string; title: string; shareFailed?: number };
       try {
         const res = await fetch("/api/meetings", {
           method: "POST",
@@ -319,6 +371,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         docPaused: false,
       };
       setMeeting(m);
+      setShareFailed(typeof created.shareFailed === "number" ? created.shareFailed : null);
       // The address becomes the meeting's own, so a reload offers "Fortsätt mötet".
       window.history.replaceState(null, "", `/meetings/${m.id}`);
       nameRoundOpen.current = true;
@@ -385,10 +438,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       setSpeakers(v.speakers);
       setPeople(v.people);
       setCurrentSession(v.currentElSessionId);
-      // The server ran the round on its own (about two minutes in) and every voice has a name:
-      // the list takes over. Otherwise the round stays, so "Klar" can still read late names.
-      const mine = v.speakers.filter((s) => s.elSessionId === v.currentElSessionId);
-      if (nameRoundOpen.current && v.nameRoundDone && mine.length > 0 && mine.every((s) => s.displayName)) closeNameRound();
+      // The server ran the round on its own (about two minutes in): the list takes over, and
+      // voices without a name show there as "Vem är detta?" (C7). Later sessions (the hourly
+      // rollover, reconnects) never reopen the round.
+      if (nameRoundOpen.current && v.nameRoundDone) closeNameRound();
     },
     [closeNameRound],
   );
@@ -475,6 +528,13 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     })();
   };
 
+  /** "Försök igen" after a failed POST /end. */
+  const onRetryEnd = () => {
+    if (!meeting) return;
+    setBusy(true);
+    void endOnServer(meeting.id, autoStopped, limitReason);
+  };
+
   const onEndUnfinished = () => {
     if (!meeting) return;
     setBusy(true);
@@ -491,7 +551,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   // Stale notes: runs reached us > 3 min ago and no notes write since.
   const oldestUnwritten = postedAt.current[0];
   const staleMs = oldestUnwritten ? now - oldestUnwritten : 0;
-  const staleMinutes = phase === "live" && staleMs > STALE_AFTER_MS ? Math.floor(staleMs / 60_000) : null;
+  const staleMinutes = (phase === "live" || phase === "name-round") && staleMs > STALE_AFTER_MS ? Math.floor(staleMs / 60_000) : null;
   const updatedMinutesAgo = lastTickOkAt ? Math.max(0, Math.floor((now - Date.parse(lastTickOkAt)) / 60_000)) : null;
   const startedAt = meeting?.startedAt;
   const elapsedMs =
@@ -503,7 +563,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
 
   const reLogin = () => window.open(`/login?next=/meetings/${meeting?.id ?? ""}`, "_blank", "noopener");
   // Silent failures the status line doesn't cover: say what happened and what to do.
-  const notice: LiveNotice | null = !["live", "paused", "error"].includes(phase)
+  const notice: LiveNotice | null = !["live", "paused", "error", "name-round"].includes(phase)
     ? null
     : refusal === "not_starter"
       ? {
@@ -528,10 +588,22 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         : health.postsFailing
           ? {
               tone: "warning",
-              title: "Transkriptionen når inte fram just nu",
+              title: "Transkriberingen når inte fram just nu",
               text: "Vi försöker igen automatiskt och inget kastas. Stäng inte den här fliken.",
             }
-          : null;
+          : health.quiet && phase !== "paused"
+            ? {
+                tone: "warning",
+                title: "Hör inget ljud sedan 2 min",
+                text: "Kontrollera att mikrofonen inte är avstängd eller täckt och att laptopen står mitt på bordet. Är det bara tyst i rummet kan du strunta i det här.",
+              }
+            : shareFailed && shareFailed > 0
+              ? {
+                  tone: "warning",
+                  title: `${shareFailed === 1 ? "En medlem" : `${shareFailed} medlemmar`} fick inte åtkomst – dela dokumentet manuellt`,
+                  text: "Google lät oss inte dela mötesdokumentet med alla i föreningen. Öppna dokumentet och dela det med dem via Dela-knappen.",
+                }
+              : null;
 
   if (superseded) {
     return (
@@ -572,9 +644,17 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       partialText={partial}
       partialSpeaker={null}
       connection={connection}
+      firstConnect={firstConnect}
       docPaused={docPaused}
       staleMinutes={staleMinutes}
       minutesLeft={minutesLeft}
+      limitReason={limitReason}
+      streamError={streamError}
+      refusal={refusal}
+      shareFailed={shareFailed}
+      pendingRuns={pendingRuns}
+      endFailed={endFailed}
+      onRetryEnd={onRetryEnd}
       speakers={speakers}
       people={people}
       nameRound={nameRound}

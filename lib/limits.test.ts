@@ -32,7 +32,15 @@ describe("decideLimits", () => {
       stop: true,
       reason: "meeting_length",
       remainingSeconds: 0,
+      limit: "meeting_length",
     });
+  });
+
+  it("names the cap behind a warning (C9): the closest one", () => {
+    expect(decideLimits({ ...base, meetingSeconds: 3.8 * 3600 }).limit).toBe("meeting_length");
+    expect(decideLimits({ ...base, orgMonthSeconds: ORG_MONTH_SECONDS - 600 })).toMatchObject({ warn: true, limit: "org_month" });
+    expect(decideLimits({ ...base, globalDaySeconds: 30 * 3600 - 300 })).toMatchObject({ warn: true, limit: "global_day" });
+    expect(decideLimits(base).limit).toBeUndefined();
   });
 
   it("stops at 20 h per org and month", () => {

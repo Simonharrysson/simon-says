@@ -3,6 +3,25 @@
 import { resampleTo16kPcm16, rmsLevel } from "./resample";
 import type { AudioSource } from "./stream";
 
+/** Safari can leave ctx.resume() pending forever after an interruption: give up after this. */
+export const RESUME_TIMEOUT_MS = 5000;
+
+/** Resume an AudioContext, but never wait more than `ms`. True if it is running afterwards. */
+export async function resumeWithin(ctx: Pick<AudioContext, "resume" | "state">, ms = RESUME_TIMEOUT_MS): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((r) => {
+    timer = setTimeout(() => r("timeout"), ms);
+  });
+  try {
+    const result = await Promise.race([ctx.resume().then(() => "resumed" as const), timeout]);
+    return result === "resumed" && ctx.state === "running";
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Settings from the spike: raw room sound, but let the browser level the gain. */
 const CONSTRAINTS: MediaStreamConstraints = {
   audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true, channelCount: 1 },
@@ -15,6 +34,8 @@ export class MicCapture implements AudioSource {
   private opening: Promise<void> | null = null;
   private onChunk: ((pcm: Int16Array) => void) | null = null;
   private onLevel: ((level: number) => void) | null = null;
+  /** Called when the mic track ends or is muted (set by LiveStream). */
+  onProblem: ((why: string) => void) | null = null;
 
   /**
    * Ask for the mic. Call it straight from a click handler: the AudioContext is created and
@@ -36,6 +57,11 @@ export class MicCapture implements AudioSource {
     this.opening = (async () => {
       const media = await navigator.mediaDevices.getUserMedia(CONSTRAINTS);
       this.media = media;
+      // A dead mic (unplugged, taken by another app, OS mute) would otherwise only show as silence.
+      for (const track of media.getAudioTracks()) {
+        track.addEventListener("ended", () => this.media === media && this.onProblem?.("ended"));
+        track.addEventListener("mute", () => this.media === media && this.onProblem?.("muted"));
+      }
       await resumed;
       await ctx.audioWorklet.addModule("/pcm-worklet.js");
       const source = ctx.createMediaStreamSource(media);
@@ -51,7 +77,7 @@ export class MicCapture implements AudioSource {
       source.connect(node);
       node.connect(mute).connect(ctx.destination);
       this.node = node;
-      if (ctx.state === "suspended") await ctx.resume();
+      if (ctx.state === "suspended") await resumeWithin(ctx);
     })().catch((e) => {
       this.stop();
       throw e;
@@ -77,10 +103,8 @@ export class MicCapture implements AudioSource {
    */
   async recover(attempt: number): Promise<void> {
     const ctx = this.ctx;
-    if (attempt <= 1 && ctx && ctx.state !== "closed") {
-      await ctx.resume();
-      return;
-    }
+    // Attempt 1: resume, but a resume Safari leaves hanging (interrupted) falls through to a reopen.
+    if (attempt <= 1 && ctx && ctx.state !== "closed" && (await resumeWithin(ctx))) return;
     const onChunk = this.onChunk;
     const onLevel = this.onLevel;
     this.stop();
