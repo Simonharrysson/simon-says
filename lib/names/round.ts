@@ -186,11 +186,14 @@ export async function runNameRound(
     for (const r of results.values()) {
       let personId = people.find((p) => norm(p.name) === norm(r.name))?.id ?? null;
       if (!personId && !r.needsConfirm) {
-        const { data, error } = await db().from("people").insert({ org_id: meeting.org_id, name: r.name }).select("id, name").single();
-        if (error) console.error(`name round ${meeting.id}: add person: ${error.message}`);
-        else {
-          personId = data.id as string;
-          people.push(data as { id: string; name: string });
+        // One retry: a transient gateway error should not cost the person.
+        for (let attempt = 0; attempt < 2 && !personId; attempt++) {
+          const { data, error } = await db().from("people").insert({ org_id: meeting.org_id, name: r.name }).select("id, name").single();
+          if (error) console.error(`name round ${meeting.id}: add person: ${error.message}`);
+          else {
+            personId = data.id as string;
+            people.push(data as { id: string; name: string });
+          }
         }
       }
       const values = { display_name: r.name, person_id: personId, needs_confirm: r.needsConfirm };
