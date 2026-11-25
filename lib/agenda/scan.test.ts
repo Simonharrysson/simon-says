@@ -317,7 +317,7 @@ describe("scanAgenda: real Doc shapes (R-A5)", () => {
     expect(s.items.map((i) => [i.label, i.kind])).toEqual([
       ["Godkänn dagordning", "list"],
       ["Må-runda", "list"],
-      ["Från förra veckan:", "heading"],
+      ["Från förra veckan", "heading"],
       ["Topic A", "heading"],
       ["Topic B", "heading"],
       ["Övrigt", "heading"],
@@ -356,6 +356,23 @@ describe("scanAgenda: real Doc shapes (R-A5)", () => {
     const s = scan(doc);
     expect(s.items.map((i) => i.label)).toEqual(["Godkänn dagordning", "Må-runda", "Topic A"]);
     expect(s.items[2].humanText).toBe("Punkt ett\nPunkt två");
+  });
+
+  it("a bulleted list restarting after a plain 'Från förra veckan:' item gives its sub-points", () => {
+    const doc = docOf(li("Godkänn dagordning"), li("Må-runda"), p("Från förra veckan:"), li("Lokalen bokad", DOTS), li("Fakturan skickad", DOTS));
+    const s = scan(doc);
+    expect(s.items.map((i) => i.label)).toEqual(["Godkänn dagordning", "Må-runda", "Från förra veckan"]);
+    expect(s.items[2].humanText).toBe("Lokalen bokad\nFakturan skickad");
+  });
+
+  it("a list after a heading item with an unknown glyph type gives sub-points", () => {
+    const missing = docOf(li("Må-runda"), p("2. Topic A", "HEADING_3"), li("Punkt", "kix.unknown"));
+    expect(labels(missing)).toEqual(["Må-runda", "Topic A"]);
+    const bare = docOf(li("Må-runda"), p("2. Topic A", "HEADING_3"), li("Punkt", NUM2));
+    bare.tabs![0].documentTab!.lists![NUM2] = { listProperties: { nestingLevels: [{}] } };
+    expect(parseNotesTab(bare, "t.0").lists?.get(NUM2)).toEqual(["NONE"]);
+    expect(labels(bare)).toEqual(["Må-runda", "Topic A"]);
+    expect(scan(bare).items[1].humanText).toBe("Punkt");
   });
 
   it("H1 'Agenda' followed by a plain 'Agenda:' makes no 'Agenda' item", () => {

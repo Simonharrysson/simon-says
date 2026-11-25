@@ -142,9 +142,11 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
       if (isHeadingStyle(p) || fixedLabels.has(normLabel(line))) return true; // (4) "<fixed label>:"
       return boldOnly && (Boolean(p.bold) || TYPED_ITEM.test(collapse(line)));
     };
-    // (3) Lists first seen before the first non-list item hold items at their lowest level. A list
-    // first seen after it is items only when it starts at level 0 with a numbered glyph (a
-    // restarted numbered list); a bulleted one is the preceding item's sub-points.
+    // (3) Lists first seen before the first non-list item hold items at their lowest level. The
+    // glyph rule, for a list first seen after it: items only when it starts at level 0 and its
+    // level-0 glyph type is known to be numbered (a restarted numbered list). Bulleted OR unknown
+    // (list missing from the tab, or a level with neither glyphType nor glyphSymbol) → sub-points
+    // of the preceding item: a false sub-point only merges two items, a false item splits a block.
     const firstNonList = region.findIndex(nonListItem);
     const boundary = firstNonList >= 0 ? region[firstNonList].start : Infinity;
     const lists = new Map<string, { first: number; minLevel: number }>();
@@ -161,7 +163,7 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
       const l = lists.get(b.listId)!;
       if (l.first < boundary) return b.level === earlyMin;
       const glyph = listGlyph(tab, b.listId, 0);
-      return l.minLevel === 0 && b.level === 0 && (glyph === null || isNumberedGlyph(glyph));
+      return l.minLevel === 0 && b.level === 0 && isNumberedGlyph(glyph);
     };
     const isItem = (p: Paragraph) => candidate(p) && (paraBullet(p) ? isListItem(p) : nonListItem(p));
 
@@ -174,7 +176,9 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
     for (const p of region) {
       if (isItem(p)) {
         close(p.start);
-        const label = itemLabel(paraLine(p));
+        let label = itemLabel(paraLine(p));
+        // A plain "<fixed label>:" item is labelled exactly as the profile's fixed item.
+        if (!paraBullet(p) && fixedLabels.has(normLabel(label))) label = label.replace(/:\s*$/, "");
         // (2) A heading repeating an earlier item's label continues that item.
         const earlier = paraBullet(p) ? undefined : recs.find((r) => normLabel(r.item.label) === normLabel(label));
         if (earlier) {
