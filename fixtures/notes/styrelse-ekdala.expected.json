@@ -48,7 +48,7 @@
       {
         "key": "ag-7",
         "label": "Föregående protokoll",
-        "role": "followup"
+        "role": "other"
       },
       {
         "key": "ag-8",
@@ -97,29 +97,14 @@
       "role": "Eventansvarig"
     }
   ],
-  "carried": [
-    {
-      "id": "c1",
-      "owner": "Oskar Berglund",
-      "text": "Begära offert på nya nät till bana 1–4",
-      "done": true
-    },
-    {
-      "id": "c2",
-      "owner": "Sam Carter",
-      "text": "Uppdatera kontaktsidan på hemsidan",
-      "done": false
-    }
-  ],
   "traps": [
     "Decisions are rendered 'Beslut: <sentence>': the sentence must not say 'Styrelsen beslutade att …' again (ledger F7).",
     "Procedural items (ordförande, sekreterare, justerare, dagordning, behörigen utlyst, föregående protokoll) each get their own decision under their own §.",
     "The hall first offered twelve hours a week; only the agreed fourteen hours is the decision.",
     "Elin's payment reminders are hedged ('kanske', 'inga löften'): not a task.",
     "Klubbtröjorna are explicitly postponed to the next meeting: not a decision, not a task.",
-    "Sam's contact page is last meeting's c2, not done: no new task, c2 stays open.",
     "Elin's remark about the parking is a note under Övriga frågor, not a task.",
-    "Föregående protokoll is the followup item: nothing may be added there, so its approval has no expected decision (scored nowhere; see the C2 report)."
+    "Föregående protokoll is an 'other' item in Styrelseprotokoll (Ruling R-C1): its approval is a decision under its own §. There is no Från förra veckan pre-fill in this format, so last meeting's two tasks are only talked about (the net offer arrived; Sam's contact page is still open) and nothing is carried."
   ],
   "must_not": [
     {
@@ -250,6 +235,16 @@
         [
           "utlys*",
           "utlyst*"
+        ]
+      ]
+    },
+    {
+      "key": "D6",
+      "text": "Att godkänna föregående protokoll och lägga det till handlingarna.",
+      "anchor": "ag-7",
+      "match": [
+        [
+          "*protokoll*"
         ]
       ]
     },

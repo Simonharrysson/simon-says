@@ -25,6 +25,17 @@ describe("standard formats", () => {
     expect(STYRELSEPROTOKOLL.tone).toBe("full-sentences");
     expect(STYRELSEPROTOKOLL.requiredItems).toEqual([]);
   });
+
+  it("Styrelseprotokoll: Föregående protokoll is an 'other' item (R-C1), so the format has no followup item", () => {
+    expect(STYRELSEPROTOKOLL.fixedAgendaItems.find((i) => i.key === "previous")).toEqual({
+      key: "previous",
+      label: "Föregående protokoll",
+      role: "other",
+    });
+    expect(STYRELSEPROTOKOLL.fixedAgendaItems.some((i) => i.role === "followup")).toBe(false);
+    // Veckomöte keeps its Från förra veckan.
+    expect(VECKOMOTE.fixedAgendaItems.find((i) => i.key === "followup")?.role).toBe("followup");
+  });
 });
 
 describe("FormatProfileSchema", () => {

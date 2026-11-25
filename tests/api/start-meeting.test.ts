@@ -856,6 +856,6 @@ describe("POST /api/meetings: required items (stadgar, C2)", () => {
     const roles = m.anchorAgenda.mock.calls[0][1].roles;
     expect(roles).toEqual(rolesFromSkeleton(profile));
     expect(Object.keys(roles)).toHaveLength(10);
-    expect(roles["ag-7"]).toBe("followup");
+    expect(roles["ag-7"]).toBe("other");
   });
 });

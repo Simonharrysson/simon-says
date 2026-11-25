@@ -84,7 +84,7 @@ describe("rolesFromSkeleton", () => {
     });
     const styrelse = rolesFromSkeleton(STYRELSEPROTOKOLL);
     expect(Object.keys(styrelse)).toHaveLength(9);
-    expect(styrelse["ag-6"]).toBe("followup");
+    expect(styrelse["ag-6"]).toBe("other");
     expect(styrelse["ag-7"]).toBe("topic");
     expect(styrelse["ag-8"]).toBe("other");
     expect(styrelse["ag-9"]).toBe("procedural");
@@ -151,7 +151,7 @@ describe("mergeRequiredItems (stadgar, Phase C)", () => {
     const roles = rolesFromSkeleton(withRequired);
     expect(Object.keys(roles)).toHaveLength(10);
     expect(roles["ag-6"]).toBe("procedural");
-    expect(roles["ag-7"]).toBe("followup");
+    expect(roles["ag-7"]).toBe("other");
     expect(roles["ag-8"]).toBe("topic");
     expect(roles["ag-10"]).toBe("procedural");
   });

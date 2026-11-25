@@ -36,7 +36,10 @@ export const STYRELSEPROTOKOLL: FormatProfile = {
     { key: "secretary", label: "Val av mötessekreterare", role: "procedural" },
     { key: "adjuster", label: "Val av justerare", role: "procedural" },
     { key: "approve", label: "Godkännande av dagordning", role: "procedural" },
-    { key: "previous", label: "Föregående protokoll", role: "followup" },
+    // Ruling R-C1: "other", not "followup", so the approval of the previous minutes ("Beslut: Att
+    // godkänna föregående protokoll …") can sit under its §. No followup item: no Från förra
+    // veckan pre-fill in this format.
+    { key: "previous", label: "Föregående protokoll", role: "other" },
     { key: "other", label: "Övriga frågor", role: "other", position: "last" },
     { key: "close", label: "Mötets avslutande", role: "procedural", position: "last" },
   ],

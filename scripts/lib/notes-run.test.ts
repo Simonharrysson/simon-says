@@ -100,7 +100,9 @@ describe("styrelse-ekdala (C2): the replay runs as a Styrelseprotokoll", () => {
     const tail = f.notes[0].at(-1)!;
     expect(tail).toContain("Format: Styrelseprotokoll");
     expect(tail).toContain("§-numbered board minutes");
-    expect(r.items.filter((i) => i.carried).map((i) => i.id)).toEqual(["c1", "c2"]);
+    // No followup item in Styrelseprotokoll (R-C1): nothing carried.
+    expect(r.items.filter((i) => i.carried)).toEqual([]);
+    expect(tail).toContain("Föregående protokoll · other");
   });
 
   it("decisions render once as 'Beslut: <sentence>'", () => {

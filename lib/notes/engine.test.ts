@@ -17,6 +17,8 @@ import {
   type UpdateNotesInput,
 } from "@/lib/notes/engine";
 import { formatItem } from "@/lib/docs/notes";
+import { rolesFromSkeleton, skeletonBlocks } from "@/lib/formats/skeleton";
+import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
 import { SYSTEM_PROMPT, tailText } from "@/lib/notes/prompt";
 import { AGENDA_OPS_JSON_SCHEMA, OPS_JSON_SCHEMA, toAgendaOp, type NotesItem, type NotesOp } from "@/lib/notes/schema";
 import { AGENDA_SYSTEM_PROMPT, agendaTailText, PARAGRAPH_FORMAT_NOTE, type AgendaContext } from "@/lib/notes/agenda-prompt";
@@ -604,6 +606,26 @@ describe("agenda mode: §-numbered board minutes (C2)", () => {
     // Never asks for the stacked form "Beslut: Styrelsen beslutade att …".
     expect(PARAGRAPH_FORMAT_NOTE).not.toMatch(/(as|like|write)[^.]*'Styrelsen beslutade att/);
     expect(PARAGRAPH_FORMAT_NOTE).toContain("Never start it with 'Styrelsen beslutade att'");
+  });
+
+  it("applyOps accepts a decision under Föregående protokoll (role other, R-C1); a followup item still refuses it", () => {
+    const roles = rolesFromSkeleton(STYRELSEPROTOKOLL);
+    const labels = skeletonBlocks(STYRELSEPROTOKOLL).filter((b) => b.type === "item").map((b) => (b as { text: string }).text);
+    const ctx: AgendaContext = {
+      ...agenda,
+      formatName: "Styrelseprotokoll",
+      numbering: "paragraph",
+      anchors: Object.entries(roles).map(([key, role], i) => ({ key, label: labels[i].replace(/^§\d+ /, ""), role, humanText: "" })),
+    };
+    const previous = ctx.anchors.find((a) => a.label === "Föregående protokoll")!;
+    expect(previous.role).toBe("other");
+    const op: NotesOp = { op: "add", item: { id: "n1", section: "decision", text: "Att godkänna föregående protokoll och lägga det till handlingarna", anchor: previous.key } };
+    const out = applyOps([], [op], { nextId: "n1", agenda: { anchors: anchorRoles(ctx) } });
+    expect(out.dropped).toBe(0);
+    expect(out.ops).toHaveLength(1);
+    // Veckomöte unchanged: the same add under its followup item is dropped.
+    const veck = applyOps([], [{ ...op, item: { ...op.item, anchor: "ag-3" } } as NotesOp], { nextId: "n1", agenda: { anchors: anchorRoles(agenda) } });
+    expect(veck.dropped).toBe(1);
   });
 
   it("any other numbering leaves the tail byte-identical", () => {
