@@ -378,8 +378,15 @@ const errorText = (e: unknown) => {
  * come (not due yet): the caller holds back the transcript append for this tick.
  */
 async function nameRounds(meeting: MeetingRow, deps: TickDeps, final: boolean, deadlineAt?: Date): Promise<boolean> {
+  let pending: Awaited<ReturnType<typeof pendingNameRounds>>;
+  try {
+    pending = await pendingNameRounds(meeting.id, deps.now());
+  } catch (e) {
+    console.error(`tick ${meeting.id}: name rounds: ${errorText(e)}`);
+    return false; // never block the tick (or hold the transcript) over the name round
+  }
   let hold = false;
-  for (const p of await pendingNameRounds(meeting.id, deps.now())) {
+  for (const p of pending) {
     if (!p.due && !final) {
       hold = true;
       continue;

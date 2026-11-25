@@ -188,6 +188,14 @@ export async function runNameRound(
       if (!personId && !r.needsConfirm) {
         // One retry: a transient gateway error should not cost the person.
         for (let attempt = 0; attempt < 2 && !personId; attempt++) {
+          if (attempt > 0) {
+            // The first insert may have landed with only its answer lost: look before adding again.
+            const { data: again } = await db().from("people").select("id, name").eq("org_id", meeting.org_id).eq("name", r.name).limit(1);
+            if (again?.[0]) {
+              personId = again[0].id as string;
+              break;
+            }
+          }
           const { data, error } = await db().from("people").insert({ org_id: meeting.org_id, name: r.name }).select("id, name").single();
           if (error) console.error(`name round ${meeting.id}: add person: ${error.message}`);
           else {

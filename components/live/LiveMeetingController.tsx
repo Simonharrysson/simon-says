@@ -385,8 +385,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       setSpeakers(v.speakers);
       setPeople(v.people);
       setCurrentSession(v.currentElSessionId);
-      // The server ran the round on its own (about two minutes in): the list takes over.
-      if (nameRoundOpen.current && v.nameRoundDone) closeNameRound();
+      // The server ran the round on its own (about two minutes in) and every voice has a name:
+      // the list takes over. Otherwise the round stays, so "Klar" can still read late names.
+      const mine = v.speakers.filter((s) => s.elSessionId === v.currentElSessionId);
+      if (nameRoundOpen.current && v.nameRoundDone && mine.length > 0 && mine.every((s) => s.displayName)) closeNameRound();
     },
     [closeNameRound],
   );
