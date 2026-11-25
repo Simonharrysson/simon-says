@@ -208,6 +208,16 @@ describe("POST /api/meetings/test, mode agenda (A13)", () => {
     expect(m.startMeeting).not.toHaveBeenCalled();
   });
 
+  it("a DB error in testRun gives the Swedish error shape (502), and no Doc", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.testRun.mockRejectedValueOnce(new Error("testRun: db"));
+    const res = await call({ orgId: ORG, mode: "agenda" });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "doc_failed", message: expect.stringContaining("Försök igen") });
+    expect(m.createTestAgendaDoc).not.toHaveBeenCalled();
+    expect(m.startMeeting).not.toHaveBeenCalled();
+  });
+
   it("the kill switch and admin checks come first", async () => {
     m.killSwitch = true;
     expect((await call({ orgId: ORG, mode: "agenda" })).status).toBe(503);

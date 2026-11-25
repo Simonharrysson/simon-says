@@ -94,10 +94,11 @@ async function startAgendaTest(
     console.error(`test meeting: google auth: ${(err as Error).message}`);
     return { response: fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.") };
   }
-  // Before the new meeting exists: only finished agenda Testmöten count.
-  const run = await testRun(orgId);
+  let run: "a" | "b";
   let docId: string;
   try {
+    // Before the new meeting exists: only finished agenda Testmöten count.
+    run = await testRun(orgId);
     ({ docId } = await createTestAgendaDoc(auth, { orgName: org.name, folderId: org.meeting_folder_id ?? null, startedAt: new Date() }));
   } catch (err) {
     console.error(`test meeting: agenda doc: ${(err as Error).message}`);

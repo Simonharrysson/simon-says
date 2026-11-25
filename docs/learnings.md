@@ -390,5 +390,9 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - **Drive 403s.** `checkAgendaDoc` maps a 403 to "pick it again" only for access reasons (forbidden, notFound,
   insufficient(File)Permissions, appNotAuthorizedToFile, or no reason); a rate-limit 403 (`userRateLimitExceeded`,
   `rateLimitExceeded`) or any other reason goes to `google_unavailable` ("try again").
+- **Testmöte med dagordning (A13).** The fictional test agenda Doc goes into the org meeting folder when the starter's
+  grant can write there, so it inherits the folder's sharing: the förening's members can see the fictional test Doc
+  (Ekdala Padelklubb). We add no permissions ourselves. Its title ends "(Testmöte)" and `listCandidates` skips such
+  titles, so an orphaned one is never offered as a real meeting's agenda.
 - **Vitest trap.** `beforeEach(() => m.fn.mockReset())` returns the mock, which vitest runs as a teardown after each test: a
   mock left rejecting then fails the test with its own error. Use a block body.

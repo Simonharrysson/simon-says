@@ -116,6 +116,27 @@ describe("createTestAgendaDoc", () => {
   });
 });
 
+describe("createTestAgendaDoc failures", () => {
+  it("trashes the new file and rethrows when a step after the create fails", async () => {
+    g.batchUpdate.mockRejectedValueOnce(new Error("docs down"));
+    await expect(createTestAgendaDoc(auth, { orgName: "X", folderId: null, startedAt })).rejects.toThrow("docs down");
+    expect(g.filesUpdate).toHaveBeenCalledWith({ fileId: "tdoc", requestBody: { trashed: true }, supportsAllDrives: true });
+  });
+
+  it("still rethrows the original error when the trash fails too", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    g.get.mockRejectedValueOnce(new Error("read failed"));
+    g.filesUpdate.mockRejectedValueOnce(new Error("trash failed"));
+    await expect(createTestAgendaDoc(auth, { orgName: "X", folderId: null, startedAt })).rejects.toThrow("read failed");
+  });
+
+  it("no trash when the create itself fails (no file)", async () => {
+    g.filesCreate.mockRejectedValueOnce(new Error("drive down"));
+    await expect(createTestAgendaDoc(auth, { orgName: "X", folderId: null, startedAt })).rejects.toThrow("drive down");
+    expect(g.filesUpdate).not.toHaveBeenCalled();
+  });
+});
+
 describe("trashTestDoc", () => {
   it("moves the Doc to the trash", async () => {
     await trashTestDoc(auth, "tdoc");

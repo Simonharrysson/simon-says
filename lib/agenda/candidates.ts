@@ -83,9 +83,12 @@ const reasonOf = (err: unknown): string | null => {
 /** 403 reasons that mean "this grant can't see the folder" (as lib/agenda/access.ts). */
 const NO_ACCESS = new Set(["forbidden", "notFound", "insufficientPermissions", "insufficientFilePermissions", "appNotAuthorizedToFile"]);
 
+/** Titles of the fictional agenda Testmöte Docs (lib/testmeeting/agenda.ts): never a candidate. */
+export const TEST_DOC_SUFFIX = "(Testmöte)";
+
 /**
- * The folder's Google Docs modified in the last 7 days, minus Docs already used by a meeting,
- * ranked. A folder this grant cannot see (drive.file: never picked by this user) is
+ * The folder's Google Docs modified in the last 7 days, minus Docs already used by a meeting and
+ * test agenda Docs (an orphaned one must never be offered for a real meeting), ranked. A folder this grant cannot see (drive.file: never picked by this user) is
  * `accessible: false`; any other Drive error is thrown.
  */
 export async function listCandidates(
@@ -116,7 +119,7 @@ export async function listCandidates(
     includeItemsFromAllDrives: true,
   });
   const files = (res.data.files ?? [])
-    .filter((f) => f.id && !usedDocIds.has(f.id))
+    .filter((f) => f.id && !usedDocIds.has(f.id) && !(f.name ?? "").trim().endsWith(TEST_DOC_SUFFIX))
     .map((f) => ({
       id: f.id!,
       name: f.name ?? "",

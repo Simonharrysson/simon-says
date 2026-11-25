@@ -132,6 +132,19 @@ describe("listCandidates", () => {
     expect(params.pageSize).toBe(50);
   });
 
+  it("never offers a test agenda Doc ('… (Testmöte)'), e.g. an orphaned one", async () => {
+    drive.get.mockResolvedValue({ data: { id: "folder123456" } });
+    drive.list.mockResolvedValue({
+      data: {
+        files: [
+          file("t1", "Mötesprotokoll 2026-11-25 (Testmöte)", daysAgo(0), daysAgo(0)),
+          file("b", "Möte 25/11", daysAgo(3), daysAgo(3)),
+        ],
+      },
+    });
+    expect((await listCandidates(auth, "folder123456", new Set(), NOW)).candidates.map((f) => f.id)).toEqual(["b"]);
+  });
+
   it("refuses a folder id that is not a Drive id (it goes into the query)", async () => {
     await expect(listCandidates(auth, "x' or '1'='1", new Set(), NOW)).rejects.toThrow(/folder id/);
     expect(drive.get).not.toHaveBeenCalled();
