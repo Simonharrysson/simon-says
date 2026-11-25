@@ -49,6 +49,26 @@ describe("checkAgendaDoc", () => {
     expect(await checkAgendaDoc(auth, "d1")).toEqual({ ok: false, error: "not_found" });
   });
 
+  it("a 403 for lack of access is not_found; a 403 rate limit (or unknown reason) is thrown", async () => {
+    const e403 = (reason: string, where: "errors" | "response") =>
+      Object.assign(
+        new Error(reason),
+        where === "errors"
+          ? { code: 403, errors: [{ reason }] }
+          : { response: { status: 403, data: { error: { errors: [{ reason }] } } } },
+      );
+    m.get.mockRejectedValue(e403("insufficientFilePermissions", "errors"));
+    expect(await checkAgendaDoc(auth, "d1")).toEqual({ ok: false, error: "not_found" });
+    m.get.mockRejectedValue(e403("appNotAuthorizedToFile", "response"));
+    expect(await checkAgendaDoc(auth, "d1")).toEqual({ ok: false, error: "not_found" });
+    for (const reason of ["userRateLimitExceeded", "rateLimitExceeded", "dailyLimitExceeded"]) {
+      m.get.mockRejectedValue(e403(reason, "errors"));
+      await expect(checkAgendaDoc(auth, "d1")).rejects.toThrow(reason);
+      m.get.mockRejectedValue(e403(reason, "response"));
+      await expect(checkAgendaDoc(auth, "d1")).rejects.toThrow(reason);
+    }
+  });
+
   it("other Drive errors are thrown", async () => {
     m.get.mockRejectedValue(Object.assign(new Error("backend"), { code: 500 }));
     await expect(checkAgendaDoc(auth, "d1")).rejects.toThrow("backend");

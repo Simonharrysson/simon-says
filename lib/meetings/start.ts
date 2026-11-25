@@ -169,23 +169,11 @@ export async function startMeeting(
   const ctx: SetupCtx = { auth, meetingId, startedAt, orgId, orgName: org.name, user };
 
   const setup = agendaMode
-    ? // The tab only when the org shares transcripts at all AND the starter said yes (answer 8: default no).
-      await agendaSetup(ctx, opts.agendaDocId!, format.profile, org.share_transcript && opts.transcriptInDoc === true)
+    ? await agendaSetup(ctx, opts.agendaDocId!, format.profile)
     : format.profile.kind === "enkel"
       ? await v1Setup(ctx, org.share_transcript)
       : await formatSetup(ctx, format.profile, org.share_transcript);
   if ("ok" in setup) return setup;
-
-  // Every check passed: only now may the standard format row be created (override, Testmöte).
-  let formatProfileId = format.id;
-  if (format.ensureKind) {
-    try {
-      formatProfileId = await ensureStandardRow(orgId, format.ensureKind);
-    } catch (err) {
-      console.error(`meetings: format row failed (Doc ${setup.docId} left in Drive): ${(err as Error).message}`);
-      return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
-    }
-  }
 
   const anchor = setup.anchor;
   const agendaRoles: Record<string, ItemRole> = anchor?.agendaRoles ?? {};
@@ -211,7 +199,8 @@ export async function startMeeting(
       started_at: startedAt.toISOString(),
       agenda_doc: agendaMode,
       layout,
-      format_profile_id: formatProfileId,
+      // A standard row for `formatKind` is ensured after the guard (no write for a refused start).
+      format_profile_id: format.id,
       is_test: isTest,
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
@@ -232,12 +221,41 @@ export async function startMeeting(
   if (guard === "starter_busy") return startBusy();
   if (guard === "start_rate") return startRate();
 
+  // The start stands. Only now the remaining writes: the standard format row and the Transkript tab.
+  const admin = supabaseAdmin();
+  if (format.ensureKind) {
+    try {
+      const formatProfileId = await ensureStandardRow(orgId, format.ensureKind);
+      const { error } = await admin.from("meetings").update({ format_profile_id: formatProfileId }).eq("id", meetingId);
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      // Never run a meeting under the wrong format (profileFor would read Enkel): undo the start.
+      console.error(`meetings: format row failed (Doc ${setup.docId} left in Drive): ${(err as Error).message}`);
+      const { error } = await admin.from("meetings").delete().eq("id", meetingId);
+      if (error) console.error(`meetings ${meetingId}: undo after format row failure: ${error.message}`);
+      return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
+    }
+  }
+  let transcriptTabId = setup.transcriptTabId;
+  // Agenda mode: the tab only when the org shares transcripts at all AND the starter said yes
+  // (answer 8: default no). Soft: the transcript is kept in our DB either way.
+  if (agendaMode && org.share_transcript && opts.transcriptInDoc === true) {
+    try {
+      const tabId = await addTranscriptTab(auth, setup.docId);
+      const { error } = await admin.from("meetings").update({ transcript_tab_id: tabId }).eq("id", meetingId);
+      if (error) throw new Error(`save tab id: ${error.message}`);
+      transcriptTabId = tabId;
+    } catch (err) {
+      console.error(`meetings ${meetingId}: transcript tab failed: ${(err as Error).message}`);
+    }
+  }
+
   const log = (kind: MeetingEventKind, detail: Record<string, unknown>) =>
     logEvent(meetingId, kind, detail).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
   await log(eventKind, {
     by: user.id,
     shareFailed: setup.shareFailed,
-    transcriptTab: setup.transcriptTabId !== null,
+    transcriptTab: transcriptTabId !== null,
     agenda: agendaMode,
     layout,
   });
@@ -335,13 +353,8 @@ async function otherMembers(ctx: SetupCtx): Promise<string[]> {
   return (await memberEmails(ctx.orgId)).filter((e) => e.toLowerCase() !== (ctx.user.email ?? "").toLowerCase());
 }
 
-/** Agenda mode: the checks (no writes), then the anchoring. Their Doc: never shared by us. */
-async function agendaSetup(
-  ctx: SetupCtx,
-  docId: string,
-  profile: FormatProfile,
-  transcriptInDoc: boolean,
-): Promise<DocSetup | Failure> {
+/** Agenda mode: the checks (no writes), then the anchoring (the only Doc write before the guard, F14). Their Doc: never shared by us. */
+async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile): Promise<DocSetup | Failure> {
   let access;
   try {
     access = await checkAgendaDoc(ctx.auth, docId);
@@ -374,20 +387,11 @@ async function agendaSetup(
     return failed("doc_failed", 502, "Vi kunde inte förbereda dokumentet. Försök igen om en liten stund.");
   }
 
-  let transcriptTabId: string | null = null;
-  if (transcriptInDoc) {
-    try {
-      transcriptTabId = await addTranscriptTab(ctx.auth, docId);
-    } catch (err) {
-      // The transcript is kept in our DB either way: the meeting goes on without the tab.
-      console.error(`meetings: transcript tab failed: ${(err as Error).message}`);
-    }
-  }
-
   return {
     docId,
     notesTabId: anchor.tabId,
-    transcriptTabId,
+    // A Transkript tab, if wanted, is added after the start guard.
+    transcriptTabId: null,
     headerRange: anchor.headerRange,
     headerRendered: anchor.headerRendered,
     sectionRanges: anchor.sectionRanges,
@@ -526,13 +530,14 @@ async function prefill(input: {
   if (insertError) throw new Error(`prefill: insert: ${insertError.message}`);
   if (!carried.length) return 0;
 
+  let rendered = false;
   try {
-    await renderCarried(auth, meeting as MeetingRow, rows, carried, profile, people, groupBy);
+    rendered = await renderCarried(auth, meeting as MeetingRow, rows, carried, profile, people, groupBy);
   } catch (err) {
     // Saved but unrendered (range_name null): the first tick renders them like any new item.
     console.error(`meetings ${meeting.id}: pre-fill render failed: ${(err as Error).message}`);
   }
-  await input.log("followup_prefilled", { count: carried.length });
+  await input.log("followup_prefilled", { count: carried.length, rendered });
   return carried.length;
 }
 
@@ -544,7 +549,7 @@ async function renderCarried(
   profile: FormatProfile,
   people: RolePerson[],
   groupBy: "role" | "person",
-): Promise<void> {
+): Promise<boolean> {
   const carriedIds = new Set(carried.map((r) => r.id));
   const format = {
     plan: planFormatRender,
@@ -557,7 +562,7 @@ async function renderCarried(
     const tab = await readNotesTab(auth, meeting.doc_id, meeting.notes_tab_id);
     const res = await renderItems(auth, meeting, rows, rows.map(toNotesItem), tab.revisionId, undefined, format);
     if (res.status === "conflict") continue;
-    if (res.status !== "ok") return;
+    if (res.status !== "ok") return false;
     const db = supabaseAdmin();
     for (const r of res.rows) {
       if (!carriedIds.has(r.id) || !r.range_name) continue;
@@ -568,9 +573,10 @@ async function renderCarried(
         .eq("id", r.id);
       if (error) throw new Error(`prefill: update ${r.id}: ${error.message}`);
     }
-    return;
+    return true;
   }
   console.warn(`meetings ${meeting.id}: pre-fill render kept conflicting; the first tick renders it`);
+  return false;
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -39,6 +39,7 @@ const m = vi.hoisted(() => ({
   people: [] as { id: string; name: string; role: string | null; org_id: string }[],
   noteRows: [] as Record<string, unknown>[],
   noteInsert: vi.fn(),
+  meetingUpdate: vi.fn(),
   noteUpdate: vi.fn(),
   profileInsert: vi.fn(),
   queries: [] as Query[],
@@ -53,6 +54,7 @@ async function adminAnswer(q: Query): Promise<{ data: unknown; error: null }> {
   const ok = (data: unknown) => ({ data, error: null });
   if (q.table === "meetings") {
     if (q.op === "insert") return m.insert(q.payload);
+    if (q.op === "update") return (m.meetingUpdate(q.payload, val(q, "id")), ok(null));
     if (q.op === "delete") return (m.del(val(q, "id")), ok(null));
     if (has(q, "eq", "doc_id")) {
       const statuses = val(q, "status") as string[];
@@ -194,6 +196,7 @@ beforeEach(() => {
     rows: rows.map((r, i) => ({ ...r, range_name: r.range_name ?? `ss-${meeting.id}-${r.id}`, last_rendered_text: r.last_rendered_text ?? `line ${r.id}`, position: 10 + i })),
   }));
   m.noteInsert.mockReset();
+  m.meetingUpdate.mockReset();
   m.noteUpdate.mockReset();
   m.profileInsert.mockReset().mockReturnValue("std1");
   Object.assign(m, { docMeetings: [], prevMeetings: [], profiles: [], people: [], noteRows: [], queries: [] });
@@ -427,7 +430,25 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     const res = await agendaCall({ transcriptInDoc: true });
     expect(res.status).toBe(200);
     expect(m.addTranscriptTab).toHaveBeenCalledWith({}, AGENDA_DOC);
-    expect(insertedRow().transcript_tab_id).toBe("t.tr");
+    // Added after the guard, then saved with a plain update.
+    expect(insertedRow().transcript_tab_id).toBeNull();
+    expect(m.meetingUpdate).toHaveBeenCalledWith({ transcript_tab_id: "t.tr" }, insertedRow().id);
+    expect(eventsOf("started")[0][2]).toMatchObject({ transcriptTab: true });
+  });
+
+  it("the Transkript tab is added only after the guard: a refused start never touches it", async () => {
+    m.guard.mockResolvedValue({ data: "starter_busy", error: null });
+    expect((await agendaCall({ transcriptInDoc: true })).status).toBe(409);
+    expect(m.addTranscriptTab).not.toHaveBeenCalled();
+    expect(m.meetingUpdate).not.toHaveBeenCalled();
+  });
+
+  it("a failing Transkript tab never fails the start", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.addTranscriptTab.mockRejectedValue(new Error("docs down"));
+    expect((await agendaCall({ transcriptInDoc: true })).status).toBe(200);
+    expect(m.meetingUpdate).not.toHaveBeenCalled();
+    expect(eventsOf("started")[0][2]).toMatchObject({ transcriptTab: false });
   });
 
   it("no Transkript tab in the agenda Doc when the org does not share transcripts, even if asked", async () => {
@@ -435,6 +456,7 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect((await agendaCall({ transcriptInDoc: true })).status).toBe(200);
     expect(m.addTranscriptTab).not.toHaveBeenCalled();
     expect(insertedRow().transcript_tab_id).toBeNull();
+    expect(m.meetingUpdate).not.toHaveBeenCalled();
   });
 
   it("null options are the same as absent", async () => {
@@ -579,14 +601,33 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     const res = await call({ orgId: ORG, consent: true, formatKind: "veckomote" });
     expect(res.status).toBe(200);
     expect(m.profileInsert).toHaveBeenCalledWith({ org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: false });
-    expect(insertedRow().format_profile_id).toBe("std1");
+    // Inserted without it, set after the guard.
+    expect(insertedRow().format_profile_id).toBeNull();
+    expect(m.meetingUpdate).toHaveBeenCalledWith({ format_profile_id: "std1" }, insertedRow().id);
     // A matching row exists: reused, nothing inserted.
     m.insert.mockClear();
     m.profileInsert.mockClear();
+    m.meetingUpdate.mockClear();
     m.profiles = [{ id: "stdOld", org_id: ORG, kind: "veckomote", profile: JSON.parse(JSON.stringify(VECKOMOTE)), is_default: false }];
     expect((await call({ orgId: ORG, consent: true, formatKind: "veckomote" })).status).toBe(200);
     expect(m.profileInsert).not.toHaveBeenCalled();
-    expect(insertedRow().format_profile_id).toBe("stdOld");
+    expect(m.meetingUpdate).toHaveBeenCalledWith({ format_profile_id: "stdOld" }, insertedRow().id);
+  });
+
+  it("formatKind: a refused start creates no format row; a failing one undoes the start", async () => {
+    m.guard.mockResolvedValue({ data: "start_rate", error: null });
+    expect((await call({ orgId: ORG, consent: true, formatKind: "veckomote" })).status).toBe(429);
+    expect(m.profileInsert).not.toHaveBeenCalled();
+    m.guard.mockResolvedValue({ data: "ok", error: null });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.profileInsert.mockImplementation(() => {
+      throw new Error("db down");
+    });
+    m.del.mockClear();
+    const res = await call({ orgId: ORG, consent: true, formatKind: "veckomote" });
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe("save_failed");
+    expect(m.del).toHaveBeenCalledWith(m.insert.mock.calls.at(-1)![0].id);
   });
 
   it("pre-fills Från förra veckan with the previous done meeting's open tasks (c1, c2)", async () => {
@@ -653,7 +694,7 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(m.noteUpdate.mock.calls[0][0]).toEqual(
       expect.objectContaining({ range_name: expect.stringMatching(/^ss-/), last_rendered_text: expect.any(String), position: expect.any(Number) }),
     );
-    expect(eventsOf("followup_prefilled")[0][2]).toEqual({ count: 2 });
+    expect(eventsOf("followup_prefilled")[0][2]).toEqual({ count: 2, rendered: true });
   });
 
   it("a render conflict is retried; a failing pre-fill never fails the start", async () => {
@@ -670,6 +711,7 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     const res = await agendaCall();
     expect(res.status).toBe(200);
     expect(m.insert).toHaveBeenCalledTimes(1);
+    expect(eventsOf("followup_prefilled").at(-1)![2]).toEqual({ count: 1, rendered: false });
   });
 
   it("a start the guard refuses writes no note rows", async () => {

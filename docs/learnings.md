@@ -361,21 +361,34 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 
 - **Order of a start (F14).** Org checks, `already_live`, the per-starter limits, then the format (read only), Google auth, and
   in agenda mode `checkAgendaDoc` → `agenda_used` (any org's live/ending meeting on that Doc, service role) → `anchorAgenda`
-  (its scan throws `AgendaShapeError` before its batch, so "no items" writes nothing). Only after all of that: the standard
-  format row (`ensureStandardRow`), the optional Transkript tab, the meetings insert, `guard_meeting_start`. No refusal writes
-  to the DB or the Doc.
+  (its scan throws `AgendaShapeError` before its batch, so "no items" writes nothing). Then the meetings insert (with
+  `format_profile_id` null when a standard `formatKind` was asked for) and `guard_meeting_start`. Only after the guard passed:
+  `ensureStandardRow` + an update of `format_profile_id` (on failure the row is deleted and the start answers `save_failed`:
+  a meeting never runs under the wrong format), then the optional Transkript tab + an update of `transcript_tab_id` (soft: a
+  failure is logged, the transcript stays in the DB). No refusal writes to the DB or the Doc; anchoring is the one Doc write
+  before the guard.
 - **Accepted race (F14).** The route-level pre-check runs before anchoring, as in v1, but the atomic check is the guard after
   the insert. When two starts by the same person race (or the hourly limit is hit in between), the guard deletes the losing
   row **after** its Doc was anchored: the förening's agenda Doc keeps our LIVE line, any appended headings, the filled
   Datum/Tid cells and `ss-<lostId>-…` named ranges (invisible). A later meeting on the same Doc reuses the status line and
   rewrites our Tid (A7's idempotent re-anchoring), so the leftovers are harmless; low probability (one person, two starts
   within seconds). Not fixed on purpose: moving the guard before anchoring would need a reserved row and a second cleanup path.
+- **Guard RPC error (pre-existing in v1).** If the `guard_meeting_start` call itself errors after the insert, the start throws
+  (500) but the inserted row stays `live`, and in format layout the Doc is already anchored. The starter then hits
+  `already_live`/`starter_busy` until that meeting is ended; v1 had the same gap with its new Doc.
 - **Från förra veckan at start (answer 3).** After the guard, `info-tid` (from anchoring, with its range) and the carried rows
   (`c1…`, `range_name null`, `meeting_id` set by us) are inserted with a plain service-role insert (no tick lease yet, so not
   `save_note_rows`), rendered with `renderItems(…, { plan: planFormatRender, profile, ownerLabel })` against a fresh read
   (anchoring and the Transkript tab moved the revision), conflicts retried 4×, and only `range_name`, `last_rendered_text`,
   `position` written back. A failure there is logged and the meeting goes on: the first tick renders unrendered rows.
+  The event is `followup_prefilled { count, rendered }` (`rendered: false` = saved but left for the first tick).
 - **Privacy.** `agenda_anchored` logs `{ items, appended, roles }` as counts and `ItemRole` values; the appended labels go
   only into the API response (a learned profile's labels are the förening's text).
+- **Old Testmöten (0026).** `meetings.is_test` came in 0023 with default false; 0026 backfills it from `test_started` events
+  and test ElevenLabs sessions (`backfill_test_meetings()`, service role, idempotent) so a pre-0023 Testmöte is never the
+  "previous meeting" of a real one.
+- **Drive 403s.** `checkAgendaDoc` maps a 403 to "pick it again" only for access reasons (forbidden, notFound,
+  insufficient(File)Permissions, appNotAuthorizedToFile, or no reason); a rate-limit 403 (`userRateLimitExceeded`,
+  `rateLimitExceeded`) or any other reason goes to `google_unavailable` ("try again").
 - **Vitest trap.** `beforeEach(() => m.fn.mockReset())` returns the mock, which vitest runs as a teardown after each test: a
   mock left rejecting then fails the test with its own error. Use a block body.

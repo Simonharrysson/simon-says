@@ -15,6 +15,23 @@ const statusOf = (err: unknown): number => {
   return Number(e?.response?.status ?? e?.status ?? e?.code);
 };
 
+type ApiError = { errors?: { reason?: unknown }[]; response?: { data?: { error?: { errors?: { reason?: unknown }[] } } } };
+/** The first Google API error reason ("rateLimitExceeded", "insufficientFilePermissions", …), if any. */
+const reasonOf = (err: unknown): string | null => {
+  const e = err as ApiError;
+  const r = e?.errors?.[0]?.reason ?? e?.response?.data?.error?.errors?.[0]?.reason;
+  return typeof r === "string" ? r : null;
+};
+
+/** 403 reasons that mean "this grant can't see or use the file": the user picks it again. */
+const NO_ACCESS = new Set([
+  "forbidden",
+  "notFound",
+  "insufficientPermissions",
+  "insufficientFilePermissions",
+  "appNotAuthorizedToFile",
+]);
+
 /**
  * The picked Doc's name when it is a Google Doc the starter can edit. A file the grant cannot see
  * (never picked, deleted, no access) is `not_found`; any other Drive error is thrown.
@@ -30,9 +47,15 @@ export async function checkAgendaDoc(auth: OAuth2Client, docId: string): Promise
       })
     ).data;
   } catch (err) {
-    // 404: not visible to this grant; 403 on a file the user lost access to reads the same to them.
+    // 404: not visible to this grant; a 403 for lack of access reads the same to the user. A 403
+    // for a rate limit (userRateLimitExceeded, rateLimitExceeded) or any other reason is thrown:
+    // the caller says "Google is unavailable, try again".
     const status = statusOf(err);
-    if (status === 404 || status === 403) return { ok: false, error: "not_found" };
+    if (status === 404) return { ok: false, error: "not_found" };
+    if (status === 403) {
+      const reason = reasonOf(err);
+      if (reason === null || NO_ACCESS.has(reason)) return { ok: false, error: "not_found" };
+    }
     throw err;
   }
   if (file.trashed) return { ok: false, error: "trashed" };
