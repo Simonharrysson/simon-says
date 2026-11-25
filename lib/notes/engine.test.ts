@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { APIConnectionTimeoutError, InternalServerError } from "@anthropic-ai/sdk";
 import type { BetaMessage, BetaMessageStreamParams } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import {
+  anchorRoles,
   applyOps,
   buildRequest,
   churn,
@@ -16,7 +18,8 @@ import {
 } from "@/lib/notes/engine";
 import { formatItem } from "@/lib/docs/notes";
 import { SYSTEM_PROMPT, tailText } from "@/lib/notes/prompt";
-import type { NotesItem } from "@/lib/notes/schema";
+import { AGENDA_OPS_JSON_SCHEMA, OPS_JSON_SCHEMA, toAgendaOp, type NotesItem, type NotesOp } from "@/lib/notes/schema";
+import { AGENDA_SYSTEM_PROMPT, agendaTailText, type AgendaContext } from "@/lib/notes/agenda-prompt";
 
 const items: NotesItem[] = [
   { id: "n1", section: "decision", text: "Hackathon 14 mars i Kårhuset" },
@@ -457,5 +460,217 @@ describe("nextItemId", () => {
   it("counts past every used id", () => {
     expect(nextItemId(["n1", "n12", "n3", "header"])).toBe("n13");
     expect(nextItemId([])).toBe("n1");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Agenda mode (meeting formats A8). Fictional people and agenda only.
+
+const agenda: AgendaContext = {
+  formatName: "Veckomöte",
+  decisionPrefix: "Beslut:",
+  groupBy: "role",
+  anchors: [
+    { key: "ag-1", label: "Godkänn dagordning", role: "procedural", humanText: "" },
+    { key: "ag-2", label: "Må-runda", role: "checkin", humanText: "" },
+    { key: "ag-3", label: "Från förra veckan", role: "followup", humanText: "" },
+    { key: "ag-4", label: "Kommande event", role: "topic", humanText: "Höstfesten 14 november" },
+    { key: "ag-5", label: "Ekonomi", role: "topic", humanText: "" },
+    { key: "ag-6", label: "Övrigt", role: "other", humanText: "" },
+    { key: "ag-7", label: "Gammal punkt", role: "topic", humanText: "", gone: true },
+  ],
+  people: [
+    { name: "Anna Berg", role: "Kassör" },
+    { name: "Erik Lund", role: null },
+  ],
+};
+const agendaItems: NotesItem[] = [
+  { id: "n1", section: "note", text: "Lokalen är bokad till höstfesten", anchor: "ag-4" },
+  { id: "c1", section: "action", text: "Mejla klubben om avgiften", owner: "Anna Berg", anchor: "ag-3", carried: true },
+];
+function agendaInput(over: Partial<UpdateNotesInput> = {}): UpdateNotesInput {
+  return {
+    ...input(),
+    speakerNames: { "S1-speaker_0": "Anna Berg", "S1-speaker_1": "Erik Lund" },
+    notesTabText: "Kommande event\nHöstfesten 14 november\n– Lokalen är bokad till höstfesten.\nEgen rad av Erik",
+    items: agendaItems,
+    locked: [],
+    deletedIds: [],
+    agenda,
+    ownLines: ["– Lokalen är bokad till höstfesten."],
+    ...over,
+  };
+}
+const sha = (s: string) => createHash("sha256").update(s).digest("hex");
+
+describe("v1 prompt and schema stay byte-identical", () => {
+  it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as before agenda mode", () => {
+    expect(sha(SYSTEM_PROMPT)).toBe("e1655d97ddcffb60fd9ec54f19e932d76c83202bc0a682189284484dfb0d3799");
+    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("4dc1cc2bdd258b174de989dfa889455e36fc8bb31b49a5c50326eea218079096");
+  });
+
+  it("a v1 input still uses them", () => {
+    const body = buildRequest(input());
+    expect(body.system).toBe(SYSTEM_PROMPT);
+    expect(body.output_config?.format?.schema).toBe(OPS_JSON_SCHEMA);
+    const tail = (body.messages[0].content as { text: string }[]).at(-1)!.text;
+    expect(tail).not.toContain("<agenda>");
+  });
+});
+
+describe("agenda mode: request", () => {
+  it("uses the agenda prompt, schema and tail", () => {
+    const body = buildRequest(agendaInput());
+    expect(body.system).toBe(AGENDA_SYSTEM_PROMPT);
+    expect(body.output_config?.format?.schema).toBe(AGENDA_OPS_JSON_SCHEMA);
+    expect(body.output_config?.effort).toBe("medium");
+    const content = body.messages[0].content as { text: string; cache_control?: unknown }[];
+    expect(content[1].cache_control).toEqual({ type: "ephemeral" });
+    const tail = content.at(-1)!.text;
+    expect(tail).toContain("ag-2 · Må-runda · checkin");
+    expect(tail).toContain("ag-7 · Gammal punkt · topic · gone");
+    expect(tail).toContain("Anna Berg (Kassör)");
+    expect(tail).toContain("Erik Lund\n");
+    expect(tail).toContain("Beslut:");
+    expect(tail).toContain("Höstfesten 14 november");
+    expect(tail).toContain('"id":"c1"');
+    expect(tail).toContain('"carried":true');
+    expect(tail).toContain('"anchor":"ag-4"');
+  });
+
+  it("the agenda system prompt is frozen: nothing per meeting in it", () => {
+    for (const s of ["Veckomöte", "Anna Berg", "Kommande event", "Höstfesten"]) expect(AGENDA_SYSTEM_PROMPT).not.toContain(s);
+    expect(buildRequest(agendaInput({ agenda: { ...agenda, formatName: "Annat" } })).system).toBe(AGENDA_SYSTEM_PROMPT);
+    for (const s of ["[Må-runda — utelämnad]", "checkin", "followup", '"done": true', "notes", "human_text", "FINAL"]) {
+      expect(AGENDA_SYSTEM_PROMPT).toContain(s);
+    }
+  });
+
+  it("Claude's own lines are not shown back to it as human text (ownLines, not formatItem)", () => {
+    const tail = (buildRequest(agendaInput()).messages[0].content as { text: string }[]).at(-1)!.text;
+    const tab = tail.slice(tail.indexOf("<notes_tab_text"), tail.indexOf("</notes_tab_text>"));
+    expect(tab).not.toContain("Lokalen är bokad");
+    expect(tab).toContain("Egen rad av Erik");
+    expect(tab).toContain("Höstfesten 14 november");
+    // Without ownLines the same line would be shown as if a person wrote it.
+    const leaky = (buildRequest(agendaInput({ ownLines: undefined })).messages[0].content as { text: string }[]).at(-1)!.text;
+    expect(leaky.slice(leaky.indexOf("<notes_tab_text"))).toContain("– Lokalen är bokad");
+  });
+
+  it("human text per item is truncated to 1 500 chars", () => {
+    const long = "x".repeat(4000);
+    const ctx = { ...agenda, anchors: [{ key: "ag-1", label: "Ekonomi", role: "topic" as const, humanText: long }] };
+    const tail = agendaTailText({
+      orgName: "Kodklubben",
+      speakerNames: {},
+      notesTabText: "",
+      items: [],
+      locked: [],
+      deletedIds: [],
+      nextId: "n1",
+      final: false,
+      agenda: ctx,
+    });
+    expect(tail).toContain("x".repeat(1500));
+    expect(tail).not.toContain("x".repeat(1501));
+  });
+});
+
+describe("agenda mode: applyOps", () => {
+  const anchors = anchorRoles(agenda);
+  const add = (item: Partial<NotesItem>): NotesOp => ({ op: "add", item: { id: "x1", section: "note", text: "Ny punkt", ...item } });
+  const run = (ops: NotesOp[]) => applyOps(agendaItems, ops, { nextId: "n2", agenda: { anchors } });
+
+  it("anchorRoles: live ag-* anchors with their roles plus notes; gone anchors left out", () => {
+    expect(anchors.get("ag-2")).toBe("checkin");
+    expect(anchors.get("notes")).toBe("notes");
+    expect(anchors.has("ag-7")).toBe(false);
+  });
+
+  it("drops adds under checkin, followup, unknown and gone anchors, and without an anchor", () => {
+    for (const anchor of ["ag-2", "ag-3", "ag-9", "ag-7", "tasks", undefined]) {
+      const out = run([add({ anchor })]);
+      expect(out.ops).toEqual([]);
+      expect(out.dropped).toBe(1);
+    }
+  });
+
+  it("accepts adds under a topic item and under notes", () => {
+    const out = run([add({ anchor: "ag-4", section: "action", owner: "Anna Berg" }), add({ id: "x2", anchor: "notes" })]);
+    expect(out.dropped).toBe(0);
+    expect(out.items.slice(-2)).toEqual([
+      { id: "n2", section: "action", text: "Ny punkt", owner: "Anna Berg", anchor: "ag-4" },
+      { id: "n3", section: "note", text: "Ny punkt", anchor: "notes" },
+    ]);
+  });
+
+  it("drops adds of kind now or attendees", () => {
+    expect(run([add({ anchor: "ag-4", section: "now" })]).dropped).toBe(1);
+    expect(run([add({ anchor: "ag-4", section: "attendees" })]).dropped).toBe(1);
+  });
+
+  it("change c1 done:true is accepted and is not a rewrite", () => {
+    const out = run([{ op: "change", id: "c1", done: true }]);
+    expect(out.ops).toEqual([{ op: "change", id: "c1", done: true }]);
+    expect(out.items.find((i) => i.id === "c1")).toMatchObject({ done: true, text: "Mejla klubben om avgiften" });
+    // Four done reports in one tick: none is capped as a rewrite.
+    const many: NotesItem[] = ["c1", "c2", "c3", "c4"].map((id) => ({ ...agendaItems[1], id }));
+    const all = applyOps(many, many.map((i) => ({ op: "change" as const, id: i.id, done: true })), { agenda: { anchors } });
+    expect(all.dropped).toBe(0);
+  });
+
+  it("drops a rewrite or removal of a carried item, done on a non-task, and any anchor change", () => {
+    for (const op of [
+      { op: "change", id: "c1", text: "Mejla klubben om avgiften senast fredag" },
+      { op: "change", id: "c1", owner: "Erik Lund" },
+      { op: "change", id: "c1", due: "fredag" },
+      { op: "remove", id: "c1" },
+      { op: "change", id: "n1", done: true },
+      { op: "change", id: "n1", anchor: "ag-5" },
+      { op: "change", id: "n1", anchor: "ag-5", text: "Lokalen är bokad" },
+    ] as NotesOp[]) {
+      const out = run([op]);
+      expect(out.ops, JSON.stringify(op)).toEqual([]);
+      expect(out.items).toEqual(agendaItems);
+    }
+  });
+
+  it("an ordinary change of our own item still works", () => {
+    const out = run([{ op: "change", id: "n1", text: "Lokalen är bokad till höstfesten 14 november" }]);
+    expect(out.ops).toHaveLength(1);
+  });
+});
+
+describe("agenda mode: updateNotes", () => {
+  it("parses agenda ops (kind → section, anchor kept) and validates them", async () => {
+    quiet();
+    const { client, stream } = fakeClient(
+      message({
+        text: opsText([
+          { op: "add", id: "n9", kind: "task", anchor: "ag-5", text: "Betala hyran", owner: "Anna Berg", due: "fredag" },
+          { op: "add", id: "n10", kind: "note", anchor: "ag-2", text: "Erik är trött" },
+          { op: "change", id: "c1", done: true },
+        ]),
+      }),
+    );
+    const out = await updateNotes(agendaInput(), { client });
+    expect(stream.mock.calls[0][0].system).toBe(AGENDA_SYSTEM_PROMPT);
+    expect(out.ops).toEqual([
+      { op: "add", item: { id: "n2", section: "action", text: "Betala hyran", owner: "Anna Berg", due: "fredag", anchor: "ag-5" } },
+      { op: "change", id: "c1", done: true },
+    ]);
+    expect(out.dropped).toBe(1);
+    expect(out.failure).toBeNull();
+  });
+
+  it("toAgendaOp: add needs kind and text; change needs a field", () => {
+    expect(toAgendaOp({ op: "add", id: "n1", text: "x", anchor: "ag-4" })).toBeNull();
+    expect(toAgendaOp({ op: "add", id: "n1", kind: "decision", text: " ", anchor: "ag-4" })).toBeNull();
+    expect(toAgendaOp({ op: "add", id: "n1", kind: "decision", text: "Festen blir 14 november", anchor: "ag-4" })).toEqual({
+      op: "add",
+      item: { id: "n1", section: "decision", text: "Festen blir 14 november", anchor: "ag-4" },
+    });
+    expect(toAgendaOp({ op: "change", id: "n1" })).toBeNull();
+    expect(toAgendaOp({ op: "change", id: "c1", done: true })).toEqual({ op: "change", id: "c1", done: true });
   });
 });

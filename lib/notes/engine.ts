@@ -1,10 +1,21 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaMessage, BetaMessageStreamParams, BetaUsage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import type { ItemRole } from "@/lib/db/types";
 import { formatItem } from "@/lib/docs/notes";
 import { getEnv } from "@/lib/env";
+import { AGENDA_SYSTEM_PROMPT, agendaTailText, type AgendaContext } from "@/lib/notes/agenda-prompt";
 import { SYSTEM_PROMPT, tailText, transcriptBlockText } from "@/lib/notes/prompt";
-import { OPS_JSON_SCHEMA, OpsOutputSchema, toNotesOp, type NotesItem, type NotesOp } from "@/lib/notes/schema";
+import {
+  AGENDA_OPS_JSON_SCHEMA,
+  AgendaOpsOutputSchema,
+  OPS_JSON_SCHEMA,
+  OpsOutputSchema,
+  toAgendaOp,
+  toNotesOp,
+  type NotesItem,
+  type NotesOp,
+} from "@/lib/notes/schema";
 
 // The notes engine: transcript blocks + current notes → Claude → validated operations.
 // Settings are fixed by the plan's global constraints (model, adaptive thinking by default,
@@ -70,6 +81,17 @@ export interface UpdateNotesInput {
    * service removed its own item. Missing → computed from items ∪ locked ∪ deletedIds.
    */
   nextId?: string;
+  /**
+   * Agenda mode (meeting formats A8): the notes go under the agenda items of the förening's Doc.
+   * Switches prompt, schema and tail, and adds the anchor rules to validation.
+   */
+  agenda?: AgendaContext;
+  /**
+   * Agenda mode: the text we last rendered for each of our rows (`last_rendered_text`, placement
+   * prefix included). These lines are taken out of `notesTabText` so Claude never sees its own
+   * lines as human text (F3).
+   */
+  ownLines?: string[];
 }
 
 export interface UpdateNotesResult {
@@ -160,9 +182,13 @@ export function messageUsage(usage: BetaUsage, model: string): NotesUsage {
   return total;
 }
 
-/** Notes-tab text without the lines that are exactly one of our own unlocked items (sent as JSON anyway). */
-export function humanTabText(notesTabText: string, items: NotesItem[]): string {
-  const ours = new Set(items.map((i) => formatItem(i).trim()));
+/**
+ * Notes-tab text without the lines that are exactly one of our own unlocked items (sent as JSON
+ * anyway). v1 recognises them by `formatItem`; agenda mode passes `ownLines` (the rows'
+ * `last_rendered_text`), since lines in a human Doc are rendered by the format renderer.
+ */
+export function humanTabText(notesTabText: string, items: NotesItem[], ownLines?: string[]): string {
+  const ours = new Set((ownLines ?? items.map((i) => formatItem(i))).map((l) => l.trim()).filter(Boolean));
   return notesTabText
     .split("\n")
     .filter((line) => !ours.has(line.trim()))
@@ -182,23 +208,25 @@ export function buildRequest(input: UpdateNotesInput): BetaMessageStreamParams {
     // One breakpoint, on the newest transcript block: the next tick reads everything up to here.
     ...(i === all.length - 1 ? { cache_control: { type: "ephemeral" as const } } : {}),
   }));
-  const tail = tailText({
+  const agenda = input.agenda;
+  const tailInput = {
     orgName: input.orgName,
     speakerNames: input.speakerNames,
-    notesTabText: humanTabText(input.notesTabText, input.items),
+    notesTabText: agenda ? humanTabText(input.notesTabText, input.items, input.ownLines ?? []) : humanTabText(input.notesTabText, input.items),
     items: input.items,
     locked: input.locked,
     deletedIds: input.deletedIds,
     nextId: effectiveNextId(input),
     final: input.final,
-  });
+  };
+  const tail = agenda ? agendaTailText({ ...tailInput, agenda }) : tailText(tailInput);
   return {
     model: NOTES_MODEL,
     max_tokens: MAX_TOKENS,
     betas: [FALLBACK_BETA],
     fallbacks: "default",
-    output_config: { effort: "medium", format: { type: "json_schema", schema: OPS_JSON_SCHEMA } },
-    system: SYSTEM_PROMPT,
+    output_config: { effort: "medium", format: { type: "json_schema", schema: agenda ? AGENDA_OPS_JSON_SCHEMA : OPS_JSON_SCHEMA } },
+    system: agenda ? AGENDA_SYSTEM_PROMPT : SYSTEM_PROMPT,
     messages: [{ role: "user", content: [...blocks, { type: "text", text: tail }] }],
   };
 }
@@ -210,12 +238,23 @@ export function buildRequest(input: UpdateNotesInput): BetaMessageStreamParams {
  *   the model's id are mapped to it); a second "now" item becomes a change of the existing one;
  * - outside the final pass: never remove the "now" item, at most MAX_REMOVALS_PER_TICK removals and
  *   MAX_REWRITES_PER_TICK text changes of other items;
- * - a `change` that changes nothing is dropped.
+ * - a `change` that changes nothing is dropped;
+ * - a `change` that moves an item to another anchor is dropped; a carried item (Från förra
+ *   veckan) only takes `done` (no text/owner/due change, no removal); `done` only on tasks.
+ *   A `done` change is not a rewrite;
+ * - with `agenda` (agenda mode) an `add` also needs a known anchor (a live `ag-*` key in
+ *   `agenda.anchors`, or `notes`) whose role is not `checkin` or `followup`, and a kind other than
+ *   "now" or "attendees".
  */
 export function applyOps(
   items: NotesItem[],
   ops: NotesOp[],
-  opts: { protectedIds?: Iterable<string>; final?: boolean; nextId?: string } = {},
+  opts: {
+    protectedIds?: Iterable<string>;
+    final?: boolean;
+    nextId?: string;
+    agenda?: { anchors: Map<string, ItemRole | "notes"> };
+  } = {},
 ): { ops: NotesOp[]; items: NotesItem[]; dropped: number; nextId: string } {
   const blocked = new Set(opts.protectedIds ?? []);
   const final = opts.final ?? false;
@@ -228,6 +267,10 @@ export function applyOps(
   let rewrites = 0;
 
   for (const op of ops) {
+    if (op.op === "add" && opts.agenda && !agendaAddAllowed(op.item, opts.agenda.anchors)) {
+      dropped++;
+      continue;
+    }
     if (op.op === "add") {
       const now = op.item.section === "now" ? work.find((i) => i.section === "now") : undefined;
       if (now) {
@@ -255,13 +298,20 @@ export function applyOps(
       continue;
     }
     if (op.op === "remove") {
-      if (!final && (target.section === "now" || removals >= MAX_REMOVALS_PER_TICK)) {
+      if (target.carried || (!final && (target.section === "now" || removals >= MAX_REMOVALS_PER_TICK))) {
         dropped++;
         continue;
       }
       removals++;
       work = work.filter((i) => i.id !== id);
       accepted.push({ op: "remove", id });
+      continue;
+    }
+    const moves = op.anchor !== undefined && op.anchor !== target.anchor;
+    const edits = op.text !== undefined || op.owner !== undefined || op.due !== undefined;
+    const badDone = op.done !== undefined && target.section !== "action";
+    if (moves || badDone || (target.carried && edits)) {
+      dropped++;
       continue;
     }
     const rewrite = op.text !== undefined && op.text !== target.text && target.section !== "now";
@@ -277,6 +327,8 @@ export function applyOps(
       if (value) target[key] = value;
       else delete target[key];
     }
+    if (op.done === true) target.done = true;
+    else if (op.done === false) delete target.done;
     if (JSON.stringify(target) === before) {
       dropped++;
       continue;
@@ -285,6 +337,28 @@ export function applyOps(
     accepted.push({ ...op, id });
   }
   return { ops: accepted, items: work, dropped, nextId: `n${counter}` };
+}
+
+/** An agenda-mode `add` is placed under a live agenda item or `notes`, never under checkin/followup. */
+function agendaAddAllowed(item: NotesItem, anchors: Map<string, ItemRole | "notes">): boolean {
+  if (item.section === "now" || item.section === "attendees") return false;
+  const anchor = item.anchor;
+  if (!anchor) return false;
+  if (anchor === "notes") return true; // Ruling R-A7: every profile may carry a notes anchor.
+  if (!anchor.startsWith("ag-")) return false;
+  const role = anchors.get(anchor);
+  return role !== undefined && role !== "checkin" && role !== "followup";
+}
+
+/**
+ * The anchor map `applyOps` validates agenda-mode adds against: every live (not gone) agenda key
+ * with its role, plus `notes` (Ruling R-A7).
+ */
+export function anchorRoles(agenda: AgendaContext): Map<string, ItemRole | "notes"> {
+  const out = new Map<string, ItemRole | "notes">();
+  for (const a of agenda.anchors) if (!a.gone) out.set(a.key, a.role);
+  out.set("notes", "notes");
+  return out;
 }
 
 /**
@@ -317,17 +391,30 @@ export function churnStrict(prev: NotesItem[], next: NotesItem[], locked: string
   );
 }
 
-type ParsedOutput = { ok: true; ops: ReturnType<typeof OpsOutputSchema.parse>["ops"] } | { ok: false; why: string };
+type ParsedOutput = { ok: true; ops: NotesOp[]; invalid: number; count: number } | { ok: false; why: string };
 
-/** Parse the structured output: all text blocks joined in order; if that fails, the last one alone. */
-function parseOutput(message: BetaMessage): ParsedOutput {
+/**
+ * Parse the structured output: all text blocks joined in order; if that fails, the last one alone.
+ * Raw ops are turned into NotesOps (v1 or agenda shape); incomplete ones count as invalid.
+ */
+function parseOutput(message: BetaMessage, agenda: boolean): ParsedOutput {
   const texts = message.content.flatMap((b) => (b.type === "text" ? [b.text] : []));
   if (!texts.length) return { ok: false, why: "no text block" };
   const candidates = texts.length > 1 ? [texts.join(""), texts[texts.length - 1]] : texts;
   for (const candidate of candidates) {
     try {
-      const parsed = OpsOutputSchema.safeParse(JSON.parse(candidate));
-      if (parsed.success) return { ok: true, ops: parsed.data.ops };
+      const json: unknown = JSON.parse(candidate);
+      let converted: (NotesOp | null)[] | null = null;
+      if (agenda) {
+        const parsed = AgendaOpsOutputSchema.safeParse(json);
+        if (parsed.success) converted = parsed.data.ops.map(toAgendaOp);
+      } else {
+        const parsed = OpsOutputSchema.safeParse(json);
+        if (parsed.success) converted = parsed.data.ops.map(toNotesOp);
+      }
+      if (!converted) continue;
+      const ops = converted.filter((op): op is NotesOp => op !== null);
+      return { ok: true, ops, invalid: converted.length - ops.length, count: converted.length };
     } catch {
       // not JSON: try the next candidate
     }
@@ -385,25 +472,23 @@ export async function updateNotes(
     return nothing(`stop:${message.stop_reason}`);
   }
 
-  const parsed = parseOutput(message);
+  const parsed = parseOutput(message, Boolean(input.agenda));
   if (!parsed.ok) {
     // Log the shape problem only, never the content (it may quote the meeting).
     console.error("notes engine: malformed output", parsed.why);
     return nothing("malformed");
   }
 
-  const ops: NotesOp[] = [];
-  let invalid = 0;
-  for (const raw of parsed.ops) {
-    const op = toNotesOp(raw);
-    if (op) ops.push(op);
-    else invalid++;
-  }
-  const applied = applyOps(items, ops, { protectedIds: [...lockedIds, ...input.deletedIds], final: input.final, nextId });
-  const dropped = invalid + applied.dropped;
-  if (dropped) console.warn(`notes engine: dropped ${dropped} of ${parsed.ops.length} ops`);
+  const applied = applyOps(items, parsed.ops, {
+    protectedIds: [...lockedIds, ...input.deletedIds],
+    final: input.final,
+    nextId,
+    ...(input.agenda ? { agenda: { anchors: anchorRoles(input.agenda) } } : {}),
+  });
+  const dropped = parsed.invalid + applied.dropped;
+  if (dropped) console.warn(`notes engine: dropped ${dropped} of ${parsed.count} ops`);
   // Ops came back but validation rejected every one: the notes didn't move although Claude meant
   // them to. Zero ops returned is fine (a quiet stretch).
-  const failure = parsed.ops.length > 0 && applied.ops.length === 0 ? "all_dropped" : null;
+  const failure = parsed.count > 0 && applied.ops.length === 0 ? "all_dropped" : null;
   return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId, failure };
 }

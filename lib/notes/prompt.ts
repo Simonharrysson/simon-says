@@ -69,12 +69,15 @@ export interface TailInput {
   final: boolean;
 }
 
-/** The volatile last block (after the cache breakpoint). */
-export function tailText(t: TailInput): string {
+/**
+ * The volatile last block (after the cache breakpoint). `line` renders one item; agenda mode
+ * passes its own (kind, anchor, done, carried) and puts its agenda parts in front.
+ */
+export function tailText(t: TailInput, line: (item: NotesItem) => string = itemLine): string {
   const names = Object.keys(t.speakerNames)
     .sort()
     .map((label) => `${label} = ${t.speakerNames[label]}`);
-  const lines = (items: NotesItem[]) => (items.length ? items.map(itemLine).join("\n") : "(none)");
+  const lines = (items: NotesItem[]) => (items.length ? items.map(line).join("\n") : "(none)");
   return [
     `Organisation: ${t.orgName}`,
     "",
