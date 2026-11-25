@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { IconPlay, IconStop } from "@/components/ui/icons";
 import { formatClock } from "@/lib/format";
+import { StartErrorBanner, type StartError } from "./ConsentStep";
 import { LiveDialog, stopCopy } from "./LiveDialog";
 
 /** Shown when the page finds an unfinished meeting (live, or abandoned < 2 h ago). */
@@ -13,12 +14,17 @@ export function ResumeMeeting({
   onResume,
   onEnd,
   resuming,
+  error,
+  errorText,
 }: {
   startedAt: string;
   orgName: string;
   onResume: () => void;
   onEnd?: () => void;
   resuming?: boolean;
+  /** Why "Fortsätt mötet" did not get going (mic blocked, server refused). */
+  error?: StartError;
+  errorText?: string | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   return (
@@ -33,6 +39,7 @@ export function ResumeMeeting({
           datorn. Allt som hann transkriberas finns kvar.
         </p>
       </div>
+      {error && <StartErrorBanner error={error} text={errorText} />}
       <div className="cluster">
         <Button variant="primary" size="lg" icon={<IconPlay size={18} />} onClick={onResume} loading={resuming}>
           Fortsätt mötet

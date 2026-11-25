@@ -67,6 +67,8 @@ export interface StreamStatus {
 export interface HeartbeatInfo {
   warn: boolean;
   stop: boolean;
+  /** Minutes until a cap stops the meeting, while `warn`. */
+  minutesLeft?: number | null;
   docPaused?: boolean;
   lastTickOkAt?: string | null;
   status?: string;

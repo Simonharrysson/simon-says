@@ -65,6 +65,7 @@ export default async function OrgPage({
       people={people}
       meetings={meetings}
       notice={orgNotice(fel, klart)}
+      liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}
       startMeeting={<StartMeetingForm
           orgId={org.id}
           shareTranscript={org.share_transcript}

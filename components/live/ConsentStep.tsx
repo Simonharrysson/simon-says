@@ -23,6 +23,16 @@ const startErrors: Record<Exclude<StartError, null>, { title: string; text: stri
   },
 };
 
+/** The banner for a start error; `text` replaces the default explanation (e.g. the server's own message). */
+export function StartErrorBanner({ error, text }: { error: Exclude<StartError, null>; text?: string | null }) {
+  const problem = startErrors[error];
+  return (
+    <Banner tone="danger" icon={error.startsWith("mic") ? <IconMicOff /> : undefined} title={problem.title}>
+      {text ?? problem.text}
+    </Banner>
+  );
+}
+
 /** Input level above this counts as "we hear you". */
 const HEARD = 0.08;
 
@@ -37,6 +47,7 @@ export function ConsentStep({
   onStart,
   starting,
   error,
+  errorText,
   micLevel,
   onMicCheck,
 }: {
@@ -46,6 +57,8 @@ export function ConsentStep({
   onStart: () => void;
   starting?: boolean;
   error?: StartError;
+  /** Replaces the error's default explanation (e.g. the server's Swedish message). */
+  errorText?: string | null;
   /** Mic input level 0–1 while the check runs; null/undefined before it has started. */
   micLevel?: number | null;
   /** Ask for the mic and start reporting `micLevel`. Without it, no mic check is shown. */
@@ -53,7 +66,6 @@ export function ConsentStep({
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
-  const problem = error ? startErrors[error] : null;
   const testing = micLevel != null;
   const heard = testing && micLevel >= HEARD;
   const bars = testing ? Math.min(5, Math.ceil(micLevel * 5)) : 0;
@@ -95,11 +107,7 @@ export function ConsentStep({
         </div>
       )}
 
-      {problem && (
-        <Banner tone="danger" icon={error?.startsWith("mic") ? <IconMicOff /> : undefined} title={problem.title}>
-          {problem.text}
-        </Banner>
-      )}
+      {error && <StartErrorBanner error={error} text={errorText} />}
 
       <label className={`consent__check${confirmed ? " is-checked" : ""}`} htmlFor={`${id}-ok`}>
         <input

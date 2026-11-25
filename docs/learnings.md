@@ -148,3 +148,34 @@ Hook & Look Golf → "Testmöte" on simonsays.harrysson.co (deploy 6b87e51): the
   meeting there are ~13. Fine for the test; not representative of churn.
 - **UI:** the "Ett möte pågår" banner on the org page wraps the Doc link onto its own line with the trailing "."
   orphaned on the next line (inline link rendered as a block).
+
+## 2026-11-25 · Task 7 · Verify on 11-28 (real ElevenLabs)
+
+The live page, `LiveStream` and the parser were built against `scripts/fake-elevenlabs.ts` (`npm run fake-el`),
+which speaks the plan's provisional event model. Every line below is an assumption to check against the first
+real session (Task 0 spike); fix `lib/elevenlabs/events.ts`, `fixtures/elevenlabs/provisional.jsonl` and the fake
+together when one is wrong.
+
+- [ ] **Token as query param:** `wss://api.elevenlabs.io/v1/speech-to-text/realtime?…&token=<single-use>` is accepted (no header needed).
+- [ ] **URL settings accepted:** `model_id=scribe_v3_live`, `diarize`, `multilang_mode`, `include_timestamps`, `include_language_detection`, `audio_format=pcm_16000`, `commit_strategy` — no `input_error` on connect.
+- [ ] **Audio format:** `{message_type:"input_audio_chunk", audio_base_64, commit:false, sample_rate:16000}` with 100 ms chunks (1600 samples, 3200 bytes, little-endian) is accepted; `commit:true` on a 100 ms silence chunk commits (pause, stop).
+- [ ] **Burst replay:** up to 60 s of held audio (600 chunks) sent at once right after a reconnect is accepted (no `rate_limited`, `queue_overflow` or `chunk_size_exceeded`) and transcribed in order.
+- [ ] **First message:** `session_started {session_id, config}`.
+- [ ] **Partials:** `partial_transcript {text}` (display only; we ignore any `words` on it).
+- [ ] **Commits:** `committed_transcript {segment_index, text}` with no speaker; `segment_index` counts from 0 per session.
+- [ ] **Timestamps event:** `committed_transcript_with_timestamps {segment_index, text, language_code, words[]}` — we read only `language_code` from it (per segment).
+- [ ] **Diarization per word:** `diarized_transcript {segment_index, words:[{text, start, end, type:"word"|"spacing", speaker_id}]}` arrives after the commit, keyed by the same `segment_index`; times in **seconds**, session-relative; spacing tokens carry the whitespace. Measure the diarized latency after the last audio (Stopp waits 3 s: `STOP_DRAIN_MS`).
+- [ ] **Speaker label format:** `speaker_id` like `"speaker_0"`, stable within one session, restarting on a new session.
+- [ ] **Merges:** `speakers_merged {from_speaker_id, to_speaker_id}` (the parser also takes `from_speaker_ids[]` / `into_speaker_id`). Does it appear at all?
+- [ ] **Session end:** `session_time_limit_exceeded {error}` then the socket closes when `max_session_duration_seconds` is reached; does any other "session ended" message exist?
+- [ ] **Errors:** error messages are `{message_type:"<kind>", error}` (`auth_error`, `quota_exceeded`, `commit_throttled`, `insufficient_audio_activity`, …) and fatal ones close the socket.
+- [ ] **Idle while paused:** Paus sends no audio but keeps the socket open. Does ElevenLabs close an idle session (and after how long)? The page reconnects on Fortsätt, so a close is harmless; note the time.
+- [ ] **Reconnect behaviour:** a socket killed mid-run (Wi-Fi off 10 s) — does a new session with a new token work immediately (server mints with `closingSessionId`), and do labels restart?
+- [ ] **Commit timing with `commit_strategy=vad`:** how long are segments; are partials frequent enough for the strip?
+- [ ] **Browser audio:** Chrome and Safari give the AudioWorklet 48 kHz (or 44.1 kHz) and the 100 ms blocks resample to exactly 1600 samples; Safari's AudioContext runs when started from the Start/Fortsätt click.
+- [ ] **Hidden tab / lid closed:** segments keep arriving while the tab is hidden for 10 min (flush and heartbeat are also driven from the audio callback), and the screen wake lock is re-acquired on return.
+
+How to try the page against the fake (no credits): `npm run fake-el` in one terminal,
+`ELEVENLABS_WS_URL=ws://localhost:8787/v1/speech-to-text/realtime npm run dev` in another (the override is ignored when
+`NODE_ENV` or `VERCEL_ENV` is production, and the token route then skips the real mint). `curl localhost:8787/drop`
+simulates a network drop; `npm run fake-el -- --session-limit 60` ends every session after a minute.

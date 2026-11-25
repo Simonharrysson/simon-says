@@ -182,9 +182,21 @@ the digits.
 ## Org page hooks for Task 7
 
 `OrgDetailView` takes `startMeetingHref?` and `liveMeetingHref?: (id) => string`. With the latter,
-running meetings get "Till mötet" in the list and the header action becomes "Fortsätt mötet".
-`startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`, which posts
-to `/api/meetings`); while a meeting is live/ending it is replaced by an info banner with the Doc link.
+the starter's running meeting gets "Till mötet" in the list and the header action becomes "Fortsätt mötet";
+the starter's meetings abandoned < 2 h ago get "Fortsätt mötet" in the list. Other members see no live
+links (only the starter can run a meeting).
+`startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`: a link to the live
+page's consent step `/meetings/ny/<orgId>`, plus the admins' Testmöte); while a meeting is live/ending it is
+replaced by an info banner with the Doc link.
+
+## The live page (Task 7)
+
+Routes outside the `(app)` layout: `/meetings/ny/<orgId>` (consent step; Start asks for the mic from the click,
+then `POST /api/meetings` creates the Doc, the address becomes `/meetings/<id>` without a reload) and
+`/meetings/<id>` (starter only; live or abandoned < 2 h → "Fortsätt mötet", which `POST /resume`s and starts
+the mic from that click; ending → polls until done; done → ended). `LiveMeetingController` maps `LiveStream`
+(`lib/audio/stream.ts`) onto `LiveMeeting`; heartbeat answers feed `minutesLeft`, `docPaused` and
+`lastTickOkAt`. Speakers and the name round stay empty until Task 11.
 
 ## Dependencies
 

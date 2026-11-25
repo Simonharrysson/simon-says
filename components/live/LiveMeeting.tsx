@@ -41,6 +41,8 @@ export interface LiveMeetingProps {
   people: PersonOption[];
   nameRound: NameRoundEntry[];
   startError?: StartError;
+  /** Replaces the start error's default explanation (e.g. the server's Swedish message). */
+  startErrorText?: string | null;
   /** Consent step mic check: input level 0–1 while it runs (see ConsentStep). */
   micLevel?: number | null;
   onMicCheck?: () => void;
@@ -80,6 +82,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           onStart={p.onStart}
           starting={p.phase === "starting"}
           error={p.startError}
+          errorText={p.startErrorText}
           micLevel={p.micLevel}
           onMicCheck={p.onMicCheck}
         />
@@ -98,6 +101,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           onResume={p.onResumeMeeting}
           onEnd={p.onEndUnfinished}
           resuming={p.busy}
+          error={p.startError}
+          errorText={p.startErrorText}
         />
       </div>
     );

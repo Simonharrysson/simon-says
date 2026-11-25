@@ -11,7 +11,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { MeetingStatus } from "@/lib/db/types";
 import { formatDateTime, formatDuration, formatMeetingDate, plural } from "@/lib/format";
-import { docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
+import { canResume, docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
 import type { Notice } from "@/lib/ui/messages";
 import { NoticeBanner } from "./NoticeBanner";
 import { OrgSettingsForm } from "./OrgSettingsForm";
@@ -40,7 +40,11 @@ export interface OrgDetailViewProps {
   startMeeting?: ReactNode;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
-  /** Link into a running meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Hidden when absent. */
+  /**
+   * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Shown only to the
+   * person who started it (only they can run it): running meetings and ones abandoned < 2 h ago.
+   * Hidden when absent.
+   */
   liveMeetingHref?: (meetingId: string) => string;
   actions: {
     rotateInvite: FormAction;
@@ -63,7 +67,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 export function OrgDetailView(props: OrgDetailViewProps) {
   const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, liveMeetingHref, actions } = props;
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
-  const running = liveMeetingHref && active;
+  const running = liveMeetingHref && active && userId !== null && active.started_by === userId ? active : null;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
 
   return (
@@ -80,7 +84,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </div>
         }
         actions={
-          running ? (
+          running && liveMeetingHref ? (
             <ButtonLink href={liveMeetingHref(running.id)} variant="primary" size="lg" icon={<IconPlay size={18} />}>
               Fortsätt mötet
             </ButtonLink>
@@ -240,6 +244,7 @@ function MeetingsPanel({
           <ul className="list" aria-labelledby="meetings-title">
             {meetings.map((meeting) => {
               const state = meetingDeleteState(meeting, { isAdmin, userId });
+              const mine = userId !== null && meeting.started_by === userId;
               const duration =
                 meeting.ended_at &&
                 formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000);
@@ -255,9 +260,14 @@ function MeetingsPanel({
                       </span>
                     </span>
                     <span className="row__actions">
-                      {state === "active" && liveMeetingHref && (
+                      {state === "active" && mine && liveMeetingHref && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
                           Till mötet
+                        </ButtonLink>
+                      )}
+                      {meeting.status === "abandoned" && mine && liveMeetingHref && canResume(meeting) && (
+                        <ButtonLink href={liveMeetingHref(meeting.id)} size="sm" icon={<IconPlay size={16} />}>
+                          Fortsätt mötet
                         </ButtonLink>
                       )}
                       <a
