@@ -320,3 +320,9 @@ a note in `notes`, Närvarande in the empty cell):
 - Known consequence of (b): a new line inherits the level of the block's LAST paragraph. If a human Tabs our last line to level 2,
   the next line under that item is level 2 as well (we never set levels). Accepted: the alternative needs a level change request.
 - Human stage (sub-bullet under ag-5, edit a copy, Tab on one of ours, then `tick`): run by the controller — result below.
+
+**A6 human stage (controller typed in the Docs editor, 2026-11-25):** on the A6 render Doc — Enter+Tab after "Ekonomi" (human
+sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-section copy of a task, Tab on our nested line under
+"Kommande event" — then `tick`: only the edited tasks copy (`n4-t`) locked; the same task's copy under Ekonomi kept updating
+(one copy locks, the other follows); the human sub-point intact and our new line went **after** everything in the item's block
+(human + ours); the Tabbed line stayed at level 2, unlocked and reworded; numbering 1–6 unchanged, one listId, re-render 0 requests.
