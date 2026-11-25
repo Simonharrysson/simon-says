@@ -226,3 +226,71 @@ simulates a network drop; `npm run fake-el -- --session-limit 60` ends every ses
 - Prod migrations 0014–0022 applied the same day; the first `vercel deploy --prod` after them answered
   "Not authorized" once (CLI still logged in) and the retry worked — retry once before investigating.
 - The checklist for the day ElevenLabs credits return is `docs/checklist-11-28.md`.
+
+## 2026-11-25 · Meeting formats A1 · The agenda Doc model
+
+Measured with `npm run check-agenda-render -- simon.harrysson@gmail.com build|auto` (`scripts/check-agenda-render.ts`) on a fictional
+Veckomöte Doc, each measurement on a fresh Drive copy. A measurement script, not a test. Fixtures:
+`fixtures/agenda/veckomote.doc.json` (item 5 "Ekonomi" is a list item) and `veckomote-h3.doc.json` (item 5 is a
+`HEADING_3` "5. Banbokning", not a list item). Both are `documents.get` dumps (`includeTabsContent`, `SUGGESTIONS_INLINE`).
+**The human-editor stage (Enter / Tab / cell edit on our bullets) is pending: see the end of this entry.**
+
+**Doc shape.** The list is one list: `NUMBERED_DECIMAL_ALPHA_ROMAN`, level 0 `DECIMAL "%0."` (indentStart 36, firstLine 18), level 1
+`ALPHA "%1."` (72/54), level 2 `ROMAN "%2."` (108/90). Items 1-6 level 0, "Kommande event" has two level-1 sub-bullets (a., b.), same
+`listId` for all eight paragraphs. Info table is a real table (4 rows x 2 columns: label | value). `lists[id].listProperties.nestingLevels`
+is on `lists[id]` directly (not under `.list`, which is the Schema type's name). Numbers/glyphs are never in the text: they are computed
+from the list order and level.
+
+- **M1 insert `"\n<line>"` before item 5's newline:** the new paragraph is in the same `listId`, `nestingLevel` 0, `NORMAL_TEXT`. Everything
+  after it renumbers (Övrigt 6. becomes 7.). The text read back is the label only.
+- **M2a (`"\n\t<line>"` then `createParagraphBullets` on the new paragraph) FAILS on an already-bulleted paragraph.** The inserted paragraph is
+  already a level-0 item of the human list, and `createParagraphBullets` on it changes nothing: the `\t` stays as literal text
+  (`"\tM2a rad"`), level 0, same list, so it is a new numbered top-level item and renumbers the rest. No index shift (nothing removed).
+- **M2b (insert after the item's last nested sub-bullet) WORKS:** new paragraph inherits level 1, same `listId`, glyph `c.`, top-level numbering
+  unchanged (Ekonomi 5., Övrigt 6.).
+- **M2c (`deleteParagraphBullets` + `updateParagraphStyle indentStart 54 / indentFirstLine 36` + `"– "` prefix) WORKS:** non-list paragraph, top-level
+  numbering unchanged, and Övrigt keeps the human `listId`. The `deleteParagraphBullets` + style + insert sequence needs no index
+  adjustment as long as the `"– "` insert goes last.
+- **Decision (NESTED_INSERT):** (b) when the item already has a nested sub-bullet (insert after the last one, text = `"\n<line>"`, no tabs, no
+  bullet request); (a) never works on a bulleted paragraph, so skip it; (c) for an item with no sub-bullet (for those the line is a plain
+  paragraph with a `"– "` prefix and indent 54/36, written as the sequence above). Once our first line exists under an item via (c), the next
+  line goes after it the same way (the item then has no list sub-bullet). The API has no request that changes the `nestingLevel` of an existing
+  list paragraph, and none that adds a paragraph to an existing list other than inserting a newline inside it.
+- **Tab handling elsewhere:** `createParagraphBullets` on a **non-list** paragraph does remove leading tabs and uses them as the nesting level
+  (`"\t\tdjup"` after `"rot"` gave `rot` level 0 and `djup` level 2: N tabs = level N), but it always makes a
+  **new list** (different `listId`, glyph `1.`). That is useless for joining the human's list.
+- **M3 insert after a `HEADING_3` item:** `"\n<line>"` gives a paragraph that inherits `HEADING_3` (not a list item, no run overrides: `bold`/`fontSize`
+  absent). After `updateParagraphStyle NORMAL_TEXT` + `createParagraphBullets BULLET_DISC_CIRCLE_SQUARE` it is level 0 of a **new list**
+  (`●`, indentStart 36), different `listId` from the numbered list; the heading stays `HEADING_3`. Note in the variant Doc the numbered
+  list continues across the heading: Övrigt shows `5.` there (same `listId`, the heading is not a list item).
+- **M4:** paragraph text of every list item (levels 0 and 1) equals its label exactly: no glyph, no number, no leading tab. `parseNotesTab`
+  reports the same texts, so `last_rendered_text` comparisons are safe.
+- **M5 named range over a list item:** after typing `XX` in the middle the range grows with it (`"Må-XXrunda"`, paragraph text equal); deleting only
+  the text (newline kept) removes the range entirely; deleting the paragraph including its newline removes it too, and the numbers after it
+  close up (3. becomes 2. ...). In both cases `itemSpan` returns null and no range entry is left.
+- **M6 table cells:** `insertTable` (rows 4, columns 2) at an empty paragraph puts an extra empty paragraph **before** the table that cannot be
+  deleted (`Invalid deletion range`), and keeps one empty paragraph after it. Cell paragraphs: first cell paragraph starts at tableStart+3;
+  inside a row the next cell's paragraph starts at the previous cell paragraph's end + 1; the next row's first cell starts at the previous
+  row's last cell paragraph end + 2. An empty cell's paragraph is `[s, s+1)` (just the newline). `insertText` at `s` + `createNamedRange [s, s+len)`
+  in the same batch works; the range text equals the cell text; `replaceNamedRangeContent` replaces it and the range follows (`[51,71)`,
+  cell text updated). All indices after an insert shift by the inserted length (the Sekreterare cell moved 67 to 93). `parseNotesTab` **skips**
+  `el.table` (cell text absent from `paragraphs`; the range itself is listed in `ranges`, but `itemSpan` for it is null: there is no paragraph).
+  A5/A7 must read cells from the `table` element, not from `paragraphs`.
+- **M7 one batch** (`insertText`, `createParagraphBullets`, `createNamedRange`, `writeControl.requiredRevisionId` from a fresh `get`): accepted, all
+  replies returned. Requests apply in order: a range created **after** `createParagraphBullets` uses post-removal indices (a range
+  `[ns, ns+len)` computed with the tab ended on the paragraph's newline: `"M7c rad\n"`; `[ns, ns+len-1)` was the exact label), a range
+  created **before** it follows the tab removal (label-only range `[ns+1, ns+1+len)` ended up exactly on the label after the tab was gone).
+  On a list paragraph (M7a) no tab is removed at all, as in M2a.
+- **M8 headings:** `"\n<text>"` at the end of a `HEADING_1` gives a `HEADING_1` paragraph (inherits); a new paragraph after an explicit `HEADING_2` is
+  `HEADING_2` too. So every appended heading and every body line needs an explicit `updateParagraphStyle` (headings `HEADING_n`, text
+  `NORMAL_TEXT`). `"<text>\n"` inserted at the **start** of the NORMAL_TEXT paragraph that follows a `HEADING_1` gets `NORMAL_TEXT` (so the LIVE
+  line directly after "Anteckningar:" can be written that way, if there is a paragraph after the heading; at the end of the tab, insert
+  `"\n<line>"` and reset to `NORMAL_TEXT`). No run-level bold/fontSize overrides appear in any of these.
+
+**What this changes in the plan:** A6's nested insert must not use tabs + `createParagraphBullets` on a list paragraph; use (b) / (c) above. A7's
+info-table prefill must read cell indices from the table element and re-read between inserts (or fill from the last cell backwards).
+A5's `Paragraph`-based scan needs table cell paragraphs separately.
+
+**Pending (human stage, controller runs it in the Docs editor):** what Enter at the end of our bullet, Tab on our bullet and a new sub-bullet
+typed after ours do to `itemSpan` and `nestingLevel`, and what an edit to the filled Närvarande cell does to its named range. See
+`.superpowers/sdd/2026-11-25-meeting-formats/task-A1-report.md` for the steps.

@@ -14,6 +14,7 @@
     "test": "vitest run",
     "check-google": "tsx --conditions=react-server scripts/check-google.ts",
     "check-notes-render": "tsx --conditions=react-server scripts/check-notes-render.ts",
+    "check-agenda-render": "tsx --conditions=react-server scripts/check-agenda-render.ts",
     "check-elevenlabs-token": "tsx --conditions=react-server scripts/check-elevenlabs-token.ts",
     "notes-replay": "tsx --conditions=react-server scripts/notes-replay.ts",
     "notes-eval": "tsx --conditions=react-server scripts/notes-eval.ts",
