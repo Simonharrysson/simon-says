@@ -27,7 +27,7 @@ vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => ({ from: () => ({ 
 vi.mock("@/lib/db/orgs", () => ({ getOrg: m.getOrg, myRole: m.myRole }));
 vi.mock("@/lib/db/members", () => ({ memberEmails: m.memberEmails }));
 vi.mock("@/lib/db/events", () => ({ logEvent: m.logEvent }));
-vi.mock("@/lib/docs/create", () => ({ createMeetingDoc: m.createMeetingDoc }));
+vi.mock("@/lib/docs/create", () => ({ createMeetingDoc: m.createMeetingDoc, meetingTitle: (org: string) => `${org} möte` }));
 vi.mock("@/lib/env", () => ({ getEnv: () => ({ KILL_SWITCH: m.killSwitch }) }));
 vi.mock("@/lib/google/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/client")>()),
@@ -72,6 +72,7 @@ describe("POST /api/meetings", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.docUrl).toBe("https://docs.google.com/document/d/doc1/edit");
+    expect(json.title).toBe("Styrelsen möte");
     const input = m.createMeetingDoc.mock.calls[0][1];
     expect(input).toMatchObject({ orgName: "Styrelsen", shareTranscript: true, meetingId: json.meetingId });
     expect(input.memberEmails).toEqual(["b@x.se"]); // the starter is not shared with

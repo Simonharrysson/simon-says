@@ -15,7 +15,7 @@ const fail = (error: string, status: number, message: string) =>
 /**
  * Start a meeting. Body: `{ "orgId": string, "consent": true }` (consent: everyone in the room
  * knows the meeting is transcribed). Creates the Google Doc in the caller's Drive, shares it
- * with the org's other members and writes the meetings row. Returns `{ meetingId, docUrl }`.
+ * with the org's other members and writes the meetings row. Returns `{ meetingId, docUrl, title }`.
  * Only members; 409 if the org already has a live meeting. Nothing is left behind in the
  * database if the Doc cannot be created.
  */
@@ -39,5 +39,5 @@ export async function POST(request: NextRequest) {
   const result = await startMeeting(supabase, user, orgId);
   if (!result.ok) return fail(result.error, result.status, result.message);
 
-  return NextResponse.json({ meetingId: result.meetingId, docUrl: result.docUrl }, { headers: noStore });
+  return NextResponse.json({ meetingId: result.meetingId, docUrl: result.docUrl, title: result.title }, { headers: noStore });
 }

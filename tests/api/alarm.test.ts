@@ -84,14 +84,14 @@ describe("heartbeat stop ends the meeting", () => {
   it("stop: answers { stop: true } and ends the meeting after the response", async () => {
     limitsState.result = { ok: false, warn: false, stop: true, reason: "meeting_length", remainingSeconds: 0 };
     const res = await beat();
-    expect(await res.json()).toEqual({ warn: false, stop: true });
+    expect(await res.json()).toMatchObject({ warn: false, stop: true, minutesLeft: null });
     await run();
     expect(ended.ids).toEqual(["m1"]);
   });
 
   it("warn: only warns, nothing ends", async () => {
     limitsState.result = { ok: true, warn: true, stop: false, remainingSeconds: 800 };
-    expect(await (await beat()).json()).toEqual({ warn: true, stop: false });
+    expect(await (await beat()).json()).toMatchObject({ warn: true, stop: false, minutesLeft: 14 });
     await run();
     expect(ended.ids).toEqual([]);
   });

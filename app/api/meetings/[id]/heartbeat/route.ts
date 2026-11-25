@@ -14,7 +14,9 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 
 /**
  * Starter's browser pings this; it only sets last_heartbeat_at. Answers `{ warn, stop }` from
- * checkLimits (also under the kill switch, where stop is true).
+ * checkLimits (also under the kill switch, where stop is true), plus what the live page shows
+ * `minutesLeft` while warning, and about the Doc: `docPaused` (Google access lost) and
+ * `lastTickOkAt` (last notes write).
  *
  * Stop = the meeting must end now (4 h per meeting, org month, global day/dollar cap, kill
  * switch). The server does not rely on the browser: on stop it ends the meeting itself, after
@@ -32,7 +34,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const { data: meeting, error } = await supabase
     .from("meetings")
-    .select("id, org_id, started_by, status")
+    .select("id, org_id, started_by, status, doc_paused_at, last_tick_ok_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`heartbeat: meeting: ${error.message}`);
@@ -50,5 +52,15 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   if (limits.stop && limits.reason !== "no_consent") {
     after(() => endMeeting(meeting.id).catch((e) => console.error(`heartbeat: auto end failed: ${(e as Error).message}`)));
   }
-  return NextResponse.json({ warn: limits.warn, stop: limits.stop }, { headers: noStore });
+  return NextResponse.json(
+    {
+      warn: limits.warn,
+      stop: limits.stop,
+      // Minutes until the first cap stops the meeting (the page's "avslutas om N min").
+      minutesLeft: limits.warn ? Math.ceil(limits.remainingSeconds / 60) : null,
+      docPaused: Boolean(meeting.doc_paused_at),
+      lastTickOkAt: meeting.last_tick_ok_at ?? null,
+    },
+    { headers: noStore },
+  );
 }

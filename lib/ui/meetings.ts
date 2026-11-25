@@ -26,3 +26,12 @@ export const meetingStatusLabel: Record<MeetingStatus, string> = {
 export function docUrl(docId: string): string {
   return `https://docs.google.com/document/d/${encodeURIComponent(docId)}/edit`;
 }
+
+/** An abandoned meeting can be continued for this long after it was ended by the cron. */
+export const RESUME_WINDOW_MS = 2 * 3600 * 1000;
+
+/** Whether "Fortsätt mötet" is offered: live, or abandoned < 2 h ago (the resume route decides). */
+export function canResume(m: { status: string; ended_at: string | null }, now = Date.now()): boolean {
+  if (m.status === "live") return true;
+  return m.status === "abandoned" && m.ended_at !== null && now - new Date(m.ended_at).getTime() < RESUME_WINDOW_MS;
+}

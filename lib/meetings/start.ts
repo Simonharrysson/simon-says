@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createMeetingDoc, type MeetingDoc } from "@/lib/docs/create";
+import { createMeetingDoc, meetingTitle, type MeetingDoc } from "@/lib/docs/create";
 import { logEvent } from "@/lib/db/events";
 import { memberEmails } from "@/lib/db/members";
 import { getOrg, myRole } from "@/lib/db/orgs";
@@ -11,7 +11,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 
 export type StartResult =
-  | { ok: true; meetingId: string; docUrl: string; orgName: string }
+  | { ok: true; meetingId: string; docUrl: string; orgName: string; title: string }
   | { ok: false; error: string; status: number; message: string };
 
 const failed = (error: string, status: number, message: string): StartResult => ({ ok: false, error, status, message });
@@ -109,5 +109,5 @@ export async function startMeeting(
   }).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
 
 
-  return { ok: true, meetingId, docUrl: docUrl(doc.docId), orgName: org.name };
+  return { ok: true, meetingId, docUrl: docUrl(doc.docId), orgName: org.name, title: meetingTitle(org.name, startedAt) };
 }
