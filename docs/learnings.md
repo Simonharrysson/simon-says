@@ -412,3 +412,8 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - `--ledger <file>` keeps the spend ledger per eval (A14 uses `.notes-replay/spend-formats.json`).
 - Not replayed: the server rows (Närvarande, Tid, "Må-runda genomförd."), the copies in the tasks section, `MAX_NEW_BLOCKS`, human edits of the Doc during the meeting.
 - Numbers (2026-11-25, 2 runs each, claude-opus-5-5): veckomote-a and veckomote-b both PASS every bar — placement 20/20, roles 14/14, followup 8/8, Må-runda leaks 0, recall 20/20, churn 0 %, must_not 0, live2+ 0; cost $0.44 total ($1.18/h over 11.3 min of meeting time; a 0.240, b 0.203). No prompt tuning needed. Ledger .notes-replay/spend-formats.json.
+
+## Meeting formats C2 — Styrelseprotokoll eval (2026-11-25, controller)
+
+- `styrelse-ekdala`, 2 runs, $0.30 (ledger $0.74 of $4): churn 0 %, recall 11/11, roles 3/3, leaks 0, $1.50/h; placement 11/11 in run 1 but 9/11 in run 2 (82 % < 90 % bar) → FAIL on placement only.
+- Run 2 misplacements: the approval of the previous minutes landed under "Val av justerare" (justerare and protokoll are discussed together), and one task landed under "Föregående protokoll" instead of its topic item. Not tuned (pace ruling R-B0); candidate fix is a Styrelseprotokoll-only tail note (keeps AGENDA_SYSTEM_PROMPT and Veckomöte byte-identical): "approval of the previous minutes belongs under Föregående protokoll; tasks go under the item whose topic they concern".
