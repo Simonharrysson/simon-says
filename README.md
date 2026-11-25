@@ -107,6 +107,15 @@ The operator-only "Testmöte" button on an org page replays a scripted fictional
 pipeline into a Doc, with no microphone needed.
 The live page can be exercised without ElevenLabs via the fake server: `npm run fake-el`.
 
+### Running the suite
+
+`npm run suite` runs the feature test suite (`tests/suite` plus the tagged unit and DB tests) and prints a
+scorecard: one PASS/FAIL row per feature (document formats, transcription style, voices per förening, a chain of
+meetings, safety rails), with passed, failed, skipped and known-bug counts. Claude is scripted through the real
+code paths and Docs are simulated (`test/docsim.ts`), so it is free. Without the local Supabase stack the DB tests
+skip; CI runs them. `npm run suite -- --paid --budget 1.50` also replays each feature's real-Claude eval fixtures
+(`scripts/notes-eval.ts`) and stops before this run adds more than the budget to `.notes-replay/spend-formats.json`.
+
 ## Environment variables
 
 Validated in `lib/env.ts` (zod) on first use. Never commit real values.
