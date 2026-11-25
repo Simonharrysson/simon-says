@@ -1,6 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, seedMeeting, type TestUser } from "@/test/local-supabase";
 import { createOrg, joinOrg } from "@/lib/db/orgs";
+import { ensureStandardRow } from "@/lib/formats/store";
+import { VECKOMOTE } from "@/lib/formats/standard";
 import { kindOfSection, sectionOfKind, type NoteSection } from "@/lib/db/types";
 
 const PROFILE = { name: "Test", sections: [] };
@@ -181,5 +183,45 @@ describe.skipIf(!hasLocalSupabase)("meeting formats schema (0023, 0024)", () => 
       p_meeting_id: crypto.randomUUID(), p_lease_id: crypto.randomUUID(), p_rows: [],
     });
     expect(error).not.toBeNull();
+  });
+
+  it("ensureStandardRow: one non-default row per standard kind, reused, the default untouched (A10)", async () => {
+    const db = adminClient();
+    const before = await db.from("format_profiles").select("id").eq("org_id", orgId).eq("is_default", true).maybeSingle();
+    const a = await ensureStandardRow(orgId, "veckomote", db);
+    const b = await ensureStandardRow(orgId, "veckomote", db);
+    expect(b).toBe(a);
+    const { data } = await db.from("format_profiles").select("kind, is_default, profile").eq("id", a).single();
+    expect(data).toMatchObject({ kind: "veckomote", is_default: false });
+    expect(data!.profile).toEqual(VECKOMOTE);
+    const after = await db.from("format_profiles").select("id").eq("org_id", orgId).eq("is_default", true).maybeSingle();
+    expect(after.data?.id).toBe(before.data?.id);
+    expect(await ensureStandardRow(otherOrgId, "veckomote", db)).not.toBe(a);
+  });
+
+  it("an agenda-mode meetings row and its pre-filled note rows are accepted as A10 writes them", async () => {
+    const db = adminClient();
+    const profileId = await ensureStandardRow(orgId, "veckomote", db);
+    const id = crypto.randomUUID();
+    const { error } = await db.from("meetings").insert({
+      id, org_id: orgId, started_by: admin.id, doc_id: "agenda-doc-a10", notes_tab_id: "t.0", transcript_tab_id: null,
+      header_range: `ss-${id}-header`, header_rendered: "Simon Says antecknar live · uppdaterad –",
+      section_ranges: { "ag-1": `ss-${id}-ag-1`, tasks: `ss-${id}-sec-tasks` }, status: "done",
+      agenda_doc: true, layout: "format", format_profile_id: profileId, is_test: true,
+      agenda_roles: { "ag-1": "followup" }, checkin_window: { startMs: null, endMs: null, closed: false, failures: 0 },
+    });
+    expect(error).toBeNull();
+    const rows = await db.from("note_items").insert([
+      { meeting_id: id, id: "info-tid", section: "note", kind: "note", text: "18:05", anchor: "info.tid",
+        range_name: `ss-${id}-info-tid`, last_rendered_text: "18:05", position: 0, locked: false, deleted_by_human: false,
+        owner: null, due: null, done: false, copy_of: null },
+      { meeting_id: id, id: "c1", section: "action", kind: "task", text: "Boka hallen", anchor: "ag-1", owner: null, due: null,
+        owner_person_id: null, locked: false, deleted_by_human: false, done: false, carried_from_meeting: crypto.randomUUID(),
+        carried_from_id: "n1", copy_of: null, range_name: null, last_rendered_text: null, position: 0 },
+    ]);
+    expect(rows.error).toBeNull();
+    const upd = await db.from("note_items").update({ range_name: `ss-${id}-c1`, last_rendered_text: "– Boka hallen.", position: 1 })
+      .eq("meeting_id", id).eq("id", "c1");
+    expect(upd.error).toBeNull();
   });
 });

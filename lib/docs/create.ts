@@ -120,6 +120,14 @@ async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[
 
 const TRANSCRIPT_TAB: DocsRequest = { addDocumentTab: { tabProperties: { title: "Transkript" } } };
 
+/** Agenda mode with "Lägg transkriptet i dokumentet?" = ja: a "Transkript" tab in the förening's own Doc; its id. */
+export async function addTranscriptTab(auth: OAuth2Client, docId: string): Promise<string> {
+  const res = await docsApi(auth).documents.batchUpdate({ documentId: docId, requestBody: { requests: [TRANSCRIPT_TAB] } });
+  const tabId = res.data.replies?.[0]?.addDocumentTab?.tabProperties?.tabId;
+  if (!tabId) throw new Error("addTranscriptTab: transcript tab was not created");
+  return tabId;
+}
+
 /**
  * Create the meeting's Google Doc in the starter's Drive: in the org folder, a notes tab
  * ("Anteckningar": header line + four section headings, each with a named range), a "Transkript"
