@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { getEnv } from "@/lib/env";
 
 const MINT_URL = "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe";
@@ -15,6 +16,8 @@ export async function mintToken(maxSessionSeconds: number): Promise<string> {
   if (!Number.isInteger(maxSessionSeconds) || maxSessionSeconds <= 0) {
     throw new Error(`mintToken: maxSessionSeconds must be a positive integer, got ${maxSessionSeconds}`);
   }
+  // Dev/test fake server: no ElevenLabs call, no credits. The fake accepts any token.
+  if (devWsOverride()) return `fake-${randomUUID()}`;
   const url = new URL(MINT_URL);
   url.searchParams.set("max_session_duration_seconds", String(maxSessionSeconds));
   const res = await fetch(url, {
@@ -36,7 +39,7 @@ export async function mintToken(maxSessionSeconds: number): Promise<string> {
  * connects to `${wsUrl}&token=${encodeURIComponent(token)}`.
  */
 export function realtimeWsUrl(): string {
-  const url = new URL(WS_URL);
+  const url = new URL(devWsOverride() ?? WS_URL);
   const p = url.searchParams;
   p.set("model_id", "scribe_v3_live");
   p.set("diarize", "true");
@@ -46,4 +49,23 @@ export function realtimeWsUrl(): string {
   p.set("audio_format", "pcm_16000");
   p.set("commit_strategy", getEnv().ELEVENLABS_COMMIT_STRATEGY);
   return url.toString();
+}
+
+let warned = false;
+
+/**
+ * `ELEVENLABS_WS_URL` points the browser at a local fake ElevenLabs server
+ * (`npm run fake-el`) and skips the real mint. Dev and tests only: ignored (with a warning)
+ * when NODE_ENV or VERCEL_ENV is production, so a stray value can never reach real meetings.
+ */
+export function devWsOverride(source: Record<string, string | undefined> = process.env): string | null {
+  const url = source.ELEVENLABS_WS_URL;
+  if (!url) return null;
+  if (source.NODE_ENV === "production" || source.VERCEL_ENV === "production") {
+    if (!warned) console.warn("ELEVENLABS_WS_URL is set but ignored in production");
+    warned = true;
+    return null;
+  }
+  if (!/^wss?:\/\//.test(url)) throw new Error("ELEVENLABS_WS_URL must be a ws:// or wss:// URL");
+  return url;
 }

@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { useTestEnv } from "@/test/env";
 
 useTestEnv();
-const { mintToken, realtimeWsUrl } = await import("./token");
+const { devWsOverride, mintToken, realtimeWsUrl } = await import("./token");
 
 describe("mintToken", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -56,5 +56,43 @@ describe("realtimeWsUrl", () => {
   it("carries no token and no session duration (both belong to the mint)", () => {
     expect(url.searchParams.has("token")).toBe(false);
     expect(url.searchParams.has("max_session_duration_seconds")).toBe(false);
+  });
+});
+
+describe("devWsOverride (fake ElevenLabs for dev)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("is off without ELEVENLABS_WS_URL", () => {
+    expect(devWsOverride({ NODE_ENV: "development" })).toBeNull();
+  });
+
+  it("is used in development and tests", () => {
+    expect(devWsOverride({ ELEVENLABS_WS_URL: "ws://localhost:8787/v1/speech-to-text/realtime", NODE_ENV: "development" })).toBe(
+      "ws://localhost:8787/v1/speech-to-text/realtime",
+    );
+  });
+
+  it("is ignored when NODE_ENV or VERCEL_ENV is production", () => {
+    const url = "ws://localhost:8787/x";
+    expect(devWsOverride({ ELEVENLABS_WS_URL: url, NODE_ENV: "production" })).toBeNull();
+    expect(devWsOverride({ ELEVENLABS_WS_URL: url, NODE_ENV: "development", VERCEL_ENV: "production" })).toBeNull();
+  });
+
+  it("rejects a non-WebSocket URL", () => {
+    expect(() => devWsOverride({ ELEVENLABS_WS_URL: "http://x", NODE_ENV: "development" })).toThrow(/ws:\/\//);
+  });
+
+  it("with the override: no real mint, and the WS URL points at the fake with the same settings", async () => {
+    vi.stubEnv("ELEVENLABS_WS_URL", "ws://localhost:8787/v1/speech-to-text/realtime");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await mintToken(60)).toMatch(/^fake-/);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const url = new URL(realtimeWsUrl());
+    expect(url.origin + url.pathname).toBe("ws://localhost:8787/v1/speech-to-text/realtime");
+    expect(url.searchParams.get("model_id")).toBe("scribe_v3_live");
   });
 });
