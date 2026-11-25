@@ -119,7 +119,7 @@ export async function runNameRound(
   try {
     let claim = db().from("el_sessions").update({ name_round_at: now.toISOString() }).eq("id", sessionId).eq("meeting_id", meeting.id);
     claim = opts.force
-      ? claim.or(`name_round_at.is.null,name_round_at.lt.${new Date(now.getTime() - FORCE_GAP_MS).toISOString()}`)
+      ? claim.or(`name_round_at.is.null,name_round_at.lt."${new Date(now.getTime() - FORCE_GAP_MS).toISOString()}"`)
       : claim.is("name_round_at", null);
     const claimed = must("claim", await claim.select("id")) as unknown[];
     if (!claimed.length) return { status: "busy" };
