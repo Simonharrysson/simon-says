@@ -197,7 +197,8 @@ describe.skipIf(!hasLocalSupabase)("feature: safety (runTick on the local stack)
     expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
     expect(f.renders()).toBe(2);
     expect(linesOf(doc)).toContain("Ekonomi och budget");
-    expect(linesOf(doc).filter((l) => l === "Kassör: Boka Kårallen.")).toHaveLength(2);
+    // Skyddsklubben has no people rows: the owner is shown as said.
+    expect(linesOf(doc).filter((l) => l === "Anna Berg: Boka Kårallen.")).toHaveLength(2);
     expect(await db.events(id, "tick_conflict")).toEqual([]);
   });
 
