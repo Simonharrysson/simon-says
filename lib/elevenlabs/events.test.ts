@@ -37,7 +37,7 @@ describe("parseEvent on the provisional fixture", () => {
   it("partial and committed carry the text; committed keeps the segment index and language", () => {
     expect(events[2]).toEqual({ kind: "partial", text: "Hej allihop, välkomna" });
     expect(events[3]).toEqual({ kind: "committed", segmentIndex: 0, text: "Hej allihop, välkomna." });
-    expect(events[4]).toMatchObject({ kind: "committed", segmentIndex: 0, lang: "sv" });
+    expect(events[4]).toMatchObject({ kind: "committed", segmentIndex: 0, lang: "sv", startMs: 120, endMs: 1600 });
   });
 
   it("session-limit message → session_end", () => {
@@ -99,6 +99,15 @@ describe("toRuns", () => {
       { segmentIndex: 7, runIndex: 0, speaker: "unknown", text: "a", startMs: 0, endMs: 10 },
       { segmentIndex: 7, runIndex: 1, speaker: "s1", text: "b c d", startMs: 20, endMs: 70 },
     ]);
+  });
+
+  it("a word without an end time never makes endMs < startMs", () => {
+    const ev: DiarizedEvent = {
+      kind: "diarized",
+      segmentIndex: 1,
+      words: [{ text: "hm", speaker: "s", startMs: 900, endMs: 0 }],
+    };
+    expect(toRuns(ev)[0]).toMatchObject({ startMs: 900, endMs: 900 });
   });
 
   it("no words → no runs", () => {

@@ -70,6 +70,30 @@ export class MicCapture implements AudioSource {
     this.onChunk = onChunk;
   }
 
+  /**
+   * The watchdog saw no blocks for a while (lid closed, Safari "interrupted" the context, the mic
+   * went away). Attempt 1: resume the AudioContext. Later attempts: reopen the mic and context
+   * (outside a click Safari may refuse; the page then shows that no sound arrives).
+   */
+  async recover(attempt: number): Promise<void> {
+    const ctx = this.ctx;
+    if (attempt <= 1 && ctx && ctx.state !== "closed") {
+      await ctx.resume();
+      return;
+    }
+    const onChunk = this.onChunk;
+    const onLevel = this.onLevel;
+    this.stop();
+    await this.open();
+    this.onChunk = onChunk;
+    this.onLevel = onLevel;
+  }
+
+  /** End the consent-step mic check (the stream reports the level from now on). */
+  stopCheck(): void {
+    this.onLevel = null;
+  }
+
   stop(): void {
     this.onChunk = null;
     this.onLevel = null;

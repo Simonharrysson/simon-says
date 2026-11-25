@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef } from "react";
+import { Banner } from "@/components/ui/Banner";
+import { Button } from "@/components/ui/Button";
 import { IconArrowLeft, IconPause } from "@/components/ui/icons";
 import { liveStatus, type LiveStatus } from "@/lib/ui/live-status";
 import { ConsentStep, type StartError } from "./ConsentStep";
@@ -62,6 +64,15 @@ export interface LiveMeetingProps {
   onRetry: () => void;
   /** Leave the page (after confirming while running). Defaults to navigating to `orgHref`. */
   onLeave?: () => void;
+  /** Something stuck that `liveStatus` doesn't cover (no mic sound, posts failing, signed out). */
+  notice?: LiveNotice | null;
+}
+
+export interface LiveNotice {
+  tone: "warning" | "danger";
+  title: string;
+  text: string;
+  action?: { label: string; onClick: () => void };
 }
 
 /**
@@ -149,6 +160,21 @@ export function LiveMeeting(p: LiveMeetingProps) {
         onReLogin={p.onReLogin}
         onRetry={p.onRetry}
       />
+      {p.notice && !ending && (
+        <Banner
+          tone={p.notice.tone}
+          title={p.notice.title}
+          action={
+            p.notice.action && (
+              <Button variant="primary" onClick={p.notice.action.onClick}>
+                {p.notice.action.label}
+              </Button>
+            )
+          }
+        >
+          {p.notice.text}
+        </Banner>
+      )}
 
       {ending ? (
         <MeetingEnded docUrl={p.docUrl} durationSeconds={p.elapsedMs / 1000} orgHref={p.orgHref} finalizing autoStopped={p.autoStopped} />

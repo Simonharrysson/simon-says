@@ -34,7 +34,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const { data: meeting, error } = await supabase
     .from("meetings")
-    .select("id, org_id, started_by, status, doc_paused_at, last_tick_ok_at")
+    .select("id, org_id, started_by, status, doc_paused_at, last_tick_ok_at, current_el_session_id")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`heartbeat: meeting: ${error.message}`);
@@ -60,6 +60,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       minutesLeft: limits.warn ? Math.ceil(limits.remainingSeconds / 60) : null,
       docPaused: Boolean(meeting.doc_paused_at),
       lastTickOkAt: meeting.last_tick_ok_at ?? null,
+      // The session the server considers current: a tab whose session isn't it stops (another tab took over).
+      currentElSessionId: meeting.current_el_session_id ?? null,
     },
     { headers: noStore },
   );

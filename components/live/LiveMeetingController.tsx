@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MicCapture } from "@/lib/audio/capture";
-import { LiveStream, type HeartbeatInfo, type StreamStatus } from "@/lib/audio/stream";
+import { LiveStream, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import type { StartError } from "./ConsentStep";
-import { LiveMeeting } from "./LiveMeeting";
+import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { ConnectionState, LivePhase } from "./types";
 
 /** Notes count as stale when runs posted this long ago have not reached the Doc yet. */
@@ -72,6 +72,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [docPaused, setDocPaused] = useState(props.meeting?.docPaused ?? false);
   const [lastTickOkAt, setLastTickOkAt] = useState<string | null>(props.meeting?.lastTickOkAt ?? null);
   const [now, setNow] = useState(() => Date.now());
+  const [health, setHealth] = useState<StreamHealth>({ audioStalled: false, postsFailing: false, authLost: false });
+  /** Another tab (or laptop) took over this meeting's session. */
+  const [superseded, setSuperseded] = useState(false);
 
   const capture = useRef<MicCapture | null>(null);
   const stream = useRef<LiveStream | null>(null);
@@ -163,6 +166,12 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           setStoppedAt((t) => t ?? Date.now());
           return;
         case "stopped":
+          if (s.superseded) {
+            // The other tab runs the meeting now: don't end it, just stop listening here.
+            capture.current?.stop();
+            setSuperseded(true);
+            return;
+          }
           if (userStopped.current) return; // onStop posts /end itself
           setAutoStopped(Boolean(s.autoStopped));
           setBusy(true);
@@ -218,6 +227,16 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         }
       });
       s.on("posted", () => postedAt.current.push(Date.now()));
+      s.on("health", setHealth);
+      // The consent check's meter hands over to the stream's level (throttled for React).
+      cap.stopCheck();
+      let lastLevelAt = 0;
+      s.on("level", (level) => {
+        const t = Date.now();
+        if (t - lastLevelAt < 500) return;
+        lastLevelAt = t;
+        setMicLevel(level);
+      });
       await s.start();
     },
     [onStreamState],
@@ -327,7 +346,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       }
       setBusy(false);
       setPhase("live");
-      await runStream({ ...meeting, status: "live" }, cap);
+      // A resumed abandoned meeting is running again: the timer counts from its start, not its end.
+      const resumed: LiveMeetingInfo = { ...meeting, status: "live", durationSeconds: undefined };
+      setMeeting(resumed);
+      await runStream(resumed, cap);
     })();
   };
 
@@ -370,9 +392,58 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         ? Math.max(0, (stoppedAt ?? now) - Date.parse(startedAt))
         : 0;
 
+  const reLogin = () => window.open(`/login?next=/meetings/${meeting?.id ?? ""}`, "_blank", "noopener");
+  // Silent failures the status line doesn't cover: say what happened and what to do.
+  const notice: LiveNotice | null = !["live", "paused", "error"].includes(phase)
+    ? null
+    : health.authLost
+      ? {
+          tone: "danger",
+          title: "Du är utloggad — logga in igen",
+          text: "Det som sägs hålls kvar i webbläsaren och skickas när du loggat in. Stäng inte den här fliken.",
+          action: { label: "Logga in igen", onClick: reLogin },
+        }
+      : health.audioStalled
+        ? {
+            tone: "danger",
+            title: "Inget ljud från mikrofonen",
+            text: "Datorn kan ha somnat eller mikrofonen kopplats bort. Vi försöker starta den igen. Hjälper det inte: ladda om sidan och tryck Fortsätt mötet.",
+          }
+        : health.postsFailing
+          ? {
+              tone: "warning",
+              title: "Transkriptionen når inte fram just nu",
+              text: "Vi försöker igen automatiskt och inget kastas. Stäng inte den här fliken.",
+            }
+          : null;
+
+  if (superseded) {
+    return (
+      <div className="live live--centered">
+        <section className="resume" aria-labelledby="superseded-title">
+          <span className="magnet magnet--ink resume__magnet" aria-hidden="true" />
+          <div className="stack stack--2">
+            <h1 id="superseded-title" className="consent__title">
+              Mötet körs i en annan flik
+            </h1>
+            <p className="muted">
+              Mötet fortsatte i en annan flik eller på en annan dator, så den här fliken slutade lyssna. Du kan stänga den.
+            </p>
+          </div>
+          <div className="cluster">
+            <a className="btn btn--lg" href={props.orgHref}>
+              Tillbaka till föreningen
+            </a>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <LiveMeeting
       phase={phase}
+      notice={notice}
       orgName={props.orgName}
       orgHref={props.orgHref}
       title={meeting?.title ?? ""}
@@ -411,7 +482,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       onPause={() => stream.current?.pause()}
       onResume={() => stream.current?.resume()}
       onStop={onStop}
-      onReLogin={() => window.open(`/login?next=/meetings/${meeting?.id ?? ""}`, "_blank", "noopener")}
+      onReLogin={reLogin}
       onAssignSpeaker={() => {}}
       onNameRoundDone={() => {}}
       onResumeMeeting={onResumeMeeting}

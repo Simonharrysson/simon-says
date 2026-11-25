@@ -226,6 +226,22 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect((await meetingRow(id)).current_el_session_id).toBe(body.sessionId);
   });
 
+  it("dev override (ELEVENLABS_WS_URL): the session is booked as 'test' (no ElevenLabs hours or dollars)", async () => {
+    vi.stubEnv("ELEVENLABS_WS_URL", "ws://127.0.0.1:8787/v1/speech-to-text/realtime");
+    try {
+      const id = await live(orgId, starter.id);
+      as(starter);
+      const res = await callToken(id);
+      expect(res.status).toBe(200);
+      const { sessionId, wsUrl } = await res.json();
+      expect(wsUrl).toMatch(/^ws:\/\/127\.0\.0\.1:8787\//);
+      const { data } = await adminClient().from("el_sessions").select("kind").eq("id", sessionId).single();
+      expect(data!.kind).toBe("test");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("409 for a second token while the session is open and no (or a wrong) closingSessionId", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
@@ -236,7 +252,8 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     for (const body of [undefined, {}, { closingSessionId: "some-other-session" }]) {
       const res = await callToken(id, body);
       expect(res.status).toBe(409);
-      expect(await res.json()).toEqual({ error: "session_open" });
+      // The starter learns which session is open, so a lost token response can't wedge the meeting.
+      expect(await res.json()).toEqual({ error: "session_open", openSessionId: sessionId });
     }
     expect(mint.fn).toHaveBeenCalledTimes(1);
     expect((await meetingRow(id)).current_el_session_id).toBe(sessionId);

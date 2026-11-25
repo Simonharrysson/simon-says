@@ -3,8 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { logEvent } from "@/lib/db/events";
 import { isUuid } from "@/lib/db/ids";
 import { claimElSession, closeElSession, type ClaimStatus } from "@/lib/db/usage";
-import { mintToken, realtimeWsUrl } from "@/lib/elevenlabs/token";
+import { devWsOverride, mintToken, realtimeWsUrl } from "@/lib/elevenlabs/token";
 import { getEnv } from "@/lib/env";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -72,9 +73,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const claim = await claimElSession(meeting.id, sessionId, closingSessionId);
   if (claim.status !== "ok") {
     const [status, error] = refusal[claim.status];
+    if (claim.status === "busy") {
+      // The starter's own open session (e.g. a token response that never reached the browser):
+      // tell the starter which one, so the next request can close it instead of waiting.
+      const { data: cur } = await supabaseAdmin()
+        .from("meetings")
+        .select("current_el_session_id")
+        .eq("id", meeting.id)
+        .maybeSingle();
+      return NextResponse.json(
+        { error, openSessionId: cur?.current_el_session_id ?? null },
+        { status, headers: noStore },
+      );
+    }
     return fail(error, status);
   }
   const maxSeconds = claim.maxSeconds!;
+
+  // Dev/test fake ElevenLabs (ignored in production): book the session as 'test', so it never
+  // reserves or books ElevenLabs hours or dollars against the caps (0011).
+  if (devWsOverride()) {
+    const { error: ke } = await supabaseAdmin().from("el_sessions").update({ kind: "test" }).eq("id", sessionId);
+    if (ke) console.error(`token: dev session kind: ${ke.message}`);
+  }
 
   let token: string;
   try {

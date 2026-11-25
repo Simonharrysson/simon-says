@@ -24,7 +24,8 @@ export interface DiarizedEvent {
 export type ParsedEvent =
   | { kind: "started"; sessionId: string | null }
   | { kind: "partial"; text: string }
-  | { kind: "committed"; segmentIndex: number; text: string; lang?: string }
+  /** startMs/endMs only when the event carries word timestamps (…_with_timestamps). */
+  | { kind: "committed"; segmentIndex: number; text: string; lang?: string; startMs?: number; endMs?: number }
   | DiarizedEvent
   | { kind: "merged"; from: string[]; into: string }
   | { kind: "session_end"; reason: string }
@@ -75,7 +76,11 @@ export function parseEvent(raw: string): ParsedEvent {
     case "committed_transcript_with_timestamps": {
       const segmentIndex = index(m.segment_index);
       if (segmentIndex === null) return { kind: "ignored", type };
-      return { kind: "committed", segmentIndex, text: str(m.text) ?? "", ...(lang ? { lang } : {}) };
+      const timed = words(m.words).filter((w) => !w.spacing);
+      const times = timed.length
+        ? { startMs: timed[0].startMs, endMs: Math.max(timed[0].startMs, ...timed.map((w) => w.endMs)) }
+        : {};
+      return { kind: "committed", segmentIndex, text: str(m.text) ?? "", ...(lang ? { lang } : {}), ...times };
     }
     case "diarized_transcript": {
       const segmentIndex = index(m.segment_index);
@@ -133,7 +138,8 @@ export function toRuns(ev: DiarizedEvent): Run[] {
     if (w.endMs > cur.endMs) cur.endMs = w.endMs;
   }
   return runs
-    .map((r) => ({ ...r, text: r.text.trim() }))
+    // A word without an end time (0) must not make endMs < startMs (the ingest rejects that).
+    .map((r) => ({ ...r, text: r.text.trim(), endMs: Math.max(r.startMs, r.endMs) }))
     .filter((r) => r.text !== "")
     .map((r, i) => ({ ...r, runIndex: i }));
 }

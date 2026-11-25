@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { base64ToPcm16 } from "./resample";
 import {
+  AUDIO_STALL_MS,
+  AUDIO_STALL_NOTICE_MS,
   FLUSH_MS,
   HEARTBEAT_MS,
   LiveStream,
@@ -54,12 +56,16 @@ class FakeAudio implements AudioSource {
     if (this.error) throw this.error;
     this.onChunk = onChunk;
   }
+  recovers: number[] = [];
   stop() {
     this.stopped = true;
   }
-  /** Push one 100 ms chunk whose first sample is `tag`. */
-  push(tag: number) {
-    const pcm = new Int16Array(1600);
+  async recover(attempt: number) {
+    this.recovers.push(attempt);
+  }
+  /** Push one 100 ms chunk whose first sample is `tag` (`loud`: speech-level audio). */
+  push(tag: number, loud = false) {
+    const pcm = new Int16Array(1600).fill(loud ? 8000 : 0);
     pcm[0] = tag;
     this.onChunk?.(pcm);
   }
@@ -422,5 +428,192 @@ describe("LiveStream", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(t.stream.pending).toBe(0);
     expect(t.sockets).toHaveLength(2);
+  });
+
+  // --- fix round 1: robustness -----------------------------------------------------------------
+
+  it("409 session_open with the server's open session id → adopts it as closingSessionId (lost token response)", async () => {
+    const t = setup();
+    t.replies.token.push(json(409, { error: "session_open", openSessionId: "lost-session" }));
+    await t.stream.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(t.of("token").map((c) => c.body)).toEqual([{}, { closingSessionId: "lost-session" }]);
+    expect(t.sockets).toHaveLength(1);
+    expect(t.stream.state.state).not.toBe("error");
+  });
+
+  it("heartbeat naming another current session → stops as superseded without draining", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["mitt", "speaker_0"]]));
+    // Our own session is current: nothing happens.
+    t.replies.heartbeat.push(json(200, { warn: false, stop: false, currentElSessionId: "s1" }));
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    expect(t.stream.state.state).toBe("live");
+    // Another tab took over.
+    t.replies.heartbeat.push(json(200, { warn: false, stop: false, currentElSessionId: "other-tab" }));
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    await vi.advanceTimersByTimeAsync(100);
+    await settle();
+    expect(t.stream.state).toMatchObject({ state: "stopped", superseded: true });
+    expect(t.audio.stopped).toBe(true);
+    expect(t.sockets[0].sent.some((m) => m.commit === true)).toBe(false); // no drain commit
+    expect(t.of("segments").flatMap((c) => c.body.segments).map((r: { text: string }) => r.text)).toEqual(["mitt"]);
+  });
+
+  it("401 on segments keeps the runs and reports authLost until a post succeeds", async () => {
+    const t = setup();
+    const health: unknown[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    t.replies.segments.push(json(401, { error: "unauthenticated" }));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["kvar", "speaker_0"]]));
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    await settle();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(t.stream.pending).toBe(1);
+    expect(health.at(-1)).toMatchObject({ authLost: true });
+    await vi.advanceTimersByTimeAsync(12_000);
+    await settle();
+    expect(t.stream.pending).toBe(0);
+    expect(t.of("segments").map((c) => c.body.segments[0].text)).toEqual(["kvar", "kvar"]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(health.at(-1)).toMatchObject({ authLost: false });
+  });
+
+  it("a 400 on a batch retries the runs one by one, so only the bad one is dropped", async () => {
+    const t = setup();
+    t.replies.segments.push(json(400, { error: "bad_request" }), json(200), json(400, { error: "bad_request" }), json(200));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["ett", "a"], ["två", "b"], ["tre", "c"]]));
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(FLUSH_MS);
+      await settle();
+    }
+    expect(t.of("segments").map((c) => c.body.segments.map((r: { text: string }) => r.text))).toEqual([
+      ["ett", "två", "tre"],
+      ["ett"],
+      ["två"],
+      ["tre"],
+    ]);
+    expect(t.stream.pending).toBe(0);
+  });
+
+  it("speaker labels are cut to 100 chars and endMs never precedes startMs", async () => {
+    const t = setup();
+    const runs: { speaker: string; startMs: number; endMs: number }[] = [];
+    t.stream.on("runs", (r) => runs.push(...r));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit({
+      message_type: "diarized_transcript",
+      segment_index: 0,
+      words: [{ text: "x", start: 2, type: "word", speaker_id: "s".repeat(150) }],
+    });
+    expect(runs[0].speaker).toHaveLength(100);
+    expect(runs[0].endMs).toBeGreaterThanOrEqual(runs[0].startMs);
+  });
+
+  it("a committed segment that never got diarized is posted as speaker 'unknown' when the socket drops", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    for (let i = 0; i < 20; i++) t.audio.push(i);
+    t.sockets[0].emit({ message_type: "committed_transcript", segment_index: 0, text: "Diarized later." });
+    t.sockets[0].emit(diarized(0, [["Diarized", "speaker_0"], ["later.", "speaker_0"]]));
+    t.sockets[0].emit({ message_type: "committed_transcript", segment_index: 1, text: "Aldrig diarized." });
+    t.sockets[0].drop();
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    await settle();
+    const posted = t.of("segments").flatMap((c) => c.body.segments);
+    expect(posted.map((r: { text: string }) => r.text)).toEqual(["Diarized later.", "Aldrig diarized."]);
+    expect(posted[1]).toMatchObject({ elSessionId: "s1", segmentIndex: 1, runIndex: 0, speaker: "unknown", endMs: 2000 });
+  });
+
+  it("…and on Stopp when the diarization doesn't come within the drain", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit({
+      message_type: "committed_transcript_with_timestamps",
+      segment_index: 4,
+      text: "Sista meningen.",
+      language_code: "sv",
+      words: [{ text: "Sista", start: 1, end: 1.4, type: "word" }, { text: "meningen.", start: 1.5, end: 2, type: "word" }],
+    });
+    const done = t.stream.stop();
+    await vi.advanceTimersByTimeAsync(STOP_DRAIN_MS);
+    await settle();
+    await done;
+    expect(t.of("segments")[0].body.segments).toEqual([
+      { elSessionId: "s1", segmentIndex: 4, runIndex: 0, speaker: "unknown", text: "Sista meningen.", startMs: 1000, endMs: 2000, lang: "sv" },
+    ]);
+  });
+
+  it("no mic audio: asks the mic to recover after 5 s, tells the page after 10 s", async () => {
+    const t = setup();
+    const health: { audioStalled: boolean }[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.audio.push(1);
+    await vi.advanceTimersByTimeAsync(AUDIO_STALL_MS + 1000);
+    expect(t.audio.recovers).toEqual([1]);
+    await vi.advanceTimersByTimeAsync(AUDIO_STALL_NOTICE_MS - AUDIO_STALL_MS);
+    expect(t.audio.recovers).toEqual([1, 2]);
+    expect(health.at(-1)).toMatchObject({ audioStalled: true });
+    t.audio.push(2); // sound is back
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(health.at(-1)).toMatchObject({ audioStalled: false });
+  });
+
+  it("a socket that stays silent while we send speech is treated as dropped", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    for (let s = 0; s < 21; s++) {
+      for (let i = 0; i < 10; i++) t.audio.push(i, true);
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(t.of("token").map((c) => c.body)).toEqual([{}, { closingSessionId: "s1" }]);
+    expect(t.sockets).toHaveLength(2);
+  });
+
+  it("a silent room (no speech) never trips the socket watchdog", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    for (let s = 0; s < 40; s++) {
+      for (let i = 0; i < 10; i++) t.audio.push(i);
+      await vi.advanceTimersByTimeAsync(1000);
+    }
+    expect(t.sockets).toHaveLength(1);
+  });
+
+  it("an unreadable 200 from the token route reconnects instead of hanging", async () => {
+    const t = setup();
+    t.replies.token.push(json(200, { nope: true }));
+    await t.stream.start();
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
+    expect(t.of("token")).toHaveLength(2);
+    expect(t.sockets).toHaveLength(1);
   });
 });
