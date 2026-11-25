@@ -12,6 +12,15 @@ export interface NotesItem {
   text: string;
   owner?: string;
   due?: string;
+  // Format layout (meeting formats A6). Set only when present, so v1 items keep their shape.
+  /** Where the item lives: `ag-<n>`, `tasks`, `notes`, `info.<slug>`. */
+  anchor?: string;
+  /** A task reported done ("✓ klart"). */
+  done?: boolean;
+  /** This item is the tasks-section copy of item `copyOf` (id `<copyOf>-t`). */
+  copyOf?: string;
+  /** Carried from the previous meeting's open tasks (Från förra veckan). */
+  carried?: boolean;
 }
 
 export type NotesOp =

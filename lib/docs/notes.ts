@@ -1,6 +1,7 @@
 import { parseNotesTab, type NotesTab } from "./tab";
 import type { OAuth2Client } from "google-auth-library";
-import type { MeetingRow, NoteItemRow, NoteSection } from "@/lib/db/types";
+import { kindOfSection, type MeetingRow, type NoteItemRow, type NoteSection } from "@/lib/db/types";
+import type { FormatProfile } from "@/lib/formats/schema";
 import { docsApi, isRevisionConflict, replaceRange, type DocsRequest } from "@/lib/google/docs";
 import type { NotesItem } from "@/lib/notes/schema";
 
@@ -16,7 +17,7 @@ import type { NotesItem } from "@/lib/notes/schema";
 
 export const itemRangeName = (meetingId: string, itemId: string) => `ss-${meetingId}-${itemId}`;
 
-function clean(s: string): string {
+export function clean(s: string): string {
   // Newlines, vertical tab (Docs' soft line break), other control and separator characters → space.
   // eslint-disable-next-line no-control-regex
   return s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
@@ -44,6 +45,11 @@ export function toNotesItem(row: NoteItemRow): NotesItem {
     text: row.text,
     ...(row.owner ? { owner: row.owner } : {}),
     ...(row.due ? { due: row.due } : {}),
+    // Format fields only when set, so a v1 row maps to exactly the v1 item.
+    ...(row.anchor ? { anchor: row.anchor } : {}),
+    ...(row.done ? { done: true } : {}),
+    ...(row.copy_of ? { copyOf: row.copy_of } : {}),
+    ...(row.carried_from_id != null ? { carried: true } : {}),
   };
 }
 
@@ -76,8 +82,16 @@ export function itemSpan(tab: NotesTab, name: string): ItemSpan | null {
   if (!parts.length) return null;
   const rangeStart = Math.min(...parts.map((p) => p.start));
   const rangeEnd = Math.max(...parts.map((p) => p.end));
-  const touched = tab.paragraphs.filter((p) => p.start < rangeEnd && p.end > rangeStart);
+  let touched = tab.paragraphs.filter((p) => p.start < rangeEnd && p.end > rangeStart);
   if (!touched.length) return null;
+  // A range in a table cell (A1 human stage: typing at a cell's edge lands outside the range):
+  // the span is the whole cell, so any edit anywhere in it makes rangeText differ from paraText.
+  const cell = touched[0].inTable;
+  if (cell) {
+    touched = tab.paragraphs.filter(
+      (p) => p.inTable && p.inTable.table === cell.table && p.inTable.row === cell.row && p.inTable.col === cell.col,
+    );
+  }
   const first = tab.paragraphs.indexOf(touched[0]);
   const last = tab.paragraphs.indexOf(touched[touched.length - 1]);
   const paras = tab.paragraphs.slice(first, last + 1);
@@ -195,10 +209,11 @@ export function diffHumanEdits(
 // ---------------------------------------------------------------------------------------------
 // Rendering
 
-type Group = { index: number; kind: 0 | 1 | 2; requests: DocsRequest[] };
-const DELETE = 0;
-const INSERT = 1;
-const REPLACE = 2;
+/** Requests that go together at one Doc index (sorted highest index first, then by kind). */
+export type Group = { index: number; kind: 0 | 1 | 2; requests: DocsRequest[] };
+export const DELETE = 0;
+export const INSERT = 1;
+export const REPLACE = 2;
 
 function sectionAnchor(meeting: MeetingRow, section: NoteSection): string | null {
   const v = (meeting.section_ranges ?? {})[section];
@@ -211,7 +226,7 @@ function sectionAnchor(meeting: MeetingRow, section: NoteSection): string | null
  * longer covers its paragraph (e.g. an edge character deleted and retyped, which lands outside
  * the range) would make a replace leave that character behind, so it is not written either.
  */
-function ownedSpan(tab: NotesTab, row: NoteItemRow): ItemSpan | null {
+export function ownedSpan(tab: NotesTab, row: NoteItemRow): ItemSpan | null {
   if (!row.range_name || row.locked || row.deleted_by_human) return null;
   const span = itemSpan(tab, row.range_name);
   if (!span || span.ambiguous || span.suggested || span.rangeText !== span.paraText) return null;
@@ -230,10 +245,93 @@ export interface RenderPlan {
   removed: Set<string>;
   /** The header line written, if the header is replaced. */
   header: string | null;
+  /**
+   * Format layout only: the exact line now in the Doc per applied item (incl. a "– " or
+   * "Närvarande: " prefix). renderedRows stores it as `last_rendered_text`; v1 plans leave it out.
+   */
+  lines?: Map<string, string>;
 }
 
+/** What `renderItems` passes to the injected format planner (pre-flight F12: no import cycle). */
+export interface FormatPlanOpts {
+  profile: FormatProfile;
+  ownerLabel(owner: string): string;
+  headerText?: string;
+  newAnchors?: { key: string; start: number; end: number }[];
+}
+export type FormatPlanner = (
+  meeting: MeetingRow,
+  tab: NotesTab,
+  rows: NoteItemRow[],
+  desired: NotesItem[],
+  opts: FormatPlanOpts,
+) => RenderPlan;
+
 /** An item we refuse to render: nothing visible left after cleaning. */
-const isEmptyItem = (item: NotesItem) => clean(item.text) === "";
+export const isEmptyItem = (item: NotesItem) => clean(item.text) === "";
+
+/** End of the tab's last paragraph (a Doc never ends in a table). */
+export const tabEnd = (tab: NotesTab) => (tab.paragraphs.length ? tab.paragraphs[tab.paragraphs.length - 1].end : 1);
+
+/**
+ * Delete requests for the `removed` rows' paragraphs and ranges (each must have an owned span):
+ * adjacent paragraphs become one run, so deletes never overlap; a run reaching the end of the tab
+ * takes the newline before it instead (the final newline cannot be deleted).
+ */
+export function deleteRuns(tab: NotesTab, rows: NoteItemRow[], removed: Set<string>): Group[] {
+  const tabId = tab.tabId;
+  const lastIndex = tabEnd(tab);
+  const doomed: { start: number; end: number; name: string }[] = [];
+  for (const row of rows) {
+    if (!removed.has(row.id)) continue;
+    const span = ownedSpan(tab, row);
+    if (!span) continue;
+    doomed.push({ start: span.paraStart, end: span.paraEnd, name: row.range_name! });
+  }
+  doomed.sort((a, b) => a.start - b.start);
+  const runs: { start: number; end: number; names: string[] }[] = [];
+  for (const d of doomed) {
+    const run = runs.at(-1);
+    if (run && d.start <= run.end) {
+      run.end = Math.max(run.end, d.end);
+      run.names.push(d.name);
+    } else runs.push({ start: d.start, end: d.end, names: [d.name] });
+  }
+  const groups: Group[] = [];
+  for (const run of runs) {
+    const isLast = run.end >= lastIndex;
+    const start = isLast ? Math.max(1, run.start - 1) : run.start;
+    const end = isLast ? lastIndex - 1 : run.end;
+    const requests: DocsRequest[] = run.names.map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
+    if (end > start) requests.push({ deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } });
+    groups.push({ index: start, kind: DELETE, requests });
+  }
+  return groups;
+}
+
+/**
+ * The header (LIVE) line: replaced only while its range covers exactly the single paragraph we
+ * last wrote (null = not recorded yet: the coverage check alone).
+ */
+export function headerGroup(meeting: MeetingRow, tab: NotesTab, headerText: string | undefined): { group: Group | null; header: string | null } {
+  if (headerText === undefined || !meeting.header_range) return { group: null, header: null };
+  const span = itemSpan(tab, meeting.header_range);
+  const text = clean(headerText);
+  const owned =
+    span &&
+    !span.ambiguous &&
+    !span.suggested &&
+    span.rangeText === span.paraText &&
+    !span.paraText.includes("\n") &&
+    (meeting.header_rendered == null || span.paraText === meeting.header_rendered);
+  if (owned && text !== "" && span.rangeText !== text) {
+    return {
+      group: { index: span.rangeStart, kind: REPLACE, requests: [replaceRange(meeting.notes_tab_id, meeting.header_range, text)] },
+      header: text,
+    };
+  }
+  return { group: null, header: null };
+}
 
 /**
  * The requests that take the notes tab from `rows` to `desired`, built from `tab` (the revision
@@ -262,35 +360,15 @@ export function planRender(
   let header: string | null = null;
 
   // Removals first, so inserts never anchor on an item deleted in the same batch.
-  const lastIndex = tab.paragraphs.length ? tab.paragraphs[tab.paragraphs.length - 1].end : 1;
-  const doomed: { start: number; end: number; name: string }[] = [];
+  const lastIndex = tabEnd(tab);
   for (const row of rows) {
     if (desiredIds.has(row.id)) continue;
     const span = ownedSpan(tab, row);
     // Only remove a paragraph that holds nothing but our line.
     if (!span || span.paraText !== row.last_rendered_text) continue;
     removed.add(row.id);
-    doomed.push({ start: span.paraStart, end: span.paraEnd, name: row.range_name! });
   }
-  // Adjacent removed paragraphs become one run, so deletes never overlap.
-  doomed.sort((a, b) => a.start - b.start);
-  const runs: { start: number; end: number; names: string[] }[] = [];
-  for (const d of doomed) {
-    const run = runs.at(-1);
-    if (run && d.start <= run.end) {
-      run.end = Math.max(run.end, d.end);
-      run.names.push(d.name);
-    } else runs.push({ start: d.start, end: d.end, names: [d.name] });
-  }
-  for (const run of runs) {
-    // The tab's final newline cannot be deleted: a run reaching the end takes the newline before it.
-    const isLast = run.end >= lastIndex;
-    const start = isLast ? Math.max(1, run.start - 1) : run.start;
-    const end = isLast ? lastIndex - 1 : run.end;
-    const requests: DocsRequest[] = run.names.map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
-    if (end > start) requests.push({ deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } });
-    groups.push({ index: start, kind: DELETE, requests });
-  }
+  groups.push(...deleteRuns(tab, rows, removed));
 
   // Changes and new items.
   const pending = new Map<NoteSection, NotesItem[]>();
@@ -362,23 +440,9 @@ export function planRender(
     groups.push({ index: at, kind: INSERT, requests });
   }
 
-  if (headerText !== undefined && meeting.header_range) {
-    const span = itemSpan(tab, meeting.header_range);
-    const text = clean(headerText);
-    // Ours only while the range is the whole single paragraph and still the line we last wrote
-    // (null = not recorded yet: the coverage check alone).
-    const owned =
-      span &&
-      !span.ambiguous &&
-      !span.suggested &&
-      span.rangeText === span.paraText &&
-      !span.paraText.includes("\n") &&
-      (meeting.header_rendered == null || span.paraText === meeting.header_rendered);
-    if (owned && text !== "" && span.rangeText !== text) {
-      groups.push({ index: span.rangeStart, kind: REPLACE, requests: [replaceRange(tabId, meeting.header_range, text)] });
-      header = text;
-    }
-  }
+  const head = headerGroup(meeting, tab, headerText);
+  if (head.group) groups.push(head.group);
+  header = head.header;
 
   // Highest index first; at the same index a delete runs before an insert.
   groups.sort((a, b) => b.index - a.index || a.kind - b.kind);
@@ -394,7 +458,7 @@ export function renderedRows(
   meetingId: string,
   rows: NoteItemRow[],
   desired: NotesItem[],
-  plan: Pick<RenderPlan, "applied" | "removed">,
+  plan: Pick<RenderPlan, "applied" | "removed" | "lines">,
 ): NoteItemRow[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const out: NoteItemRow[] = rows.filter((r) => !plan.removed.has(r.id));
@@ -418,6 +482,14 @@ export function renderedRows(
       range_name: row?.range_name ?? itemRangeName(meetingId, item.id),
       position: row?.range_name ? row.position : (nextPos.get(section) ?? -1) + 1,
     };
+    if (plan.lines) {
+      // Format layout: the exact line written, and the item's format fields.
+      updated.last_rendered_text = plan.lines.get(item.id) ?? updated.last_rendered_text;
+      updated.kind = kindOfSection(section);
+      updated.anchor = item.anchor ?? row?.anchor ?? null;
+      updated.done = item.done === true;
+      updated.copy_of = item.copyOf ?? row?.copy_of ?? null;
+    }
     if (!row?.range_name) nextPos.set(section, updated.position);
     const i = out.findIndex((r) => r.id === item.id);
     if (i >= 0) out[i] = updated;
@@ -443,12 +515,24 @@ export async function renderItems(
   desired: NotesItem[],
   revisionId: string,
   headerText?: string,
+  format?: Omit<FormatPlanOpts, "headerText"> & { plan: FormatPlanner },
 ): Promise<RenderResult> {
+  // A format meeting rendered by code that does not know formats (e.g. a tick deployed before
+  // A12): write nothing rather than v1 lines at the end of a human's Doc.
+  if (meeting.layout === "format" && !format) return { status: "ok", rows, headerRendered: null };
   const tab =
     snapshots.get(snapshotKey(meeting.doc_id, meeting.notes_tab_id, revisionId)) ??
     (await fetchTab(auth, meeting.doc_id, meeting.notes_tab_id));
   if (tab.revisionId !== revisionId) return { status: "conflict" };
-  const plan = planRender(meeting, tab, rows, desired, headerText);
+  const plan =
+    meeting.layout === "format" && format
+      ? format.plan(meeting, tab, rows, desired, {
+          profile: format.profile,
+          ownerLabel: format.ownerLabel,
+          headerText,
+          newAnchors: format.newAnchors,
+        })
+      : planRender(meeting, tab, rows, desired, headerText);
   const ok = (): RenderResult => ({ status: "ok", rows: renderedRows(meeting.id, rows, desired, plan), headerRendered: plan.header });
   if (!plan.requests.length) return ok();
   try {

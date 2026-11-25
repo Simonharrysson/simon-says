@@ -198,7 +198,7 @@ async function inspect(auth: OAuth2Client, n: Notes, g: G, s: State) {
 
 /** Simulated Claude: reword every item it may touch, and offer human-deleted ids again. */
 const reworded = (k: number) => (rows: NoteItemRow[]): NotesItem[] =>
-  rows.map((r) => ({ ...r, owner: r.owner ?? undefined, due: r.due ?? undefined, text: `${r.text.replace(/ · t\d+$/, "")} · t${k}` }));
+  rows.map((r) => ({ id: r.id, section: r.section, owner: r.owner ?? undefined, due: r.due ?? undefined, text: `${r.text.replace(/ · t\d+$/, "")} · t${k}` }));
 
 async function tick(auth: OAuth2Client, n: Notes, g: G, s: State) {
   s.ticks += 1;
