@@ -18,10 +18,7 @@ const fake = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({
-    rpc: async (fn: string) =>
-      fn === "cleanup_retention"
-        ? { data: [{ usage_daily_deleted: 3, org_creations_deleted: 1 }], error: null }
-        : { data: null, error: null },
+    rpc: async () => ({ data: null, error: null }),
     from: (table: string) => {
       const result = () =>
         table === "meeting_events"
@@ -175,12 +172,8 @@ describe("cron route", () => {
     const res = await call("Bearer cron");
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toMatchObject({
-      totalUsd: 20,
-      exceeded: true,
-      sent: false,
-      retention: { usageDailyDeleted: 3, orgCreationsDeleted: 1 },
-    });
+    expect(body).toMatchObject({ totalUsd: 20, exceeded: true, sent: false });
+    expect(body).not.toHaveProperty("retention");
   });
 });
 

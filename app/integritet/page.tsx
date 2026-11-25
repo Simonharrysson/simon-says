@@ -85,7 +85,7 @@ export default function PrivacyPage() {
           </ul>
           <p>
             <strong>Användningsposterna och loggen över skapade föreningar finns kvar även när föreningen raderas.</strong>{" "}
-            De innehåller inga mötesinnehåll, bara siffror och id:n. De sparas i 24 månader för att förhindra missbruk.
+            De innehåller inga mötesinnehåll, bara siffror och id:n. Användningsposterna sparas så länge tjänsten drivs, för att förhindra missbruk av den gratis tjänsten och för att kunna följa kostnaden över tid. När en förening raderas finns bara dess id kvar i posterna, inte namnet. Loggen över skapade föreningar sparas för att kunna hålla gränsen på två föreningar per person.
           </p>
           <h3>Det som inte sparas</h3>
           <ul>
