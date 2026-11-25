@@ -2,16 +2,17 @@ import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { logEvent } from "@/lib/db/events";
 import { isUuid } from "@/lib/db/ids";
-import { claimElSession, closeElSession, type ClaimStatus } from "@/lib/db/usage";
+import { claimElSession, releaseUnmintedElSession, type ClaimStatus } from "@/lib/db/usage";
 import { devWsOverride, mintToken, realtimeWsUrl } from "@/lib/elevenlabs/token";
 import { getEnv } from "@/lib/env";
+import { MAX_MINTS_PER_MEETING } from "@/lib/limits";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 // Refusals from claim_el_session → [HTTP status, error]. 429 `reconnect_limit`: retry after
-// 5 s unless the meeting has used its 30 mints.
+// 5 s unless the meeting has used its MAX_MINTS_PER_MEETING (14) mints.
 const refusal: Record<Exclude<ClaimStatus, "ok">, [number, string]> = {
   not_found: [404, "not_found"],
   not_live: [409, "not_live"],
@@ -33,11 +34,12 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
  * Returns `{ token, wsUrl, sessionId }`; connect to `${wsUrl}&token=${token}`.
  *
  * Only the member who started the meeting, only while it is live and consent is confirmed,
- * at most one mint per 5 s and 30 per meeting, and only while every cap has time left. The
+ * at most one mint per 5 s and 14 per meeting, and only while every cap has time left. The
  * whole decision (lock, rate limit, caps, max duration) is made atomically in
- * claim_el_session. The session's max duration is the time left (≤ 4 h), so one session
- * normally covers the whole meeting. Usage is booked from server times when the session is
- * closed (on the next mint, or by the end/cleanup jobs).
+ * claim_el_session. The session's max duration is least(time left, 1 h) (Ruling 39); the page
+ * rolls over to a new session at the limit. A session's full granted length is booked when it
+ * is closed (on the next mint, or by the end/cleanup jobs): ElevenLabs may keep billing an
+ * orphaned socket until then.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -67,8 +69,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const closingSessionId = typeof closing === "string" ? closing : null;
 
   // Claim the session first (atomic: lock, rate limit, caps, closing the previous one), then
-  // mint. A failed mint closes the claimed session again (≈ 0 s booked) so a retry is allowed
-  // (after the 5 s mint spacing).
+  // mint. A failed mint releases the claimed session (nothing booked, not counted toward the
+  // mint cap) so a retry is allowed (after the 5 s mint spacing).
   const sessionId = randomUUID();
   const claim = await claimElSession(meeting.id, sessionId, closingSessionId);
   if (claim.status !== "ok") {
@@ -86,6 +88,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status, headers: noStore },
       );
     }
+    if (claim.status === "reconnect_limit") {
+      // Two causes: the 5 s spacing (wait and retry) or the meeting's mint cap (no retry can
+      // succeed: start a new meeting). Tell the page which.
+      const { count } = await supabaseAdmin()
+        .from("el_sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("meeting_id", meeting.id)
+        .eq("kind", "live");
+      if ((count ?? 0) >= MAX_MINTS_PER_MEETING) return fail("mint_cap", 429);
+    }
     return fail(error, status);
   }
   const maxSeconds = claim.maxSeconds!;
@@ -102,8 +114,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     token = await mintToken(maxSeconds);
   } catch (e) {
     console.error(`token: mint failed for meeting ${meeting.id}: ${(e as Error).message}`);
-    await closeElSession(sessionId).catch((ce: Error) =>
-      console.error(`token: could not close unminted session ${sessionId}: ${ce.message}`),
+    await releaseUnmintedElSession(sessionId).catch((ce: Error) =>
+      console.error(`token: could not release unminted session ${sessionId}: ${ce.message}`),
     );
     return fail("mint_failed", 502);
   }

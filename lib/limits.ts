@@ -10,8 +10,16 @@ export const ORG_MONTH_SECONDS = 20 * 3600;
 export const MEETING_SECONDS = 4 * 3600;
 /** Warn this long before any cap stops the meeting (meeting: at 3 h 45). */
 export const WARN_BEFORE_SECONDS = 15 * 60;
-/** Mint rate limit per meeting (Ruling 15). */
-export const MAX_MINTS_PER_MEETING = 30;
+/**
+ * One ElevenLabs session is granted at most this long (Ruling 39, enforced in claim_el_session):
+ * a session closed early may keep billing at ElevenLabs up to its granted length, so it is
+ * booked in full; one hour bounds what an orphaned socket can cost.
+ */
+export const SESSION_MAX_SECONDS = 3600;
+/** Mint cap per meeting (Ruling 39): one per session-hour of a 4 h meeting, plus 10 reconnects. */
+export const MAX_MINTS_PER_MEETING = Math.ceil(MEETING_SECONDS / SESSION_MAX_SECONDS) + 10;
+/** Starting meetings (Ruling 39): at most this many per user per rolling hour, and one live at a time. */
+export const MAX_STARTS_PER_HOUR = 6;
 export const MIN_MINT_INTERVAL_SECONDS = 5;
 
 export type LimitReason =

@@ -12,7 +12,11 @@ const m = vi.hoisted(() => ({
   createMeetingDoc: vi.fn(),
   insert: vi.fn(),
   logEvent: vi.fn(),
+  del: vi.fn(),
   killSwitch: false,
+  /** The user's live meetings (any org) and meetings started in the last hour, as the admin client sees them. */
+  liveRows: (): { id: string; started_at: string }[] => [],
+  recentRows: (): { id: string; started_at: string }[] => [],
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -23,7 +27,20 @@ vi.mock("@/lib/supabase/server", () => ({
     }),
   }),
 }));
-vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => ({ from: () => ({ insert: m.insert }) }) }));
+vi.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: () => ({
+    from: () => ({
+      insert: m.insert,
+      delete: () => ({ eq: async (_c: string, id: string) => (m.del(id), { error: null }) }),
+      select: () => ({
+        eq: () => ({
+          eq: async () => ({ data: m.liveRows(), error: null }),
+          gte: async () => ({ data: m.recentRows(), error: null }),
+        }),
+      }),
+    }),
+  }),
+}));
 vi.mock("@/lib/db/orgs", () => ({ getOrg: m.getOrg, myRole: m.myRole }));
 vi.mock("@/lib/db/members", () => ({ memberEmails: m.memberEmails }));
 vi.mock("@/lib/db/events", () => ({ logEvent: m.logEvent }));
@@ -64,7 +81,12 @@ beforeEach(() => {
   m.createMeetingDoc.mockReset().mockResolvedValue(doc);
   m.insert.mockReset().mockResolvedValue({ error: null });
   m.logEvent.mockReset().mockResolvedValue(undefined);
+  m.del.mockReset();
+  m.liveRows = () => [];
+  m.recentRows = () => [];
 });
+
+const ago = (s: number) => new Date(Date.now() - s * 1000).toISOString();
 
 describe("POST /api/meetings", () => {
   it("creates the Doc and the meeting row, and returns meetingId + docUrl", async () => {
@@ -150,5 +172,38 @@ describe("POST /api/meetings", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     m.logEvent.mockRejectedValue(new Error("x"));
     expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+  });
+
+  it("409 starter_busy when the user already has a live meeting in any org (Ruling 39), before creating a Doc", async () => {
+    m.liveRows = () => [{ id: "other", started_at: ago(600) }];
+    const res = await call({ orgId: ORG, consent: true });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("starter_busy");
+    expect(m.createMeetingDoc).not.toHaveBeenCalled();
+  });
+
+  it("429 start_rate at 6 starts in the last hour", async () => {
+    m.recentRows = () => Array.from({ length: 6 }, (_, i) => ({ id: `m${i}`, started_at: ago(3000 - i) }));
+    const res = await call({ orgId: ORG, consent: true });
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toBe("start_rate");
+    expect(m.createMeetingDoc).not.toHaveBeenCalled();
+    m.recentRows = () => Array.from({ length: 5 }, (_, i) => ({ id: `m${i}`, started_at: ago(3000 - i) }));
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+  });
+
+  it("two racing starts: the later row is removed again after the insert", async () => {
+    // The pre-check saw nothing; by the time of the re-check an earlier start has landed.
+    m.liveRows = () => (m.insert.mock.calls.length ? [{ id: "earlier", started_at: ago(1) }, { id: m.insert.mock.calls[0][0].id, started_at: m.insert.mock.calls[0][0].started_at }] : []);
+    const res = await call({ orgId: ORG, consent: true });
+    expect(res.status).toBe(409);
+    expect(m.del).toHaveBeenCalledWith(m.insert.mock.calls[0][0].id);
+    expect(m.logEvent).not.toHaveBeenCalled();
+  });
+
+  it("the earlier of two racing starts survives the re-check", async () => {
+    m.liveRows = () => (m.insert.mock.calls.length ? [{ id: m.insert.mock.calls[0][0].id, started_at: m.insert.mock.calls[0][0].started_at }, { id: "later", started_at: new Date(Date.now() + 1000).toISOString() }] : []);
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+    expect(m.del).not.toHaveBeenCalled();
   });
 });

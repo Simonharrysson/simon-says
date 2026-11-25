@@ -7,6 +7,7 @@ import { memberEmails } from "@/lib/db/members";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { MeetingEventKind } from "@/lib/db/types";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { MAX_STARTS_PER_HOUR } from "@/lib/limits";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 
@@ -45,6 +46,9 @@ export async function startMeeting(
   if ((active ?? []).length > 0) {
     return failed("already_live", 409, "Ett möte pågår redan i föreningen. Avsluta det först.");
   }
+
+  const limited = await startLimit(user.id, null);
+  if (limited) return limited;
 
   let auth;
   try {
@@ -102,6 +106,15 @@ export async function startMeeting(
     return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
   }
 
+  // Re-check after the insert (Ruling 39): two concurrent starts both pass the check above, so
+  // the earliest row wins and the later one is removed again (its Doc stays in Drive).
+  const lost = await startLimit(user.id, { id: meetingId, startedAt: startedAt.toISOString() });
+  if (lost) {
+    const { error: de } = await supabaseAdmin().from("meetings").delete().eq("id", meetingId);
+    if (de) console.error(`meetings: could not remove refused start ${meetingId}: ${de.message}`);
+    return lost;
+  }
+
   await logEvent(meetingId, eventKind, {
     by: user.id,
     shareFailed: doc.shareFailed.length,
@@ -110,4 +123,39 @@ export async function startMeeting(
 
 
   return { ok: true, meetingId, docUrl: docUrl(doc.docId), orgName: org.name, title: meetingTitle(org.name, startedAt) };
+}
+
+type MeetingKey = { id: string; startedAt: string };
+const before = (a: { id: string; started_at: string }, b: MeetingKey) =>
+  Date.parse(a.started_at) < Date.parse(b.startedAt) || (a.started_at === b.startedAt && a.id < b.id);
+
+/**
+ * Per-user start limits (Ruling 39), counted from meetings rows across every org: at most one
+ * live (or ending) meeting per starter, and MAX_STARTS_PER_HOUR starts per rolling hour. `own`
+ * is the user's just-inserted meeting: only rows ordered before it (started_at, id) count, so
+ * of two racing starts exactly the earlier one survives.
+ */
+async function startLimit(userId: string, own: MeetingKey | null): Promise<StartResult | null> {
+  const db = supabaseAdmin();
+  const hourAgo = new Date(Date.now() - 3600_000).toISOString();
+  const [active, recent] = await Promise.all([
+    db.from("meetings").select("id, started_at").eq("started_by", userId).eq("status", "live"),
+    db.from("meetings").select("id, started_at").eq("started_by", userId).gte("started_at", hourAgo),
+  ]);
+  if (active.error) throw new Error(`meetings: start limit: ${active.error.message}`);
+  if (recent.error) throw new Error(`meetings: start limit: ${recent.error.message}`);
+  const counts = (rows: { id: string; started_at: string }[]) =>
+    rows.filter((r) => (own ? r.id !== own.id && before(r, own) : true));
+  const otherLive = counts((active.data ?? []) as { id: string; started_at: string }[]);
+  if (otherLive.length > 0) {
+    return failed(
+      "starter_busy",
+      409,
+      "Du har redan ett möte igång. Öppna det och avsluta det först (under Möten i föreningen).",
+    );
+  }
+  if (counts((recent.data ?? []) as { id: string; started_at: string }[]).length >= MAX_STARTS_PER_HOUR) {
+    return failed("start_rate", 429, "Du har startat många möten den senaste timmen. Vänta en stund och försök igen.");
+  }
+  return null;
 }

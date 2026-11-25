@@ -114,7 +114,7 @@ describe.skipIf(!hasLocalSupabase)("test sessions (el_sessions.kind)", () => {
       if (error) throw new Error(error.message);
       return data.id as string;
     };
-    await session(await mk(), "test", 3000); // would reserve 3900 s if it counted
+    await session(await mk(), "test", 2000); // would reserve 2000 s if it counted
     const target = await mk();
     const claim = async () =>
       (await rpc("claim_el_session", {
@@ -122,7 +122,7 @@ describe.skipIf(!hasLocalSupabase)("test sessions (el_sessions.kind)", () => {
         p_new_session_id: `live-${randomUUID()}`,
         p_closing_session_id: null,
         p_meeting_cap_secs: 100_000,
-        p_org_month_cap_secs: 5000,
+        p_org_month_cap_secs: 3000,
         p_global_day_cap_secs: 1_000_000_000,
         p_global_usd_cap: 1_000_000_000,
         p_usd_per_hour: 0.22,
@@ -131,6 +131,6 @@ describe.skipIf(!hasLocalSupabase)("test sessions (el_sessions.kind)", () => {
       })) as { status: string; max_seconds: number | null }[];
     const [row] = await claim();
     expect(row.status).toBe("ok");
-    expect(row.max_seconds).toBe(5000);
+    expect(row.max_seconds).toBe(3000);
   });
 });

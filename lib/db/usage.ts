@@ -36,9 +36,10 @@ export async function globalDaySeconds(): Promise<number> {
 }
 
 /**
- * Close an ElevenLabs session and book its seconds (server times, capped at its window end
- * started_at + max_seconds + 900 s) and their cost at ELEVENLABS_USD_PER_HOUR in usage_daily,
- * atomically. Idempotent: returns 0 if it was already closed.
+ * Close an ElevenLabs session and book its FULL granted length (max_seconds, Ruling 39 / 0017:
+ * ElevenLabs may keep billing an orphaned socket until then) and its cost at
+ * ELEVENLABS_USD_PER_HOUR in usage_daily, atomically. Test sessions book 0. Idempotent:
+ * returns 0 if it was already closed.
  */
 export async function closeElSession(sessionId: string): Promise<number> {
   const { data, error } = await supabaseAdmin().rpc("close_el_session", {
@@ -56,6 +57,15 @@ export async function closeElSession(sessionId: string): Promise<number> {
     }
   }
   return seconds;
+}
+
+/**
+ * The mint for a claimed session failed, so no ElevenLabs session exists: close the row without
+ * booking anything (it becomes kind 'unminted' and does not count toward the mint cap).
+ */
+export async function releaseUnmintedElSession(sessionId: string): Promise<void> {
+  const { error } = await supabaseAdmin().rpc("release_unminted_el_session", { p_session_id: sessionId });
+  if (error) throw new Error(`releaseUnmintedElSession: ${error.message}`);
 }
 
 export type ClaimStatus =

@@ -203,7 +203,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect(await res.json()).toEqual({ error: "not_live" });
   });
 
-  it("mints with max_session_duration_seconds = the remaining meeting time (14 400 at start, never 900)", async () => {
+  it("mints with max_session_duration_seconds = least(remaining time, 1 h) (3 600 at start, Ruling 39)", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
     const res = await callToken(id);
@@ -214,7 +214,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect(typeof body.sessionId).toBe("string");
 
     expect(mint.fn).toHaveBeenCalledTimes(1);
-    expect(mint.fn).toHaveBeenCalledWith(14_400);
+    expect(mint.fn).toHaveBeenCalledWith(3600);
 
     const ws = new URL(body.wsUrl);
     expect(ws.origin + ws.pathname).toBe("wss://api.elevenlabs.io/v1/speech-to-text/realtime");
@@ -222,7 +222,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect(ws.searchParams.has("token")).toBe(false);
 
     const session = await sessionRow(body.sessionId);
-    expect(session).toMatchObject({ meeting_id: id, max_seconds: 14_400, closed_at: null });
+    expect(session).toMatchObject({ meeting_id: id, max_seconds: 3600, closed_at: null });
     expect((await meetingRow(id)).current_el_session_id).toBe(body.sessionId);
   });
 
@@ -260,7 +260,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect((await sessionRow(sessionId)).closed_at).toBeNull();
   });
 
-  it("reconnect: socket drops, a request 1 s later with closingSessionId succeeds; usage from server times only", async () => {
+  it("reconnect: socket drops, a request 1 s later with closingSessionId succeeds; the closed session is booked in full", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
     const first = await (await callToken(id)).json();
@@ -277,14 +277,13 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
 
     const closed = await sessionRow(first.sessionId);
     expect(closed.closed_at).not.toBeNull();
-    const booked = (await orgSecondsToday(orgId)) - before;
-    expect(booked).toBeGreaterThanOrEqual(120);
-    expect(booked).toBeLessThanOrEqual(125);
+    // Ruling 39: ElevenLabs may keep billing the old socket up to its granted hour, so the
+    // whole granted length is booked, not the 2 minutes it ran.
+    expect((await orgSecondsToday(orgId)) - before).toBe(3600);
 
-    // The new session gets the rest of the 4 h.
+    // The new session gets another hour (the meeting's 4 h cap counts elapsed time).
     const max = mint.fn.mock.calls[1][0];
-    expect(max).toBeGreaterThanOrEqual(14_400 - 125);
-    expect(max).toBeLessThanOrEqual(14_400 - 120);
+    expect(max).toBe(3600);
     expect((await sessionRow(second.sessionId)).max_seconds).toBe(max);
     expect((await meetingRow(id)).current_el_session_id).toBe(second.sessionId);
 
@@ -302,8 +301,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     await age(id, first.sessionId, 3600);
     expect((await callToken(id, { closingSessionId: first.sessionId })).status).toBe(200);
     const { seconds, usd } = await orgUsageToday(org);
-    expect(seconds).toBeGreaterThanOrEqual(3600);
-    expect(seconds).toBeLessThanOrEqual(3605);
+    expect(seconds).toBe(3600);
     expect(usd).toBeCloseTo((seconds / 3600) * 0.22, 5);
   });
 
@@ -325,14 +323,14 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
 
   it("two simultaneous first mints in one org near its cap: the second gets only what's left after the first's reservation", async () => {
     const { owner, orgId: org } = await freshOrg("Nearly full");
-    // 20 000 s left this month. The first session takes 14 400 and reserves 14 400 + 900 (its
-    // 15-min token window), leaving 4 700 for the second.
-    await adminClient().from("usage_daily").insert({ org_id: org, day: today(), seconds: 20 * 3600 - 20_000 });
+    // 5 000 s left this month. The first session takes 3 600 (the 1 h session cap) and reserves
+    // exactly that (its close books it in full), leaving 1 400 for the second.
+    await adminClient().from("usage_daily").insert({ org_id: org, day: today(), seconds: 20 * 3600 - 5000 });
     const [a, b] = [await live(org, owner.id), await live(org, owner.id)];
     as(owner);
     const results = await Promise.all([callToken(a), callToken(b)]);
     expect(results.map((r) => r.status)).toEqual([200, 200]);
-    expect(mint.fn.mock.calls.map((c) => c[0]).sort((x, y) => x - y)).toEqual([4_700, 14_400]);
+    expect(mint.fn.mock.calls.map((c) => c[0]).sort((x, y) => x - y)).toEqual([1400, 3600]);
 
     // A third meeting now has nothing left: 429, no mint.
     const c = await live(org, owner.id);
@@ -342,7 +340,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect(mint.fn).toHaveBeenCalledTimes(2);
   });
 
-  it("a session past its window end (started_at + max_seconds + 900 s) is booked only up to it and can be replaced", async () => {
+  it("a session past its window end (started_at + max_seconds + 900 s) is booked at max_seconds and can be replaced", async () => {
     const id = await live(orgId, starter.id);
     as(starter);
     const first = await (await callToken(id)).json();
@@ -351,11 +349,11 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     await age(id, first.sessionId, 900);
     expect((await callToken(id)).status).toBe(409);
 
-    // 20 minutes after the mint it is over: booked 60 + 900 s.
+    // 20 minutes after the mint it is over: booked its granted 60 s (all ElevenLabs can bill).
     await age(id, first.sessionId, 1200);
     const before = await orgSecondsToday(orgId);
     expect((await callToken(id)).status).toBe(200);
-    expect((await orgSecondsToday(orgId)) - before).toBe(960);
+    expect((await orgSecondsToday(orgId)) - before).toBe(60);
   });
 
   it("allows a new token after the page has been silent for > 60 s, and closes the abandoned session", async () => {
@@ -371,15 +369,19 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect((await sessionRow(first.sessionId)).closed_at).not.toBeNull();
   });
 
-  it("a failed mint closes the claimed session (502), so a request after the 5 s spacing gets a token", async () => {
-    const id = await live(orgId, starter.id);
-    as(starter);
+  it("a failed mint releases the claimed session (502, nothing booked), so a request after the 5 s spacing gets a token", async () => {
+    const { owner, orgId: org } = await freshOrg("Mint fails");
+    const id = await live(org, owner.id);
+    as(owner);
     mint.fn.mockRejectedValueOnce(new Error("ElevenLabs 401: quota_exceeded"));
     const res = await callToken(id);
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: "mint_failed" });
     const { current_el_session_id } = await meetingRow(id);
-    expect((await sessionRow(current_el_session_id!)).closed_at).not.toBeNull();
+    const released = await sessionRow(current_el_session_id!);
+    expect(released.closed_at).not.toBeNull();
+    expect(released.kind).toBe("unminted");
+    expect(await orgSecondsToday(org)).toBe(0);
 
     expect((await callToken(id)).status).toBe(429); // within 5 s
     await age(id, current_el_session_id!, 6);
@@ -401,10 +403,19 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect((await callToken(id, { closingSessionId: first.sessionId })).status).toBe(200);
   });
 
-  it("429 reconnect_limit: at most 30 mints per meeting", async () => {
+  it("429 mint_cap: at most 14 mints per meeting (ceil(4 h / 1 h) + 10); failed mints don't count", async () => {
     const id = await live(orgId, starter.id);
     const start = new Date(Date.now() - 3600 * 1000).toISOString();
-    const rows = Array.from({ length: 29 }, () => ({
+    const unminted = Array.from({ length: 5 }, () => ({
+      id: `bad-${randomUUID()}`,
+      meeting_id: id,
+      started_at: start,
+      max_seconds: 1,
+      closed_at: start,
+      kind: "unminted",
+    }));
+    await adminClient().from("el_sessions").insert(unminted);
+    const rows = Array.from({ length: 13 }, () => ({
       id: `old-${randomUUID()}`,
       meeting_id: id,
       started_at: start,
@@ -413,12 +424,13 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     }));
     await adminClient().from("el_sessions").insert(rows);
     as(starter);
-    expect((await callToken(id)).status).toBe(200); // the 30th
+    expect((await callToken(id)).status).toBe(200); // the 14th
     const { current_el_session_id } = await meetingRow(id);
     await age(id, current_el_session_id!, 30);
     const res = await callToken(id, { closingSessionId: current_el_session_id });
     expect(res.status).toBe(429);
-    expect(await res.json()).toEqual({ error: "reconnect_limit" });
+    // Not the 5 s spacing: no retry can succeed, the page tells the user to start a new meeting.
+    expect(await res.json()).toEqual({ error: "mint_cap" });
     expect(mint.fn).toHaveBeenCalledTimes(1);
   });
 
@@ -498,6 +510,7 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
         },
       ],
       ["meeting_seconds", { p_meeting_id: randomUUID() }],
+      ["release_unminted_el_session", { p_session_id: "x" }],
       ["global_day_seconds", {}],
     ] as const) {
       const { error } = await starter.db.rpc(fn, args);

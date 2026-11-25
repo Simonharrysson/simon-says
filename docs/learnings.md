@@ -185,6 +185,14 @@ together when one is wrong.
 - [ ] **Mic recovery:** after sleep, Safari reports the AudioContext as `interrupted`/`suspended`; the watchdog resumes
   it after 5 s of no audio, then reopens the mic. Check that a reopen outside a click works in Safari and Chrome.
 - [ ] **Hidden tab / lid closed:** segments keep arriving while the tab is hidden for 10 min (flush and heartbeat are also driven from the audio callback), and the screen wake lock is re-acquired on return.
+- [ ] **Can ElevenLabs end a session server-side?** (Ruling 39, final fix wave A1.) Today a session closed early (reconnect,
+  Avsluta, sweep) is booked at its FULL granted length (`max_seconds`, ≤ 1 h), because the old socket could keep
+  streaming — and billing — until then. Every meeting therefore books whole granted hours against the 20 h/month (a
+  10-minute meeting costs 60 minutes of it). If ElevenLabs has an API to terminate a realtime session (or a single-use
+  token's session), call it on close and revert `close_el_session` to booking actual seconds (migration 0017).
+- [ ] **Hourly rollover:** sessions are granted at most 1 h, so every hour `session_time_limit_exceeded` closes the socket
+  and the page mints a new session: check the gap (audio is held in the ring buffer and replayed) and that the new
+  labels show as "Vem är detta?" in the list without reopening the name round.
 
 How to try the page against the fake (no credits): `npm run fake-el` in one terminal,
 `ELEVENLABS_WS_URL=ws://localhost:8787/v1/speech-to-text/realtime npm run dev` in another (the override is ignored when
