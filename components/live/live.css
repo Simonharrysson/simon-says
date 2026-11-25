@@ -535,7 +535,7 @@ a.doclink:hover {
   gap: var(--s-3);
   align-items: center;
   padding: var(--s-4);
-  border: 1px solid var(--rail);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-panel);
   font-weight: 500;
   line-height: 1.35;
@@ -557,7 +557,7 @@ a.doclink:hover {
   width: 1.25rem;
   height: 1.25rem;
   margin: 0;
-  border: 1px solid var(--ink-3);
+  border: 1px solid var(--control-border);
   border-radius: 4px;
   background: var(--surface);
   display: grid;
@@ -830,7 +830,7 @@ a.doclink:hover {
   gap: var(--s-1);
   min-height: 2.75rem;
   padding: 0 var(--s-4);
-  border: 1px solid var(--rail);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-control);
   background: var(--surface);
   color: var(--ink);

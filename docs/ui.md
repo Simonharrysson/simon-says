@@ -48,7 +48,8 @@ names `--board`, `--rail`, `--ink` are left over from it and now mean what the t
 | `--board` | `#fafafa` | `#000000` | page background |
 | `--surface` | `#ffffff` | `#0a0a0a` | cards, sheets, controls |
 | `--surface-sunk` | `#f2f2f2` | `#1a1a1a` | hover, inset areas |
-| `--rail` | `#c7c7c7` | `#454545` | control outlines (inputs, secondary buttons, chips) |
+| `--rail` | `#c7c7c7` | `#454545` | decorative strong lines (timer track, dashed empty states, neutral dots) |
+| `--control-border` | `#8a8a8a` | `#6e6e6e` | edges of inputs, selects, checkboxes, chips, bordered buttons, the consent box |
 | `--line` | `#ebebeb` | `#2e2e2e` | hairlines: card borders, row dividers |
 | `--ink` / `--ink-2` / `--ink-3` | `#171717` / `#4d4d4d` / `#666666` | `#ededed` / `#bdbdbd` / `#a1a1a1` | text levels |
 | `--on-ink` | `#ffffff` | `#0a0a0a` | text on the primary (ink) button |
@@ -64,8 +65,10 @@ The status colours are the darker, text-safe shades of Geist's scales (Geist's b
 Contrast (WCAG, computed): every text token ≥ 4.5:1 on board, surface and sunk in both themes.
 Lowest light: red on red-wash 4.69, green on sunk 4.69, blue on sunk 4.75; lowest dark: red on
 red-wash 5.90. `--ink-3` 5.13 on sunk (light). White on the red button 5.37 (light); dark uses
-`#1a0806` on red, 6.62. Primary button text 17.9 / 16.9. Control outlines (`--rail`) 1.69:1 on
-white (the old design's was 1.61); checkboxes use `--ink-3` for their edge (5.7:1).
+`#1a0806` on red, 6.62. Primary button text 17.9 / 16.9. Control edges (`--control-border`, WCAG
+1.4.11 ≥ 3:1): light 3.45 on surface, 3.31 on board, 3.08 on sunk; dark 3.88 on surface, 4.12
+on board, 3.41 on sunk. Hairlines between rows and cards (`--line`) stay faint on purpose: they
+are decorative, not control boundaries.
 
 **Type.** Geist Sans for everything; Geist Mono only for measurements: timer, timestamps, speaker
 labels, invite link, ids. Both via `next/font/google` (`Geist`, `Geist_Mono`; versions pinned by
@@ -78,7 +81,7 @@ tracking −0.025em (display −0.045em, section titles −0.035em), `text-wrap:
 8 (cards, banners, dialogs), round only for badges, status dots and the mic ring.
 **Controls** sm 32px, md 40px, lg 48px (lg stays big on purpose: Paus/Fortsätt on the live page);
 on screens under 48rem every button and input is ≥ 44px. Primary = ink on light, white on dark
-(`--ink` / `--on-ink`); secondary = surface with a `--rail` outline; ghost = transparent.
+(`--ink` / `--on-ink`); secondary = surface with a `--control-border` outline; ghost = transparent.
 
 **Depth.** Cards are flat: `--shadow-panel` is a 1px `--line` ring (a box-shadow, so it adds no
 size). Only floating things get a real shadow: `--shadow-lift` (dialogs, popovers, menus) = ring +

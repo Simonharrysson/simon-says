@@ -15,8 +15,9 @@
   --board: #fafafa; /* page background */
   --surface: #ffffff; /* cards, sheets, controls */
   --surface-sunk: #f2f2f2; /* hover, inset areas */
-  --rail: #c7c7c7; /* control outlines (inputs, checkboxes, secondary buttons) */
+  --rail: #c7c7c7; /* decorative strong lines: timer track, dashed empty states, neutral dots */
   --line: #ebebeb; /* hairlines: card borders, row dividers */
+  --control-border: #8a8a8a; /* edges of inputs, selects, checkboxes, bordered buttons: >= 3:1 (WCAG 1.4.11) */
 
   /* Text: neutral greys */
   --ink: #171717;
@@ -87,6 +88,7 @@
     --surface-sunk: #1a1a1a;
     --rail: #454545;
     --line: #2e2e2e;
+    --control-border: #6e6e6e;
 
     --ink: #ededed;
     --ink-2: #bdbdbd;
@@ -440,7 +442,7 @@ select {
 .btn {
   --btn-bg: var(--surface);
   --btn-fg: var(--ink);
-  --btn-border: var(--rail);
+  --btn-border: var(--control-border);
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -643,7 +645,7 @@ select {
   width: 100%;
   min-height: 2.5rem;
   padding: 0 var(--s-3);
-  border: 1px solid var(--rail);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-control);
   background: var(--surface);
   color: var(--ink);
@@ -712,7 +714,7 @@ select {
   width: 1.25rem;
   height: 1.25rem;
   margin: 0.15rem 0 0;
-  border: 1px solid var(--ink-3);
+  border: 1px solid var(--control-border);
   border-radius: 4px;
   background: var(--surface);
   display: grid;
