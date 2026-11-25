@@ -1,0 +1,110 @@
+{
+  "source": "Fictional housing cooperative (bostadsrättsförening) board meeting written for Task Q (scripts/notes-eval.ts). Fictional association and people; no real meeting.",
+  "orgName": "Brf Lönnen",
+  "speakerNames": {
+    "S1-speaker_0": "Eva Lind",
+    "S1-speaker_1": "Mats Berg",
+    "S1-speaker_2": "Sara Öhman",
+    "S1-speaker_3": "Ahmed Karimi"
+  },
+  "languages": ["sv"],
+  "traps": [
+    "Fee increase proposed as 5 %, changed to 3 % before it is decided.",
+    "Washing machine: a 35 000 kr professional model is discussed, the 28 000 kr model is decided.",
+    "Charging posts (laddstolpar) are explicitly NOT decided; tabled to the next board meeting (allowed only as a deferral).",
+    "Ahmed may ask his brother-in-law about charging boxes, 'men jag lovar ingenting' (not an action).",
+    "The broken door phone is already reported, and the laundry-room sign is already up (no actions).",
+    "Eva typed the action 'book the party room for the annual meeting' into the notes tab herself before the meeting; it must not be duplicated.",
+    "Amounts said in words (tjugoåttatusen, tre procent)."
+  ],
+  "human_lines": [
+    { "atMs": 0, "section": "action", "line": "☐ Eva Lind: Boka festlokalen till föreningsstämman (senast 15 mars)" }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Årsavgiften höjs med 3 % från 1 januari.",
+      "match": [["avgift"], ["3 %", "3%", "3 procent", "tre procent"]]
+    },
+    {
+      "key": "D2",
+      "text": "Målningen av trapphusen skjuts upp ett år.",
+      "match": [["trapphus"]]
+    },
+    {
+      "key": "D3",
+      "text": "Den enklare tvättmaskinen köps för högst 28 000 kr inkl. installation.",
+      "match": [["tvättmaskin", "maskin"], ["28 000", "28000", "tjugoåttatusen", "28 tkr"]]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Ahmed Karimi",
+      "text": "Sätta upp lappar i trapphusen om avgiftshöjningen",
+      "due": "fredag",
+      "match": [["lapp", "anslag", "informera", "information"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Mats Berg",
+      "text": "Lägga in den nya avgiften i aviseringen",
+      "due": "innan decemberaviseringen",
+      "match": [["avisering", "avin", "avier"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Sara Öhman",
+      "text": "Beställa tvättmaskinen",
+      "due": "nästa vecka",
+      "match": [["tvättmaskin", "maskin"]]
+    },
+    {
+      "key": "A4",
+      "owner": "Mats Berg",
+      "text": "Begära in två offerter på laddstolpar",
+      "due": "till nästa möte",
+      "match": [["offert"]]
+    }
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "The 5 % proposal recorded as a decision",
+      "sections": ["decision"],
+      "match": [["5 %", "5%", "5 procent", "fem procent"]]
+    },
+    {
+      "key": "M2",
+      "text": "The 35 000 kr machine recorded as a decision",
+      "sections": ["decision"],
+      "match": [["35 000", "35000", "trettiofemtusen"]]
+    },
+    {
+      "key": "M3",
+      "text": "A decision on charging posts (only a deferral to the next meeting is allowed)",
+      "sections": ["decision"],
+      "match": [["laddstolp", "laddbox", "laddplats", "laddning"]],
+      "unless": [["nästa möte", "nästa styrelsemöte", "bordl", "skjuts upp", "senare möte"]]
+    },
+    {
+      "key": "M4",
+      "text": "Ahmed's 'lovar ingenting' about charging boxes as an action",
+      "sections": ["action"],
+      "match": [["ladd", "elektriker", "svåger"]],
+      "owner": "Ahmed Karimi"
+    },
+    {
+      "key": "M5",
+      "text": "Door phone (already reported) as an action",
+      "sections": ["action"],
+      "match": [["porttelefon"]]
+    },
+    {
+      "key": "M6",
+      "text": "Duplicate of the human-typed line (party room for the annual meeting)",
+      "sections": ["action", "decision"],
+      "match": [["festlokal"]]
+    }
+  ]
+}

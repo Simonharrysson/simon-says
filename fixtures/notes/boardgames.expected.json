@@ -1,0 +1,110 @@
+{
+  "source": "Fictional student board games society meeting (English with Swedish phrases) written for Task Q (scripts/notes-eval.ts). Fictional society and people; no real meeting.",
+  "orgName": "Campus Board Games Society",
+  "speakerNames": {
+    "S1-speaker_0": "Hanna Virtanen",
+    "S1-speaker_1": "Jamal Osei",
+    "S1-speaker_2": "Sofia Lindqvist",
+    "S1-speaker_3": "Wei Chen"
+  },
+  "languages": ["en", "sv"],
+  "traps": [
+    "Kick-off proposed for Monday 2 February, moved to Tuesday 3 February before it is decided.",
+    "Games budget proposed as all 3 000 kr, decided as up to 2 400 kr.",
+    "Jamal says he will handle the reimbursement forms, then Sofia takes them (final owner Sofia).",
+    "Wei 'maybe' pings the student union about a bigger room, 'no guarantees' (not an action).",
+    "Hoodies are explicitly NOT decided; next meeting (allowed only as a deferral). Wei's interest form IS an action.",
+    "Hanna typed the room booking action into the notes tab before the meeting; it must not be duplicated.",
+    "Jamal already ordered the new bank card (no action).",
+    "Swedish phrases inside English speech; notes stay in English."
+  ],
+  "human_lines": [
+    { "atMs": 0, "section": "action", "line": "☐ Jamal Osei: Renew the room booking for spring (Friday)" }
+  ],
+  "decisions": [
+    {
+      "key": "D1",
+      "text": "Spring kick-off on Tuesday 3 February at 18:00 in the library basement.",
+      "match": [["3 feb", "3rd", "third", "3/2", "february 3", "feb 3", "tredje"]]
+    },
+    {
+      "key": "D2",
+      "text": "New games for up to 2 400 kr.",
+      "match": [["game"], ["2 400", "2400", "2,400", "two thousand four hundred", "2.4"]]
+    }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Wei Chen",
+      "text": "Announce the kick-off on Instagram and the mailing list",
+      "due": "Friday",
+      "match": [["instagram", "mailing", "announce", "post"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Sofia Lindqvist",
+      "text": "Make a wishlist poll for the new games",
+      "match": [["poll", "wishlist", "wish list", "vote"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Sofia Lindqvist",
+      "text": "Fill in the reimbursement forms",
+      "due": "Wednesday",
+      "match": [["reimburs", "receipt", "expense"]]
+    },
+    {
+      "key": "A4",
+      "owner": "Wei Chen",
+      "text": "Make an interest form for hoodies",
+      "match": [["interest", "form"]]
+    }
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "Kick-off on Monday 2 February (the first proposal) as a decision",
+      "sections": ["decision"],
+      "match": [["2nd", "second of february", "2 feb", "feb 2", "february 2", "2/2"]]
+    },
+    {
+      "key": "M2",
+      "text": "The 3 000 kr games budget as a decision",
+      "sections": ["decision"],
+      "match": [["3000", "3,000", "three thousand"]]
+    },
+    {
+      "key": "M3",
+      "text": "Reimbursement forms with the old owner (Jamal)",
+      "sections": ["action"],
+      "match": [["reimburs", "receipt", "expense"]],
+      "owner": "Jamal Osei"
+    },
+    {
+      "key": "M4",
+      "text": "Asking the student union about a bigger room ('no guarantees') as an action",
+      "sections": ["action"],
+      "match": [["union", "bigger room", "larger room"]]
+    },
+    {
+      "key": "M5",
+      "text": "A decision on hoodies (only a deferral to the next meeting is allowed)",
+      "sections": ["decision"],
+      "match": [["hoodie", "merch"]],
+      "unless": [["next meeting", "nästa möte", "postpon", "defer", "tabled", "later meeting"]]
+    },
+    {
+      "key": "M6",
+      "text": "Duplicate of the human-typed room booking action",
+      "sections": ["action", "decision"],
+      "match": [["room booking", "renew", "book the room"]]
+    },
+    {
+      "key": "M7",
+      "text": "Bank card (already ordered) as an action",
+      "sections": ["action"],
+      "match": [["bank card", "card"]]
+    }
+  ]
+}

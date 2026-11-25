@@ -14,6 +14,34 @@
     "The jetty (bryggan) is explicitly NOT decided; it goes to the next meeting.",
     "Daniel watching the grant application is explicitly 'no promises' (not expected as an action)."
   ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "Spring clean-up on 5 April (the first proposal) as a decision",
+      "sections": ["decision"],
+      "match": [["5 april", "femte april", "5:e april", "fifth", "5th"]]
+    },
+    {
+      "key": "M2",
+      "text": "Marinservice call with the old owner (Jonas)",
+      "sections": ["action"],
+      "match": [["marinservice"]],
+      "owner": "Jonas Holm"
+    },
+    {
+      "key": "M3",
+      "text": "A decision on the jetty (only a deferral to the next meeting is allowed)",
+      "sections": ["decision"],
+      "match": [["brygg", "jetty"]],
+      "unless": [["nästa möte", "next meeting", "bordl", "senare möte"]]
+    },
+    {
+      "key": "M4",
+      "text": "Daniel watching the grant ('no promises') as an action",
+      "sections": ["action"],
+      "match": [["bidrag", "grant", "ansökan"]]
+    }
+  ],
   "decisions": [
     {
       "key": "D1",
