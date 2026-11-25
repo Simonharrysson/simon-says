@@ -1,13 +1,17 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
+import { propagateDone } from "@/lib/agenda/followup";
+import { itemAt, newAgendaItems, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
 import { recordClaudeUsage } from "@/lib/db/claude-usage";
 import { logEvent } from "@/lib/db/events";
-import type { MeetingRow, MeetingStatus, NoteItemRow } from "@/lib/db/types";
+import type { CheckinWindow, ItemRole, MeetingRow, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/types";
 import { closeElSession, dayUsd } from "@/lib/db/usage";
+import { expandCopies, planFormatRender, withoutOwnLines } from "@/lib/docs/format-render";
 import {
   currentItems,
   diffHumanEdits,
+  itemRangeName,
   itemSpan,
   readNotesTab,
   renderItems,
@@ -15,6 +19,12 @@ import {
   toNotesItem,
   type NotesTab,
 } from "@/lib/docs/notes";
+import type { FormatProfile } from "@/lib/formats/schema";
+import { FORMAT_NAMES } from "@/lib/formats/standard";
+import { profileFor } from "@/lib/formats/store";
+import type { AgendaContext } from "@/lib/notes/agenda-prompt";
+import { CHECKIN_PLACEHOLDER, detectCheckin, maskCheckin, nextWindow, type CheckinFound } from "@/lib/notes/checkin";
+import { ownerLabel, resolveOwner } from "@/lib/people/roles";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
 import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
@@ -72,6 +82,8 @@ export interface TickDeps {
   updateNotes(input: UpdateNotesInput, opts?: { timeoutMs?: number }): Promise<UpdateNotesResult>;
   /** The name round's Claude call (lib/names/extract). */
   extractNames: ExtractFn;
+  /** The Må-runda detector's Claude call (lib/notes/checkin; format layout only). */
+  detectCheckin: typeof detectCheckin;
   mailer: Mailer;
   now(): Date;
   sleep(ms: number): Promise<void>;
@@ -92,6 +104,7 @@ function defaultDeps(): TickDeps {
           : {},
       ),
     extractNames,
+    detectCheckin,
     mailer: defaultMailer(),
     now: () => new Date(),
     sleep,
@@ -169,21 +182,50 @@ function resolver(sessions: SessionRead[], speakers: SpeakerRead[]) {
   return { numbers, label, resolve };
 }
 
+/** Speaker of the Må-runda placeholder line (maskCheckin's). */
+const MASK_SPEAKER = "–";
+const isPlaceholder = (s: SegmentRead) => s.speaker === MASK_SPEAKER && s.text === CHECKIN_PLACEHOLDER;
+
+/**
+ * Sorted segments with the Må-runda window masked (maskCheckin) per tick and per session, so a
+ * run never spans two ticks: a tick wholly inside the window still gets its own block (one
+ * placeholder line), and a block's bytes depend on its own tick's segments only.
+ */
+function maskedSegments(sorted: SegmentRead[], window: CheckinWindow, numbers: Map<string, number>): SegmentRead[] {
+  const groups = new Map<string, SegmentRead[]>();
+  for (const s of sorted) {
+    const key = `${s.tick_no}\u0000${s.el_session_id}`;
+    groups.set(key, [...(groups.get(key) ?? []), s]);
+  }
+  const out = [...groups.values()].flatMap((g) => maskCheckin(g, window, (s) => s.start_ms));
+  return sortSegments(out, numbers);
+}
+
 /**
  * Claude's transcript blocks (one per tick_no, oldest first; lines `[HH:MM:SS] S<n>-<raw>: text`)
  * and the speaker-name map `S<n>-<raw>` → display name for labels that resolve (through merges)
- * to a named speaker. Only segments with a tick_no count.
+ * to a named speaker. Only segments with a tick_no count. With a Må-runda `window` (format
+ * layout) the segments inside it are masked first: one `[HH:MM:SS] –: [Må-runda — utelämnad]`
+ * line per run, per tick and session. Without one the output is exactly v1's.
  */
 export function buildTranscript(
   segments: SegmentRead[],
   sessions: SessionRead[],
   speakers: SpeakerRead[],
+  window?: CheckinWindow | null,
 ): { blocks: string[]; speakerNames: Record<string, string> } {
   const r = resolver(sessions, speakers);
   const byTick = new Map<number, string[]>();
   const speakerNames: Record<string, string> = {};
-  for (const s of sortSegments(segments, r.numbers)) {
+  const sorted = sortSegments(segments, r.numbers);
+  for (const s of window ? maskedSegments(sorted, window, r.numbers) : sorted) {
     if (s.tick_no === null) continue;
+    if (window && isPlaceholder(s)) {
+      const lines = byTick.get(s.tick_no) ?? [];
+      lines.push(`[${formatTimestamp(s.start_ms)}] ${MASK_SPEAKER}: ${CHECKIN_PLACEHOLDER}`);
+      byTick.set(s.tick_no, lines);
+      continue;
+    }
     const label = r.label(s.el_session_id, s.speaker);
     const lines = byTick.get(s.tick_no) ?? [];
     lines.push(`[${formatTimestamp(s.start_ms)}] ${label}: ${oneLine(s.text)}`);
@@ -250,6 +292,175 @@ export function readState(tab: NotesTab, rows: NoteItemRow[]): ReadState {
 export function desiredItems(items: NotesItem[], diff: ReadState["diff"]): NotesItem[] {
   const off = new Set([...diff.locked.map((i) => i.id), ...diff.deletedIds]);
   return [...items.filter((i) => !off.has(i.id)), ...diff.locked];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Format layout (meeting formats A12): pure parts
+
+/** Server rows of the format layout: never Claude's to write. */
+export const ATTENDEES_ROW = "info-narvarande";
+export const TID_ROW = "info-tid";
+export const CHECKIN_DONE_ROW = "checkin-done";
+export const CHECKIN_DONE_TEXT = "Må-runda genomförd.";
+/** Earlier transcript lines the Må-runda detector gets for context. */
+const CHECKIN_CONTEXT_LINES = 20;
+
+/**
+ * The Närvarande text: every distinct named speaker (display name, through merges) in
+ * first-heard order (earliest segment; ties by name), ", "-joined. Named speakers without a
+ * segment come last, by name. "" when nobody is named (the row is then not rendered).
+ */
+export function attendeesText(speakers: SpeakerRead[], segments: SegmentRead[] = [], sessions: SessionRead[] = []): string {
+  const r = resolver(sessions, speakers);
+  const first = new Map<string, number>();
+  for (const s of segments) {
+    if (s.tick_no === null) continue;
+    const res = r.resolve(s.el_session_id, s.speaker);
+    if (res.displayName === res.label) continue;
+    first.set(res.displayName, Math.min(first.get(res.displayName) ?? Infinity, s.start_ms));
+  }
+  for (const sp of speakers) {
+    const res = r.resolve(sp.el_session_id, sp.speaker_label);
+    if (res.displayName !== res.label && !first.has(res.displayName)) first.set(res.displayName, Infinity);
+  }
+  return [...first.entries()]
+    .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0], "sv"))
+    .map(([name]) => name)
+    .join(", ");
+}
+
+/** `ag-*` keys of the anchor map that name a range, in numeric order. */
+function agendaKeys(ranges: Record<string, unknown>): string[] {
+  return Object.keys(ranges)
+    .filter((k) => /^ag-\d+$/.test(k) && typeof ranges[k] === "string")
+    .sort((a, b) => Number(a.slice(3)) - Number(b.slice(3)));
+}
+
+/**
+ * What the notes engine is told about the agenda Doc this tick (F4). Each stored `ag-*` anchor is
+ * found through its named range (`ss-<meeting>-<key>`), and its label and human text come from
+ * the scanned item that holds that range's paragraph; an anchor whose range is gone (or no longer
+ * in an agenda item) is listed `gone`, without a label. Scan keys are only used for `newItems`
+ * (items a human added, role topic). Anchors are in Doc order, gone ones last. `scan` must be of
+ * `withoutOwnLines(tab, rows)`, so our own lines are not in the human text.
+ */
+export function agendaContext(
+  tab: NotesTab,
+  scan: AgendaScan,
+  meeting: Pick<MeetingRow, "id" | "section_ranges" | "agenda_roles">,
+  profile: FormatProfile,
+  people: Pick<PersonRow, "name" | "role">[],
+  newItems: { key: string; start: number }[] = [],
+): AgendaContext {
+  const ranges = (meeting.section_ranges ?? {}) as Record<string, unknown>;
+  const roles = meeting.agenda_roles ?? {};
+  const placed: (AgendaContext["anchors"][number] & { at: number })[] = [];
+  for (const key of agendaKeys(ranges)) {
+    const role: ItemRole = roles[key] ?? "topic";
+    const span = itemSpan(tab, (ranges[key] as string | undefined) ?? itemRangeName(meeting.id, key));
+    const item = span ? itemAt(scan, span.paraStart) : null;
+    placed.push(
+      item
+        ? { key, label: item.label, role, humanText: item.humanText, at: span!.paraStart }
+        : { key, label: "", role, humanText: "", gone: true, at: Infinity },
+    );
+  }
+  for (const n of newItems) {
+    const item = itemAt(scan, n.start);
+    if (item) placed.push({ key: n.key, label: item.label, role: "topic", humanText: item.humanText, at: n.start });
+  }
+  placed.sort((a, b) => a.at - b.at || Number(a.key.slice(3)) - Number(b.key.slice(3)));
+  return {
+    formatName: FORMAT_NAMES[profile.kind],
+    decisionPrefix: profile.decisionPrefix,
+    groupBy: profile.tasksSection?.groupBy ?? "person",
+    anchors: placed.map(({ at: _at, ...a }) => a),
+    people: people.map((p) => ({ name: p.name, role: p.role ?? null })),
+  };
+}
+
+/** The anchor key of the Må-runda item (role checkin, with a range), or null. */
+export function checkinAnchor(meeting: Pick<MeetingRow, "agenda_roles" | "section_ranges">): string | null {
+  const ranges = (meeting.section_ranges ?? {}) as Record<string, unknown>;
+  return Object.entries(meeting.agenda_roles ?? {}).find(([key, role]) => role === "checkin" && typeof ranges[key] === "string")?.[0] ?? null;
+}
+
+/** A row the server writes itself (info cells, Må-runda line) or a tasks-section copy: not Claude's. */
+export const isServerItem = (id: string) => id.startsWith("info-") || id === CHECKIN_DONE_ROW || id.endsWith("-t");
+
+/** Claude's share of the items (and of the locked ones): no server rows, no `-t` copies. */
+export const claudeItems = (items: NotesItem[]) => items.filter((i) => !isServerItem(i.id) && !i.copyOf);
+
+/**
+ * The format layout's render list: Claude's items (minus any locked or deleted since, plus the
+ * locked ones, as v1), the server rows not locked or deleted by a human, then the tasks-section
+ * copies (expandCopies). Every row we own that should stay must be in it, every tick: the
+ * planner removes owned rows that are missing.
+ */
+export function formatDesired(items: NotesItem[], diff: ReadState["diff"], server: NotesItem[], profile: FormatProfile): NotesItem[] {
+  const off = new Set([...diff.locked.map((i) => i.id), ...diff.deletedIds]);
+  return expandCopies([...desiredItems(items, diff), ...server.filter((i) => !off.has(i.id))], diff.rows, profile);
+}
+
+/**
+ * The server rows this tick: Närvarande (when someone is named), the Må-runda line once the
+ * window closed after it had started (anchored at the checkin item), and on the final pass the
+ * Tid cell "HH:mm–HH:mm" (only when the start wrote it: an `info-tid` row exists).
+ */
+export function serverItems(input: {
+  attendees: string;
+  window: CheckinWindow | null;
+  checkinKey: string | null;
+  tidRow: boolean;
+  final: boolean;
+  startedAt: Date;
+  endedAt: Date;
+}): NotesItem[] {
+  const out: NotesItem[] = [];
+  if (input.attendees) out.push({ id: ATTENDEES_ROW, section: "attendees", text: input.attendees, anchor: "info.narvarande" });
+  if (input.window?.closed && input.window.startMs !== null && input.checkinKey) {
+    out.push({ id: CHECKIN_DONE_ROW, section: "note", text: CHECKIN_DONE_TEXT, anchor: input.checkinKey });
+  }
+  if (input.final && input.tidRow) {
+    out.push({ id: TID_ROW, section: "note", text: `${stockholmTime(input.startedAt)}–${stockholmTime(input.endedAt)}`, anchor: "info.tid" });
+  }
+  return out;
+}
+
+/**
+ * New agenda items of a later read keyed as Claude was told: an item with the label of one found
+ * in the tick's first read keeps that key; any other gets a key after every key in use.
+ */
+export function rekeyNewItems(
+  items: { key: string; start: number; end: number }[],
+  scan: AgendaScan,
+  told: { key: string; label: string }[],
+  used: string[],
+): { key: string; start: number; end: number }[] {
+  const byLabel = new Map(told.map((t) => [normLabel(t.label), t.key]));
+  const taken = new Set<string>();
+  let max = Math.max(0, ...[...used, ...told.map((t) => t.key)].map((k) => Number(k.slice(3)) || 0));
+  return items.map((i) => {
+    const label = itemAt(scan, i.start)?.label;
+    const known = label !== undefined ? byLabel.get(normLabel(label)) : undefined;
+    if (known && !taken.has(known)) {
+      taken.add(known);
+      return { ...i, key: known };
+    }
+    return { ...i, key: `ag-${++max}` };
+  });
+}
+
+/**
+ * The span `nextWindow` gets for this tick's segments: their first and last time, with the first
+ * raised above every earlier tick's segment, so a window edge never moves into a block already
+ * built (a late segment can carry an earlier start_ms than lines already sent).
+ */
+export function checkinSpan(fresh: SegmentRead[], earlier: SegmentRead[]): { firstMs: number; lastMs: number } {
+  const firstNew = Math.min(...fresh.map((s) => s.start_ms));
+  const lastMs = Math.max(...fresh.map((s) => s.start_ms));
+  const floor = earlier.length ? Math.max(...earlier.map((s) => s.start_ms)) + 1 : -Infinity;
+  return { firstMs: Math.max(firstNew, floor), lastMs };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -405,6 +616,74 @@ async function nameRounds(meeting: MeetingRow, deps: TickDeps, final: boolean, d
   return hold;
 }
 
+/** A format meeting's profile and the org's people (owner labels, owner ids, Claude's people list). */
+async function loadFormat(meeting: MeetingRow): Promise<{ profile: FormatProfile; people: PersonRow[] }> {
+  const [profile, people] = await Promise.all([
+    profileFor(meeting),
+    db().from("people").select("id, org_id, name, member_user_id, role").eq("org_id", meeting.org_id),
+  ]);
+  return { profile, people: must("tick: people", people) as PersonRow[] };
+}
+
+/**
+ * Rows to save with `owner_person_id` resolved from the owner text (people of the org); a carried
+ * row keeps the id it was carried with, a row without an owner has none.
+ */
+export function withOwnerIds(rows: NoteItemRow[], people: PersonRow[]): NoteItemRow[] {
+  return rows.map((r) => {
+    if (r.carried_from_id != null) return r;
+    const id = r.owner ? (resolveOwner(r.owner, people)?.id ?? null) : null;
+    return (r.owner_person_id ?? null) === id ? r : { ...r, owner_person_id: id };
+  });
+}
+
+/**
+ * The Må-runda detector for this tick (format layout): while the window is open, one Claude call
+ * over the segments of tick `assigned` (20 earlier lines as context), then nextWindow. Skipped
+ * without new lines or when `allowed` is false (kill switch, dollar cap, deadline). Usage is
+ * recorded here; the window is stored when it changed and a `checkin` event (state and times
+ * only) logged when it opened or closed. Returns the window to mask with.
+ */
+async function checkinStep(
+  meeting: MeetingRow,
+  ctx: { segments: SegmentRead[]; sessions: SessionRead[]; speakers: SpeakerRead[] },
+  assigned: number | null,
+  agenda: AgendaContext,
+  allowed: boolean,
+  deps: TickDeps,
+): Promise<CheckinWindow | null> {
+  const prev = meeting.checkin_window ?? null;
+  if (!prev || prev.closed || assigned === null || !allowed) return prev;
+  const r = resolver(ctx.sessions, ctx.speakers);
+  const sorted = sortSegments(ctx.segments, r.numbers);
+  const fresh = sorted.filter((s) => s.tick_no === assigned);
+  if (!fresh.length) return prev;
+  const earlier = sorted.filter((s) => s.tick_no !== null && s.tick_no < assigned);
+  const line = (s: SegmentRead) => ({ atMs: s.start_ms, speaker: r.label(s.el_session_id, s.speaker), text: s.text });
+  let found: CheckinFound | "failed" = "failed";
+  try {
+    const res = await deps.detectCheckin(
+      {
+        lines: fresh.map(line),
+        context: earlier.slice(-CHECKIN_CONTEXT_LINES).map(line),
+        agenda: agenda.anchors.filter((a) => !a.gone).map(({ key, label, role }) => ({ key, label, role })),
+        window: prev,
+      },
+      { orgId: meeting.org_id },
+    );
+    found = res.found;
+    if (res.usage) await recordUsage(meeting.org_id, res.usage);
+  } catch (e) {
+    console.error(`tick ${meeting.id}: checkin: ${errorText(e)}`);
+  }
+  const next = nextWindow(prev, found, checkinSpan(fresh, earlier));
+  if (JSON.stringify(next) !== JSON.stringify(prev)) await updateMeeting(meeting.id, { checkin_window: next });
+  if (next.closed !== prev.closed || next.startMs !== prev.startMs) {
+    await logEvent(meeting.id, "checkin", { state: next.closed ? "closed" : "open", startMs: next.startMs, endMs: next.endMs });
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The tick
 
@@ -450,25 +729,67 @@ export async function runTick(
     // Name rounds first, so this tick's transcript lines and speakerNames already have the names.
     const holdTranscript = spendOk ? await nameRounds(meeting, deps, final, opts.deadlineAt) : false;
     const ctx = await loadContext(meeting);
-    const { blocks, speakerNames } = buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
-    const timeLeft = opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity;
+    const layout = meeting.layout ?? "v1";
+    const left = () => (opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity);
+
+    // Format layout (A12): read the Doc first; the agenda (and the Må-runda window) shape the input.
+    let fmt: {
+      profile: FormatProfile;
+      people: PersonRow[];
+      tab: NotesTab;
+      agenda: AgendaContext;
+      fresh: { key: string; start: number; end: number; label: string }[];
+      window: CheckinWindow | null;
+    } | null = null;
+    if (layout === "format") {
+      const { profile, people } = await loadFormat(meeting);
+      const tab = await deps.readNotes(auth, meeting);
+      const scan = scanAgenda(withoutOwnLines(tab, ctx.rows), profile);
+      const fresh = newAgendaItems(scan, tab, meeting.section_ranges ?? {}).map((n) => ({ ...n, label: itemAt(scan, n.start)?.label ?? "" }));
+      const agenda = agendaContext(tab, scan, meeting, profile, people, fresh);
+      // A8 carry: the detector runs only on a tick with new lines, within the spend caps and time.
+      const detectOk = spendOk && left() >= NAME_ROUND_MIN_LEFT_MS;
+      const window = await checkinStep(meeting, ctx, assigned, agenda, detectOk, deps);
+      fmt = { profile, people, tab, agenda, fresh, window };
+    }
+
+    const { blocks, speakerNames } = fmt
+      ? buildTranscript(ctx.segments, ctx.sessions, ctx.speakers, fmt.window)
+      : buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
+    const timeLeft = left();
     const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && spendOk;
     const sentTick = meeting.notes_sent_tick ?? 0;
-    const layout = meeting.layout ?? "v1";
     const header = final
       ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now(), layout)
       : liveHeader(deps.now(), layout);
 
     // read → diff → Claude
-    const first = readState(await deps.readNotes(auth, meeting), ctx.rows);
-    let items = first.items;
+    const first = readState(fmt ? fmt.tab : await deps.readNotes(auth, meeting), ctx.rows);
+    let items = fmt ? claudeItems(first.items) : first.items;
     let out: UpdateNotesResult | null = null;
     let claudeFailed = false;
     const send = blocksForCall(blocks, sentTick);
     // Claude only with something new to read (or the final pass over a non-empty transcript).
     if (claudeAllowed && send.length > 0 && (final || send.length > sentTick)) {
       out = await deps.updateNotes(
-        {
+        fmt
+          ? {
+              orgName: ctx.orgName,
+              transcriptBlocks: send,
+              speakerNames,
+              notesTabText: first.text,
+              items,
+              locked: claudeItems(first.diff.locked),
+              deletedIds: first.diff.deletedIds,
+              final,
+              nextId: meeting.notes_next_id ?? undefined,
+              agenda: fmt.agenda,
+              // F3: our own lines as rendered ("– " prefix and all) are not human text.
+              ownLines: first.diff.rows
+                .filter((r) => !r.locked && !r.deleted_by_human && r.last_rendered_text)
+                .map((r) => r.last_rendered_text!),
+            }
+          : {
         orgName: ctx.orgName,
         transcriptBlocks: send,
         speakerNames,
@@ -500,19 +821,69 @@ export async function runTick(
     // read + diff again right before writing; on a revision conflict wait, re-read, retry.
     // After a Claude error only the final pass still writes (unchanged items, `Avslutat` header).
     let notes: "ok" | "conflict" | "skipped" = "skipped";
+    let anchorsAdded = 0;
     if (!claudeFailed || final) {
       const target: MeetingRow = { ...meeting };
+      // Format layout: the server rows, the same for every attempt.
+      const server = fmt
+        ? serverItems({
+            attendees: attendeesText(ctx.speakers, ctx.segments, ctx.sessions),
+            window: fmt.window,
+            checkinKey: checkinAnchor(meeting),
+            tidRow: ctx.rows.some((r) => r.id === TID_ROW),
+            final,
+            startedAt: new Date(meeting.started_at),
+            endedAt: meeting.ended_at ? new Date(meeting.ended_at) : deps.now(),
+          })
+        : [];
       for (let attempt = 0; attempt <= CONFLICT_RETRIES; attempt++) {
         if (attempt > 0) await deps.sleep(retryDelayMs(deps.random));
-        const st = readState(await deps.readNotes(auth, target), ctx.rows);
-        const res = await deps.render(auth, target, st.diff.rows, desiredItems(items, st.diff), st.revisionId, header);
+        const tab = await deps.readNotes(auth, target);
+        const st = readState(tab, ctx.rows);
+        let newAnchors: { key: string; start: number; end: number }[] = [];
+        let res: Awaited<ReturnType<TickDeps["render"]>>;
+        if (fmt) {
+          const ranges = meeting.section_ranges ?? {};
+          const scan = scanAgenda(withoutOwnLines(tab, st.diff.rows), fmt.profile);
+          newAnchors = rekeyNewItems(newAgendaItems(scan, tab, ranges), scan, fmt.fresh, agendaKeys(ranges));
+          const groupBy = fmt.profile.tasksSection?.groupBy ?? "person";
+          const people = fmt.people;
+          res = await deps.render(auth, target, st.diff.rows, formatDesired(items, st.diff, server, fmt.profile), st.revisionId, header, {
+            plan: planFormatRender,
+            profile: fmt.profile,
+            ownerLabel: (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy),
+            newAnchors,
+          });
+        } else {
+          res = await deps.render(auth, target, st.diff.rows, desiredItems(items, st.diff), st.revisionId, header);
+        }
         if (res.status === "ok") {
-          if (!(await saveRows(meetingId, leaseId, res.rows))) {
+          let rows = res.rows;
+          if (fmt) {
+            if (newAnchors.length) {
+              // The ranges exist in the Doc now: store them (role topic, F5) whatever happens next.
+              await updateMeeting(meetingId, {
+                section_ranges: { ...meeting.section_ranges, ...Object.fromEntries(newAnchors.map((a) => [a.key, itemRangeName(meetingId, a.key)])) },
+                agenda_roles: { ...meeting.agenda_roles, ...Object.fromEntries(newAnchors.map((a) => [a.key, "topic"])) },
+              });
+              anchorsAdded = newAnchors.length;
+            }
+            rows = withOwnerIds(rows, fmt.people);
+          }
+          if (!(await saveRows(meetingId, leaseId, rows))) {
             // A newer tick holds the lease now (ours expired): it owns the rows and the transcript.
             console.warn(`tick ${meetingId}: lease ${leaseId} moved on; not saving notes rows`);
             return "busy";
           }
           if (res.headerRendered !== null) await updateMeeting(meetingId, { header_rendered: res.headerRendered });
+          if (fmt) {
+            // "Från förra veckan": a carried task done here is done at its source (same org and is_test).
+            try {
+              await propagateDone(rows, meeting.org_id, meeting.is_test ?? false);
+            } catch (e) {
+              console.error(`tick ${meetingId}: propagate done: ${errorText(e)}`);
+            }
+          }
           notes = "ok";
           break;
         }
@@ -562,6 +933,7 @@ export async function runTick(
       dropped: out?.dropped ?? 0,
       stopReason: out?.stopReason ?? null,
       usd: out?.usage.usd ?? 0,
+      ...(fmt ? { anchorsAdded } : {}),
     });
     return "ok";
   } catch (err) {

@@ -240,3 +240,27 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile): AgendaScan {
     notesHeading: heading(notesIdx),
   };
 }
+
+/**
+ * Agenda items a human added after the start (spec "Agenda items added during the meeting"):
+ * scanned items whose own paragraph no `ag-*` range in `sectionRanges` touches. Their keys
+ * continue after the highest existing `ag-<n>`, in Doc order; their role is `topic` (F5). The
+ * range to create covers the item's text, newline left out, as at the start (anchor.ts).
+ * Scan through `withoutOwnLines(tab, rows)` so our own lines are never taken for items.
+ */
+export function newAgendaItems(
+  scan: AgendaScan,
+  tab: NotesTab,
+  sectionRanges: Record<string, unknown>,
+): { key: string; start: number; end: number }[] {
+  const keys = Object.keys(sectionRanges).filter((k) => /^ag-\d+$/.test(k));
+  const parts = keys
+    .map((k) => sectionRanges[k])
+    .filter((name): name is string => typeof name === "string")
+    .flatMap((name) => (tab.ranges.get(name) ?? []).flat())
+    .filter((p) => p.end > p.start);
+  let max = Math.max(0, ...keys.map((k) => Number(k.slice(3))));
+  return scan.items
+    .filter((i) => !parts.some((p) => p.start < i.paraEnd && p.end > i.paraStart))
+    .map((i) => ({ key: `ag-${++max}`, start: i.paraStart, end: i.paraEnd - 1 }));
+}

@@ -7,6 +7,9 @@ import type { NotesTab, RenderResult } from "@/lib/docs/notes";
 import type { TranscriptLine } from "@/lib/docs/transcript";
 import type { UpdateNotesInput, UpdateNotesResult } from "@/lib/notes/engine";
 import type { NotesItem } from "@/lib/notes/schema";
+import type { docs_v1 } from "@googleapis/docs";
+import fixture from "@/fixtures/agenda/veckomote.doc.json";
+import { apply, TAB } from "@/test/docsim";
 
 // after() needs a Next request scope: record the scheduled work and run it in the test.
 const scheduled = vi.hoisted(() => [] as (() => unknown)[]);
@@ -32,13 +35,22 @@ vi.mock("@/lib/env", async (importOriginal) => {
 });
 
 const tick = await import("@/lib/meetings/tick");
-const { renderedRows, itemRangeName } = await import("@/lib/docs/notes");
+const { renderedRows, itemRangeName, itemSpan } = await import("@/lib/docs/notes");
+const { withoutOwnLines: withoutOwn } = await import("@/lib/docs/format-render");
 const { GoogleAuthLostError } = await import("@/lib/google/client");
 const { ingestSegments } = await import("@/lib/segments/ingest");
 const { createOrg } = await import("@/lib/db/orgs");
 const { POST: postEnd } = await import("@/app/api/meetings/[id]/end/route");
 const { GET: getFinalize } = await import("@/app/api/cron/finalize/route");
 const { NextRequest } = await import("next/server");
+const { planFormatRender } = await import("@/lib/docs/format-render");
+const { parseNotesTab } = await import("@/lib/docs/tab");
+const { planAnchoring, INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
+const { scanAgenda, newAgendaItems } = await import("@/lib/agenda/scan");
+const { VECKOMOTE } = await import("@/lib/formats/standard");
+const { buildRequest, anchorRoles } = await import("@/lib/notes/engine");
+const { CHECKIN_PLACEHOLDER } = await import("@/lib/notes/checkin");
+const { ensureStandardRow } = await import("@/lib/formats/store");
 
 // ---------------------------------------------------------------------------------------------
 // Pure parts (run everywhere)
@@ -217,6 +229,399 @@ describe("cron route", () => {
     expect((await getFinalize(new Request("https://x.test/api/cron/finalize"))).status).toBe(401);
     const wrong = new Request("https://x.test/api/cron/finalize", { headers: { authorization: "Bearer nope" } });
     expect((await getFinalize(wrong)).status).toBe(401);
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// Format layout (A12): pure parts on the A1 agenda fixture, through the Docs simulator
+
+type Doc = docs_v1.Schema$Document;
+type Req = docs_v1.Schema$Request;
+type MeetingInput = Parameters<typeof tick.agendaContext>[2];
+
+// Fixture items: ag-1 Godkänn dagordning · ag-2 Må-runda · ag-3 Från förra veckan · ag-4 Kommande
+// event (two sub-points) · ag-5 Ekonomi · ag-6 Övrigt; tasks heading, "Ordförande: Boka lokal.", Anteckningar.
+const ROLES = {
+  "ag-1": "procedural",
+  "ag-2": "checkin",
+  "ag-3": "followup",
+  "ag-4": "topic",
+  "ag-5": "topic",
+  "ag-6": "other",
+} as const;
+const FMT_STARTED = new Date("2026-11-25T17:05:00Z"); // 18:05 in Stockholm
+const FMT_ENDED = new Date("2026-11-25T18:10:00Z"); // 19:10
+
+const docText = (doc: Doc) => parseNotesTab(doc, TAB).paragraphs.map((p) => p.text).join("");
+const linesOf = (doc: Doc) => parseNotesTab(doc, TAB).paragraphs.map((p) => p.text.replace(/\n$/, ""));
+
+/** docsim's apply, plus replaceNamedRangeContent (delete the range's text, insert, re-create the range); bumps the revision. */
+function applyDoc(doc: Doc, requests: Req[]): Doc {
+  for (const r of requests) {
+    const rep = r.replaceNamedRangeContent;
+    if (!rep) {
+      apply(doc, [r]);
+      continue;
+    }
+    const name = rep.namedRangeName!;
+    const parts = (parseNotesTab(doc, TAB).ranges.get(name) ?? []).flat().filter((x) => x.end > x.start);
+    if (parts.length !== 1) throw new Error(`replace ${name}: ${parts.length} parts`);
+    const { start, end } = parts[0];
+    const text = rep.text ?? "";
+    apply(doc, [
+      { deleteContentRange: { range: { tabId: TAB, startIndex: start, endIndex: end } } },
+      { insertText: { text, location: { tabId: TAB, index: start } } },
+      { deleteNamedRange: { name, tabsCriteria: { tabIds: [TAB] } } },
+      { createNamedRange: { name, range: { tabId: TAB, startIndex: start, endIndex: start + text.length } } },
+    ]);
+  }
+  doc.revisionId = `REV_${Number(String(doc.revisionId ?? "").replace(/\D/g, "") || 0) + 1}`;
+  return doc;
+}
+
+/** The fixture agenda Doc as the start leaves it for meeting `id` (anchors, LIVE line, Tid "18:05"). */
+function anchoredDoc(id: string) {
+  const doc = JSON.parse(JSON.stringify(fixture)) as Doc;
+  const tab = parseNotesTab(doc, TAB);
+  const plan = planAnchoring(scanAgenda(tab, VECKOMOTE), tab, { meetingId: id, profile: VECKOMOTE, startedAt: FMT_STARTED });
+  applyDoc(doc, plan.requests);
+  return { doc, plan };
+}
+
+function fmtMeeting(id: string, plan: ReturnType<typeof anchoredDoc>["plan"], over: Partial<MeetingRow> = {}): MeetingRow {
+  return {
+    id,
+    org_id: "o",
+    notes_tab_id: TAB,
+    header_range: plan.headerRange,
+    header_rendered: INITIAL_LIVE_LINE,
+    section_ranges: plan.sectionRanges,
+    agenda_roles: { ...ROLES },
+    layout: "format",
+    started_at: FMT_STARTED.toISOString(),
+    ...over,
+  } as MeetingRow;
+}
+
+/** One render as the tick does it (planFormatRender), applied to the simulated Doc. */
+function renderInto(
+  doc: Doc,
+  meeting: MeetingRow,
+  rows: NoteItemRow[],
+  desired: NotesItem[],
+  opts: { header?: string; newAnchors?: { key: string; start: number; end: number }[] } = {},
+) {
+  const tab = parseNotesTab(doc, TAB);
+  const plan = planFormatRender(meeting, tab, rows, desired, {
+    profile: VECKOMOTE,
+    ownerLabel: (o) => o,
+    headerText: opts.header,
+    newAnchors: opts.newAnchors,
+  });
+  applyDoc(doc, plan.requests);
+  return { rows: renderedRows(meeting.id, rows, desired, plan), plan };
+}
+
+/** Insert a new top-level agenda item right before "Övrigt" (inherits its list and level). */
+function insertItemBeforeOvrigt(doc: Doc, label: string) {
+  const ovrigt = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Övrigt\n")!;
+  applyDoc(doc, [{ insertText: { text: `${label}\n`, location: { tabId: TAB, index: ovrigt.start } } }]);
+}
+
+describe("format layout: transcript masking (Må-runda)", () => {
+  const sessions = [{ id: "sess-a", started_at: "2026-11-25T17:05:00Z" }];
+  const tick1 = [
+    seg({ start_ms: 1000, segment_index: 0, text: "Hej allihop" }),
+    seg({ start_ms: 2000, segment_index: 1, text: "Jag mår bra idag" }),
+    seg({ start_ms: 3000, segment_index: 2, text: "Lite trött" }),
+  ];
+  const tick2 = [
+    seg({ tick_no: 2, start_ms: 4000, segment_index: 3, text: "Jag har sovit dåligt" }),
+    seg({ tick_no: 2, start_ms: 5000, segment_index: 4, text: "Nu tar vi förra veckan" }),
+  ];
+  const tick3 = [seg({ tick_no: 3, start_ms: 6000, segment_index: 5, text: "Mejlet är skickat" })];
+  const all = [...tick1, ...tick2, ...tick3];
+
+  it("no window: exactly v1's blocks", () => {
+    expect(tick.buildTranscript(all, sessions, [], null)).toEqual(tick.buildTranscript(all, sessions, []));
+    expect(tick.buildTranscript(all, sessions, [], { startMs: null, endMs: null, closed: false, failures: 0 })).toEqual(
+      tick.buildTranscript(all, sessions, []),
+    );
+  });
+
+  it("an open window masks from its start: one placeholder per run, no Må-runda line", () => {
+    const open = { startMs: 2000, endMs: null, closed: false, failures: 0 };
+    const { blocks } = tick.buildTranscript(tick1, sessions, [], open);
+    expect(blocks).toEqual([`[00:00:01] S1-speaker_0: Hej allihop\n[00:00:02] –: ${CHECKIN_PLACEHOLDER}`]);
+    expect(blocks.join("\n")).not.toMatch(/mår bra|trött/);
+  });
+
+  it("a block keeps its bytes after the window closes; a tick wholly inside it still gets a block", () => {
+    const open = { startMs: 2000, endMs: null, closed: false, failures: 0 };
+    const closed = { startMs: 2000, endMs: 5000, closed: true, failures: 0 };
+    const t1 = tick.buildTranscript(tick1, sessions, [], open).blocks;
+    const t3 = tick.buildTranscript(all, sessions, [], closed).blocks;
+    expect(t3[0]).toBe(t1[0]);
+    expect(t3[1]).toBe(`[00:00:04] –: ${CHECKIN_PLACEHOLDER}\n[00:00:05] S1-speaker_0: Nu tar vi förra veckan`);
+    expect(t3[2]).toBe("[00:00:06] S1-speaker_0: Mejlet är skickat");
+    // Tick 2 wholly inside a still open window: a block of its own (only the placeholder).
+    const inside = tick.buildTranscript([...tick1, ...tick2], sessions, [], open).blocks;
+    expect(inside).toHaveLength(2);
+    expect(inside[1]).toBe(`[00:00:04] –: ${CHECKIN_PLACEHOLDER}`);
+  });
+
+  it("checkinSpan: the first time is raised above every earlier tick's segment (late segments)", () => {
+    expect(tick.checkinSpan(tick2, tick1)).toEqual({ firstMs: 4000, lastMs: 5000 });
+    const late = [seg({ tick_no: 2, start_ms: 1500, segment_index: 9 }), ...tick2];
+    expect(tick.checkinSpan(late, tick1)).toEqual({ firstMs: 3001, lastMs: 5000 });
+    expect(tick.checkinSpan(tick1, [])).toEqual({ firstMs: 1000, lastMs: 3000 });
+  });
+});
+
+describe("format layout: attendees, items, server rows", () => {
+  const sessions = [{ id: "sess-a", started_at: "2026-11-25T17:05:00Z" }];
+  it("attendeesText: named speakers in first-heard order, through merges; '' when none", () => {
+    const speakers = [
+      { el_session_id: "sess-a", speaker_label: "speaker_0", display_name: "Erik Lund", person_id: null },
+      { el_session_id: "sess-a", speaker_label: "speaker_1", display_name: "Anna Berg", person_id: null },
+      { el_session_id: "sess-a", speaker_label: "speaker_2", display_name: "speaker_2", merged_into_label: "speaker_1" },
+      { el_session_id: "sess-a", speaker_label: "speaker_3", display_name: "speaker_3", person_id: null },
+    ];
+    const segs = [
+      seg({ speaker: "speaker_2", start_ms: 500 }),
+      seg({ speaker: "speaker_0", start_ms: 900, segment_index: 1 }),
+      seg({ speaker: "speaker_1", start_ms: 2000, segment_index: 2 }),
+      seg({ speaker: "speaker_3", start_ms: 100, segment_index: 3 }),
+    ];
+    expect(tick.attendeesText(speakers, segs, sessions)).toBe("Anna Berg, Erik Lund");
+    // Whatever order the rows come in.
+    expect(tick.attendeesText([...speakers].reverse(), [...segs].reverse(), sessions)).toBe("Anna Berg, Erik Lund");
+    expect(tick.attendeesText([], segs, sessions)).toBe("");
+  });
+
+  it("claudeItems leaves out info rows, the Må-runda line and tasks copies; carried rows stay", () => {
+    const items: NotesItem[] = [
+      { id: "n1", section: "decision", text: "a", anchor: "ag-4" },
+      { id: "n2", section: "action", text: "b", anchor: "ag-4" },
+      { id: "n2-t", section: "action", text: "b", anchor: "tasks", copyOf: "n2" },
+      { id: "c1", section: "action", text: "c", anchor: "ag-3", carried: true },
+      { id: "info-tid", section: "note", text: "18:05", anchor: "info.tid" },
+      { id: "info-narvarande", section: "attendees", text: "Anna Berg", anchor: "info.narvarande" },
+      { id: "checkin-done", section: "note", text: "Må-runda genomförd.", anchor: "ag-2" },
+    ];
+    expect(tick.claudeItems(items).map((i) => i.id)).toEqual(["n1", "n2", "c1"]);
+  });
+
+  it("serverItems: Närvarande when named, the Må-runda line once a started window closed, Tid on the final pass", () => {
+    const base = { attendees: "", window: null, checkinKey: "ag-2", tidRow: true, final: false, startedAt: FMT_STARTED, endedAt: FMT_ENDED };
+    expect(tick.serverItems(base)).toEqual([]);
+    expect(tick.serverItems({ ...base, attendees: "Anna Berg", window: { startMs: 1, endMs: null, closed: false, failures: 0 } })).toEqual([
+      { id: "info-narvarande", section: "attendees", text: "Anna Berg", anchor: "info.narvarande" },
+    ]);
+    // Closed without ever starting (no Må-runda found): no line.
+    expect(tick.serverItems({ ...base, window: { startMs: null, endMs: null, closed: true, failures: 3 } })).toEqual([]);
+    expect(tick.serverItems({ ...base, window: { startMs: 1, endMs: 9, closed: true, failures: 0 }, final: true })).toEqual([
+      { id: "checkin-done", section: "note", text: "Må-runda genomförd.", anchor: "ag-2" },
+      { id: "info-tid", section: "note", text: "18:05–19:10", anchor: "info.tid" },
+    ]);
+    expect(tick.serverItems({ ...base, final: true, tidRow: false })).toEqual([]);
+  });
+
+  it("withOwnerIds: resolves owners, keeps a carried row's id, clears an owner-less row", () => {
+    const people = [
+      { id: "p-anna", org_id: "o", name: "Anna Berg", member_user_id: null, role: "Kassör" },
+      { id: "p-erik", org_id: "o", name: "Erik Lund", member_user_id: null, role: null },
+    ];
+    const rows = [
+      row({ id: "n1", section: "action", owner: "kassören" }),
+      row({ id: "c1", section: "action", owner: "Erik", owner_person_id: "p-old", carried_from_id: "n9", carried_from_meeting: "m0" }),
+      row({ id: "n2", section: "note", owner: null, owner_person_id: "p-anna" }),
+    ];
+    expect(tick.withOwnerIds(rows, people).map((r) => r.owner_person_id)).toEqual(["p-anna", "p-old", null]);
+  });
+});
+
+describe("format layout: the agenda context (F4) and new items (F5)", () => {
+  const M = "m-ctx";
+  it("a human inserts an item mid-list: stored anchors keep their item, the new one gets ag-7 (topic)", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    // Our note under Ekonomi (ag-5) first, as an earlier tick would have written it.
+    const { rows } = renderInto(doc, meeting, [], [{ id: "n1", section: "note", text: "Kassan är god", anchor: "ag-5" }]);
+    expect(linesOf(doc)).toContain("– Kassan är god.");
+    insertItemBeforeOvrigt(doc, "Budget 2027");
+
+    const tab = parseNotesTab(doc, TAB);
+    const scan = scanAgenda(withoutOwn(tab, rows), VECKOMOTE);
+    // The scan's own keys shifted (ag-6 is now "Budget 2027"): never used for stored anchors.
+    expect(scan.items.find((i) => i.key === "ag-6")?.label).toBe("Budget 2027");
+    const fresh = newAgendaItems(scan, tab, meeting.section_ranges);
+    expect(fresh.map((f) => f.key)).toEqual(["ag-7"]);
+    const ctx = tick.agendaContext(tab, scan, meeting, VECKOMOTE, [{ name: "Anna Berg", role: "Kassör" }], fresh);
+    expect(ctx.anchors.map((a) => [a.key, a.label, a.role])).toEqual([
+      ["ag-1", "Godkänn dagordning", "procedural"],
+      ["ag-2", "Må-runda", "checkin"],
+      ["ag-3", "Från förra veckan", "followup"],
+      ["ag-4", "Kommande event", "topic"],
+      ["ag-5", "Ekonomi", "topic"],
+      ["ag-7", "Budget 2027", "topic"],
+      ["ag-6", "Övrigt", "other"],
+    ]);
+    expect(ctx.anchors.find((a) => a.key === "ag-4")!.humanText).toBe("Sommarfest på Kårallen\nWorkshop om sponsring");
+    // Our own line is not the human's text under Ekonomi.
+    expect(ctx.anchors.find((a) => a.key === "ag-5")!.humanText).toBe("");
+    expect(ctx).toMatchObject({ formatName: "Veckomöte", decisionPrefix: "Beslut:", groupBy: "role", people: [{ name: "Anna Berg", role: "Kassör" }] });
+    expect(anchorRoles(ctx).get("ag-7")).toBe("topic");
+    expect(anchorRoles(ctx).get("notes")).toBe("notes");
+
+    // Rendered with the new anchor: the note lands under "Budget 2027" and the range is created.
+    const out = renderInto(doc, meeting, rows, [
+      { id: "n1", section: "note", text: "Kassan är god", anchor: "ag-5" },
+      { id: "n2", section: "note", text: "Budgeten ska vara klar i januari", anchor: "ag-7" },
+    ], { newAnchors: fresh });
+    const lines = linesOf(doc);
+    expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Övrigt") + 1)).toEqual([
+      "Ekonomi",
+      "– Kassan är god.",
+      "Budget 2027",
+      "– Budgeten ska vara klar i januari.",
+      "Övrigt",
+    ]);
+    const after = parseNotesTab(doc, TAB);
+    expect(itemSpan(after, `ss-${M}-ag-7`)?.rangeText).toBe("Budget 2027");
+    // Next tick: ag-7 is a stored anchor, nothing is new.
+    const next = { ...meeting, section_ranges: { ...meeting.section_ranges, "ag-7": `ss-${M}-ag-7` }, agenda_roles: { ...ROLES, "ag-7": "topic" as const } };
+    const scan2 = scanAgenda(withoutOwn(after, out.rows), VECKOMOTE);
+    expect(newAgendaItems(scan2, after, next.section_ranges)).toEqual([]);
+    const ctx2 = tick.agendaContext(after, scan2, next, VECKOMOTE, []);
+    expect(ctx2.anchors.find((a) => a.key === "ag-7")).toMatchObject({ label: "Budget 2027", role: "topic" });
+    expect(ctx2.anchors.find((a) => a.key === "ag-5")).toMatchObject({ label: "Ekonomi", humanText: "" });
+  });
+
+  it("an anchor whose item text is gone is listed gone, without a label", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const ma = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;
+    applyDoc(doc, [{ deleteContentRange: { range: { tabId: TAB, startIndex: ma.start, endIndex: ma.end - 1 } } }]);
+    const tab = parseNotesTab(doc, TAB);
+    const ctx = tick.agendaContext(tab, scanAgenda(tab, VECKOMOTE), fmtMeeting(M, plan), VECKOMOTE, []);
+    expect(ctx.anchors.at(-1)).toEqual({ key: "ag-2", label: "", role: "checkin", humanText: "", gone: true });
+    expect(anchorRoles(ctx).has("ag-2")).toBe(false);
+  });
+
+  it("rekeyNewItems: a later read keeps the keys Claude was told (by label), others get fresh keys", () => {
+    const { doc, plan } = anchoredDoc(M);
+    insertItemBeforeOvrigt(doc, "Lokalfrågan");
+    insertItemBeforeOvrigt(doc, "Budget 2027");
+    const tab = parseNotesTab(doc, TAB);
+    const scan = scanAgenda(tab, VECKOMOTE);
+    const found = newAgendaItems(scan, tab, plan.sectionRanges);
+    expect(found.map((f) => f.key)).toEqual(["ag-7", "ag-8"]);
+    // Claude was told only about "Budget 2027" as ag-7.
+    const keyed = tick.rekeyNewItems(found, scan, [{ key: "ag-7", label: "Budget 2027" }], Object.keys(plan.sectionRanges));
+    expect(keyed.map((k) => k.key)).toEqual(["ag-8", "ag-7"]);
+  });
+});
+
+describe("format layout: the render list (F2) and Claude's view of own lines (F3)", () => {
+  const M = "m-desired";
+  const emptyDiff = (rows: NoteItemRow[]) => ({ rows, locked: [] as NotesItem[], deletedIds: [] as string[] });
+
+  it("the Må-runda line renders once and survives the next tick; copies and carried rows stay", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    const server = tick.serverItems({
+      attendees: "Anna Berg, Erik Lund",
+      window: { startMs: 2000, endMs: 5000, closed: true, failures: 0 },
+      checkinKey: tick.checkinAnchor(meeting),
+      tidRow: true,
+      final: false,
+      startedAt: FMT_STARTED,
+      endedAt: FMT_ENDED,
+    });
+    const items: NotesItem[] = [
+      { id: "c1", section: "action", text: "Mejla klubben om avgiften", owner: "Kassör", anchor: "ag-3", carried: true },
+      { id: "n1", section: "action", text: "Boka sal", owner: "Anna Berg", anchor: "ag-4" },
+    ];
+    const tidRow = plan.rows.map((r) => ({ ...r, meeting_id: M }));
+    let rows: NoteItemRow[] = tidRow;
+    for (let t = 0; t < 2; t++) {
+      const desired = tick.formatDesired(items, emptyDiff(rows), server, VECKOMOTE);
+      expect(desired.map((d) => d.id)).toEqual(["c1", "n1", "info-narvarande", "checkin-done", "n1-t"]);
+      const out = renderInto(doc, meeting, rows, desired);
+      if (t === 1) expect(out.plan.requests).toEqual([]); // nothing moves on the second tick
+      rows = out.rows;
+    }
+    const lines = linesOf(doc);
+    expect(lines.filter((l) => l === "– Må-runda genomförd.")).toHaveLength(1);
+    expect(lines[lines.indexOf("Må-runda") + 1]).toBe("– Må-runda genomförd.");
+    expect(lines).toContain("Närvarande");
+    expect(docText(doc)).toContain("Anna Berg, Erik Lund");
+    expect(rows.find((r) => r.id === "checkin-done")).toMatchObject({ anchor: "ag-2", kind: "note", locked: false, range_name: `ss-${M}-checkin-done` });
+    expect(rows.map((r) => r.id).sort()).toEqual(["c1", "checkin-done", "info-narvarande", "info-tid", "n1", "n1-t"]);
+    // Left out of the list, the planner would remove it: that is why it is in every tick's list.
+    const without = planFormatRender(meeting, parseNotesTab(doc, TAB), rows, tick.formatDesired(items, emptyDiff(rows), [], VECKOMOTE), {
+      profile: VECKOMOTE,
+      ownerLabel: (o) => o,
+    });
+    expect(without.removed.has("checkin-done")).toBe(true);
+    expect(without.removed.has("info-narvarande")).toBe(false); // info cells are never removed
+  });
+
+  it("a server row a human edited or deleted stays theirs: only the locked version, never re-added", () => {
+    const server: NotesItem[] = [{ id: "checkin-done", section: "note", text: "Må-runda genomförd.", anchor: "ag-2" }];
+    const locked = { id: "checkin-done", section: "note" as const, text: "Må-runda klar" };
+    const desired = tick.formatDesired([], { rows: [], locked: [locked], deletedIds: [] }, server, VECKOMOTE);
+    expect(desired).toEqual([locked]);
+    expect(tick.formatDesired([], { rows: [], locked: [], deletedIds: ["checkin-done"] }, server, VECKOMOTE)).toEqual([]);
+  });
+
+  it("F3: our rendered lines ('– ' prefix as stored) never reach Claude as human text", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    const { rows } = renderInto(doc, meeting, [], [{ id: "n1", section: "note", text: "Lokalen är bokad", anchor: "ag-5" }]);
+    const own = rows.filter((r) => r.last_rendered_text).map((r) => r.last_rendered_text!);
+    expect(own).toEqual(["– Lokalen är bokad."]);
+    const tab = parseNotesTab(doc, TAB);
+    // Even a scan that saw our line (no withoutOwnLines) is cleaned by ownLines.
+    const ctx = tick.agendaContext(tab, scanAgenda(tab, VECKOMOTE), meeting, VECKOMOTE, []);
+    const body = buildRequest({
+      orgName: "Kodklubben",
+      transcriptBlocks: ["[00:00:01] S1-speaker_0: hej"],
+      speakerNames: {},
+      notesTabText: tab.paragraphs.map((p) => p.text).join(""),
+      items: [{ id: "n1", section: "note", text: "Lokalen är bokad", anchor: "ag-5" }],
+      locked: [],
+      deletedIds: [],
+      final: false,
+      agenda: ctx,
+      ownLines: own,
+    });
+    const content = body.messages[0].content as { text: string }[];
+    const tail = content[content.length - 1].text;
+    expect(tail).toContain("Ekonomi");
+    expect(tail).not.toContain("Lokalen är bokad.");
+  });
+
+  it("final pass: Tid becomes 18:05–19:10 and the status line 'Simon Says · avslutat 19:10'", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    const rows = plan.rows.map((r) => ({ ...r, meeting_id: M }));
+    const live = renderInto(doc, meeting, rows, [], { header: tick.liveHeader(new Date("2026-11-25T17:31:00Z"), "format") });
+    expect(linesOf(doc)).toContain("Simon Says antecknar live · uppdaterad 18:31");
+    const server = tick.serverItems({ attendees: "", window: null, checkinKey: null, tidRow: true, final: true, startedAt: FMT_STARTED, endedAt: FMT_ENDED });
+    const ended = renderInto(
+      doc,
+      { ...meeting, header_rendered: live.plan.header },
+      live.rows,
+      tick.formatDesired([], emptyDiff(live.rows), server, VECKOMOTE),
+      { header: tick.endedHeader(FMT_ENDED, "format") },
+    );
+    expect(ended.plan.header).toBe("Simon Says · avslutat 19:10");
+    const lines = linesOf(doc);
+    expect(lines).toContain("Simon Says · avslutat 19:10");
+    expect(lines).toContain("18:05–19:10");
+    expect(ended.rows.find((r) => r.id === "info-tid")).toMatchObject({ text: "18:05–19:10", last_rendered_text: "18:05–19:10" });
   });
 });
 
@@ -762,5 +1167,418 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(m.tick_lease_until).not.toBeNull();
     expect(await tick.runTick(randomUUID(), { final: true }, f.deps)).toBe("not_found");
     expect(await tick.finishMeeting(randomUUID(), { deps: f.deps })).toBe("not_found");
+  });
+});
+
+describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
+  let starter: TestUser;
+  let orgId: string;
+  let profileId: string;
+  let anna: string;
+
+  beforeAll(async () => {
+    starter = await createTestUser("formatticker");
+    const r = await createOrg(starter.db, "Kodklubben");
+    if (!r.ok) throw new Error("org");
+    orgId = r.id;
+    profileId = await ensureStandardRow(orgId, "veckomote");
+    const { data, error } = await adminClient()
+      .from("people")
+      .insert([
+        { org_id: orgId, name: "Anna Berg", role: "Kassör" },
+        { org_id: orgId, name: "Erik Lund" },
+      ])
+      .select("id, name");
+    if (error) throw new Error(error.message);
+    anna = data!.find((p) => p.name === "Anna Berg")!.id;
+  });
+
+  beforeEach(() => {
+    for (const k of Object.keys(envOverride)) delete envOverride[k as keyof EnvOverride];
+    envOverride.GLOBAL_DAILY_HOURS = 1_000_000;
+    envOverride.GLOBAL_DAILY_USD = 1_000_000;
+  });
+
+  const OPEN = { startMs: null, endMs: null, closed: false, failures: 0 };
+
+  /** A format meeting on the anchored fixture Doc, as startMeeting leaves it (info-tid row saved). */
+  async function formatMeeting(opts: { window?: typeof OPEN | null; status?: "live" | "ending"; prerender?: NoteItemRow[]; isTest?: boolean } = {}) {
+    const admin = adminClient();
+    const id = randomUUID();
+    const { doc, plan } = anchoredDoc(id);
+    const { error } = await admin.from("meetings").insert({
+      id,
+      org_id: orgId,
+      started_by: starter.id,
+      doc_id: `doc-${id}`,
+      notes_tab_id: TAB,
+      transcript_tab_id: null,
+      header_range: plan.headerRange,
+      header_rendered: INITIAL_LIVE_LINE,
+      section_ranges: plan.sectionRanges,
+      status: opts.status ?? "live",
+      consent_confirmed_at: FMT_STARTED.toISOString(),
+      started_at: FMT_STARTED.toISOString(),
+      ended_at: opts.status === "ending" ? FMT_ENDED.toISOString() : null,
+      last_heartbeat_at: new Date().toISOString(),
+      agenda_doc: true,
+      layout: "format",
+      format_profile_id: profileId,
+      is_test: opts.isTest ?? false,
+      agenda_roles: ROLES,
+      checkin_window: opts.window === undefined ? null : opts.window,
+    });
+    if (error) throw new Error(error.message);
+    let rows: NoteItemRow[] = plan.rows.map((r) => ({ ...r, meeting_id: id }));
+    if (opts.prerender?.length) {
+      // As the start's pre-fill renders the carried rows.
+      const pre = opts.prerender.map((r) => ({ ...r, meeting_id: id }));
+      rows = renderInto(doc, fmtMeeting(id, plan), [...rows, ...pre], [...rows, ...pre].map(toItem)).rows;
+    }
+    const { error: ie } = await admin.from("note_items").insert(rows);
+    if (ie) throw new Error(ie.message);
+    const sessionId = `el-${randomUUID()}`;
+    const { error: se } = await admin
+      .from("el_sessions")
+      // Name round already done: these tests set speaker_map themselves.
+      .insert({
+        id: sessionId,
+        meeting_id: id,
+        max_seconds: 3600,
+        started_at: new Date(Date.now() - 600_000).toISOString(),
+        name_round_at: new Date().toISOString(),
+      });
+    if (se) throw new Error(se.message);
+    return { id, sessionId, doc };
+  }
+  const toItem = (r: NoteItemRow): NotesItem => ({
+    id: r.id,
+    section: r.section,
+    text: r.text,
+    ...(r.owner ? { owner: r.owner } : {}),
+    ...(r.anchor ? { anchor: r.anchor } : {}),
+    ...(r.carried_from_id ? { carried: true } : {}),
+  });
+
+  let segCounter = 0;
+  const sayAs = (meetingId: string, sessionId: string, speaker: string, text: string, startMs: number) =>
+    ingestSegments(meetingId, [
+      { elSessionId: sessionId, segmentIndex: segCounter++, runIndex: 0, speaker, text, startMs, endMs: startMs + 500 },
+    ]);
+  const say = (meetingId: string, sessionId: string, text: string, startMs: number) => sayAs(meetingId, sessionId, "speaker_0", text, startMs);
+
+  type Found = import("@/lib/notes/checkin").CheckinFound | "failed";
+  /** Fake Docs (the simulator, rendered by the planner the tick passes) and fake Claude calls. */
+  function fakes(doc: Doc, opts: { answer?: (input: UpdateNotesInput) => NotesItem[]; detect?: (lines: { atMs: number }[]) => Found } = {}) {
+    const calls: UpdateNotesInput[] = [];
+    const detects: { lines: { atMs: number; text: string }[] }[] = [];
+    const headers: (string | undefined)[] = [];
+    const deps: Partial<import("@/lib/meetings/tick").TickDeps> = {
+      getAuth: async () => ({}) as OAuth2Client,
+      readNotes: async () => parseNotesTab(doc, TAB),
+      render: async (_auth, m, rows, desired, rev, header, format): Promise<RenderResult> => {
+        headers.push(header);
+        if (!format) throw new Error("format meeting rendered without its planner");
+        const tab = parseNotesTab(doc, TAB);
+        if (tab.revisionId !== rev) return { status: "conflict" };
+        const plan = format.plan(m, tab, rows, desired, {
+          profile: format.profile,
+          ownerLabel: format.ownerLabel,
+          headerText: header,
+          newAnchors: format.newAnchors,
+        });
+        applyDoc(doc, plan.requests);
+        return { status: "ok", rows: renderedRows(m.id, rows, desired, plan), headerRendered: plan.header };
+      },
+      appendTranscript: async () => undefined,
+      extractNames: async () => [],
+      detectCheckin: async (input) => {
+        detects.push(input);
+        return { found: opts.detect ? opts.detect(input.lines) : { startMs: null, endMs: null }, usage: null };
+      },
+      updateNotes: async (input): Promise<UpdateNotesResult> => {
+        calls.push(input);
+        const items = opts.answer ? opts.answer(input) : input.items;
+        return {
+          ops: [],
+          items,
+          usage: { input: 10, output: 1, cacheRead: 0, cacheWrite: 0, usd: 0.0001 },
+          stopReason: "end_turn",
+          dropped: 0,
+          nextId: input.nextId ?? "n1",
+          failure: null,
+        };
+      },
+      mailer: { send: async () => false },
+      sleep: async () => undefined,
+      now: () => new Date("2026-11-25T17:31:00Z"),
+    };
+    return { deps, calls, detects, headers };
+  }
+
+  const read = async (id: string) => (await adminClient().from("meetings").select("*").eq("id", id).single()).data as MeetingRow;
+  const noteRows = async (id: string) =>
+    ((await adminClient().from("note_items").select("*").eq("meeting_id", id)).data ?? []) as NoteItemRow[];
+  const backdate = (id: string) =>
+    adminClient().from("meetings").update({ last_tick_at: new Date(Date.now() - 46_000).toISOString() }).eq("id", id);
+  const events = async (id: string, kind: string) =>
+    (await adminClient().from("meeting_events").select("kind, detail").eq("meeting_id", id).eq("kind", kind)).data ?? [];
+
+  it("Claude gets the agenda (roles, human text) and the people with roles; the LIVE line is updated", async () => {
+    const { id, sessionId, doc } = await formatMeeting();
+    await say(id, sessionId, "Vi börjar med dagordningen", 1000);
+    const f = fakes(doc);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.calls).toHaveLength(1);
+    const input = f.calls[0];
+    expect(input.agenda?.anchors.map((a) => [a.key, a.label, a.role])).toEqual([
+      ["ag-1", "Godkänn dagordning", "procedural"],
+      ["ag-2", "Må-runda", "checkin"],
+      ["ag-3", "Från förra veckan", "followup"],
+      ["ag-4", "Kommande event", "topic"],
+      ["ag-5", "Ekonomi", "topic"],
+      ["ag-6", "Övrigt", "other"],
+    ]);
+    expect(input.agenda?.anchors[3].humanText).toBe("Sommarfest på Kårallen\nWorkshop om sponsring");
+    expect(input.agenda?.people).toEqual(expect.arrayContaining([{ name: "Anna Berg", role: "Kassör" }, { name: "Erik Lund", role: null }]));
+    expect(input.agenda).toMatchObject({ formatName: "Veckomöte", groupBy: "role" });
+    // Server rows are not Claude's.
+    expect(input.items.map((i) => i.id)).toEqual([]);
+    expect(f.headers[0]).toBe("Simon Says antecknar live · uppdaterad 18:31");
+    expect(linesOf(doc)).toContain("Simon Says antecknar live · uppdaterad 18:31");
+    expect((await read(id)).header_rendered).toBe("Simon Says antecknar live · uppdaterad 18:31");
+    expect(f.detects).toHaveLength(0); // no check-in window on this meeting
+    const ok = await events(id, "tick_ok");
+    expect(ok).toEqual([{ kind: "tick_ok", detail: expect.objectContaining({ anchorsAdded: 0 }) }]);
+  });
+
+  it("a top-level item added by a human gets ag-7 (topic); the next tick lists it and can add under it; own lines are not human text", async () => {
+    const { id, sessionId, doc } = await formatMeeting();
+    insertItemBeforeOvrigt(doc, "Budget 2027");
+    await say(id, sessionId, "Budgeten ska vara klar i januari", 1000);
+    const add = (input: UpdateNotesInput, item: NotesItem) =>
+      input.agenda?.anchors.some((a) => a.key === "ag-7" && !a.gone) ? [...input.items, item] : input.items;
+    const f = fakes(doc, {
+      answer: (input) =>
+        input.items.length === 0
+          ? add(input, { id: "n1", section: "note", text: "Budgeten ska vara klar i januari", anchor: "ag-7" })
+          : add(input, { id: "n2", section: "decision", text: "Budgeten antas", anchor: "ag-7" }),
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.calls[0].agenda?.anchors.find((a) => a.key === "ag-7")).toMatchObject({ label: "Budget 2027", role: "topic" });
+    let m = await read(id);
+    expect((m.section_ranges as Record<string, string>)["ag-7"]).toBe(`ss-${id}-ag-7`);
+    expect(m.agenda_roles?.["ag-7"]).toBe("topic");
+    expect((await events(id, "tick_ok"))[0].detail).toMatchObject({ anchorsAdded: 1 });
+
+    await say(id, sessionId, "Vi antar budgeten", 2000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    const ctx = f.calls[1].agenda!;
+    expect(ctx.anchors.find((a) => a.key === "ag-7")).toMatchObject({ label: "Budget 2027", role: "topic" });
+    expect(ctx.anchors.find((a) => a.key === "ag-6")).toMatchObject({ label: "Övrigt", role: "other" });
+    expect(anchorRoles(ctx).get("ag-7")).toBe("topic");
+    // F3: our line goes to Claude as ownLines (prefix as stored) and never as human text.
+    expect(f.calls[1].ownLines).toContain("– Budgeten ska vara klar i januari.");
+    const content = buildRequest(f.calls[1]).messages[0].content as { text: string }[];
+    expect(content[content.length - 1].text).not.toContain("januari.");
+    const lines = linesOf(doc);
+    expect(lines.slice(lines.indexOf("Budget 2027"), lines.indexOf("Övrigt"))).toEqual([
+      "Budget 2027",
+      "– Budgeten ska vara klar i januari.",
+      "– Beslut: Budgeten antas.",
+    ]);
+    m = await read(id);
+    expect(Object.keys(m.section_ranges).filter((k) => k.startsWith("ag-"))).toHaveLength(7);
+    const rows = await noteRows(id);
+    expect(rows.find((r) => r.id === "n2")).toMatchObject({ anchor: "ag-7", kind: "decision" });
+  });
+
+  it("Må-runda: masked from the detector's start, block bytes kept, one 'Må-runda genomförd.' line that survives", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN });
+    await say(id, sessionId, "Hej allihop", 1000);
+    await say(id, sessionId, "Jag mår bra idag", 2000);
+    await say(id, sessionId, "Lite trött", 3000);
+    let tickNo = 0;
+    const f = fakes(doc, {
+      detect: () => {
+        tickNo++;
+        if (tickNo === 1) return { startMs: 2000, endMs: null }; // the second new line
+        if (tickNo === 2) return { startMs: null, endMs: 5000 };
+        return { startMs: null, endMs: null };
+      },
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.detects[0].lines.map((l) => l.atMs)).toEqual([1000, 2000, 3000]);
+    const block1 = f.calls[0].transcriptBlocks[0];
+    expect(block1).toContain(CHECKIN_PLACEHOLDER);
+    expect(block1).not.toMatch(/mår bra|trött/);
+    expect((await read(id)).checkin_window).toEqual({ startMs: 2000, endMs: null, closed: false, failures: 0 });
+
+    await say(id, sessionId, "Jag har sovit dåligt", 4000);
+    await say(id, sessionId, "Nu tar vi förra veckan", 5000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect((await read(id)).checkin_window).toEqual({ startMs: 2000, endMs: 5000, closed: true, failures: 0 });
+    expect(linesOf(doc).filter((l) => l === "– Må-runda genomförd.")).toHaveLength(1);
+
+    await say(id, sessionId, "Mejlet är skickat", 6000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.detects).toHaveLength(2); // closed: no detector call
+    const blocks = f.calls[2].transcriptBlocks;
+    expect(blocks[0]).toBe(block1);
+    expect(blocks.join("\n")).not.toMatch(/mår bra|trött|sovit/);
+    expect(blocks[1]).toContain("Nu tar vi förra veckan");
+    expect(linesOf(doc).filter((l) => l === "– Må-runda genomförd.")).toHaveLength(1);
+    const done = (await noteRows(id)).find((r) => r.id === "checkin-done");
+    expect(done).toMatchObject({ anchor: "ag-2", text: "Må-runda genomförd.", locked: false, range_name: `ss-${id}-checkin-done` });
+    // Claude never sees the server row.
+    expect(f.calls[2].items.map((i) => i.id)).not.toContain("checkin-done");
+    // Events: states and times only.
+    expect((await events(id, "checkin")).map((e) => e.detail)).toEqual([
+      { state: "open", startMs: 2000, endMs: null },
+      { state: "closed", startMs: 2000, endMs: 5000 },
+    ]);
+  });
+
+  it("a detector failing 3 ticks in a row closes the window (nothing masked)", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN });
+    const f = fakes(doc, { detect: () => "failed" });
+    for (let i = 0; i < 3; i++) {
+      await say(id, sessionId, `rad ${i}`, 1000 + i * 1000);
+      await backdate(id);
+      expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    }
+    expect((await read(id)).checkin_window).toMatchObject({ closed: true, startMs: null, failures: 3 });
+    expect(f.calls.at(-1)!.transcriptBlocks.join("\n")).not.toContain(CHECKIN_PLACEHOLDER);
+    expect((await noteRows(id)).map((r) => r.id)).not.toContain("checkin-done");
+  });
+
+  it("kill switch: neither the detector nor the notes call; carried rows and the Doc stay", async () => {
+    const prev = await prevMeeting();
+    const { id, sessionId, doc } = await formatMeeting({ window: OPEN, prerender: [carried(prev)] });
+    const before = docText(doc);
+    expect(linesOf(doc)).toContain("– Kassör: Mejla klubben om avgiften.");
+    await say(id, sessionId, "Hej", 1000);
+    envOverride.KILL_SWITCH = true;
+    const f = fakes(doc, { detect: () => ({ startMs: 1000, endMs: null }) });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.detects).toHaveLength(0);
+    expect(f.calls).toHaveLength(0);
+    expect((await read(id)).checkin_window).toEqual(OPEN);
+    expect((await noteRows(id)).map((r) => r.id).sort()).toEqual(["c1", "info-tid"]);
+    // Only the LIVE line moved.
+    expect(docText(doc).replace("uppdaterad 18:31", "uppdaterad –")).toBe(before);
+  });
+
+  /** A finished earlier meeting of the org with one open task (Anna Berg's). */
+  async function prevMeeting(): Promise<string> {
+    const admin = adminClient();
+    const id = randomUUID();
+    const { error } = await admin.from("meetings").insert({
+      id,
+      org_id: orgId,
+      started_by: starter.id,
+      doc_id: `doc-${id}`,
+      notes_tab_id: TAB,
+      status: "done",
+      consent_confirmed_at: new Date().toISOString(),
+      started_at: new Date("2026-11-18T17:05:00Z").toISOString(),
+      layout: "format",
+    });
+    if (error) throw new Error(error.message);
+    const { error: ie } = await admin.from("note_items").insert({
+      meeting_id: id,
+      id: "n3",
+      section: "action",
+      kind: "task",
+      text: "Mejla klubben om avgiften",
+      owner: "Anna Berg",
+      done: false,
+    });
+    if (ie) throw new Error(ie.message);
+    return id;
+  }
+  const carried = (prev: string): NoteItemRow => ({
+    meeting_id: "",
+    id: "c1",
+    section: "action",
+    kind: "task",
+    anchor: "ag-3",
+    text: "Mejla klubben om avgiften",
+    owner: "Kassör",
+    due: null,
+    owner_person_id: anna,
+    locked: false,
+    deleted_by_human: false,
+    done: false,
+    carried_from_meeting: prev,
+    carried_from_id: "n3",
+    copy_of: null,
+    range_name: null,
+    last_rendered_text: null,
+    position: 0,
+  });
+
+  it("change c1 done:true → '✓ klart' in the Doc and the previous meeting's task is done", async () => {
+    const prev = await prevMeeting();
+    const { id, sessionId, doc } = await formatMeeting({ prerender: [carried(prev)] });
+    await say(id, sessionId, "Mejlet till klubben är skickat", 1000);
+    const f = fakes(doc, { answer: (input) => input.items.map((i) => (i.id === "c1" ? { ...i, done: true } : i)) });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.calls[0].items).toEqual([expect.objectContaining({ id: "c1", carried: true })]);
+    expect(linesOf(doc)).toContain("– Kassör: Mejla klubben om avgiften. ✓ klart");
+    const rows = await noteRows(id);
+    expect(rows.find((r) => r.id === "c1")).toMatchObject({ done: true, owner_person_id: anna, carried_from_id: "n3" });
+    const { data: source } = await adminClient().from("note_items").select("done").eq("meeting_id", prev).eq("id", "n3").single();
+    expect(source?.done).toBe(true);
+  });
+
+  it("a new task gets its owner's person id and a tasks-section copy", async () => {
+    const { id, sessionId, doc } = await formatMeeting();
+    await say(id, sessionId, "Anna bokar salen", 1000);
+    const f = fakes(doc, {
+      answer: (input) => [...input.items, { id: "n1", section: "action", text: "Boka salen", owner: "Anna Berg", anchor: "ag-4" }],
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    const rows = await noteRows(id);
+    expect(rows.find((r) => r.id === "n1")).toMatchObject({ owner_person_id: anna, kind: "task", anchor: "ag-4" });
+    expect(rows.find((r) => r.id === "n1-t")).toMatchObject({ anchor: "tasks", copy_of: "n1" });
+    expect(linesOf(doc).filter((l) => l.includes("Kassör: Boka salen."))).toHaveLength(2);
+  });
+
+  it("two named speakers fill the Närvarande cell: 'Anna Berg, Erik Lund'", async () => {
+    const { id, sessionId, doc } = await formatMeeting();
+    await sayAs(id, sessionId, "speaker_1", "Hej, Anna här", 1000);
+    await sayAs(id, sessionId, "speaker_0", "Och Erik", 2000);
+    await adminClient().from("speaker_map").insert([
+      { meeting_id: id, el_session_id: sessionId, speaker_label: "speaker_0", display_name: "Erik Lund" },
+      { meeting_id: id, el_session_id: sessionId, speaker_label: "speaker_1", display_name: "Anna Berg" },
+    ]);
+    const f = fakes(doc);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect((await noteRows(id)).find((r) => r.id === "info-narvarande")).toMatchObject({
+      text: "Anna Berg, Erik Lund",
+      anchor: "info.narvarande",
+      kind: "attendee",
+    });
+    const lines = linesOf(doc);
+    expect(lines[lines.indexOf("Närvarande") + 1]).toBe("Anna Berg, Erik Lund");
+    expect(f.calls[0].items.map((i) => i.id)).not.toContain("info-narvarande");
+  });
+
+  it("final pass: 'Simon Says · avslutat 19:10' and Tid '18:05–19:10'", async () => {
+    const { id, sessionId, doc } = await formatMeeting({ status: "ending" });
+    await say(id, sessionId, "Tack för idag", 1000);
+    const f = fakes(doc);
+    expect(await tick.runTick(id, { final: true }, f.deps)).toBe("ok");
+    expect(f.headers.at(-1)).toBe("Simon Says · avslutat 19:10");
+    expect((await read(id)).header_rendered).toBe("Simon Says · avslutat 19:10");
+    const lines = linesOf(doc);
+    expect(lines).toContain("Simon Says · avslutat 19:10");
+    expect(lines[lines.indexOf("Tid") + 1]).toBe("18:05–19:10");
+    expect((await noteRows(id)).find((r) => r.id === "info-tid")).toMatchObject({ text: "18:05–19:10", last_rendered_text: "18:05–19:10" });
+    await adminClient().from("meetings").update({ status: "done" }).eq("id", id);
   });
 });

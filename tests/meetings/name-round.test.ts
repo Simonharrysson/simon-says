@@ -26,6 +26,7 @@ const { ingestSegments } = await import("@/lib/segments/ingest");
 const { seedTestSession } = await import("@/lib/testmeeting/feed");
 const { FIXTURE_LINES, FIXTURE_SPEAKER_NAMES, toSegments } = await import("@/lib/testmeeting/fixture");
 const { NameRoundError } = await import("@/lib/names/extract");
+const { CHECKIN_PLACEHOLDER } = await import("@/lib/notes/checkin");
 
 /**
  * A stand-in for Claude that really reads the name round: per label, the first
@@ -163,6 +164,29 @@ describe.skipIf(!hasLocalSupabase)("name round in the tick (Testmöte fixture)",
     await backdate(id);
     expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
     expect(f.extractCalls).toHaveLength(1);
+  });
+
+  it("format layout: segments inside an open Må-runda window still reach the name round (masked for the notes only)", async () => {
+    const { id, sessionId } = await testMeeting();
+    await adminClient()
+      .from("meetings")
+      .update({ layout: "format", checkin_window: { startMs: 0, endMs: null, closed: false, failures: 0 } })
+      .eq("id", id);
+    const f = fakes(async (segs) => readNames(segs));
+    const notes: UpdateNotesInput[] = [];
+    const update = f.deps.updateNotes!;
+    f.deps.updateNotes = async (input, opts) => {
+      notes.push(input);
+      return update(input, opts);
+    };
+    f.deps.detectCheckin = async () => ({ found: { startMs: null, endMs: null }, usage: null });
+    await feed(id, sessionId, -1, 150_000);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.extractCalls).toHaveLength(1);
+    expect(f.extractCalls[0][0].text).toContain("Jag heter Karin Ek");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].transcriptBlocks).toEqual([expect.stringContaining(CHECKIN_PLACEHOLDER)]);
+    expect(notes[0].transcriptBlocks.join("\n")).not.toContain("Karin Ek");
   });
 
   it("a failed round never blocks the meeting: raw labels, a name_round event", async () => {
