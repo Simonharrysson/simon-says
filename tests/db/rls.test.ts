@@ -186,17 +186,29 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
     expect(rotateError).not.toBeNull();
   });
 
-  it("an admin sets and clears a person's role; a stranger changes nothing", async () => {
+  it("an admin sets and clears a person's role; a member or stranger changes nothing", async () => {
     const owner = await createTestUser("roleowner");
     const stranger = await createTestUser("rolestranger");
+    const member = await createTestUser("rolemember");
     const r = await createOrg(owner.db, "Roller");
     if (!r.ok) throw new Error("org");
+    const { data: org } = await adminClient().from("orgs").select("invite_code").eq("id", r.id).single();
+    expect(await joinOrg(member.db, org!.invite_code as string)).toBe(r.id);
     await addPerson(owner.db, r.id, "Anna Berg");
     const [anna] = await listPeople(owner.db, r.id);
     expect(await setPersonRole(owner.db, anna.id, "Kassör")).toBe(true);
     expect((await listPeople(owner.db, r.id))[0].role).toBe("Kassör");
     expect(await setPersonRole(stranger.db, anna.id, "Ordförande")).toBe(false);
+    expect(await setPersonRole(member.db, anna.id, "Ordförande")).toBe(false);
     expect((await listPeople(owner.db, r.id))[0].role).toBe("Kassör");
+    // Not through the table either, whatever the row policy says.
+    expect((await member.db.from("people").update({ role: "Ordförande" }).eq("id", anna.id)).error).not.toBeNull();
+    expect((await member.db.from("people").insert({ org_id: r.id, name: "Smyg Roll", role: "PR" })).error).not.toBeNull();
+    expect((await listPeople(owner.db, r.id))[0].role).toBe("Kassör");
+    expect(await setPersonRole(owner.db, anna.id, "x".repeat(41))).toBe(false);
+    // Members still add and rename people.
+    expect(await renamePerson(member.db, anna.id, "Anna Bergh")).toBe(true);
+    expect(await addPerson(member.db, r.id, "Nils Ek")).toBe(true);
     expect(await setPersonRole(owner.db, anna.id, null)).toBe(true);
     expect((await listPeople(owner.db, r.id))[0].role).toBeNull();
   });
