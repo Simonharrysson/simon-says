@@ -127,6 +127,13 @@ export async function renamePerson(db: Db, personId: string, name: string): Prom
   return (data ?? []).length > 0;
 }
 
+/** Sets (or clears, with null) a person's role. The caller checks that the user is an admin of the org. */
+export async function setPersonRole(db: Db, personId: string, role: string | null): Promise<boolean> {
+  const { data, error } = await db.from("people").update({ role }).eq("id", personId).select("id");
+  if (error) fail("setPersonRole", error);
+  return (data?.length ?? 0) > 0;
+}
+
 export async function deletePerson(db: Db, personId: string): Promise<boolean> {
   const { data, error } = await db.from("people").delete().eq("id", personId).select("id");
   if (error) fail("deletePerson", error);

@@ -33,7 +33,7 @@ export interface OrgDetailViewProps {
   inviteUrl: string;
   /** Members (email, role), oldest first. Omitted when unavailable. */
   members?: { userId: string; email: string; role: "admin" | "member" }[];
-  people: { id: string; name: string }[];
+  people: { id: string; name: string; role?: string | null }[];
   meetings: OrgDetailMeeting[];
   notice: Notice | null;
   /** The "Starta möte" form, shown while no meeting is running. Omitted: no start panel. */
@@ -52,6 +52,8 @@ export interface OrgDetailViewProps {
     rotateInvite: FormAction;
     addPerson: FormAction;
     renamePerson: FormAction;
+    /** Admins: set or clear a person's role (hidden `orgId`, `personId`, field `role`). */
+    setPersonRole?: FormAction;
     deletePerson: FormAction;
     deleteMeeting: FormAction;
     updateOrg: FormAction;
@@ -133,7 +135,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             liveMeetingHref={liveMeetingHref}
           />
           {formatCard}
-          <PeoplePanel orgId={org.id} people={people} actions={actions} />
+          <PeoplePanel orgId={org.id} people={people} isAdmin={isAdmin} actions={actions} />
         </div>
 
         <div className="stack stack--5">
@@ -357,10 +359,12 @@ function MeetingsPanel({
 function PeoplePanel({
   orgId,
   people,
+  isAdmin,
   actions,
 }: {
   orgId: string;
-  people: { id: string; name: string }[];
+  people: { id: string; name: string; role?: string | null }[];
+  isAdmin: boolean;
   actions: OrgDetailViewProps["actions"];
 }) {
   return (
@@ -394,6 +398,7 @@ function PeoplePanel({
               orgId={orgId}
               person={person}
               renamePerson={actions.renamePerson}
+              setPersonRole={isAdmin ? actions.setPersonRole : undefined}
               deletePerson={actions.deletePerson}
             />
           ))}

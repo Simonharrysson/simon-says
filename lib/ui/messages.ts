@@ -37,6 +37,11 @@ const orgNotices: Record<string, Notice> = {
     tone: "danger",
     text: "Det namnet går inte att använda. Ett personnamn får bara ha bokstäver, mellanslag, bindestreck, punkt och apostrof, högst fyra ord och 60 tecken.",
   },
+  rollnamn: {
+    tone: "danger",
+    text: "Den rollen går inte att använda. En roll får bara ha bokstäver, siffror, mellanslag och tecknen & / - . ', högst fyra ord och 40 tecken.",
+  },
+  "roll-admin": { tone: "danger", text: "Bara en admin kan ändra roller." },
   "mote-forbidden": { tone: "danger", text: "Bara den som startade mötet eller en admin kan radera det." },
   "mote-not_found": { tone: "danger", text: "Mötet finns inte längre." },
   "mote-active": { tone: "danger", text: "Avsluta mötet innan du raderar det." },

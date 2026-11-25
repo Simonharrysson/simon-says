@@ -11,14 +11,18 @@ export function PersonRow({
   orgId,
   person,
   renamePerson,
+  setPersonRole,
   deletePerson,
 }: {
   orgId: string;
-  person: { id: string; name: string };
+  person: { id: string; name: string; role?: string | null };
   renamePerson: FormAction;
+  /** Only passed for admins: roles are set by the admin. */
+  setPersonRole?: FormAction;
   deletePerson: FormAction;
 }) {
   const [editing, setEditing] = useState(false);
+  const [editingRole, setEditingRole] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
@@ -28,6 +32,47 @@ export function PersonRow({
     else if (wasEditing.current) editRef.current?.focus();
     wasEditing.current = editing;
   }, [editing]);
+
+  if (editingRole && setPersonRole) {
+    return (
+      <li>
+        <form
+          className="row person-edit"
+          action={async (form) => {
+            await setPersonRole(form);
+            setEditingRole(false);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setEditingRole(false);
+          }}
+        >
+          <input type="hidden" name="orgId" value={orgId} />
+          <input type="hidden" name="personId" value={person.id} />
+          <label className="visually-hidden" htmlFor={`role-${person.id}`}>
+            Roll för {person.name}
+          </label>
+          <input
+            id={`role-${person.id}`}
+            className="input"
+            name="role"
+            defaultValue={person.role ?? ""}
+            placeholder="Roll (t.ex. Kassör)"
+            maxLength={40}
+            autoComplete="off"
+            autoFocus
+          />
+          <span className="row__actions">
+            <SubmitButton variant="primary" size="sm" pendingLabel="Sparar…">
+              Spara
+            </SubmitButton>
+            <Button variant="ghost" size="sm" onClick={() => setEditingRole(false)}>
+              Avbryt
+            </Button>
+          </span>
+        </form>
+      </li>
+    );
+  }
 
   if (editing) {
     return (
@@ -77,9 +122,17 @@ export function PersonRow({
           {initials(person.name)}
         </span>
         <span className="row__main">
-          <span className="row__title">{person.name}</span>
+          <span className="row__title">
+            {person.name}
+            {person.role && <span className="subtle"> · {person.role}</span>}
+          </span>
         </span>
         <span className="row__actions">
+          {setPersonRole && (
+            <Button variant="ghost" size="sm" onClick={() => setEditingRole(true)}>
+              {person.role ? "Ändra roll" : "Lägg till roll"}
+            </Button>
+          )}
           <button
             ref={editRef}
             type="button"

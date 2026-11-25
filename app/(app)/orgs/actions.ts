@@ -11,12 +11,16 @@ import {
   deletePerson,
   joinOrg,
   leaveOrg,
+  listPeople,
+  myRole,
   removeMember,
   renamePerson,
   rotateInviteCode,
+  setPersonRole,
   updateOrgSettings,
 } from "@/lib/db/orgs";
 import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
+import { validRole } from "@/lib/people/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Server actions for the org pages. All run as the signed-in user; RLS decides what's allowed.
@@ -75,6 +79,23 @@ export async function renamePersonAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   if (!isUuid(personId) || !(await renamePerson(db, personId, field(form, "name")))) {
     redirect(`/orgs/${orgId}?fel=personnamn`);
+  }
+  revalidatePath(`/orgs/${orgId}`);
+}
+
+/** Roles are set by the org's admin (spec G5): members get a refusal, not a silent no-op. */
+export async function setPersonRoleAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const personId = field(form, "personId");
+  const db = await createSupabaseServerClient();
+  if ((await myRole(db, orgId)) !== "admin") redirect(`/orgs/${orgId}?fel=roll-admin`);
+  const raw = field(form, "role");
+  const role = validRole(raw);
+  if (raw.trim() !== "" && role === null) redirect(`/orgs/${orgId}?fel=rollnamn`);
+  // The person must belong to this org, or an admin of one org could edit another's people.
+  const people = isUuid(personId) ? await listPeople(db, orgId) : [];
+  if (!people.some((p) => p.id === personId) || !(await setPersonRole(db, personId, role))) {
+    redirect(`/orgs/${orgId}?fel=rollnamn`);
   }
   revalidatePath(`/orgs/${orgId}`);
 }

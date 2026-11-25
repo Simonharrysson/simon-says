@@ -21,6 +21,7 @@ import {
   myRole,
   renamePerson,
   rotateInviteCode,
+  setPersonRole,
   updateOrgSettings,
 } from "@/lib/db/orgs";
 
@@ -183,6 +184,21 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
     expect(updated).toEqual([]);
     const { error: rotateError } = await joiner.db.rpc("rotate_invite_code", { p_org_id: orgA });
     expect(rotateError).not.toBeNull();
+  });
+
+  it("an admin sets and clears a person's role; a stranger changes nothing", async () => {
+    const owner = await createTestUser("roleowner");
+    const stranger = await createTestUser("rolestranger");
+    const r = await createOrg(owner.db, "Roller");
+    if (!r.ok) throw new Error("org");
+    await addPerson(owner.db, r.id, "Anna Berg");
+    const [anna] = await listPeople(owner.db, r.id);
+    expect(await setPersonRole(owner.db, anna.id, "Kassör")).toBe(true);
+    expect((await listPeople(owner.db, r.id))[0].role).toBe("Kassör");
+    expect(await setPersonRole(stranger.db, anna.id, "Ordförande")).toBe(false);
+    expect((await listPeople(owner.db, r.id))[0].role).toBe("Kassör");
+    expect(await setPersonRole(owner.db, anna.id, null)).toBe(true);
+    expect((await listPeople(owner.db, r.id))[0].role).toBeNull();
   });
 
   it("an admin changes settings and rotates the invite code; the old code stops working", async () => {
