@@ -62,81 +62,91 @@
   {
     "speaker": "S1-speaker_0",
     "startMs": 96037,
-    "text": "Härligt. Från förra veckan, uppgifterna står i dokumentet. Oskar, hur gick det med hyran?"
+    "text": "Härligt. Från förra veckan, vi tar uppgifterna i dokumentet roll för roll. Kassören, hur gick det med hyran?"
   },
   {
     "speaker": "S1-speaker_1",
-    "startMs": 106328,
+    "startMs": 108055,
     "text": "Hyran är betald, den gick iväg i måndags."
   },
   {
+    "speaker": "S1-speaker_0",
+    "startMs": 113982,
+    "text": "Bra, kassören: hyran är betald. Eventansvarig, banorna?"
+  },
+  {
     "speaker": "S1-speaker_4",
-    "startMs": 112255,
-    "text": "Och banorna är bokade, bana tre och fyra den tolfte mars. Jag har fått en bekräftelse från hallen."
+    "startMs": 121182,
+    "text": "Banorna är bokade, bana tre och fyra den tolfte mars. Jag har fått en bekräftelse från hallen."
+  },
+  {
+    "speaker": "S1-speaker_0",
+    "startMs": 131927,
+    "text": "PR-ansvarig, inlägget på Instagram?"
   },
   {
     "speaker": "S1-speaker_3",
-    "startMs": 123364,
+    "startMs": 137309,
     "text": "I haven't made the Instagram post yet, sorry, so that one isn't done. I'll do it tomorrow."
   },
   {
     "speaker": "S1-speaker_0",
-    "startMs": 133746,
+    "startMs": 147691,
     "text": "Okej, då står den kvar. Vi går vidare till ekonomi. Oskar?"
   },
   {
     "speaker": "S1-speaker_1",
-    "startMs": 141219,
+    "startMs": 155164,
     "text": "Efter hyran har vi ungefär sjuttontusen kvar. Bollrören är köpta, det blev tvåtusenåttahundra. Och en sak till: cykelaffären på torget har hört av sig. De vill sponsra oss med femtusen kronor om vi har deras logga på hemsidan."
   },
   {
     "speaker": "S1-speaker_3",
-    "startMs": 163964,
+    "startMs": 177909,
     "text": "That's great. Putting a logo on the website is easy."
   },
   {
     "speaker": "S1-speaker_0",
-    "startMs": 170891,
+    "startMs": 184836,
     "text": "Då säger vi ja till sponsoravtalet med cykelaffären, femtusen kronor mot deras logga på hemsidan. Är alla överens?"
   },
   {
     "speaker": "S1-speaker_2",
-    "startMs": 183455,
+    "startMs": 197400,
     "text": "Ja."
   },
   {
     "speaker": "S1-speaker_4",
-    "startMs": 185928,
+    "startMs": 199873,
     "text": "Ja, absolut."
   },
   {
     "speaker": "S1-speaker_0",
-    "startMs": 189219,
+    "startMs": 203164,
     "text": "Beslutat. Oskar, kan du skriva under avtalet?"
   },
   {
     "speaker": "S1-speaker_1",
-    "startMs": 195510,
+    "startMs": 209455,
     "text": "Ja, jag skriver under och skickar tillbaka det senast på onsdag."
   },
   {
     "speaker": "S1-speaker_3",
-    "startMs": 203528,
+    "startMs": 217473,
     "text": "And I'll add their logo to the website by Friday."
   },
   {
     "speaker": "S1-speaker_0",
-    "startMs": 210183,
+    "startMs": 224128,
     "text": "Bra. Övrigt, har någon något?"
   },
   {
     "speaker": "S1-speaker_4",
-    "startMs": 215019,
+    "startMs": 228964,
     "text": "Ja, nycklarna till förrådet. Vi har bara två. Jag frågar hallen om vi kan få två till, senast till nästa möte."
   },
   {
     "speaker": "S1-speaker_0",
-    "startMs": 227219,
+    "startMs": 241164,
     "text": "Toppen. Då avslutar vi för idag. Tack allihop."
   }
 ]
