@@ -4,7 +4,7 @@ import { endMeeting, maybeTick, type EndResult } from "@/lib/meetings/tick";
 import { IngestError, ingestSegments } from "@/lib/segments/ingest";
 import type { SegmentIn } from "@/lib/segments/types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { FIXTURE_LINES, FIXTURE_SPEAKER_NAMES, toSegments, type FixtureLine } from "./fixture";
+import { FIXTURE_LINES, toSegments, type FixtureLine } from "./fixture";
 
 // Testmöte: replay the fictional meeting as ElevenLabs would deliver it, but from the server.
 // Everything after the segments is the real path: ingestSegments (the same function the
@@ -51,7 +51,11 @@ export function planBatches(
   return batches;
 }
 
-/** The ElevenLabs stand-in session, current for the meeting, plus the speaker names (the name round's result). */
+/**
+ * The ElevenLabs stand-in session, current for the meeting. No speaker names: the name round
+ * (lib/names/round.ts, run by the tick once the session has ~2 min of speech) finds them in the
+ * fixture's opening lines, as in a real meeting. Until then the tick holds the transcript back.
+ */
 export async function seedTestSession(meetingId: string): Promise<string> {
   const db = supabaseAdmin();
   const sessionId = `test-${randomUUID()}`;
@@ -64,15 +68,6 @@ export async function seedTestSession(meetingId: string): Promise<string> {
     .update({ current_el_session_id: sessionId, last_heartbeat_at: new Date().toISOString() })
     .eq("id", meetingId);
   if (me) throw new Error(`test meeting: current session: ${me.message}`);
-  const { error: pe } = await db.from("speaker_map").insert(
-    Object.entries(FIXTURE_SPEAKER_NAMES).map(([label, name]) => ({
-      meeting_id: meetingId,
-      el_session_id: sessionId,
-      speaker_label: label,
-      display_name: name,
-    })),
-  );
-  if (pe) throw new Error(`test meeting: speakers: ${pe.message}`);
   return sessionId;
 }
 

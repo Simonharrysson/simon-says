@@ -18,7 +18,7 @@ const fail = (error: string, status: number, message: string) =>
 /**
  * Testmöte. Body: `{ "orgId": string }`. Admins only (ADMIN_EMAILS, else ALARM_EMAIL), members
  * of the org. Starts a real meeting exactly like "Starta möte" (consent given by the admin,
- * event `test_started`), seeds a test ElevenLabs session and its speaker names, answers, and
+ * event `test_started`), seeds a test ElevenLabs session (names come from the name round), answers, and
  * then replays a fictional 10-minute meeting at 4× through the real ingest, ticks and end.
  * 409 if the org already has a live meeting; 503 under the kill switch.
  */

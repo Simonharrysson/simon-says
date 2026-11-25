@@ -14,7 +14,7 @@ export interface FixtureLine {
 }
 
 export const FIXTURE_LINES = rawLines as FixtureLine[];
-/** Speaker label (`speaker_0`, without the `S1-` prefix) → display name. */
+/** Speaker label (`speaker_0`, without the `S1-` prefix) → display name. Test oracle only: the name round must find these. */
 export const FIXTURE_SPEAKER_NAMES: Record<string, string> = Object.fromEntries(
   Object.entries(expected.speakerNames).map(([label, name]) => [stripSessionPrefix(label), name]),
 );
