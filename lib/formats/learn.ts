@@ -34,13 +34,35 @@ export function forceLearned(raw: unknown, kind: "learned" | "styrelseprotokoll"
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
   // Structured output says "no position" with null; the profile leaves the key out.
-  const items = Array.isArray(obj.fixedAgendaItems)
+  let items = Array.isArray(obj.fixedAgendaItems)
     ? obj.fixedAgendaItems.map((i) =>
         i && typeof i === "object" && (i as Record<string, unknown>).position == null
           ? Object.fromEntries(Object.entries(i as Record<string, unknown>).filter(([k]) => k !== "position"))
           : i,
       )
     : obj.fixedAgendaItems;
+  // Repaired, not refused (final review R3 minor): a repeated key gets a suffix, a second
+  // check-in or follow-up item becomes a topic.
+  if (Array.isArray(items)) {
+    const keys = new Set<string>();
+    const seenRole = new Set<string>();
+    items = items.map((i) => {
+      if (!i || typeof i !== "object") return i;
+      const item = { ...(i as Record<string, unknown>) };
+      if (typeof item.key === "string") {
+        const base = item.key.trim().slice(0, 36);
+        let key = base;
+        for (let n = 2; keys.has(key); n++) key = `${base}-${n}`;
+        keys.add(key);
+        item.key = key;
+      }
+      if (item.role === "checkin" || item.role === "followup") {
+        if (seenRole.has(item.role)) item.role = "topic";
+        else seenRole.add(item.role as string);
+      }
+      return item;
+    });
+  }
   const parsed = FormatProfileSchema.safeParse({
     ...obj,
     fixedAgendaItems: items,
@@ -65,7 +87,8 @@ export async function proposeFormat(
       user: buildLearnUserText(input.docs),
       jsonSchema: LEARN_JSON_SCHEMA,
       schema: AnswerSchema,
-      maxTokens: 4000,
+      // Thinking counts toward max_tokens: room for it and the profile (final review R3 minor).
+      maxTokens: 16_000,
       orgId: input.orgId,
       client: opts.client,
     });
@@ -75,7 +98,8 @@ export async function proposeFormat(
       if (res.reason === "stop_reason") return { ok: false, error: res.detail === "refusal" ? "refusal" : "error" };
       return { ok: false, error: "error" };
     }
-    const profile = forceLearned(res.value.profile);
+    // Required items come from the stadgar, never from minutes.
+    const profile = forceLearned({ ...res.value.profile, requiredItems: [] });
     if (!profile) {
       console.error("format learn: proposed profile is invalid");
       return { ok: false, error: "malformed" };

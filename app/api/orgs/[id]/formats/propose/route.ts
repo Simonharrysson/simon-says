@@ -29,7 +29,8 @@ const googleStatus = (err: unknown): number | undefined => {
  * Propose a format from 1–5 Docs the admin picked (old minutes or a template). Body
  * `{ docIds }`. Reads each Doc with the admin's own Google grant, keeps only its structure
  * (lib/formats/structure.ts) and asks Claude for a profile. Stores nothing; logs only counts.
- * → `{ profile, explanation, qualityNote, folderId }` (folderId: the first Doc's parent folder).
+ * → `{ profile, explanation, qualityNote, folderId }` (folderId: the parent folder of the first
+ * picked Doc that is not a template, else of the first Doc).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -79,7 +80,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const shared = recurringOnly(docs.map((d) => d.structure));
     docs = docs.map((d, i) => ({ ...d, structure: shared[i] }));
     try {
-      const file = await driveApi(auth).files.get({ fileId: docIds[0], fields: "parents", supportsAllDrives: true });
+      // The meeting folder: where the old minutes live, not a template's folder ("Mallar").
+      const minutesIdx = docs.findIndex((d) => !d.isTemplate);
+      const folderSource = docIds[minutesIdx >= 0 ? minutesIdx : 0];
+      const file = await driveApi(auth).files.get({ fileId: folderSource, fields: "parents", supportsAllDrives: true });
       const parent = file.data.parents?.[0];
       folderId = parent && DRIVE_ID.test(parent) ? parent : null;
     } catch (err) {

@@ -68,6 +68,9 @@ describe("extractRequiredItems", () => {
     const blocks = content(bodies[0]);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].text).toContain("Fråga om mötets behöriga utlysande");
+    // The Styrelseprotokoll's own labels, so a required item that is one of them is spelled the same (R3).
+    expect(blocks[0].text).toContain('Labels the minutes already use (reuse one when the stadgar require that item): "Mötets öppnande"');
+    expect((bodies[0] as unknown as { max_tokens: number }).max_tokens).toBe(8000);
     expect((bodies[0] as unknown as { model: string }).model).toBe("claude-opus-5-5");
   });
 

@@ -130,6 +130,13 @@ describe("proposeFormat", () => {
     expect(JSON.stringify(res.profile)).not.toMatch(/"secret"|"note"/);
   });
 
+  it("required items never come from minutes; max_tokens leaves room for thinking (final review R3)", async () => {
+    const { client, bodies } = fakeClient({ ...ANSWER, profile: { ...PROPOSED, requiredItems: ["Val av justerare"] } });
+    const res = await proposeFormat({ orgId: ORG, docs: DOCS }, { client: client as never });
+    expect(res.ok && res.profile.requiredItems).toEqual([]);
+    expect((bodies[0] as unknown as { max_tokens: number }).max_tokens).toBe(16_000);
+  });
+
   it("invalid profile → malformed", async () => {
     const { client } = fakeClient({ ...ANSWER, profile: { ...PROPOSED, numbering: "roman", title: "" } });
     expect(await proposeFormat({ orgId: ORG, docs: DOCS }, { client: client as never })).toEqual({ ok: false, error: "malformed" });
@@ -169,6 +176,24 @@ describe("forceLearned", () => {
   it("forces kind and style on an edited profile", () => {
     const p = forceLearned({ ...VECKOMOTE, kind: "enkel", decisionPrefix: "X", tone: "short" });
     expect(p).toMatchObject({ kind: "learned", decisionPrefix: "Beslut:", tone: "full-sentences" });
+  });
+
+  it("repairs a repeated key and a second check-in / follow-up item instead of refusing (final review R3)", () => {
+    const p = forceLearned({
+      ...VECKOMOTE,
+      fixedAgendaItems: [
+        { key: "a", label: "Må-runda", role: "checkin" },
+        { key: "a", label: "Hur mår vi", role: "checkin" },
+        { key: "f", label: "Från förra veckan", role: "followup" },
+        { key: "f", label: "Uppföljning", role: "followup" },
+      ],
+    });
+    expect(p?.fixedAgendaItems.map((i) => [i.key, i.role])).toEqual([
+      ["a", "checkin"],
+      ["a-2", "topic"],
+      ["f", "followup"],
+      ["f-2", "topic"],
+    ]);
   });
 
   it("rejects non-objects", () => {

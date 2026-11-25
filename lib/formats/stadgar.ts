@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import type { NotesClient, NotesUsage } from "@/lib/notes/engine";
 import { oneShot } from "@/lib/notes/oneshot";
+import { STYRELSEPROTOKOLL } from "./standard";
 
 // Required agenda items from a förening's stadgar (spec "Learning a format", Phase C, Task C1):
 // one Claude call over the stadgar text (a Google Doc as plain text) or the PDF itself. Only the
@@ -65,10 +66,13 @@ export async function extractRequiredItems(
   opts: { orgId: string; client?: NotesClient },
 ): Promise<StadgarResult> {
   try {
+    // The Styrelseprotokoll's own items: an item the stadgar require that is one of these is
+    // written with the same label, so it matches the agenda instead of being added twice.
+    const fixed = `Labels the minutes already use (reuse one when the stadgar require that item): ${STYRELSEPROTOKOLL.fixedAgendaItems.map((i) => `"${i.label}"`).join(", ")}.`;
     const user =
       input.kind === "doc"
-        ? ["<stadgar>", defuse(input.text.slice(0, STADGAR_MAX_CHARS)), "</stadgar>", "", "List the required board-meeting agenda items."].join("\n")
-        : "The stadgar are the attached PDF. List the required board-meeting agenda items.";
+        ? ["<stadgar>", defuse(input.text.slice(0, STADGAR_MAX_CHARS)), "</stadgar>", "", fixed, "List the required board-meeting agenda items."].join("\n")
+        : `The stadgar are the attached PDF.\n${fixed}\nList the required board-meeting agenda items.`;
     const res = await oneShot({
       label: "stadgar items",
       system: STADGAR_SYSTEM_PROMPT,
@@ -76,7 +80,8 @@ export async function extractRequiredItems(
       pdfs: input.kind === "pdf" ? [input.base64] : undefined,
       jsonSchema: STADGAR_JSON_SCHEMA,
       schema: AnswerSchema,
-      maxTokens: 2000,
+      // Thinking counts toward max_tokens (final review R3 minor).
+      maxTokens: 8000,
       orgId: opts.orgId,
       client: opts.client,
       timeoutMs: 90_000,
