@@ -4,7 +4,22 @@
 
 export type OrgRole = "admin" | "member";
 export type MeetingStatus = "live" | "ending" | "done" | "abandoned";
-export type NoteSection = "decision" | "action" | "now" | "attendees";
+export type NoteSection = "decision" | "action" | "now" | "attendees" | "note";
+export type NoteKind = "decision" | "task" | "note" | "attendee" | "now";
+export type ItemRole = "procedural" | "checkin" | "followup" | "other" | "topic";
+export type CheckinWindow = { startMs: number | null; endMs: number | null; closed: boolean; failures: number };
+
+export function kindOfSection(section: NoteSection): NoteKind {
+  if (section === "action") return "task";
+  if (section === "attendees") return "attendee";
+  return section;
+}
+
+export function sectionOfKind(kind: NoteKind): NoteSection {
+  if (kind === "task") return "action";
+  if (kind === "attendee") return "attendees";
+  return kind;
+}
 export type MeetingEventKind =
   | "tick_ok"
   | "tick_failed"
@@ -21,7 +36,11 @@ export type MeetingEventKind =
   | "paused"
   | "unpaused"
   | "name_round"
-  | "final_without_claude";
+  | "final_without_claude"
+  | "agenda_anchored"
+  | "format_learned"
+  | "followup_prefilled"
+  | "checkin";
 
 export interface OrgRow {
   id: string;
@@ -29,6 +48,7 @@ export interface OrgRow {
   invite_code: string;
   show_on_status: boolean;
   share_transcript: boolean;
+  meeting_folder_id?: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -45,6 +65,7 @@ export interface PersonRow {
   org_id: string;
   name: string;
   member_user_id: string | null;
+  role?: string | null;
 }
 
 export interface MeetingRow {
@@ -81,6 +102,12 @@ export interface MeetingRow {
   end_attempts?: number;
   /** A running end attempt's lock. */
   end_lease_until?: string | null;
+  agenda_doc?: boolean;
+  format_profile_id?: string | null;
+  layout?: "v1" | "format";
+  is_test?: boolean;
+  agenda_roles?: Record<string, ItemRole>;
+  checkin_window?: CheckinWindow | null;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */
@@ -121,6 +148,13 @@ export interface NoteItemRow {
   last_rendered_text: string | null;
   range_name: string | null;
   position: number;
+  kind?: NoteKind | null;
+  anchor?: string | null;
+  done?: boolean;
+  owner_person_id?: string | null;
+  carried_from_meeting?: string | null;
+  carried_from_id?: string | null;
+  copy_of?: string | null;
 }
 
 export interface UsageDailyRow {
