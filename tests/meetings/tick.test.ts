@@ -1412,7 +1412,7 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
   const backdate = (id: string) =>
     adminClient().from("meetings").update({ last_tick_at: new Date(Date.now() - 46_000).toISOString() }).eq("id", id);
   const events = async (id: string, kind: string) =>
-    (await adminClient().from("meeting_events").select("kind, detail").eq("meeting_id", id).eq("kind", kind)).data ?? [];
+    (await adminClient().from("meeting_events").select("kind, detail").eq("meeting_id", id).eq("kind", kind).order("id")).data ?? [];
 
   it("Claude gets the agenda (roles, human text) and the people with roles; the LIVE line is updated", async () => {
     const { id, sessionId, doc } = await formatMeeting();
