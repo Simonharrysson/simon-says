@@ -89,7 +89,8 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
   const folderId = await findOrCreateFolder(auth, folderName(orgName));
   const docId = (
     await drive.files.create({
-      requestBody: { name: meetingTitle(orgName, startedAt), mimeType: DOC_MIME, parents: [folderId] },
+      // writersCanShare=false: members get edit access, but only the owner can share it further.
+      requestBody: { name: meetingTitle(orgName, startedAt), mimeType: DOC_MIME, parents: [folderId], writersCanShare: false },
       fields: "id",
     })
   ).data.id;

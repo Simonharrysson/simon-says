@@ -52,6 +52,7 @@ describe("createMeetingDoc", () => {
       name: "LiU AI Society möte 2026-11-24 14:05",
       mimeType: "application/vnd.google-apps.document",
       parents: ["folder1"],
+      writersCanShare: false, // members edit, only the owner shares further
     });
   });
 

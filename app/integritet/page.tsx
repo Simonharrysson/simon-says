@@ -42,7 +42,10 @@ export default function PrivacyPage() {
           <h2 id="kort">Kort sagt</h2>
           <ul>
             <li>Vi sparar ingen ljudinspelning. Ljudet går direkt från laptopen till transkriberingen och blir text medan ni pratar.</li>
-            <li>Anteckningarna hamnar i ett Google-dokument i Drive hos den som startade mötet.</li>
+            <li>
+              Anteckningarna hamnar i ett Google-dokument i Drive hos den som startade mötet. Alla föreningens medlemmar får
+              redigeringsåtkomst till dokumentet (men kan inte dela det vidare).
+            </li>
             <li>Transkriptionen och anteckningarna finns också hos oss tills ni raderar mötet eller föreningen.</li>
             <li>Föreningens medlemmar som loggar in har ett konto. Alla andra som deltar i mötet finns bara som ett namn i föreningens personlista.</li>
             <li>
@@ -70,7 +73,10 @@ export default function PrivacyPage() {
           <h3>För varje förening</h3>
           <ul>
             <li>Namn, medlemmar, inbjudningslänk och personlistan (bara namn).</li>
-            <li>Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.</li>
+            <li>
+              Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.
+              Transkriptionen och anteckningarna sparas tills mötet eller föreningen raderas.
+            </li>
             <li>
               Användningsposter: hur många sekunder ljud, hur mycket text till Claude och vad det kostade, per förening och
               dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.
@@ -156,6 +162,9 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Google-dokumenten</strong> ligger kvar i Drive. De är era, och ni tar bort dem i Drive som vanligt.
+              Varje medlem får redigeringsåtkomst till dokumenten för möten som startas medan hen är medlem. Tas en medlem
+              bort ur föreningen, eller lämnar den, är dokument som redan delats fortfarande delade med hen tills ägaren tar
+              bort delningen i Drive.
             </li>
           </ul>
 

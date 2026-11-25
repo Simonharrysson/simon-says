@@ -64,7 +64,7 @@ export async function rotateInviteAction(form: FormData): Promise<void> {
 export async function addPersonAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
-  if (!(await addPerson(db, orgId, field(form, "name")))) redirect(`/orgs/${orgId}?fel=namn`);
+  if (!(await addPerson(db, orgId, field(form, "name")))) redirect(`/orgs/${orgId}?fel=personnamn`);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -73,7 +73,7 @@ export async function renamePersonAction(form: FormData): Promise<void> {
   const personId = field(form, "personId");
   const db = await createSupabaseServerClient();
   if (!isUuid(personId) || !(await renamePerson(db, personId, field(form, "name")))) {
-    redirect(`/orgs/${orgId}?fel=namn`);
+    redirect(`/orgs/${orgId}?fel=personnamn`);
   }
   revalidatePath(`/orgs/${orgId}`);
 }

@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validName } from "@/lib/names/validate";
 import type { MeetingRow, OrgMemberRow, OrgRow, PersonRow } from "./types";
 
 // Org, people and deletion operations. Each takes the signed-in user's client
@@ -103,9 +104,9 @@ export async function listPeople(db: Db, orgId: string): Promise<PersonRow[]> {
   return data ?? [];
 }
 
+/** People's names are speaker names too (prompt, Doc, transcript): the same rule as the speaker list. */
 function cleanName(name: string): string | null {
-  const trimmed = name.trim();
-  return trimmed.length >= 1 && trimmed.length <= 100 ? trimmed : null;
+  return validName(name);
 }
 
 export async function addPerson(db: Db, orgId: string, name: string): Promise<boolean> {

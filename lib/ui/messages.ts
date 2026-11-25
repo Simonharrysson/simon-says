@@ -33,6 +33,10 @@ const orgsNotices: Record<string, Notice> = {
 
 const orgNotices: Record<string, Notice> = {
   namn: { tone: "danger", text: "Ange ett namn (högst 100 tecken)." },
+  personnamn: {
+    tone: "danger",
+    text: "Det namnet går inte att använda. Ett personnamn får bara ha bokstäver, mellanslag, bindestreck, punkt och apostrof, högst fyra ord och 60 tecken.",
+  },
   "mote-forbidden": { tone: "danger", text: "Bara den som startade mötet eller en admin kan radera det." },
   "mote-not_found": { tone: "danger", text: "Mötet finns inte längre." },
   "mote-active": { tone: "danger", text: "Avsluta mötet innan du raderar det." },
