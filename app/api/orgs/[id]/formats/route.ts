@@ -13,7 +13,9 @@ const fail = (error: string, status: number, message: string) =>
 const FORBIDDEN = "Bara administratörer kan byta mötesformat.";
 
 /**
- * Approve a learned format as the förening's default. Body `{ profile, folderId? }`. Admins only.
+ * Approve an edited format as the förening's default. Body `{ profile, folderId?, kind? }`:
+ * kind "learned" (default, B1/B2) or "styrelseprotokoll" (a Styrelseprotokoll with the stadgar's
+ * required items, C1). Admins only.
  * The profile comes back from the browser, so it is forced and validated again (only schema
  * keys are stored). `folderId` becomes the meeting folder only when the förening has none.
  */
@@ -30,15 +32,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!role) return fail("not_found", 404, "Föreningen finns inte.");
   if (role !== "admin") return fail("forbidden", 403, FORBIDDEN);
 
-  const body = (await request.json().catch(() => null)) as { profile?: unknown; folderId?: unknown } | null;
-  const profile = forceLearned(body?.profile);
+  const body = (await request.json().catch(() => null)) as { profile?: unknown; folderId?: unknown; kind?: unknown } | null;
+  const kindRaw = body?.kind ?? "learned";
+  if (kindRaw !== "learned" && kindRaw !== "styrelseprotokoll") return fail("bad_request", 400, "Okänt format.");
+  const profile = forceLearned(body?.profile, kindRaw);
   if (!profile) return fail("invalid_profile", 400, "Formatet är inte giltigt. Kontrollera fälten och försök igen.");
   const folderId = body?.folderId ?? null;
   if (folderId !== null && (typeof folderId !== "string" || !DRIVE_ID.test(folderId))) {
     return fail("bad_request", 400, "Mappen är inte giltig.");
   }
 
-  const { data, error } = await db.rpc("set_default_format", { p_org_id: id, p_kind: "learned", p_profile: profile });
+  const { data, error } = await db.rpc("set_default_format", { p_org_id: id, p_kind: kindRaw, p_profile: profile });
   if (error) {
     if (error.code === "42501") return fail("forbidden", 403, FORBIDDEN);
     console.error(`formats: set_default_format: ${error.message}`);

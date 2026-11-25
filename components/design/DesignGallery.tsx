@@ -25,6 +25,7 @@ import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEdito
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
 import { StatusView } from "@/components/views/StatusView";
+import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { designViews, type DesignGroup } from "./registry";
 
@@ -216,12 +217,12 @@ const learnedProposal = {
   folderId: null,
 };
 
-function LearnDemo({ view }: { view: LearnPhase }) {
+function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "stadgar" }) {
   return (
     <AppChrome>
       <div className="page">
         <Panel title="Mötesformat" titleId="format-title-demo">
-          <LearnFormatView orgId={ORG_ID} view={view} onStart={noop} onCancel={noop} />
+          <LearnFormatView orgId={ORG_ID} view={view} variant={variant} onStart={noop} onCancel={noop} />
         </Panel>
       </div>
     </AppChrome>
@@ -323,6 +324,21 @@ const render: Record<string, () => ReactNode> = {
   "format-learn-editor": () => <LearnDemo view={{ phase: "editor", proposal: learnedProposal }} />,
   "format-learn-error": () => (
     <LearnDemo view={{ phase: "error", message: "Simon Says kan inte läsa ett av dokumenten. Välj dem igen i Google-väljaren." }} />
+  ),
+  "format-stadgar-editor": () => (
+    <LearnDemo
+      variant="stadgar"
+      view={{
+        phase: "editor",
+        proposal: {
+          profile: {
+            ...STYRELSEPROTOKOLL,
+            requiredItems: ["Fråga om mötets behöriga utlysande", "Fråga om beslutsmässighet", "Ekonomisk rapport"],
+          },
+          explanation: "Stadgarna kräver 3 punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.",
+        },
+      }}
+    />
   ),
   "org-member-empty": () => (
     <AppChrome>

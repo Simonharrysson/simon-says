@@ -4,7 +4,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import type { FormatKind } from "@/lib/formats/schema";
-import { LearnFormat } from "./FormatEditor";
+import { LearnFormat, StadgarFormat } from "./FormatEditor";
 import { MeetingFolderButton } from "./MeetingFolderButton";
 
 export interface FormatCardProps {
@@ -74,7 +74,10 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
         </div>
         {isAdmin &&
           (pickerEnabled ? (
-            <LearnFormat orgId={orgId} />
+            <>
+              <LearnFormat orgId={orgId} />
+              <StadgarFormat orgId={orgId} />
+            </>
           ) : (
             <div>
               <Button variant="ghost" disabled>

@@ -26,10 +26,11 @@ const AnswerSchema = z.object({
 
 /**
  * The fields every learned profile gets regardless of what was proposed or edited: kind
- * "learned" and the standard tone, task style and decision prefix. Then validated; null when it
- * is not a valid profile. Also used by the approve route (the profile comes back from the browser).
+ * "learned" (or "styrelseprotokoll" for one approved with the stadgar's items, C1) and the
+ * standard tone, task style and decision prefix. Then validated; null when it is not a valid
+ * profile. Also used by the approve route (the profile comes back from the browser).
  */
-export function forceLearned(raw: unknown): FormatProfile | null {
+export function forceLearned(raw: unknown, kind: "learned" | "styrelseprotokoll" = "learned"): FormatProfile | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
   // Structured output says "no position" with null; the profile leaves the key out.
@@ -43,7 +44,7 @@ export function forceLearned(raw: unknown): FormatProfile | null {
   const parsed = FormatProfileSchema.safeParse({
     ...obj,
     fixedAgendaItems: items,
-    kind: "learned",
+    kind,
     tone: VECKOMOTE.tone,
     taskStyle: VECKOMOTE.taskStyle,
     decisionPrefix: VECKOMOTE.decisionPrefix,

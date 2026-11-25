@@ -24,6 +24,8 @@ export interface OneShotInput<T> {
   label: string;
   system: string;
   user: string;
+  /** Base64 PDFs sent as `document` blocks before the user text (stadgar, C1). */
+  pdfs?: string[];
   /** JSON schema for output_config.format. */
   jsonSchema: Record<string, unknown>;
   /** Validates the parsed JSON. */
@@ -44,7 +46,13 @@ export async function claudeAllowed(): Promise<boolean> {
   return (await dayUsd()) < env.GLOBAL_DAILY_USD;
 }
 
-export function buildOneShotRequest(input: Pick<OneShotInput<unknown>, "system" | "user" | "jsonSchema" | "maxTokens">): BetaMessageStreamParams {
+export function buildOneShotRequest(
+  input: Pick<OneShotInput<unknown>, "system" | "user" | "jsonSchema" | "maxTokens" | "pdfs">,
+): BetaMessageStreamParams {
+  const documents = (input.pdfs ?? []).map((data) => ({
+    type: "document",
+    source: { type: "base64", media_type: "application/pdf", data },
+  }));
   return {
     model: NOTES_MODEL,
     max_tokens: input.maxTokens ?? 4000,
@@ -52,7 +60,7 @@ export function buildOneShotRequest(input: Pick<OneShotInput<unknown>, "system" 
     fallbacks: "default",
     output_config: { effort: "medium", format: { type: "json_schema", schema: input.jsonSchema } },
     system: input.system,
-    messages: [{ role: "user", content: [{ type: "text", text: input.user }] }],
+    messages: [{ role: "user", content: [...documents, { type: "text", text: input.user }] }],
   } as BetaMessageStreamParams;
 }
 

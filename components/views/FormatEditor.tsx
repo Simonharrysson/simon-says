@@ -10,6 +10,7 @@ import type { ItemRole } from "@/lib/db/types";
 import { editorToProfile, profileToEditor, ROLE_NAMES, type EditorItem, type EditorState } from "@/lib/formats/editor";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
+import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
 
 // Learning a förening's format (Task B2): pick a template or 1–5 old minutes in the Google
 // Picker, let Simon Says read their structure (POST …/formats/propose), then edit and approve
@@ -258,7 +259,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
               </Button>
             </div>
           </fieldset>
-          {showRequired && (
+          {(showRequired || proposal.profile.requiredItems.length > 0) && (
             <TextList
               id="fe-required"
               label="Punkter som stadgarna kräver"
@@ -359,27 +360,52 @@ export type LearnPhase =
   | { phase: "error"; message: string }
   | { phase: "editor"; proposal: Proposal };
 
-/** Presentational: the learn-a-format part of FormatCard in each phase (used by /design). */
+const COPY = {
+  learn: {
+    start: "Lär Simon Says ert format",
+    busy: "Simon Says läser strukturen …",
+    hint: "Välj en mall eller 1–5 gamla protokoll. Simon Says läser bara strukturen, aldrig innehållet.",
+  },
+  stadgar: {
+    start: "Lägg in punkter från stadgarna",
+    busy: "Simon Says läser stadgarna …",
+    hint: "Styrelseprotokoll: välj stadgarna (Google-dokument eller PDF, högst 10 MB). Punkterna de kräver kommer med på varje dagordning. Stadgarna sparas inte.",
+  },
+} as const;
+
+/** Presentational: the learn-a-format (or stadgar, C1) part of FormatCard in each phase (used by /design). */
 export function LearnFormatView({
   orgId,
   view,
+  variant = "learn",
   onStart,
   onCancel,
   onApproved,
 }: {
   orgId: string;
   view: LearnPhase;
+  variant?: "learn" | "stadgar";
   onStart: () => void;
   onCancel: () => void;
   onApproved?: () => void;
 }) {
+  const copy = COPY[variant];
   if (view.phase === "editor") {
-    return <FormatEditor orgId={orgId} proposal={view.proposal} onCancel={onCancel} onApproved={onApproved} />;
+    return (
+      <FormatEditor
+        orgId={orgId}
+        proposal={view.proposal}
+        approveKind={variant === "stadgar" ? "styrelseprotokoll" : "learned"}
+        showRequired={variant === "stadgar"}
+        onCancel={onCancel}
+        onApproved={onApproved}
+      />
+    );
   }
   if (view.phase === "proposing") {
     return (
       <p className="subtle" role="status" aria-live="polite">
-        <span className="spinner" aria-hidden="true" /> Simon Says läser strukturen …
+        <span className="spinner" aria-hidden="true" /> {copy.busy}
       </p>
     );
   }
@@ -388,10 +414,10 @@ export function LearnFormatView({
       {view.phase === "error" && <Banner tone="danger">{view.message}</Banner>}
       <div>
         <Button variant="secondary" onClick={onStart}>
-          {view.phase === "error" ? "Försök igen" : "Lär Simon Says ert format"}
+          {view.phase === "error" ? "Försök igen" : copy.start}
         </Button>
       </div>
-      <p className="hint">Välj en mall eller 1–5 gamla protokoll. Simon Says läser bara strukturen, aldrig innehållet.</p>
+      <p className="hint">{copy.hint}</p>
     </div>
   );
 }
@@ -436,6 +462,58 @@ export function LearnFormat({ orgId }: { orgId: string }) {
     <LearnFormatView
       orgId={orgId}
       view={view}
+      onStart={() => void start()}
+      onCancel={() => setView({ phase: "idle" })}
+      onApproved={() => setView({ phase: "idle" })}
+    />
+  );
+}
+
+/** Admins: Styrelseprotokoll with the stadgar's required items (C1): Picker → read → editor → approve. */
+export function StadgarFormat({ orgId }: { orgId: string }) {
+  const picker = usePicker();
+  const [view, setView] = useState<LearnPhase>({ phase: "idle" });
+
+  const start = async () => {
+    let picked;
+    try {
+      picked = await picker.open({ mode: "doc-or-pdf", title: "Välj föreningens stadgar" });
+    } catch (err) {
+      setView({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen." });
+      return;
+    }
+    if (!picked?.[0]) return;
+    setView({ phase: "proposing" });
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/formats/stadgar`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ fileId: picked[0].id }),
+      });
+      const json = (await res.json().catch(() => null)) as { requiredItems?: string[]; message?: string } | null;
+      if (!res.ok || !Array.isArray(json?.requiredItems)) {
+        setView({ phase: "error", message: json?.message ?? "Simon Says kunde inte läsa stadgarna. Försök igen." });
+        return;
+      }
+      setView({
+        phase: "editor",
+        proposal: {
+          profile: { ...STYRELSEPROTOKOLL, requiredItems: json.requiredItems },
+          explanation: json.requiredItems.length
+            ? `Stadgarna kräver ${json.requiredItems.length} punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.`
+            : "Simon Says hittade inga punkter som stadgarna kräver på styrelsemöten. Du kan lägga till dem själv nedan.",
+        },
+      });
+    } catch {
+      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
+    }
+  };
+
+  return (
+    <LearnFormatView
+      orgId={orgId}
+      view={view}
+      variant="stadgar"
       onStart={() => void start()}
       onCancel={() => setView({ phase: "idle" })}
       onApproved={() => setView({ phase: "idle" })}

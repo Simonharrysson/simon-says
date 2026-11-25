@@ -20,6 +20,7 @@ export const designViews: DesignView[] = [
   { id: "format-learn-proposing", title: "Mötesformat · läser strukturen", group: "Sidor" },
   { id: "format-learn-editor", title: "Mötesformat · förslag att godkänna", group: "Sidor" },
   { id: "format-learn-error", title: "Mötesformat · fel", group: "Sidor" },
+  { id: "format-stadgar-editor", title: "Mötesformat · punkter från stadgarna", group: "Sidor" },
   { id: "org-member-empty", title: "Förening · ny medlem, tomt", group: "Sidor" },
   { id: "join-out", title: "Inbjudan · utloggad", group: "Sidor" },
   { id: "join-ready", title: "Inbjudan · gå med", group: "Sidor" },

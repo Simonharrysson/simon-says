@@ -1,0 +1,39 @@
+STADGAR FÖR ÅSBACKA BRÄDSPELSFÖRENING (FIKTIV)
+
+Detta är ett påhittat exempel för tester i Simon Says. Föreningen, personerna och orterna finns inte.
+
+§ 1 Namn och säte
+Föreningens namn är Åsbacka Brädspelsförening. Föreningen har sitt säte i Åsbacka.
+
+§ 2 Ändamål
+Föreningen ska främja brädspelande bland studenter genom regelbundna spelkvällar och turneringar.
+
+§ 3 Medlemskap
+Medlem är den som betalat årets medlemsavgift. Styrelsen kan utesluta en medlem som skadar föreningen.
+
+§ 4 Styrelsen
+Styrelsen består av ordförande, kassör, sekreterare och två ledamöter. Styrelsen sammanträder minst fyra gånger per termin.
+
+§ 5 Styrelsens sammanträden
+Kallelse till styrelsemöte ska skickas ut senast fem dagar före mötet. Vid varje styrelsemöte ska följande behandlas:
+1. Mötets öppnande.
+2. Fråga om mötets behöriga utlysande.
+3. Fråga om beslutsmässighet. Styrelsen är beslutsmässig när minst hälften av ledamöterna är närvarande.
+4. Val av mötesordförande och mötessekreterare.
+5. Val av justerare som tillsammans med mötesordföranden justerar protokollet.
+6. Godkännande av dagordningen.
+7. Genomgång av föregående protokoll.
+8. Ekonomisk rapport från kassören.
+Protokollet ska justeras inom två veckor och arkiveras i föreningens mapp.
+
+§ 6 Räkenskaper
+Föreningens räkenskapsår är kalenderår. Kassören ansvarar för bokföringen.
+
+§ 7 Årsmöte
+Årsmöte hålls före mars månads utgång. På årsmötet väljs styrelse och revisor.
+
+§ 8 Ändring av stadgar
+Ändring av dessa stadgar kräver beslut på två på varandra följande möten, varav ett årsmöte.
+
+§ 9 Upplösning
+Vid upplösning tillfaller föreningens tillgångar en ideell förening med liknande ändamål.

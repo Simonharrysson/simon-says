@@ -280,6 +280,14 @@ errors, **Godkänn och använd** is disabled. It posts `POST /api/orgs/<id>/form
 page. **Avbryt** drops the proposal; nothing is stored before approval.
 `/design`: `format-learn-proposing`, `format-learn-editor`, `format-learn-error`.
 
+**Lägg in punkter från stadgarna** (C1, `StadgarFormat`, below the learn button) opens the Picker
+in `doc-or-pdf` mode. It shows "Simon Says läser stadgarna …" while it calls
+`POST /api/orgs/<id>/formats/stadgar`. The route reads a Google Doc as plain text, or a PDF of at
+most 10 MB (a larger one gets 413 "Filen är för stor (max 10 MB)."). Then `FormatEditor` opens on
+the standard Styrelseprotokoll with an editable list "Punkter som stadgarna kräver" (at most 15).
+Approving stores it as `kind: "styrelseprotokoll"`. The stadgar themselves are never stored.
+`/design`: `format-stadgar-editor`.
+
 ## Name round and speaker list (Task 11)
 
 A new meeting opens in `name-round`: "Säg 'Jag heter …' en i taget"; voices appear as "Talare n …" while the page
