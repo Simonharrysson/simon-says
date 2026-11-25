@@ -1,10 +1,10 @@
 import type { OAuth2Client } from "google-auth-library";
 import type { ItemRole, NoteItemRow } from "@/lib/db/types";
-import { paraBullet, paraInTable, parseNotesTab, type NotesTab, type Paragraph } from "@/lib/docs/tab";
+import { paraBullet, paraInTable, paraLine, parseNotesTab, type NotesTab, type Paragraph } from "@/lib/docs/tab";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { docsApi, writeWithRevisionGuard, type DocsRequest, type GuardOptions } from "@/lib/google/docs";
 import { matchFixedItems } from "./roles";
-import { normLabel, scanAgenda, type AgendaScan } from "./scan";
+import { itemAt, normLabel, scanAgenda, type AgendaScan } from "./scan";
 
 // The start-time batch on an agenda Doc (spec "Rendering into a human Doc"): one revision-guarded
 // batchUpdate that
@@ -16,6 +16,9 @@ import { normLabel, scanAgenda, type AgendaScan } from "./scan";
 // - fills the EMPTY Datum and Tid cells (Tid with a row of its own, so the final pass can write
 //   "18:05–19:10"); every non-empty cell, and Sekreterare always, is left alone;
 // - ranges the first signature line (Styrelseprotokoll), so the tasks block ends above it.
+// Anchoring the same Doc again (a start retry, a Doc used by an earlier meeting) is safe: an
+// existing status line of ours is reused, a Tid we wrote ("18:05", "18:05–19:10") is ranged
+// again as is, and this meeting's own old ranges are deleted before they are re-created.
 // Inserts only ever go before a paragraph's newline or into an empty cell: never inside a human's
 // text (pre-flight F6). Requests run from the highest index down, so no index needs adjusting.
 
@@ -62,6 +65,80 @@ function stockholm(at: Date): { date: string; time: string } {
   return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
 }
 
+/** A Tid value we write: "18:05" at start, "18:05–19:10" after the final pass. */
+const OUR_TID = /^\d{2}:\d{2}(–\d{2}:\d{2})?$/;
+/** Our status line, as a previous meeting may have left it in the Doc. */
+const isStatusText = (line: string) => line.startsWith("Simon Says antecknar live") || line.startsWith("Simon Says · avslutat");
+
+/**
+ * Our status line from an earlier anchoring of this Doc: a paragraph under an `ss-*-header` range
+ * or starting with our status text, one plain body paragraph outside every agenda item. Null when none.
+ */
+function statusLine(tab: NotesTab, body: Paragraph[], scan: AgendaScan): Paragraph | null {
+  const ok = (p: Paragraph | undefined): p is Paragraph =>
+    Boolean(p) && !paraBullet(p!) && isStatusText(paraLine(p!)) && itemAt(scan, p!.start) === null;
+  for (const [name, entries] of tab.ranges) {
+    if (!/^ss-.+-header$/.test(name)) continue;
+    const start = entries.flat()[0]?.start;
+    const p = body.find((x) => start !== undefined && start >= x.start && start < x.end);
+    if (ok(p)) return p;
+  }
+  return body.find((p) => ok(p)) ?? null;
+}
+
+const BLANK = /^[\s_.…-]*$/;
+/** A typed name: one to four capitalised words ("Anna Svensson", "Bo af Klint" is not covered). */
+const NAME = /^\p{Lu}[\p{L}'’-]*(\s+\p{Lu}[\p{L}'’-]*){0,3}$/u;
+
+/** "<role>: <blank or name>" or "<role> ____", for one of the profile's signature roles. */
+function isSignatureLine(p: Paragraph, roles: string[]): boolean {
+  if (paraBullet(p)) return false;
+  const line = paraLine(p).trim();
+  let label: string;
+  let value: string;
+  const colon = line.indexOf(":");
+  if (colon >= 0) {
+    label = line.slice(0, colon);
+    value = line.slice(colon + 1).trim();
+  } else {
+    const m = /^([^_]+?)\s*(_[\s_.…-]*)$/.exec(line);
+    if (!m) return false;
+    label = m[1];
+    value = "";
+  }
+  const l = normLabel(label);
+  // "Ordförande" signs for "Mötesordförande", "Sekreterare" for "Mötessekreterare".
+  const isRole = l.length >= 4 && roles.some((r) => r === l || r.endsWith(l));
+  return isRole && (BLANK.test(value) || NAME.test(value));
+}
+
+/**
+ * The first line of the trailing run of signature lines after the agenda: the last run (empty
+ * paragraphs allowed inside) that holds at least two such lines or is followed only by empty
+ * paragraphs and our status line. A lone "Justerare: Skicka protokollet." never qualifies.
+ */
+function signatureStart(body: Paragraph[], scan: AgendaScan, profile: FormatProfile): Paragraph | null {
+  const roles = (profile.signatures ?? []).map((r) => normLabel(r)).filter(Boolean);
+  if (!roles.length) return null;
+  const after = scan.items[scan.items.length - 1]?.paraEnd ?? 0;
+  const rest = body.filter((p) => p.start >= after);
+  const isEmpty = (p: Paragraph) => paraLine(p).trim() === "";
+  let found: Paragraph | null = null;
+  for (let i = 0; i < rest.length; i++) {
+    if (!isSignatureLine(rest[i], roles)) continue;
+    let count = 0;
+    let j = i;
+    while (j < rest.length && (isEmpty(rest[j]) || isSignatureLine(rest[j], roles))) {
+      if (!isEmpty(rest[j])) count++;
+      j++;
+    }
+    const trailing = rest.slice(j).every((p) => isEmpty(p) || isStatusText(paraLine(p)));
+    if (count >= 2 || trailing) found = rest[i];
+    i = j - 1;
+  }
+  return found;
+}
+
 type NewLine = { text: string; style: "HEADING_2" | "NORMAL_TEXT"; name: string };
 
 export function planAnchoring(
@@ -105,23 +182,15 @@ export function planAnchoring(
   if (scan.tasksHeading) headingRange("tasks", scan.tasksHeading);
   if (scan.notesHeading) headingRange("notes", scan.notesHeading);
 
-  // Signature lines ("Justerare: ____"): range the first one after the agenda, so neither the
-  // tasks nor the notes block runs into them (format-render's block boundaries include it).
+  // Signature lines ("Justerare: ____", "Justerare: Anna Svensson", "Ordförande ________"): range
+  // the first line of the trailing run of them, so neither the tasks nor the notes block runs into
+  // them (format-render's block boundaries include it).
   const body = tab.paragraphs.filter((p) => !paraInTable(p));
-  const roles = (profile.signatures ?? []).map((r) => normLabel(r)).filter(Boolean);
-  if (roles.length) {
-    const after = scan.items[scan.items.length - 1]?.paraEnd ?? 0;
-    const sig = body.find((p) => {
-      if (p.start < after || paraBullet(p)) return false;
-      // "<role>: ____" with the blank still empty; "Justerare: Skicka protokollet." is a task line.
-      const match = /^([^:]+):([\s_.…-]*)\n?$/.exec(p.text);
-      return match !== null && roles.includes(normLabel(match[1]));
-    });
-    if (sig) {
-      const name = `ss-${m}-sec-signatures`;
-      sectionRanges.signatures = name;
-      push(sig.start, [namedRange(name, sig.start, sig.end - 1)]);
-    }
+  const sig = signatureStart(body, scan, profile);
+  if (sig) {
+    const name = `ss-${m}-sec-signatures`;
+    sectionRanges.signatures = name;
+    push(sig.start, [namedRange(name, sig.start, sig.end - 1)]);
   }
 
   // New paragraphs: grouped by the paragraph they go after, in Doc order.
@@ -130,11 +199,26 @@ export function planAnchoring(
   const groups = new Map<Paragraph, NewLine[]>();
   const add = (after: Paragraph, line: NewLine) => groups.set(after, [...(groups.get(after) ?? []), line]);
   const last = body[body.length - 1];
-  const paraAt = (start: number) => body.find((p) => p.start === start)!;
+  // A notes heading inside a table cell is not a body paragraph: the LIVE line then goes at the end.
+  const notesPara = scan.notesHeading ? body.find((p) => p.start === scan.notesHeading!.start) : undefined;
+
+  // A status line from an earlier anchoring of this Doc (a start retry, a Doc used again): reuse
+  // it (our own text, replaced) rather than adding a second one.
+  const old = statusLine(tab, body, scan);
+  if (old) {
+    const end = old.end - 1;
+    push(old.start, [
+      ...(end > old.start ? [{ deleteContentRange: { range: range(old.start, end) } }] : []),
+      { insertText: { text: INITIAL_LIVE_LINE, location: { index: old.start, tabId } } },
+      plainText(old.start, old.start + INITIAL_LIVE_LINE.length),
+      namedRange(headerRange, old.start, old.start + INITIAL_LIVE_LINE.length),
+    ]);
+  }
+  const liveAt = old ? null : (notesPara ?? last);
 
   // LIVE at the top of an existing notes section first: when that heading is the tab's last
   // paragraph, the appended headings follow the LIVE line.
-  if (scan.notesHeading) add(paraAt(scan.notesHeading.start), live);
+  if (liveAt && notesPara) add(notesPara, live);
   if (!scan.tasksHeading && profile.tasksSection) {
     const label = profile.tasksSection.label;
     sectionRanges.tasks = `ss-${m}-sec-tasks`;
@@ -150,7 +234,7 @@ export function planAnchoring(
     add(last, { text: label, style: "HEADING_2", name: sectionRanges.notes });
     appended.push(label);
   }
-  if (!scan.notesHeading) add(last, live);
+  if (liveAt && !notesPara) add(last, live);
 
   for (const [after, lines] of groups) {
     const at = after.end - 1;
@@ -188,9 +272,15 @@ export function planAnchoring(
     if (field !== "datum" && field !== "tid") continue;
     const s = cell.valueCell.paragraphStart;
     const p = tab.paragraphs.find((x) => x.start === s && paraInTable(x));
-    if (cell.valueCell.text !== "" || !p || p.text !== "\n") continue;
-    const text = field === "datum" ? date : time;
-    const requests: DocsRequest[] = [{ insertText: { text, location: { index: s, tabId } } }, plainText(s, s + text.length)];
+    if (!p) continue;
+    const empty = cell.valueCell.text === "" && p.text === "\n";
+    // A Tid we rendered before ("18:05", "18:05–19:10", one paragraph): ours again, ranged as is.
+    const earlier = field === "tid" && !empty && OUR_TID.test(cell.valueCell.text) && p.text === `${cell.valueCell.text}\n`;
+    if (!empty && !earlier) continue;
+    const text = earlier ? cell.valueCell.text : field === "datum" ? date : time;
+    const requests: DocsRequest[] = earlier
+      ? []
+      : [{ insertText: { text, location: { index: s, tabId } } }, plainText(s, s + text.length)];
     if (field === "tid") {
       const name = `ss-${m}-info-tid`;
       requests.push(namedRange(name, s, s + text.length));
@@ -216,7 +306,14 @@ export function planAnchoring(
   }
 
   ops.sort((a, b) => b.index - a.index || a.order - b.order);
-  return { requests: ops.flatMap((o) => o.requests), sectionRanges, headerRange, rows, appended };
+  const requests = ops.flatMap((o) => o.requests);
+  // Anchoring again under the same meeting id: a second range with one name would be ambiguous
+  // (itemSpan → never written), so this meeting's old ranges go first (ours; no text changes).
+  const created = new Set(requests.map((r) => r.createNamedRange?.name).filter((x): x is string => Boolean(x)));
+  const stale: DocsRequest[] = [...created]
+    .filter((name) => tab.ranges.has(name))
+    .map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
+  return { requests: [...stale, ...requests], sectionRanges, headerRange, rows, appended };
 }
 
 export interface AnchorResult {

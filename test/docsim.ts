@@ -163,6 +163,27 @@ export function apply(doc: Doc, requests: Req[]): Doc {
       const named = (tabOf(doc).namedRanges ??= {});
       const group = (named[name!] ??= { name, namedRanges: [] });
       group.namedRanges!.push({ name, namedRangeId: `id-${name}-${group.namedRanges!.length}`, ranges: [{ startIndex: range.startIndex, endIndex: range.endIndex }] });
+    } else if (r.deleteNamedRange) {
+      const named = tabOf(doc).namedRanges ?? {};
+      if (!r.deleteNamedRange.tabsCriteria?.tabIds?.includes(TAB)) throw new Error("docsim: deleteNamedRange without tab");
+      delete named[r.deleteNamedRange.name!];
+    } else if (r.deleteContentRange) {
+      const { startIndex: s, endIndex: e, tabId } = r.deleteContentRange.range!;
+      if (tabId !== TAB) throw new Error("docsim: deleteContentRange without tabId");
+      const hit = allParas(doc).find(({ el }) => s! >= el.startIndex! && e! < el.endIndex!);
+      if (!hit) throw new Error("docsim: deleteContentRange only inside one paragraph's text");
+      const text = textOf(hit.el);
+      setText(hit.el, text.slice(0, s! - hit.el.startIndex!) + text.slice(e! - hit.el.startIndex!));
+      for (const group of Object.values(tabOf(doc).namedRanges ?? {})) {
+        for (const nr of group.namedRanges ?? []) {
+          for (const r2 of nr.ranges ?? []) {
+            const map = (i: number) => (i <= s! ? i : i >= e! ? i - (e! - s!) : s!);
+            r2.startIndex = map(r2.startIndex!);
+            r2.endIndex = map(r2.endIndex!);
+          }
+        }
+      }
+      reindex(doc);
     } else if (r.updateParagraphStyle) {
       const { range, paragraphStyle, fields } = r.updateParagraphStyle;
       if (range?.tabId !== TAB) throw new Error("docsim: updateParagraphStyle without tabId");

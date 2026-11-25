@@ -349,3 +349,7 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - `fallback testmote` (A13's shape: own items, "Kommande event" with two sub-items, Datum + Sekreterare pre-filled, transcript tab):
   sub-items `list1/lvl1` a./b. in the items' list, no tab left in any text, read as the item's humanText; the pre-filled Datum and
   Sekreterare untouched by anchoring (Tid filled); transcript tab created; render under "Kommande event" went (b): our lines carry no "– " prefix (joined the sub-item list).
+- Fix round 1 (`reanchor veckomote|styrelseprotokoll`: `anchorAgenda` again on the rendered fallback Docs, as a new meeting and then
+  again as the same meeting): one status line each time (the old "uppdaterad 19:24" line reused and reset to "uppdaterad –" in the
+  new range), Tid "19:24" ranged again as `info-tid`, no ambiguous range, Styrelseprotokoll signatures still anchored on
+  "Mötesordförande: ____" with our task copies above them.

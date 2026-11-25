@@ -30,6 +30,9 @@
  *             anchored with VECKOMOTE: the appended headings + LIVE line after a list item. `testmote` = own items
  *             with sub-items, Datum + Sekreterare pre-filled, transcript tab.
  *             State: .check-notes/agenda-a7-<kind>.json.
+ *   reanchor <kind>
+ *             (A7 fix I2) anchorAgenda again on the `fallback <kind>` Doc (already anchored and rendered) as a
+ *             new meeting, then again as the same meeting: one status line, Tid ranged, every range once.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
  */
@@ -1031,6 +1034,26 @@ async function fallback(kind: string) {
   console.log(`\nDoc: ${urlOf(docId)}`);
 }
 
+async function reanchor(kind: string) {
+  const { VECKOMOTE, STYRELSEPROTOKOLL } = await import("@/lib/formats/standard");
+  const { anchorAgenda } = await import("@/lib/agenda/anchor");
+  const st = JSON.parse(readFileSync(join(STATE_DIR, `agenda-a7-${kind}.json`), "utf8")) as { docId: string; meeting: MeetingRow };
+  const profile = kind === "styrelseprotokoll" ? STYRELSEPROTOKOLL : VECKOMOTE;
+  tabId = st.meeting.notes_tab_id;
+  for (const mid of ["a7re", "a7re"]) {
+    const res = await anchorAgenda(auth, { meetingId: mid, orgId: "fiktiv", docId: st.docId, tabId, profile, startedAt: new Date(), roles: {} });
+    const doc = await get(st.docId);
+    const tab = n.parseNotesTab(doc, tabId);
+    rec(`reanchor.${mid}.statusLines`, paragraphs(doc).filter((p) => p.text.startsWith("Simon Says")).map((p) => p.text));
+    rec(`reanchor.${mid}.header`, n.itemSpan(tab, res.headerRange)?.rangeText ?? null);
+    rec(`reanchor.${mid}.tid`, res.rows.map((r) => [r.id, r.last_rendered_text, n.itemSpan(tab, r.range_name!)?.rangeText ?? null]));
+    rec(`reanchor.${mid}.ambiguous`, [...tab.ranges].filter(([name, e]) => name.startsWith(`ss-${mid}-`) && e.length > 1).map(([name]) => name));
+    rec(`reanchor.${mid}.signatures`, res.sectionRanges.signatures ? n.itemSpan(tab, res.sectionRanges.signatures)?.rangeText : null);
+  }
+  console.log(show(await get(st.docId)).join("\n"));
+  console.log(`\nDoc: ${urlOf(st.docId)}`);
+}
+
 async function main(): Promise<void> {
   const [userArg, stage] = process.argv.slice(2);
   if (!userArg || !stage) {
@@ -1067,6 +1090,8 @@ async function main(): Promise<void> {
       return tick();
     case "fallback":
       return fallback(process.argv[4] ?? "");
+    case "reanchor":
+      return reanchor(process.argv[4] ?? "");
     default:
       throw new Error(`unknown stage ${stage}`);
   }
