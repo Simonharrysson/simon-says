@@ -4,6 +4,7 @@ import type { BetaMessage, BetaMessageStreamParams } from "@anthropic-ai/sdk/res
 import { z } from "zod";
 import { formatTimestamp } from "@/lib/docs/transcript";
 import { getEnv } from "@/lib/env";
+import { validName } from "./validate";
 import { FALLBACK_BETA, messageUsage, NOTES_MODEL, type NotesClient, type NotesUsage } from "@/lib/notes/engine";
 
 // The name round (Task 11): who said "Jag heter …"? One Claude call over the first minutes of a
@@ -95,14 +96,16 @@ const close = (a: string, b: string) => Math.min(a.length, b.length) >= MIN_FUZZ
 /**
  * Snap a heard name to the org's known spelling: an exact match (any case), else a first name
  * that is the first name of exactly one known person, else exactly one known name (or first
- * name) at most one letter off. Otherwise the heard name stays.
+ * name) at most one letter off. Otherwise the heard name stays. `exact`: the result is what was
+ * heard (an exact match, or no snap); a first-name or one-letter snap is a guess (needs confirming).
  */
-export function matchKnown(heard: string, known: string[]): string {
+export function matchKnown(heard: string, known: string[]): { name: string; exact: boolean } {
   const h = norm(heard);
-  if (!h) return heard;
+  const kept = { name: heard, exact: true };
+  if (!h) return kept;
   const people = known.map((name) => ({ name, full: norm(name), first: norm(name).split(" ")[0] }));
   const exact = people.find((p) => p.full === h);
-  if (exact) return exact.name;
+  if (exact) return { name: exact.name, exact: true };
   const single = !h.includes(" ");
   const unique = (list: typeof people) => {
     const names = [...new Set(list.map((p) => p.name))];
@@ -110,11 +113,11 @@ export function matchKnown(heard: string, known: string[]): string {
   };
   if (single) {
     const byFirst = unique(people.filter((p) => p.first === h));
-    if (byFirst) return byFirst;
-    if (people.some((p) => p.first === h)) return heard; // ambiguous first name
+    if (byFirst) return { name: byFirst, exact: false };
+    if (people.some((p) => p.first === h)) return kept; // ambiguous first name
   }
   const fuzzy = unique(people.filter((p) => close(p.full, h) || (single && close(p.first, h))));
-  return fuzzy ?? heard;
+  return fuzzy ? { name: fuzzy, exact: false } : kept;
 }
 
 /** Session id → `S<k>` in order of first appearance (the labels Claude sees). */
@@ -195,7 +198,12 @@ export async function extractNames(
     const e = err as Error | undefined;
     throw new NameRoundError(`request failed: ${e?.constructor?.name ?? "Error"}: ${String(e?.message ?? err).slice(0, 200)}`);
   }
-  await opts.onUsage?.(messageUsage(message.usage, message.model ?? NOTES_MODEL));
+  try {
+    await opts.onUsage?.(messageUsage(message.usage, message.model ?? NOTES_MODEL));
+  } catch (e) {
+    // Recording failed (usage RPC): log it, but the names are still good.
+    console.error(`name round: usage: ${(e as Error).message}`);
+  }
 
   if (message.stop_reason !== "end_turn") throw new NameRoundError(`stop_reason ${message.stop_reason}`);
   const out = parse(message);
@@ -205,10 +213,17 @@ export async function extractNames(
   const seen = new Set<string>();
   for (const s of out.speakers) {
     const key = byLabel.get(s.speaker.trim());
-    const heard = clean(s.name);
+    // Only what looks like a name (I4): anything else is dropped and the label stays.
+    const heard = validName(s.name);
     if (!key || !heard || seen.has(s.speaker.trim())) continue;
     seen.add(s.speaker.trim());
-    names.push({ ...key, name: clean(matchKnown(heard, knownPeople)), needsConfirm: s.needs_confirm });
+    const match = matchKnown(heard, knownPeople);
+    const snapped = validName(match.name);
+    names.push({
+      ...key,
+      name: snapped ?? heard,
+      needsConfirm: s.needs_confirm || (snapped !== null && !match.exact),
+    });
   }
   // Two labels of one session with the same name: one of them is wrong, ask about both.
   const count = new Map<string, number>();

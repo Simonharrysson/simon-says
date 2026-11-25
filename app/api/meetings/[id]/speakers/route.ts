@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { dayUsd } from "@/lib/db/usage";
 import { isUuid } from "@/lib/db/ids";
 import { getEnv } from "@/lib/env";
-import { NAME_MAX_CHARS } from "@/lib/names/extract";
+import { ensurePerson } from "@/lib/names/people";
+import { validName } from "@/lib/names/validate";
 import { runNameRound } from "@/lib/names/round";
 import { loadSpeakerView, type SpeakerRow } from "@/lib/names/speakers";
 import { resolveSpeaker } from "@/lib/segments/resolve";
@@ -70,8 +71,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
 /**
  * Name a speaker. Body `{ elSessionId, speakerLabel, personId?, displayName }`. Starter only.
- * The label is resolved through merge aliases first; the name is confirmed (needs_confirm off).
- * Without personId the name is matched to the org's people (any case) or added to them.
+ * The label must have been heard in that session; it is resolved through merge aliases first;
+ * the name is confirmed (needs_confirm off). With personId the person's own name is used.
+ * Without it the name must look like a name (validName) and is matched to the org's people
+ * (any case) or added to them (the starter confirmed it).
  * Applies to transcript lines written afterwards and to the notes from the next tick.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -82,9 +85,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const str = (v: unknown, max: number) => (typeof v === "string" && v.length > 0 && v.length <= max ? v : null);
   const elSessionId = str(body?.elSessionId, 200);
   const speakerLabel = str(body?.speakerLabel, 100);
-  const displayName = typeof body?.displayName === "string" ? body.displayName.normalize("NFC").replace(/\s+/g, " ").trim() : "";
+  const typedName = validName(body?.displayName);
   const personIdIn = body?.personId ?? null;
-  if (!elSessionId || !speakerLabel || !displayName || displayName.length > NAME_MAX_CHARS) return fail("bad_request", 400);
+  if (!elSessionId || !speakerLabel) return fail("bad_request", 400);
+  if (!personIdIn && !typedName) return fail("bad_name", 400);
   if (personIdIn !== null && (typeof personIdIn !== "string" || !isUuid(personIdIn))) return fail("bad_request", 400);
 
   const db = supabaseAdmin();
@@ -96,32 +100,32 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .maybeSingle();
   if (se) throw new Error(`speakers: session: ${se.message}`);
   if (!session) return fail("session_not_in_meeting", 400);
+  const { data: heard, error: he } = await db
+    .from("segments")
+    .select("segment_index")
+    .eq("el_session_id", elSessionId)
+    .eq("speaker", speakerLabel)
+    .limit(1);
+  if (he) throw new Error(`speakers: heard: ${he.message}`);
+  if (!heard?.length) return fail("unknown_speaker", 400);
 
   let personId: string | null = null;
+  let displayName = typedName ?? "";
   if (personIdIn) {
     const { data: person, error } = await db
       .from("people")
-      .select("id")
+      .select("id, name")
       .eq("id", personIdIn)
       .eq("org_id", meeting.org_id)
       .maybeSingle();
     if (error) throw new Error(`speakers: person: ${error.message}`);
     if (!person) return fail("unknown_person", 400);
     personId = person.id as string;
+    displayName = person.name as string;
   } else {
-    const { data: people, error } = await db.from("people").select("id, name").eq("org_id", meeting.org_id);
-    if (error) throw new Error(`speakers: people: ${error.message}`);
-    const key = displayName.toLowerCase();
-    personId = (people ?? []).find((p) => (p.name as string).normalize("NFC").toLowerCase().trim() === key)?.id ?? null;
-    if (!personId) {
-      const { data: added, error: ae } = await db
-        .from("people")
-        .insert({ org_id: meeting.org_id, name: displayName })
-        .select("id")
-        .single();
-      if (ae) throw new Error(`speakers: add person: ${ae.message}`);
-      personId = added.id as string;
-    }
+    const person = await ensurePerson(meeting.org_id, displayName);
+    personId = person.id;
+    displayName = person.name;
   }
 
   const { data: rows, error: re } = await db

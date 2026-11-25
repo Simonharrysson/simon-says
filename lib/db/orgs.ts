@@ -112,7 +112,8 @@ export async function addPerson(db: Db, orgId: string, name: string): Promise<bo
   const clean = cleanName(name);
   if (!clean) return false;
   const { error } = await db.from("people").insert({ org_id: orgId, name: clean });
-  if (error) fail("addPerson", error);
+  // 23505: the name is already on the list (unique per org since 0016): nothing to add.
+  if (error && error.code !== "23505") fail("addPerson", error);
   return true;
 }
 
@@ -120,6 +121,7 @@ export async function renamePerson(db: Db, personId: string, name: string): Prom
   const clean = cleanName(name);
   if (!clean) return false;
   const { data, error } = await db.from("people").update({ name: clean }).eq("id", personId).select("id");
+  if (error?.code === "23505") return false; // another person already has that name
   if (error) fail("renamePerson", error);
   return (data ?? []).length > 0;
 }

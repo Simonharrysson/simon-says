@@ -3,7 +3,9 @@ import { recordClaudeUsage } from "@/lib/db/claude-usage";
 import { logEvent } from "@/lib/db/events";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { extractNames, NameRoundError, NAME_MAX_CHARS, type ExtractedName, type NameSegment } from "./extract";
+import { extractNames, NameRoundError, type ExtractedName, type NameSegment } from "./extract";
+import { ensurePerson } from "./people";
+import { isFullName, validName } from "./validate";
 
 // The name round on the server (Task 11). Runs once per ElevenLabs session: from the tick once
 // the session has ~2 minutes of speech (or 2 minutes passed since it started), or when the page
@@ -98,8 +100,13 @@ async function roundSegments(sessionId: string): Promise<NameSegment[]> {
   const start = rows.length ? Number(rows[0].start_ms) : 0;
   for (const r of rows) {
     const at = Number(r.start_ms);
+    if (at - start > MAX_SPAN_MS) break;
+    if (chars + r.text.length > MAX_CHARS) {
+      // A first segment over the cap is cut rather than leaving nothing to read.
+      if (out.length === 0) out.push({ ...r, text: r.text.slice(0, MAX_CHARS), start_ms: at });
+      break;
+    }
     chars += r.text.length;
-    if (at - start > MAX_SPAN_MS || chars > MAX_CHARS) break;
     out.push({ ...r, start_ms: at });
   }
   return out;
@@ -127,7 +134,7 @@ export async function runNameRound(
     }
     if (!claimed.length) return { status: "busy" };
 
-    const [segments, rowsRes, peopleRes] = await Promise.all([
+    const [segments, rowsRes, peopleRes, sessionRes] = await Promise.all([
       roundSegments(sessionId),
       db()
         .from("speaker_map")
@@ -135,9 +142,13 @@ export async function runNameRound(
         .eq("meeting_id", meeting.id)
         .eq("el_session_id", sessionId),
       db().from("people").select("id, name").eq("org_id", meeting.org_id),
+      db().from("el_sessions").select("kind").eq("id", sessionId).maybeSingle(),
     ]);
     const rows = must("speakers", rowsRes) as SpeakerMapRow[];
-    const people = must("people", peopleRes) as { id: string; name: string }[];
+    // A Testmöte session (kind 'test') never reads or grows the förening's people list: its
+    // fictional names must not become (or match) real people.
+    const live = (must("session", sessionRes) as { kind: string } | null)?.kind !== "test";
+    const people = live ? (must("people", peopleRes) as { id: string; name: string }[]) : [];
     const byLabel = new Map(rows.map((r) => [r.speaker_label, r]));
 
     // Resolved labels nobody has named yet; names already taken in this session.
@@ -172,7 +183,7 @@ export async function runNameRound(
       if (f.elSessionId !== sessionId) continue;
       const target = resolveSpeaker(rows, f.speakerLabel).label;
       if (!open.has(target)) continue;
-      const name = f.name.trim().slice(0, NAME_MAX_CHARS);
+      const name = validName(f.name);
       if (!name) continue;
       const prior = results.get(target);
       if (prior) {
@@ -184,24 +195,17 @@ export async function runNameRound(
 
     const named: ExtractedName[] = [];
     for (const r of results.values()) {
+      // Ruling 36: link an exact existing person; add one only for a confident new FULL name on
+      // a live session. Anything else is written to speaker_map only; the starter's
+      // confirmation (PATCH) adds the person.
       let personId = people.find((p) => norm(p.name) === norm(r.name))?.id ?? null;
-      if (!personId && !r.needsConfirm) {
-        // One retry: a transient gateway error should not cost the person.
-        for (let attempt = 0; attempt < 2 && !personId; attempt++) {
-          if (attempt > 0) {
-            // The first insert may have landed with only its answer lost: look before adding again.
-            const { data: again } = await db().from("people").select("id, name").eq("org_id", meeting.org_id).eq("name", r.name).limit(1);
-            if (again?.[0]) {
-              personId = again[0].id as string;
-              break;
-            }
-          }
-          const { data, error } = await db().from("people").insert({ org_id: meeting.org_id, name: r.name }).select("id, name").single();
-          if (error) console.error(`name round ${meeting.id}: add person: ${error.message}`);
-          else {
-            personId = data.id as string;
-            people.push(data as { id: string; name: string });
-          }
+      if (!personId && live && !r.needsConfirm && isFullName(r.name)) {
+        try {
+          const person = await ensurePerson(meeting.org_id, r.name);
+          personId = person.id;
+          people.push(person);
+        } catch (e) {
+          console.error(`name round ${meeting.id}: add person: ${(e as Error).message}`);
         }
       }
       const values = { display_name: r.name, person_id: personId, needs_confirm: r.needsConfirm };

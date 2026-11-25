@@ -61,7 +61,7 @@ describe.skipIf(!hasLocalSupabase)("name round in the tick (Testmöte fixture)",
   });
 
   /** A live test meeting as POST /api/meetings/test makes it (session via seedTestSession). */
-  async function testMeeting() {
+  async function testMeeting(kind: "test" | "live" = "test") {
     const id = randomUUID();
     const { error } = await adminClient().from("meetings").insert({
       id,
@@ -74,13 +74,20 @@ describe.skipIf(!hasLocalSupabase)("name round in the tick (Testmöte fixture)",
       consent_confirmed_at: new Date().toISOString(),
     });
     if (error) throw new Error(error.message);
-    const sessionId = await seedTestSession(id);
+    if (kind === "test") return { id, sessionId: await seedTestSession(id) };
+    // A real (ElevenLabs) session, started 10 min ago so its round is due.
+    const sessionId = `el-${randomUUID()}`;
+    const started = new Date(Date.now() - 600_000).toISOString();
+    await adminClient().from("meetings").update({ started_at: started }).eq("id", id);
+    const { error: se } = await adminClient().from("el_sessions").insert({ id: sessionId, meeting_id: id, max_seconds: 3600, started_at: started });
+    if (se) throw new Error(se.message);
     return { id, sessionId };
   }
 
   function fakes(extract: (segs: NameSegment[]) => Promise<ExtractedName[]>) {
     const appended: TranscriptLine[][] = [];
     const extractCalls: NameSegment[][] = [];
+    const knownCalls: string[][] = [];
     const deps: Partial<import("@/lib/meetings/tick").TickDeps> = {
       getAuth: async () => ({}) as OAuth2Client,
       readNotes: async () => ({ revisionId: "r", tabId: "t.notes", paragraphs: [], ranges: new Map() }),
@@ -94,14 +101,15 @@ describe.skipIf(!hasLocalSupabase)("name round in the tick (Testmöte fixture)",
         dropped: 0,
         nextId: input.nextId ?? "n1",
       }),
-      extractNames: async (segs) => {
+      extractNames: async (segs, known) => {
         extractCalls.push(segs);
+        knownCalls.push(known);
         return extract(segs);
       },
       mailer: { send: async () => false },
       sleep: async () => undefined,
     };
-    return { deps, appended, extractCalls };
+    return { deps, appended, extractCalls, knownCalls };
   }
 
   const feed = (id: string, sessionId: string, fromMs: number, toMs: number) => {
@@ -141,8 +149,11 @@ describe.skipIf(!hasLocalSupabase)("name round in the tick (Testmöte fixture)",
     expect(new Set(lines.map((l) => l.speaker))).toEqual(new Set(Object.values(FIXTURE_SPEAKER_NAMES)));
     const { data: unwritten } = await adminClient().from("segments").select("segment_index").eq("meeting_id", id).is("transcript_written_at", null);
     expect(unwritten).toEqual([]);
+    // A Testmöte session never touches the förening's people (I1): none added, none linked, none sent.
     const { data: people } = await adminClient().from("people").select("name").eq("org_id", orgId);
-    expect((people ?? []).map((p) => p.name).sort()).toEqual(Object.values(FIXTURE_SPEAKER_NAMES).sort());
+    expect(people).toEqual([]);
+    const { data: links } = await adminClient().from("speaker_map").select("person_id").eq("meeting_id", id);
+    expect(links?.every((l) => l.person_id === null)).toBe(true);
     const { data: events } = await adminClient().from("meeting_events").select("detail").eq("meeting_id", id).eq("kind", "name_round");
     expect(events).toEqual([{ detail: expect.objectContaining({ ok: true, named: 4, unsure: 0 }) }]);
 
@@ -199,6 +210,40 @@ describe.skipIf(!hasLocalSupabase)("name round in the tick (Testmöte fixture)",
       { speaker_label: "speaker_1", display_name: "Jonas Holm", needs_confirm: false },
       { speaker_label: "speaker_2", display_name: "Leila Nasser", needs_confirm: false },
       { speaker_label: "speaker_3", display_name: "Ordföranden", needs_confirm: true },
+    ]);
+  });
+
+  it("live session (Ruling 36): only confident new full names join people; an exact one is linked; test sessions don't snap", async () => {
+    const { data: known } = await adminClient().from("people").insert({ org_id: orgId, name: "Leila Nasser" }).select("id").single();
+    // A Testmöte session gets no known people, so nothing can snap to a real person.
+    const t = await testMeeting();
+    const ft = fakes(async (segs) => readNames(segs));
+    await feed(t.id, t.sessionId, -1, 150_000);
+    expect(await tick.runTick(t.id, { final: false }, ft.deps)).toBe("ok");
+    expect(ft.knownCalls).toEqual([[]]);
+
+    const { id, sessionId } = await testMeeting("live");
+    const f = fakes(async (segs) =>
+      readNames(segs).map((n) =>
+        n.speakerLabel === "speaker_1" ? { ...n, name: "Jonas" } : n.speakerLabel === "speaker_3" ? { ...n, needsConfirm: true } : n,
+      ),
+    );
+    await feed(id, sessionId, -1, 150_000);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.knownCalls[0]).toContain("Leila Nasser");
+    const { data: rows } = await adminClient()
+      .from("speaker_map")
+      .select("speaker_label, display_name, person_id, needs_confirm")
+      .eq("meeting_id", id)
+      .order("speaker_label");
+    const { data: people } = await adminClient().from("people").select("id, name").eq("org_id", orgId).order("name");
+    expect(people!.map((p) => p.name)).toEqual(["Karin Ek", "Leila Nasser"]); // not "Jonas" (one word), not Daniel (unsure)
+    const karin = people!.find((p) => p.name === "Karin Ek")!.id;
+    expect(rows).toEqual([
+      { speaker_label: "speaker_0", display_name: "Karin Ek", person_id: karin, needs_confirm: false },
+      { speaker_label: "speaker_1", display_name: "Jonas", person_id: null, needs_confirm: false },
+      { speaker_label: "speaker_2", display_name: "Leila Nasser", person_id: known!.id, needs_confirm: false },
+      { speaker_label: "speaker_3", display_name: "Daniel Brooks", person_id: null, needs_confirm: true },
     ]);
   });
 });
