@@ -19,6 +19,7 @@ import { AccountView } from "@/components/views/AccountView";
 import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
 import { LoginView } from "@/components/views/LoginView";
+import { FormatCard } from "@/components/views/FormatCard";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
 import { StatusView } from "@/components/views/StatusView";
@@ -224,6 +225,16 @@ const render: Record<string, () => ReactNode> = {
         meetings={meetings}
         notice={orgNotice("mote-active")}
         startMeetingHref="#"
+        formatCard={
+          <FormatCard
+            orgId={ORG_ID}
+            current={{ kind: "veckomote", name: "Veckomöte" }}
+            isAdmin
+            meetingFolder={{ id: null }}
+            formats={[]}
+            changeFormat={noopAction}
+          />
+        }
         liveMeetingHref={() => "/design?vy=live"}
         actions={actions}
       />
@@ -244,6 +255,15 @@ const render: Record<string, () => ReactNode> = {
         meetings={[]}
         notice={null}
         startMeetingHref="#"
+        formatCard={
+          <FormatCard
+            orgId={ORG_ID}
+            current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll" }}
+            isAdmin={false}
+            meetingFolder={{ id: "folder-exempel" }}
+            formats={[]}
+          />
+        }
         actions={actions}
       />
     </AppChrome>

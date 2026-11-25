@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { FormatCard } from "@/components/views/FormatCard";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import { OrgDetailView } from "@/components/views/OrgDetailView";
 import { isUuid } from "@/lib/db/ids";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
+import { FORMAT_NAMES } from "@/lib/formats/standard";
+import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { appOrigin } from "@/lib/origin";
 import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgNotice } from "@/lib/ui/messages";
 import {
   addPersonAction,
+  changeFormatAction,
   deleteMeetingAction,
   deleteOrgAction,
   deletePersonAction,
@@ -47,12 +51,14 @@ export default async function OrgPage({
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
-  const [role, people, meetings, members, userResult] = await Promise.all([
+  const [role, people, meetings, members, userResult, format, formats] = await Promise.all([
     myRole(db, id),
     listPeople(db, id),
     listMeetings(db, id),
     safeMembers(id),
     db.auth.getUser(),
+    orgDefaultFormat(db, id),
+    listOrgFormats(db, id),
   ]);
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
 
@@ -66,6 +72,16 @@ export default async function OrgPage({
       people={people}
       meetings={meetings}
       notice={orgNotice(fel, klart)}
+      formatCard={
+        <FormatCard
+          orgId={org.id}
+          current={{ kind: format.profile.kind, name: FORMAT_NAMES[format.profile.kind] }}
+          isAdmin={role === "admin"}
+          meetingFolder={{ id: org.meeting_folder_id ?? null }}
+          formats={formats}
+          changeFormat={changeFormatAction}
+        />
+      }
       liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}
       startMeeting={<StartMeetingForm
           orgId={org.id}

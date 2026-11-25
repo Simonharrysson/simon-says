@@ -40,6 +40,8 @@ export interface OrgDetailViewProps {
   startMeeting?: ReactNode;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
+  /** The meeting-format card (`FormatCard`), shown above the people panel. */
+  formatCard?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Shown only to the
    * person who started it (only they can run it): running meetings and ones abandoned < 2 h ago.
@@ -69,7 +71,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, liveMeetingHref, actions } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, actions } = props;
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
   const running = liveMeetingHref && active && userId !== null && active.started_by === userId ? active : null;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
@@ -130,6 +132,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             deleteMeeting={actions.deleteMeeting}
             liveMeetingHref={liveMeetingHref}
           />
+          {formatCard}
           <PeoplePanel orgId={org.id} people={people} actions={actions} />
         </div>
 

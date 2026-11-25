@@ -16,6 +16,7 @@ import {
   rotateInviteCode,
   updateOrgSettings,
 } from "@/lib/db/orgs";
+import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Server actions for the org pages. All run as the signed-in user; RLS decides what's allowed.
@@ -116,4 +117,22 @@ export async function leaveOrgAction(form: FormData): Promise<void> {
   const result = await leaveOrg(db, orgId);
   if (result === "removed") redirect("/orgs?klart=lamnat");
   redirect(`/orgs/${orgId}?fel=medlem-${result}`);
+}
+
+/** Admins: switch the org's meeting format (`choice` = standard kind or `id:<profile id>`). RLS-style check is in the DB function. */
+export async function changeFormatAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const choice = field(form, "choice");
+  const db = await createSupabaseServerClient();
+  try {
+    if (choice.startsWith("id:")) {
+      const id = choice.slice(3);
+      if (isUuid(id)) await adoptFormat(db, orgId, id);
+    } else if (choice === "veckomote" || choice === "styrelseprotokoll" || choice === "enkel") {
+      await chooseStandardFormat(db, orgId, choice);
+    }
+  } catch (err) {
+    if ((err as { code?: string }).code !== "42501") throw err;
+  }
+  revalidatePath(`/orgs/${orgId}`);
 }
