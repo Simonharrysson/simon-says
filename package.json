@@ -22,7 +22,8 @@
     "demo-live": "tsx --conditions=react-server scripts/demo-live.ts",
     "fake-el": "tsx scripts/fake-elevenlabs.ts",
     "check-names": "tsx --conditions=react-server scripts/check-names.ts",
-    "check-picker-folder": "tsx --conditions=react-server scripts/check-picker-folder.ts"
+    "check-picker-folder": "tsx --conditions=react-server scripts/check-picker-folder.ts",
+    "suite": "tsx --conditions=react-server scripts/suite.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.13.0",
