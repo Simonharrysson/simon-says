@@ -103,7 +103,7 @@ npm run dev                           # http://localhost:3000
 npm run typecheck && npm test
 ```
 
-The "Testmöte" button on an org page replays a scripted fictional meeting through the real
+The operator-only "Testmöte" button on an org page replays a scripted fictional meeting through the real
 pipeline into a Doc, with no microphone needed.
 
 ## Environment variables
