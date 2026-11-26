@@ -20,6 +20,7 @@ describe("dates and headings", () => {
     expect(datesIn("Ridån styrelsemöte 18/2-26")).toEqual(["2026-02-18"]);
     expect(datesIn("möte 4.11.2025")).toEqual(["2025-11-04"]);
     expect(datesIn("2025-02-30 och 14 februari")).toEqual([]);
+    expect(datesIn("Board meeting 4 Sep 2025, then 12 October 2025 and 1 May 2026")).toEqual(["2025-09-04", "2025-10-12", "2026-05-01"]);
   });
 
   it("a heading is short and starts like a protocol; body lines and 'nästa möte' are not", () => {
@@ -27,6 +28,8 @@ describe("dates and headings", () => {
     expect(headingDate("Datum: 2025-09-02")).toBe("2025-09-02");
     expect(headingDate("2025-09-02")).toBe("2025-09-02");
     expect(headingDate("Nästa möte: 2025-10-01")).toBeNull();
+    expect(headingDate("Board meeting 4 Sep 2025")).toBe("2025-09-04");
+    expect(headingDate("Next meeting 18 Sep 2025")).toBeNull();
     expect(headingDate("Datum för nästa möte 2025-10-01")).toBeNull();
     expect(headingDate("Vi bokade aulan till 2026-02-14 och skickar ut inbjudan till alla medlemmar i föreningen.")).toBeNull();
   });

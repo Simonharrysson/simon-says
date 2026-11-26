@@ -84,7 +84,14 @@ export function docPlainText(doc: docs_v1.Schema$Document, skipTabIds?: Set<stri
 // Dates and the split
 
 const MONTHS = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
-const MONTH_RE = `(${MONTHS.join("|")}|jan|feb|mar|apr|jun|jul|aug|sep|sept|okt|nov|dec)\\.?`;
+// English too: international föreningar write "Board meeting 4 Sep 2025", "12 October 2025".
+const MONTHS_EN = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+const MONTH_RE = `(${[...MONTHS, ...MONTHS_EN].join("|")}|jan|feb|mar|apr|jun|jul|aug|sep|sept|okt|oct|nov|dec)\\.?`;
+const monthIndex = (m: string) => {
+  const k = m.toLowerCase().replace(".", "").slice(0, 3);
+  const sv = MONTHS.findIndex((x) => x.startsWith(k));
+  return sv >= 0 ? sv : MONTHS_EN.findIndex((x) => x.startsWith(k));
+};
 
 function ymd(y: string, m: string, d: string): string | null {
   const s = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
@@ -97,7 +104,7 @@ const DATE_RES: { re: RegExp; iso: (m: RegExpExecArray) => string | null }[] = [
   {
     re: new RegExp(`\\b(\\d{1,2})\\s+${MONTH_RE}\\s+(20\\d\\d)\\b`, "giu"),
     iso: (m) => {
-      const k = MONTHS.findIndex((x) => x.startsWith(m[2].toLowerCase().replace(".", "").slice(0, 3)));
+      const k = monthIndex(m[2]);
       return k < 0 ? null : ymd(m[3], String(k + 1), m[1]);
     },
   },
@@ -119,14 +126,14 @@ export function datesIn(text: string): string[] {
   return found.sort((a, b) => a.at - b.at).map((f) => f.iso);
 }
 
-const HEAD_WORD = /^(?:§\s*\d+\s*)?(protokoll|mötesprotokoll|styrelsemöte|styrelseprotokoll|medlemsmöte|årsmöte|extrainsatt|sammanträde|möte|datum|tid och plats)(?![\p{L}])/iu;
-const PROTOCOL_WORD = /(?<![\p{L}])(protokoll|styrelsemöte|mötesprotokoll|medlemsmöte|årsmöte)(?![\p{L}])/iu;
+const HEAD_WORD = /^(?:§\s*\d+\s*)?(protokoll|mötesprotokoll|styrelsemöte|styrelseprotokoll|medlemsmöte|årsmöte|extrainsatt|sammanträde|möte|datum|tid och plats|board meeting|minutes)(?![\p{L}])/iu;
+const PROTOCOL_WORD = /(?<![\p{L}])(protokoll|styrelsemöte|mötesprotokoll|medlemsmöte|årsmöte|mtg|minutes)(?![\p{L}])/iu;
 const TITLE_ONLY = /^(protokoll|mötesprotokoll|styrelsemöte|styrelseprotokoll|medlemsmöte|årsmöte)(?![\p{L}])[^0-9]{0,80}$/iu;
 
 /** The date of a protocol heading line, else null: short, holds a date, and starts with a protocol word or the date. */
 export function headingDate(line: string): string | null {
   const l = line.trim();
-  if (!l || l.length > 90 || /(?<![\p{L}])nästa(?![\p{L}])/iu.test(l)) return null;
+  if (!l || l.length > 90 || /(?<![\p{L}])(nästa|next)(?![\p{L}])/iu.test(l)) return null;
   const d = datesIn(l);
   if (!d.length) return null;
   if (HEAD_WORD.test(l)) return d[0];
