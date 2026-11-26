@@ -5,7 +5,7 @@
 export type OrgRole = "admin" | "member";
 /** 0037: missed = people not at the meeting (default), all, selected = ticked people, off. */
 export type SummaryMode = "missed" | "all" | "selected" | "off";
-export type SummaryState = "sending" | "sent" | "partial" | "none" | "uncertain" | "no_notes" | "off" | "test" | "before";
+export type SummaryState = "sending" | "sent" | "partial" | "none" | "uncertain" | "no_notes" | "off" | "test" | "before" | "failed";
 export type MeetingStatus = "live" | "ending" | "done" | "abandoned";
 export type NoteSection = "decision" | "action" | "now" | "attendees" | "note";
 export type NoteKind = "decision" | "task" | "note" | "attendee" | "now";
@@ -55,6 +55,9 @@ export type MeetingEventKind =
   | "checkin"
   | "summary";
 
+/** 0045: a förening (the default), the user's own Privat space, or (later) a company. */
+export type SpaceKind = "forening" | "privat" | "foretag";
+
 export interface OrgRow {
   id: string;
   name: string;
@@ -80,6 +83,8 @@ export interface OrgRow {
   calendar_id?: string | null;
   calendar_name?: string | null;
   calendar_filter?: string | null;
+  /** 0045: the kind of space; absent on rows read before 0045 (= förening). */
+  kind?: SpaceKind;
   created_by: string | null;
   created_at: string;
 }
@@ -112,6 +117,11 @@ export interface MeetingRow {
   id: string;
   org_id: string;
   started_by: string | null;
+  /**
+   * The meeting's Google Doc. Typed as always set because every Doc code path needs it; a Privat
+   * recording without a Doc (0045) has null here and never reaches that code: check with
+   * `isDocless()` (lib/privat/docless.ts) first.
+   */
   doc_id: string;
   notes_tab_id: string;
   transcript_tab_id: string | null;
@@ -155,6 +165,8 @@ export interface MeetingRow {
   summary_at?: string | null;
   /** 0046: the calendar event the meeting matched at start ({ title, expected, declined }: lib/calendar/events.ts). */
   calendar_event?: unknown;
+  /** 0045: the Privat context the recording belongs to. */
+  context_id?: string | null;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

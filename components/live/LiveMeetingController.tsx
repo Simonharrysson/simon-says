@@ -10,6 +10,7 @@ import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, t
 import { runEndFlow } from "@/lib/live/end-flow";
 import { SIGNED_IN_CHANNEL, SIGNED_IN_PATH } from "@/lib/live/signed-in";
 import { stopParam } from "@/lib/ui/limit-copy";
+import { ContextPicker, type CreateContext, type PrivatChoice } from "@/components/privat/ContextPicker";
 import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption, type GoalOption } from "./AgendaStep";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
@@ -75,6 +76,17 @@ export interface LiveMeetingControllerProps {
   goals?: GoalOption[];
   /** New meeting from "Starta" on a calendar event (todo #14): its id (sent to the server) and title (shown). */
   calendarEvent?: { id: string; title: string } | null;
+  /**
+   * A Privat recording (0045). New: the contexts to pick from (ContextPicker replaces the agenda
+   * step) and how to add one. Either way: where the summary is shown and the back link's words.
+   */
+  privat?: {
+    contexts?: { id: string; name: string }[];
+    initialContextId?: string | null;
+    createContext?: CreateContext;
+    summaryHref: string | null;
+    backLabel: string;
+  };
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -99,6 +111,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const router = useRouter();
   const [meeting, setMeeting] = useState<LiveMeetingInfo | null>(props.meeting);
   const t = useTranslations("live.controller");
+  const tPicker = useTranslations("privat.picker");
   const locale = useLocale();
   const [phase, setPhase] = useState<LivePhase>(() => initialPhase(props.meeting));
   const [startError, setStartError] = useState<StartError>(null);
@@ -106,6 +119,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** The server's error code of a failed start (agenda_* offers "Skapa nytt dokument i stället"). */
   const [startErrorCode, setStartErrorCode] = useState<string | null>(null);
   const [agenda, setAgenda] = useState<AgendaChoice | null>(null);
+  const [privatChoice, setPrivatChoice] = useState<PrivatChoice | null>(null);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
   /** The format override kept across that remount. */
@@ -158,6 +172,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const postedAt = useRef<number[]>([]);
 
   const mic = () => (capture.current ??= new MicCapture());
+  /** A Privat recording started on this page: its summary page once it ends. */
+  const privatMeetingId = useRef<string | null>(null);
 
   // The server page re-renders (router.refresh) while ending; follow its status.
   useEffect(() => {
@@ -383,6 +399,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setStartErrorText(null);
     setStartErrorCode(null);
     const choice = agenda;
+    const privatStart = props.privat ? privatChoice : null;
     void (async () => {
       try {
         await opened;
@@ -403,7 +420,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         const res = await fetch("/api/meetings", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
+          body: JSON.stringify(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : {
             orgId: props.orgId,
             consent: true,
             agendaDocId: choice?.agendaDocId ?? null,
@@ -445,6 +462,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         docPaused: false,
       };
       setMeeting(m);
+      if (privatStart) privatMeetingId.current = m.id;
       setShareFailed(typeof created.shareFailed === "number" ? created.shareFailed : null);
       setMissingItems(missingItemsText(Array.isArray(created.warnings) ? created.warnings : null, locale));
       setMissedFolder(created.missedMeetingFolder === true);
@@ -769,8 +787,24 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       nameRoundBusy={nameRoundBusy}
       startError={startError}
       startErrorText={startErrorText}
+      privat={
+        props.privat
+          ? {
+              summaryHref: props.privat.summaryHref ?? (privatMeetingId.current ? `/privat/mote/${privatMeetingId.current}` : null),
+              backLabel: props.privat.backLabel,
+            }
+          : null
+      }
       agenda={
-        props.meeting === null ? (
+        props.meeting === null && props.privat ? (
+          <ContextPicker
+            contexts={props.privat.contexts ?? []}
+            initialId={props.privat.initialContextId ?? null}
+            create={props.privat.createContext ?? (async () => ({ ok: false, message: tPicker("failed") }))}
+            onChange={setPrivatChoice}
+            disabled={phase === "starting"}
+          />
+        ) : props.meeting === null ? (
           <AgendaStep
             key={agendaKey}
             orgId={props.orgId}
@@ -785,7 +819,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           />
         ) : undefined
       }
-      agendaConfirmed={props.meeting === null ? agenda?.confirmed === true : true}
+      agendaConfirmed={props.meeting === null ? (props.privat ? privatChoice !== null : agenda?.confirmed === true) : true}
       agendaDoc={agenda?.agendaDocId ? { transcriptInDoc: agenda.transcriptInDoc } : null}
       onNewDocInstead={
         startError === "start-failed" && startErrorCode?.startsWith("agenda_")

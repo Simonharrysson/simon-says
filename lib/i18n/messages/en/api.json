@@ -1,6 +1,8 @@
 {
   "unauthenticated": "You're not signed in. Sign in and try again.",
   "orgNotFound": "The association doesn't exist.",
+  "privatNoInvites": "Nobody can be invited to Personal.",
+  "privatNoContext": "Choose what the recording is about and try again.",
   "generic": "Something went wrong. Try again in a little while.",
   "invites": {
     "forbidden": "Only admins can invite by e-mail.",

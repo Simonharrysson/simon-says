@@ -14,3 +14,6 @@ Simon: "getting emails is super important after a meeting. for individuals … a
 - Summary: one Claude call after the final pass over the stored note items + transcript, with the context's open tasks + recent decisions as input; structured output; spend gate; e-mail via sendUserMail gate.
 - Privacy: transcript and notes stay in Simon Says (the user's own space); same retention as föreningar; /integritet line.
 - Testing: real recording needs ElevenLabs credits (11-28); build and test with the fake EL server / Testmöte path and the e2e suite.
+
+## Privat v2 (Simon 2026-11-26, not scheduled)
+"my personal recorder that just records and sends me a meeting … with calendar built in … connected with an LLM that knows everything about me … it gives some clues about what is already known. They can look in my Gmail and all that." → context from the user's calendar (built in, todo #14) and, opt-in, Gmail/Drive (restricted scopes → Google verification) like Pocket AI's contexts; an assistant memory per user. Design separately.

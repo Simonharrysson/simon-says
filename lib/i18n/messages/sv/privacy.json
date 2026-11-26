@@ -38,6 +38,7 @@
     "usage": "Användningsposter: hur många sekunder ljud, hur mycket text till Claude och vad det kostade, per förening och dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.",
     "createdLog": "En logg över vilket konto som skapat vilka föreningar (för gränsen på två per person).",
     "summary": "Sammanfattning efter mötet: när ett möte är klart mejlar Simon Says besluten och uppgifterna till personer i föreningens personlista som har en e-postadress, som standard bara till dem som inte var med (admin kan välja alla, utvalda eller ingen). Aldrig till någon utanför personlistan, aldrig efter testmöten. Varje mejl har en länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet); det försvinner med mötet, personen eller föreningen.",
+    "privat": "Privat: det du spelar in i Privat ser bara du. Transkription, anteckningar, sammanfattningen (skriven av Claude efter inspelningen) och uppgifterna sparas hos oss på samma sätt som en förenings möten, tills du raderar inspelningen eller sammanhanget. Sammanfattningen mejlas bara till dig. Ett Google-dokument skapas bara om du kryssar i det.",
     "overview": "För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har godkänt. Rubrikerna försvinner med mötet, målen med föreningen.",
     "history": "Gamla protokoll som admin väljer att läsa in: texten skickas till Anthropic (Claude), som plockar ut datum, beslut, uppgifter (med roll, inte namn) och korta lägesrader. Bara de raderna sparas, aldrig dokumentets text; admin kan ta bort dem när som helst och de försvinner med föreningen.",
     "drive": "Frivilligt, bara för admin och bara för att läsa in gamla protokoll: admin kan ge Simon Says läsrättighet till sin Google Drive. Den används för att visa adminens mappar och namnen på dokumenten i de mappar admin väljer; bara de protokoll admin kryssar i öppnas. Mappar och dokumentnamn sparas inte. Nyckeln för läsrättigheten sparas krypterad och separat från inloggningens, används bara för inläsningen och raderas automatiskt efter 24 timmar; admin kan också ta bort den direkt.",
@@ -59,7 +60,7 @@
     "google": { "what": "Inloggning, och dokumentet i Drive hos den som startar mötet.", "note": "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive, och den som kopplar sin kalender ger läsrättighet till sin kalender (se Vad som sparas). Behandlingen kan ske utanför EU." },
     "supabase": { "what": "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "note": "Lagras inom EU." },
     "vercel": { "what": "Kör webbplatsen och servern.", "note": "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar." },
-    "resend": { "what": "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, och mötessammanfattningar till personer i föreningens personlista.", "note": "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen." }
+    "resend": { "what": "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, mötessammanfattningar till personer i föreningens personlista, och sammanfattningen av en inspelning i Privat till den som spelade in.", "note": "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen." }
   },
   "legal": {
     "intro": "Det här är vår nuvarande bedömning. En juridisk granskning återstår.",
@@ -71,6 +72,7 @@
   "transfer": "När data behandlas utanför EU bygger det, där det är aktuellt, på leverantörernas standardavtalsklausuler eller EU–USA-ramverket för dataskydd (Data Privacy Framework).",
   "delete": {
     "meeting": "<strong>Ett möte:</strong> den som startade det, eller en admin, raderar det under föreningen. Transkription, anteckningar och logg försvinner hos oss.",
+    "privat": "<strong>En inspelning eller ett sammanhang i Privat:</strong> du raderar dem på sidan för inspelningen eller sammanhanget. Transkription, anteckningar, sammanfattning och uppgifter försvinner hos oss.",
     "org": "<strong>En förening:</strong> en admin raderar den längst ner på föreningens sida. Allt under den försvinner, utom användningsposterna som beskrivs ovan.",
     "account": "<strong>Ditt konto, namn, e-postadress och den krypterade Google-nyckeln:</strong> det finns ingen funktion för det i tjänsten ännu. Mejla <mail>simon@harrysson.co</mail> så raderar vi dem.",
     "google": "<strong>Koppla bort Simon Says i Google:</strong> ta bort åtkomsten på <link>myaccount.google.com/connections</link>. Då slutar nyckeln fungera.",

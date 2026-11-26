@@ -1,6 +1,8 @@
 {
   "unauthenticated": "Du är inte inloggad. Logga in och försök igen.",
   "orgNotFound": "Föreningen finns inte.",
+  "privatNoInvites": "Privat går inte att bjuda in till.",
+  "privatNoContext": "Välj vad inspelningen gäller och försök igen.",
   "generic": "Något gick fel. Försök igen om en liten stund.",
   "invites": {
     "forbidden": "Bara administratörer kan bjuda in via mejl.",

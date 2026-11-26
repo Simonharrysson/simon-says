@@ -54,6 +54,7 @@ export function ConsentStep({
   agendaDoc = null,
   onNewDocInstead,
   eventTitle,
+  privat = false,
 }: {
   orgName: string;
   /** Started from a calendar event (todo #14): its title, as read on the server. */
@@ -77,9 +78,12 @@ export function ConsentStep({
   agendaDoc?: { transcriptInDoc: boolean } | null;
   /** After an agenda_* start error: "Skapa nytt dokument i stället" in the error banner. */
   onNewDocInstead?: () => void;
+  /** A Privat recording (0045): the facts and hints speak of the user's own notes, not a förening's Doc. */
+  privat?: boolean;
 }) {
   const t = useTranslations("live.consent");
   const tCal = useTranslations("calendar");
+  const tp = useTranslations("privat.live");
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
   const testing = micLevel != null;
@@ -102,7 +106,9 @@ export function ConsentStep({
 
       <ul className="flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">
         <li>{t("laptop")}</li>
-        {agendaDoc ? (
+        {privat ? (
+          <li>{tp("consentFact")}</li>
+        ) : agendaDoc ? (
           <li>
             {t("agendaDoc")}
             {agendaDoc.transcriptInDoc ? t("agendaWithTranscript") : t("agendaNoTranscript")}
@@ -183,7 +189,7 @@ export function ConsentStep({
       </Button>
       {(!confirmed || !agendaConfirmed) && (
         <p id={`${id}-why`} className="-mt-4 text-center text-xs text-ink-3">
-          {!confirmed ? t("tickFirst") : t("agendaFirst")}
+          {!confirmed ? t("tickFirst") : privat ? tp("contextFirst") : t("agendaFirst")}
         </p>
       )}
     </section>

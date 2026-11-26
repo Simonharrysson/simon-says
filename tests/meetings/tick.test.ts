@@ -1298,6 +1298,35 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await tick.runTick(randomUUID(), { final: true }, f.deps)).toBe("not_found");
     expect(await tick.finishMeeting(randomUUID(), { deps: f.deps })).toBe("not_found");
   });
+
+  it("a Privat recording without a Doc (0045): no Google at all, the stored rows are the notes", async () => {
+    const { id, sessionId } = await meeting({ transcript: false });
+    await adminClient().from("meetings").update({ doc_id: null, notes_tab_id: null, header_range: null }).eq("id", id);
+    await say(id, sessionId, "Vi bestämmer budgeten", 1000);
+    const f = fakes();
+    const google = () => {
+      throw new Error("a Doc-less meeting must not call Google");
+    };
+    const deps = { ...f.deps, getAuth: google, readNotes: google, render: google, appendTranscript: google };
+    expect(await tick.runTick(id, { final: false }, deps)).toBe("ok");
+    const items = async () => (await adminClient().from("note_items").select("id, text").eq("meeting_id", id).order("id")).data;
+    expect(await items()).toEqual([{ id: "n1", text: "Beslut 1" }]);
+    // The next tick starts from the stored rows: Claude sees n1 as a current item, nothing is lost.
+    await say(id, sessionId, "Och lokalen", 2000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, deps)).toBe("ok");
+    expect(f.calls[1].items.map((i) => i.id)).toEqual(["n1"]);
+    expect(f.calls[1].notesTabText).toBe("");
+    expect(await items()).toEqual([
+      { id: "n1", text: "Beslut 1" },
+      { id: "n2", text: "Beslut 2" },
+    ]);
+    // A lost Google grant can't pause it, and the end's final pass works the same way.
+    expect(await tick.endMeeting(id, { deps })).toBe("ended");
+    const m = await read(id);
+    expect(m.status).toBe("done");
+    expect(m.doc_paused_at).toBeNull();
+  });
 });
 
 describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {

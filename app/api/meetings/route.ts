@@ -32,8 +32,14 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
   // "Starta" on a calendar event (todo #14): only its id; the server reads the event itself.
   const calendarEventId = opt("calendarEventId");
   if (calendarEventId !== undefined && (typeof calendarEventId !== "string" || !EVENT_ID.test(calendarEventId))) return null;
+  // Privat (0045): the context (checked against the space in startMeeting) and the optional Doc.
+  const [contextId, withDoc] = ["contextId", "withDoc"].map(opt);
+  if (contextId !== undefined && (typeof contextId !== "string" || !isUuid(contextId))) return null;
+  if (withDoc !== undefined && typeof withDoc !== "boolean") return null;
   return {
     ...(calendarEventId !== undefined ? { calendarEventId: calendarEventId as string } : {}),
+    ...(contextId !== undefined ? { contextId: contextId as string } : {}),
+    ...(withDoc !== undefined ? { withDoc: withDoc as boolean } : {}),
     ...(goalIds !== undefined ? { goalIds: goalIds as string[] } : {}),
     agendaDocId: agendaDocId as string | undefined,
     formatProfileId: formatProfileId as string | undefined,
@@ -45,7 +51,9 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
 /**
  * Start a meeting. Body: `{ "orgId": string, "consent": true, "agendaDocId"?: string,
  * "formatProfileId"?: uuid, "formatKind"?: "veckomote"|"styrelseprotokoll"|"enkel",
- * "transcriptInDoc"?: boolean, "goalIds"?: uuid[], "calendarEventId"?: string }` (goalIds: at most two goals ticked under "Mål att
+ * "transcriptInDoc"?: boolean, "goalIds"?: uuid[], "contextId"?: uuid, "withDoc"?: boolean,
+ * "calendarEventId"?: string }` (calendarEventId: "Starta" on a calendar event, todo #14; contextId and
+ * withDoc: a Privat space only, 0045; goalIds: at most two goals ticked under "Mål att
  * ta upp", added as topic items to a new Doc in a format; todo #12) (consent: everyone in the room knows the meeting is
  * transcribed). With `agendaDocId` the meeting runs in the förening's own agenda Doc; without it
  * a new Doc in the chosen format (Enkel: today's Doc) is created in the caller's Drive and shared

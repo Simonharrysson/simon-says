@@ -82,6 +82,7 @@ export default async function PrivacyPage() {
             <li>{t("stored.usage")}</li>
             <li>{t("stored.createdLog")}</li>
             <li>{t("stored.summary")}</li>
+            <li>{t("stored.privat")}</li>
             <li>{t("stored.overview")}</li>
             <li>{t("stored.history")}</li>
             <li>{t("stored.drive")}</li>
@@ -135,6 +136,7 @@ export default async function PrivacyPage() {
           <h2 id="radera">{t("toc.radera")}</h2>
           <ul>
             <li>{t.rich("delete.meeting", { strong })}</li>
+            <li>{t.rich("delete.privat", { strong })}</li>
             <li>{t.rich("delete.org", { strong })}</li>
             <li>{t.rich("delete.account", { strong, mail })}</li>
             <li>

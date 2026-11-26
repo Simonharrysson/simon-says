@@ -701,3 +701,32 @@ Every invite goes through the mail-settings gate (0039, `sendUserMailDetailed`, 
 "Vill inte ha mejl" (no retry). Each e-mail carries the recipient's own settings link
 (`emailPrefsUrl`) in the footer and List-Unsubscribe headers.
 `/design`: `invite-email*`.
+
+## Privat (migration 0045)
+
+The user's own space (`docs/superpowers/specs/2026-11-26-privat-design.md`): an org of kind
+`privat` with exactly one member, created on the first visit to `/privat` (`ensure_my_privat_space`).
+"Privat" sits first in the top rail; the space never shows in the förening list, its `/orgs/<id>`
+pages redirect to `/privat`, invites are refused. Copy: `lib/i18n/messages/*/privat.json`.
+
+- `/privat` (`PrivatHomeView`): "Spela in", a running recording on top, the contexts (most recently
+  used first) with "N öppna uppgifter" badges. Empty state explains the e-mail.
+- Before recording: the live page's consent step with `ContextPicker` in the agenda slot: "Vad gäller
+  inspelningen?" (native select, last used or the context you came from preselected, "Nytt
+  sammanhang…" adds one inline; first time: a text field prefilled "Övrigt") and the check "Skriv även i
+  ett Google-dokument" (off: no Google call at all, the notes stay in `note_items`). Everything else
+  is the live engine as for a förening; the copy says the notes stay in Privat and the summary comes
+  by e-mail.
+- `/privat/<context>` (`ContextView`): Öppna uppgifter (tick = saved at once, a failed save puts it
+  back and says so; "Klara nyligen" to undo), Beslut och bra att veta (newest first), Återkommer ofta
+  (people and topics in 2+ recordings), Inspelningar, and "Radera sammanhanget" (confirm; deletes its
+  recordings).
+- `/privat/mote/<id>` (`PrivatMeetingView`): the summary, the recording's tasks (tickable), Beslut,
+  Öppna frågor, Sedan sist (klart in green, öppen / inte nämnd in grey: words, no dots), Bra att
+  komma ihåg, "Radera inspelningen". Pending / nothing heard / failed are one calm banner each.
+- The e-mail (`lib/privat/email.ts`, design A like the invite and summary mails, sv/en by the
+  recorder's saved language): context as heading, date, summary, Mina uppgifter (boxed), Beslut,
+  Andras uppgifter, Öppna frågor, Sedan sist, Bra att komma ihåg, "Öppna i Simon Says". Category
+  `private_summary` ("Sammanfattning av mina inspelningar") in Mejlval.
+
+`/design`: `privat-*`, `live-privat-*`.

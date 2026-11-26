@@ -38,6 +38,7 @@
     "usage": "Usage records: how many seconds of audio, how much text to Claude and what it cost, per association and day. They are used for the limit of 20 hours a month and to stop abuse.",
     "createdLog": "A log of which account created which associations (for the limit of two per person).",
     "summary": "Summary after the meeting: when a meeting is over, Simon Says e-mails the decisions and tasks to people on the association's people list who have an e-mail address, by default only to those who weren't there (the admin can choose everyone, selected people or no one). Never to anyone outside the people list, never after test meetings. Every e-mail has a link to unsubscribe. We store who received the summary for which meeting (not the content); it disappears with the meeting, the person or the association.",
+    "privat": "Personal: what you record in Personal is visible only to you. The transcript, notes, the summary (written by Claude after the recording) and the tasks are stored with us the same way as an association's meetings, until you delete the recording or the context. The summary is e-mailed only to you. A Google Doc is created only if you tick it.",
     "overview": "For the Overview tab: the headings of the agenda items (without names) and the goals the association's admin has approved. The headings disappear with the meeting, the goals with the association.",
     "history": "Old minutes the admin chooses to import: the text is sent to Anthropic (Claude), which picks out dates, decisions, tasks (with role, not name) and short status lines. Only those lines are stored, never the document's text; the admin can remove them at any time and they disappear with the association.",
     "drive": "Optional, only for admins and only to import old minutes: the admin can give Simon Says read access to their Google Drive. It is used to show the admin's folders and the names of the documents in the folders the admin chooses; only the minutes the admin ticks are opened. Folders and document names are not stored. The key for the read access is stored encrypted and separately from the sign-in key, is used only for the import and is deleted automatically after 24 hours; the admin can also remove it right away.",
@@ -75,7 +76,7 @@
       "note": "The functions run in Stockholm. Vercel logs ordinary requests (for example IP address and URL) in its server logs."
     },
     "resend": {
-      "what": "Sends e-mail: operational alerts and daily summaries to us, invitations an admin sends to the addresses they type in, and meeting summaries to people on the association's people list.",
+      "what": "Sends e-mail: operational alerts and daily summaries to us, invitations an admin sends to the addresses they type in, meeting summaries to people on an association's people list, and the summary of a recording in Personal to the person who recorded it.",
       "note": "A meeting summary contains the meeting's decisions, tasks and short other items, never the transcript."
     }
   },
@@ -89,6 +90,7 @@
   "transfer": "When data is processed outside the EU, it relies, where relevant, on the providers' standard contractual clauses or the EU–US Data Privacy Framework.",
   "delete": {
     "meeting": "<strong>A meeting:</strong> the person who started it, or an admin, deletes it under the association. Transcript, notes and log disappear from our side.",
+    "privat": "<strong>A recording or a context in Personal:</strong> you delete them on the recording's or the context's page. Transcript, notes, summary and tasks disappear from our side.",
     "org": "<strong>An association:</strong> an admin deletes it at the bottom of the association's page. Everything under it disappears, except the usage records described above.",
     "account": "<strong>Your account, name, e-mail address and the encrypted Google key:</strong> there is no function for that in the service yet. E-mail <mail>simon@harrysson.co</mail> and we will delete them.",
     "google": "<strong>Disconnect Simon Says in Google:</strong> remove the access at <link>myaccount.google.com/connections</link>. The key then stops working.",
