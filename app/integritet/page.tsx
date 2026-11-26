@@ -82,6 +82,10 @@ export default function PrivacyPage() {
               dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.
             </li>
             <li>En logg över vilket konto som skapat vilka föreningar (för gränsen på två per person).</li>
+            <li>
+              För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har
+              godkänt. Rubrikerna försvinner med mötet, målen med föreningen.
+            </li>
           </ul>
           <p>
             <strong>Användningsposterna och loggen över skapade föreningar finns kvar även när föreningen raderas.</strong>{" "}
