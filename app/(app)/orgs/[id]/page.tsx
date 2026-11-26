@@ -37,14 +37,12 @@ import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
 import { dismissAction, saveProfileAction } from "./kom-igang/actions";
-import { OrgCalendarForm } from "@/components/calendar/OrgCalendarForm";
-import type { StartCalendar } from "@/components/views/StartMeetingForm";
-import { calendarResult, isNow, stockholmDateTime, type CalendarInfo } from "@/lib/calendar/events";
-import { myCalendars, orgUpcoming, safeCalendarConnected, type UpcomingState } from "@/lib/calendar/load";
+import { Suspense } from "react";
+import { OrgCalendarSlot, StartCalendarSlot } from "@/components/calendar/CalendarSlots";
+import { calendarResult } from "@/lib/calendar/events";
 import type { Notice } from "@/lib/ui/messages";
 import type { Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
-import { requestCalendarAccess, saveOrgCalendarAction } from "../../calendar-actions";
 import { OrgProfileForm } from "@/components/views/OrgProfileForm";
 import {
   addPersonAction,
@@ -150,18 +148,6 @@ function calendarNotice(raw: string | undefined, locale: Locale): Notice | null 
   return { tone: result === "ok" || result === "fran" ? "success" : "danger", text: messages[locale].calendar.result[result], code: `kalender-${result}` };
 }
 
-/** The start card's calendar part (todo #14), from the viewer's own grant. Undefined: no calendar chosen. */
-function startCalendar(upcoming: UpcomingState): StartCalendar | undefined {
-  const now = new Date();
-  if (upcoming.state === "none") return undefined;
-  if (upcoming.state === "disconnected") return { state: "disconnected", connect: requestCalendarAccess };
-  if (upcoming.state === "unavailable") return { state: "unavailable" };
-  return {
-    state: "ok",
-    events: upcoming.events.map((e) => ({ id: e.id, title: e.title, ...stockholmDateTime(e.start), now: isNow(e, now) })),
-  };
-}
-
 export default async function OrgPage({
   params,
   searchParams,
@@ -202,16 +188,6 @@ export default async function OrgPage({
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   const invites = isAdmin ? await safeInvites(id) : [];
-  // The calendar (todo #14), meetings tab only: the viewer's own grant reads the förening's calendar;
-  // an admin also gets their own calendars to choose from. Best effort, never breaks the page.
-  const calendarConnected = me && tab === "moten" ? await safeCalendarConnected(me) : false;
-  const [upcoming, adminCalendars]: [UpcomingState, CalendarInfo[] | null] =
-    me && tab === "moten"
-      ? await Promise.all([
-          !org.calendar_id ? { state: "none" as const } : calendarConnected ? orgUpcoming(me, org) : { state: "disconnected" as const },
-          isAdmin && calendarConnected ? myCalendars(me) : null,
-        ])
-      : [{ state: "none" }, null];
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
   const docAccess = docAccessFor(
@@ -262,15 +238,11 @@ export default async function OrgPage({
       }}
       profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
       calendarSettings={
-        isAdmin ? (
-          <OrgCalendarForm
-            orgId={org.id}
-            connected={calendarConnected}
-            calendars={adminCalendars?.map((c) => ({ id: c.id, name: c.name })) ?? null}
-            current={{ id: org.calendar_id ?? null, name: org.calendar_name ?? null, filter: org.calendar_filter ?? null }}
-            save={saveOrgCalendarAction}
-            connect={requestCalendarAccess}
-          />
+        isAdmin && tab === "moten" && me ? (
+          // Google's answer streams in; the rest of the page never waits for it (todo #14).
+          <Suspense fallback={null}>
+            <OrgCalendarSlot orgId={org.id} userId={me} org={org} />
+          </Suspense>
         ) : undefined
       }
       summarySettings={
@@ -311,7 +283,13 @@ export default async function OrgPage({
           orgId={org.id}
           showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
           prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
-          calendar={startCalendar(upcoming)}
+          calendar={
+            me && tab === "moten" && org.calendar_id ? (
+              <Suspense fallback={null}>
+                <StartCalendarSlot orgId={org.id} userId={me} org={org} />
+              </Suspense>
+            ) : undefined
+          }
         />}
       actions={{
         rotateInvite: rotateInviteAction,

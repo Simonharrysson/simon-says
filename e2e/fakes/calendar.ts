@@ -57,12 +57,13 @@ export class CalendarFake {
       const from = Date.parse(url.searchParams.get("timeMin") ?? "") || -Infinity;
       const to = Date.parse(url.searchParams.get("timeMax") ?? "") || Infinity;
       const max = Number(url.searchParams.get("maxResults") ?? 250);
-      const items = all
+      const offset = Number(url.searchParams.get("pageToken") ?? 0);
+      const matching = all
         .filter((e) => e.status !== "cancelled" && Date.parse(e.end) > from && Date.parse(e.start) < to)
-        .sort((a, b) => Date.parse(a.start) - Date.parse(b.start))
-        .slice(0, max)
-        .map((e) => this.render(e));
-      return { status: 200, body: { items } };
+        .sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+      const items = matching.slice(offset, offset + max).map((e) => this.render(e));
+      const next = offset + max < matching.length ? { nextPageToken: String(offset + max) } : {};
+      return { status: 200, body: { items, ...next } };
     }
     return { status: 404, body: { error: { code: 404, message: `fake calendar: no route ${rest}` } } };
   }

@@ -72,16 +72,31 @@ export function calendarApi(opts: {
       return out.sort((a, b) => Number(b.primary) - Number(a.primary) || a.name.localeCompare(b.name, "sv"));
     },
 
-    async listEvents(calendarId, from, to, max = 50) {
-      const body = (await get(`calendars/${encodeURIComponent(calendarId)}/events`, {
-        timeMin: from.toISOString(),
-        timeMax: to.toISOString(),
-        singleEvents: "true",
-        orderBy: "startTime",
-        maxResults: String(max),
-        fields: `items(${EVENT_FIELDS})`,
-      })) as { items?: unknown[] } | null;
-      return (body?.items ?? []).map(parseEvent).filter((e): e is CalendarEvent => e !== null);
+    async listEvents(calendarId, from, to, max = 500) {
+      // Paged (a busy calendar has more events than one page), at most `max` in all.
+      const out: CalendarEvent[] = [];
+      let pageToken: string | undefined;
+      let seen = 0;
+      for (let page = 0; page < 4 && seen < max; page++) {
+        const body = (await get(`calendars/${encodeURIComponent(calendarId)}/events`, {
+          timeMin: from.toISOString(),
+          timeMax: to.toISOString(),
+          singleEvents: "true",
+          orderBy: "startTime",
+          maxResults: String(Math.min(250, max - seen)),
+          fields: `nextPageToken,items(${EVENT_FIELDS})`,
+          ...(pageToken ? { pageToken } : {}),
+        })) as { items?: unknown[]; nextPageToken?: string } | null;
+        const items = body?.items ?? [];
+        seen += items.length;
+        for (const raw of items) {
+          const e = parseEvent(raw);
+          if (e) out.push(e);
+        }
+        pageToken = body?.nextPageToken;
+        if (!pageToken) break;
+      }
+      return out;
     },
 
     async getEvent(calendarId, eventId) {

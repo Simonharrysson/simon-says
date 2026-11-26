@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -9,8 +9,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { IconChevronDown, IconExternal, IconMic } from "@/components/ui/icons";
 import { intlTag, type Locale } from "@/lib/i18n/config";
 import type { MeetingType } from "@/lib/prepare/types";
-import type { FormAction } from "@/components/ui/ConfirmAction";
-import { ConnectCalendarButton } from "@/components/calendar/CalendarConnect";
 
 /**
  * "Starta möte" on the org page: no explanations, just the choices. Starting leads to the live
@@ -37,23 +35,6 @@ export function nextMeetingWhen(date: string, time: string | null, locale: Local
   return `${d}${time ? ` ${locale === "en" ? time : time.replace(":", ".")}` : ""}`;
 }
 
-/** An upcoming event of the förening's calendar (todo #14), as the card lists it. */
-export interface CalendarEventLink {
-  id: string;
-  title: string;
-  /** Swedish local `YYYY-MM-DD` and `HH:MM`. */
-  date: string;
-  time: string;
-  /** From 30 minutes before its start until its end: "Starta" is offered. */
-  now: boolean;
-}
-
-/** The card's calendar part: absent when the förening has no calendar. */
-export type StartCalendar =
-  | { state: "ok"; events: CalendarEventLink[] }
-  | { state: "disconnected"; connect: FormAction }
-  | { state: "unavailable" };
-
 export function StartMeetingForm({
   orgId,
   showTestMeeting = false,
@@ -65,11 +46,10 @@ export function StartMeetingForm({
   showTestMeeting?: boolean;
   /** Upcoming prepared agendas, soonest first; the row shows the next one. */
   prepared?: PreparedLink[];
-  /** The förening's calendar (read with the viewer's own grant): the next events, or why not. */
-  calendar?: StartCalendar;
+  /** The förening's calendar part (todo #14): `StartCalendarSlot` in a Suspense, so Google never holds up the page. */
+  calendar?: ReactNode;
 }) {
   const t = useTranslations("start");
-  const tCal = useTranslations("calendar");
   const types = useTranslations("formats.meetingTypes");
   const locale = useLocale();
   const router = useRouter();
@@ -117,51 +97,7 @@ export function StartMeetingForm({
           </span>
         </p>
       )}
-      {calendar?.state === "ok" &&
-        (calendar.events.length ? (
-          <div className="flex flex-col gap-1">
-            <p className="text-sm text-ink-3" id="calendar-upcoming">
-              {tCal("upcomingLabel")}
-            </p>
-            <ul aria-labelledby="calendar-upcoming" className="divide-y divide-line">
-              {calendar.events.map((e) => {
-                const title = e.title || tCal("untitled");
-                return (
-                  <li key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2 text-sm">
-                    <span className="min-w-0 wrap-anywhere">
-                      <span className="font-medium">{title}</span>
-                      <span className="text-ink-2"> · {nextMeetingWhen(e.date, e.time, locale)}</span>
-                    </span>
-                    <span className="flex items-center gap-2">
-                      {e.now && (
-                        <ButtonLink href={`/meetings/ny/${orgId}?event=${encodeURIComponent(e.id)}`} variant="primary" size="sm" aria-label={tCal("startLabel", { title })}>
-                          {tCal("start")}
-                        </ButtonLink>
-                      )}
-                      <ButtonLink
-                        href={`/orgs/${orgId}/forbered?datum=${e.date}&event=${encodeURIComponent(e.id)}`}
-                        variant="ghost"
-                        size="sm"
-                        aria-label={tCal("prepareLabel", { title })}
-                      >
-                        {tCal("prepare")}
-                      </ButtonLink>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : (
-          <p className="text-sm text-ink-3">{tCal("nothingUpcoming")}</p>
-        ))}
-      {calendar?.state === "disconnected" && (
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-ink-3">{tCal("connectHint")}</span>
-          <ConnectCalendarButton action={calendar.connect} back={`/orgs/${orgId}`} variant="ghost" />
-        </div>
-      )}
-      {calendar?.state === "unavailable" && <p className="text-sm text-ink-3">{tCal("unavailable")}</p>}
+      {calendar}
       {error && (
         <Banner tone="danger" title={t("startFailedTitle")}>
           {error}

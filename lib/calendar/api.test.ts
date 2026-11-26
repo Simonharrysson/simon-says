@@ -72,6 +72,20 @@ describe("calendarApi", () => {
     expect(await api().listEvents(HOOK, new Date(0), new Date())).toEqual([]);
   });
 
+  it("pages through a busy calendar", async () => {
+    const many = Array.from({ length: 300 }, (_, i) => ({
+      id: `m${i}`,
+      summary: i === 299 ? "Styrelsemöte" : "Träning",
+      start: new Date(Date.UTC(2027, 0, 1) + i * 3600_000).toISOString(),
+      end: new Date(Date.UTC(2027, 0, 1) + i * 3600_000 + 1800_000).toISOString(),
+    }));
+    fake.seed("anna@e2e.test", { id: HOOK, summary: "Hook & Look" }, many);
+    const events = await api().listEvents(HOOK, new Date("2027-01-01T00:00:00Z"), new Date("2027-02-01T00:00:00Z"));
+    expect(events).toHaveLength(300);
+    expect(events.at(-1)?.title).toBe("Styrelsemöte");
+    expect(fake.requests.filter((r) => r.includes("/events?")).length).toBe(2);
+  });
+
   it("throws on a Google error", async () => {
     failWith = 503;
     await expect(api().listCalendars()).rejects.toBeInstanceOf(CalendarApiError);
