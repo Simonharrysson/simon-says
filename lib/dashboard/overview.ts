@@ -2,7 +2,8 @@ import type { ItemRole, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/t
 import { normLabel } from "@/lib/agenda/scan";
 import { isCopy, isDecision, isTask, type ChainItem } from "@/lib/meetings/summary";
 import { resolveSpeaker } from "@/lib/segments/resolve";
-import type { HistoryMeeting } from "@/lib/history/types";
+import type { HistoryItem, HistoryMeeting } from "@/lib/history/types";
+import { synonymRole } from "@/lib/agenda/role-words";
 
 // The org dashboard's views 1–4 ("Översikt" tab), pure over rows (decisions in
 // docs/superpowers/specs/2026-11-26-org-dashboard-proposal.md, "Builder decisions"):
@@ -230,6 +231,14 @@ export const importedAt = (date: string) => `${date.slice(0, 10)}T12:00:00Z`;
 const monthOf = (iso: string) => iso.slice(0, 7);
 const cleanLabel = (s: string | null | undefined) => (typeof s === "string" && s.trim() ? s.trim() : null);
 
+/** Imported protocols carry no roles: a label's words say whether it is a formality or a check-in. */
+const importedTopic = (label: string | null | undefined) => {
+  const l = cleanLabel(label);
+  return l && !synonymRole(l) ? l : null;
+};
+/** An imported line under a Må-runda: never shown, like the own meetings' (`underCheckin`). */
+const importedUnderCheckin = (i: Pick<HistoryItem, "topic">) => Boolean(i.topic && synonymRole(i.topic) === "checkin");
+
 /** Every decision, own meetings and imported protocols merged, newest first (the same day: own first). */
 export function recentDecisions(orgId: string, input: DashInput, limit = DECISION_LIMIT, imported: HistoryMeeting[] = []): DecisionRow[] {
   const { byId, items } = scoped(orgId, input);
@@ -240,7 +249,7 @@ export function recentDecisions(orgId: string, input: DashInput, limit = DECISIO
   });
   const old: Row[] = imported.flatMap((m, p) =>
     m.items.flatMap((it, k) =>
-      it.kind === "decision"
+      it.kind === "decision" && !importedUnderCheckin(it)
         ? [{ row: { key: `import:${p}:${k}`, text: it.text, date: importedAt(m.date), item: cleanLabel(it.topic), imported: true }, at: Date.parse(importedAt(m.date)), order: k, tie: "" }]
         : [],
     ),
@@ -271,8 +280,8 @@ export function recurringTopics(orgId: string, input: DashInput, imported: Histo
   }
   for (const r of items.filter(isDecision)) decisionsOf.get(r.meeting_id)!.push({ label: itemLabel(byId.get(r.meeting_id)!, r.anchor), text: r.text, order: r.position });
   imported.forEach((m, p) => {
-    const labels = [...m.items.filter((i) => i.kind === "topic").map((i) => i.text), ...m.items.map((i) => (i.kind === "topic" ? null : cleanLabel(i.topic))).filter((l): l is string => l !== null)];
-    const decisions = m.items.flatMap((i, k) => (i.kind === "decision" ? [{ label: cleanLabel(i.topic), text: i.text, order: k }] : []));
+    const labels = m.items.map((i) => importedTopic(i.kind === "topic" ? i.text : i.topic)).filter((l): l is string => l !== null);
+    const decisions = m.items.flatMap((i, k) => (i.kind === "decision" && !importedUnderCheckin(i) ? [{ label: importedTopic(i.topic), text: i.text, order: k }] : []));
     sources.push({ id: `import:${p}`, at: importedAt(m.date), labels, decisions });
   });
   sources.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id));

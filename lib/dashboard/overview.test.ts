@@ -254,6 +254,16 @@ const history = [
   protocol("2024-10-08", [hi("topic", "Ekonomi"), hi("topic", "Spelkafé"), hi("decision", "Kassan flyttas till ny bank", "Ekonomi"), hi("task", "Ringa banken", "Ekonomi", { owner: "Kassör", done: false })]),
   protocol("2026-10-01", [hi("decision", "Spelkaféet blir varannan fredag", "spelkafé"), hi("decision", "Utan punkt"), hi("task", "Boka lokal", "Spelkafé", { done: true })]),
 ];
+// Formalities sit in every protocol: never recurring topics; nothing under a Må-runda shows.
+const formalities = (date: string) =>
+  protocol(date, [
+    hi("topic", "§1 Mötets öppnande"),
+    hi("topic", "Val av justerare"),
+    hi("topic", "Må-runda"),
+    hi("topic", "Övriga frågor"),
+    hi("decision", "Mötet förklaras öppnat", "Mötets öppnande"),
+    hi("decision", "Privat sak från rundan", "Må-runda"),
+  ]);
 
 describe("imported protocols in the Översikt", () => {
   it("decisions: merged newest first, marked imported, topic as the item; the same day own first", () => {
@@ -283,6 +293,17 @@ describe("imported protocols in the Översikt", () => {
     ]);
     // Spelkväll is on one own meeting only.
     expect(topics.some((t) => t.label === "Spelkväll")).toBe(false);
+  });
+
+  it("formalities and the Må-runda in imported protocols are not topics; a Må-runda decision never shows", () => {
+    const old = [formalities("2025-01-14"), formalities("2025-02-11"), formalities("2025-03-11")];
+    const o = buildOverview(ORG, input({ meetings: [] }), NOW, old);
+    expect(o.topics).toEqual([]);
+    expect(o.decisions.map((d) => [d.text, d.item])).toEqual([
+      ["Mötet förklaras öppnat", "Mötets öppnande"],
+      ["Mötet förklaras öppnat", "Mötets öppnande"],
+      ["Mötet förklaras öppnat", "Mötets öppnande"],
+    ]);
   });
 
   it("imported tasks are never open, only counted; attendance unchanged; the summary has the span", () => {
