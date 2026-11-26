@@ -628,6 +628,12 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   // Silent failures the status line doesn't cover: say what happened and what to do.
   const notice: LiveNotice | null = !["live", "paused", "error", "name-round"].includes(phase)
     ? null
+    : refusal === "meeting_gone"
+      ? {
+          tone: "danger",
+          title: "Mötet finns inte längre",
+          text: "Mötet hittades inte, så inget mer ljud skickas från den här fliken. Gå tillbaka till föreningen.",
+        }
     : refusal === "not_member"
       ? {
           tone: "danger",
