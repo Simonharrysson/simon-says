@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * "Avbryt inläsningen" (admins). A batch: Anthropic is asked to stop; what Claude already read
- * is still saved when the batch has ended (it is paid for), without a goals proposal. A direct
+ * is still saved when the batch has ended (it is paid for), without a goals proposal. If Claude
+ * had already finished, nothing is cancelled: the results are saved and goals proposed. A direct
  * import: the meetings not yet started are skipped. → `{ job }`.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string; jobId: string }> }) {
@@ -20,8 +21,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   try {
     const job = await loadJob(admin, jobId);
     if (!job || job.org_id !== id) return fail("not_found", 404, "Inläsningen finns inte.");
-    if (!(await cancelJob(admin, job, batchClient()))) return fail("not_running", 409, "Inläsningen är redan klar eller avbruten.");
-    console.info(`history/job: cancelled (${job.mode})`);
+    const outcome = await cancelJob(admin, job, batchClient());
+    if (!outcome) return fail("not_running", 409, "Inläsningen är redan klar eller avbruten.");
+    // "ended": Claude had already finished; the results were saved instead (the view shows it).
+    console.info(`history/job: cancel → ${outcome} (${job.mode})`);
     return NextResponse.json({ job: await jobView(admin, jobId) }, { headers: noStore });
   } catch (err) {
     console.error(`history/job: cancel: ${(err as Error).message}`.slice(0, 200));

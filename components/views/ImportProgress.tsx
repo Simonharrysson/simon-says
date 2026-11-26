@@ -244,8 +244,9 @@ export function ImportProgress({
   let headline: string;
   let detail: string;
   if (job.status === "digesting") {
-    headline = `${p.total} av ${p.total} lästa · förslag på mål ca 5 min`;
-    detail = "Alla protokoll är lästa. Simon Says läser nu hela historiken i tidsordning och föreslår mål. Du kan stänga sidan — förslaget väntar här när du kommer tillbaka.";
+    headline = `${t.done} av ${p.total} lästa${t.failed ? `, ${t.failed} misslyckades` : ""} · förslag på mål inom ca 10 min`;
+    detail =
+      "Claude har läst klart. Förslaget på mål tas fram vid nästa körning (inom 5 minuter) och tar sedan några minuter: Simon Says läser hela historiken i tidsordning. Du kan stänga sidan — förslaget väntar här när du kommer tillbaka.";
   } else if (job.status === "canceling") {
     headline = `${p.finished} av ${p.total} klara · avbryter`;
     detail = "Claude stoppar omgången. Det som redan är läst sparas (det är betalt), men inga mål föreslås. Det brukar ta någon minut.";
@@ -258,7 +259,7 @@ export function ImportProgress({
             ? "tiden räknas ut om en stund"
             : "ingen tidsuppskattning än"
           : "tiden räknas ut när första protokollet är klart";
-    headline = `${p.finished} av ${p.total} klara · ${pausedDirect ? "pausad" : eta}`;
+    headline = `${p.finished} av ${p.total} klara${t.failed ? `, ${t.failed} misslyckades` : ""} · ${pausedDirect ? "pausad" : eta}`;
     detail =
       job.mode === "batch"
         ? `${p.noEstimate === "none_finished" ? "Claude har fått alla protokoll på en gång (till halva priset) och har börjat. De flesta omgångar är klara inom en timme, alla inom ett dygn. " : "Claude läser alla protokoll på en gång (till halva priset). Resultaten kommer när hela omgången är klar. "}Du kan stänga sidan — vi fortsätter och visar resultatet här när du kommer tillbaka.`
