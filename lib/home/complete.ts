@@ -132,15 +132,15 @@ export async function propagateForward(meetingId: string, itemId: string, orgId:
       }
     }
     for (const r of next) {
-      const { data, error } = await admin
-        .from("note_items")
-        .update({ done: true })
-        .eq("meeting_id", r.meeting)
-        .or(`id.eq.${r.id},copy_of.eq.${r.id},id.eq.${r.id}-t`)
-        .eq("done", false)
-        .select("id");
-      if (error) throw new Error(`propagateForward: ${error.message}`);
-      updated += data?.length ?? 0;
+      // The row and its tasks copies (`<id>-t`, or copy_of = id): two plain filters, no or-string.
+      for (const q of [
+        admin.from("note_items").update({ done: true }).eq("meeting_id", r.meeting).in("id", [r.id, `${r.id}-t`]).eq("done", false).select("id"),
+        admin.from("note_items").update({ done: true }).eq("meeting_id", r.meeting).eq("copy_of", r.id).eq("done", false).select("id"),
+      ]) {
+        const { data, error } = await q;
+        if (error) throw new Error(`propagateForward: ${error.message}`);
+        updated += data?.length ?? 0;
+      }
     }
     level = next;
   }
