@@ -234,20 +234,31 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
     // of the preceding item: a false sub-point only merges two items, a false item splits a block.
     const firstNonList = region.findIndex(nonListItem);
     const boundary = firstNonList >= 0 ? region[firstNonList].start : Infinity;
-    const lists = new Map<string, { first: number; minLevel: number }>();
+    const lists = new Map<string, { first: number; last: number; minLevel: number }>();
     for (const p of listParas) {
       const b = paraBullet(p)!;
       const l = lists.get(b.listId);
-      if (!l) lists.set(b.listId, { first: p.start, minLevel: b.level });
-      else l.minLevel = Math.min(l.minLevel, b.level);
+      if (!l) lists.set(b.listId, { first: p.start, last: p.end, minLevel: b.level });
+      else {
+        l.minLevel = Math.min(l.minLevel, b.level);
+        l.last = p.end;
+      }
     }
     // A bulleted list that starts after an early numbered list's first item is that item's
     // sub-points, not items (final review R1-I1 probe at the start; glyph known as a bullet only).
-    const firstNumbered = Math.min(
-      ...[...lists].filter(([id, l]) => l.first < boundary && isNumberedGlyph(listGlyph(tab, id, l.minLevel))).map(([, l]) => l.first),
-    );
+    const numbered = [...lists].filter(([id, l]) => l.first < boundary && isNumberedGlyph(listGlyph(tab, id, l.minLevel)));
+    const firstNumbered = Math.min(...numbered.map(([, l]) => l.first));
+    // Parked N6: except a mixed agenda (items 1–3 numbered, 4–6 bulleted): a bulleted list at the
+    // numbered items' level that starts right after the numbered list ends (it never resumes),
+    // nothing but empty paragraphs between, holds items. Deeper, or under an item's own text → sub-points.
+    const nothingBetween = (from: number, to: number) =>
+      !region.some((p) => p.start >= from && p.start < to && !isEmpty(p)) && !(tab.tables ?? []).some((t) => t.start >= from && t.start < to);
+    const continuesNumbered = (l: { first: number; minLevel: number }) =>
+      numbered.some(([, a]) => a.minLevel === l.minLevel && a.last <= l.first && nothingBetween(a.last, l.first));
     const subLists = new Set(
-      [...lists].filter(([id, l]) => l.first < boundary && l.first > firstNumbered && listGlyph(tab, id, l.minLevel) === "BULLET").map(([id]) => id),
+      [...lists]
+        .filter(([id, l]) => l.first < boundary && l.first > firstNumbered && listGlyph(tab, id, l.minLevel) === "BULLET" && !continuesNumbered(l))
+        .map(([id]) => id),
     );
     const early = [...lists].filter(([id, l]) => l.first < boundary && !subLists.has(id)).map(([, l]) => l);
     const earlyMin = early.length ? Math.min(...early.map((l) => l.minLevel)) : 0;

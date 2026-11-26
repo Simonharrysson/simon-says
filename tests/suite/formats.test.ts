@@ -39,7 +39,8 @@ const { VECKOMOTE, STYRELSEPROTOKOLL, ENKEL } = await import("@/lib/formats/stan
 const { proposeFormat } = await import("@/lib/formats/learn");
 const { extractRequiredItems } = await import("@/lib/formats/stadgar");
 const { docStructure } = await import("@/lib/formats/structure");
-const { docOf, paraEl } = await import("@/test/docsim");
+const { docOf, paraEl, TAB } = await import("@/test/docsim");
+const { anchoredStarts, scanAgenda } = await import("@/lib/agenda/scan");
 const { createOrg } = await import("@/lib/db/orgs");
 const { ensureStandardRow } = await import("@/lib/formats/store");
 const db = await import("@/test/suite-db");
@@ -340,6 +341,61 @@ describe("feature: formats (document formats)", () => {
       "Simon Says · avslutat 19:10",
     ]);
   });
+});
+
+// Parked findings from the final re-review: fictional agendas in docsim.
+describe("feature: formats (parked fixes)", () => {
+  const BUL = "list-b";
+  type El = docs_v1.Schema$StructuralElement;
+  /** An agenda Doc: H1 title, H2 "Agenda", `items`, H2 "Anteckningar"; list-b is a bulleted list. */
+  const agendaDoc = (items: El[]): Doc => {
+    const doc = docOf([paraEl("Veckomöte", { style: "HEADING_1" }), paraEl("Agenda", { style: "HEADING_2" }), ...items, paraEl("Anteckningar", { style: "HEADING_2" })]);
+    doc.tabs![0].documentTab!.lists![BUL] = { listProperties: { nestingLevels: [{ glyphSymbol: "●" }, { glyphSymbol: "○" }] } };
+    return doc;
+  };
+  const num = (text: string) => paraEl(text, { level: 0 });
+  const bul = (text: string, level = 0) => paraEl(text, { level, listId: BUL });
+  const agKeys = (sim: InstanceType<typeof FormatSim>) => Object.keys(sim.meeting.section_ranges ?? {}).filter((k) => k.startsWith("ag-")).sort();
+  const para = (sim: InstanceType<typeof FormatSim>, text: string) => sim.tab().paragraphs.find((p) => p.text === `${text}\n`)!;
+  const range = (startIndex: number, endIndex: number) => ({ tabId: TAB, startIndex, endIndex });
+  const body = (doc: Doc) => doc.tabs![0].documentTab!.body!.content!;
+  const elOf = (doc: Doc, text: string) => body(doc).find((el) => el.paragraph?.elements?.[0]?.textRun?.content === `${text}\n`)!;
+
+  it("N6: a mixed agenda (1–3 numbered, then 4–6 bulleted at the same level) gives six items, notes under item 5", async () => {
+    const doc = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Från förra veckan"), bul("Kommande event"), bul("Ekonomi"), bul("Övrigt")]);
+    const sim = FormatSim.start({
+      id: "m-n6",
+      doc,
+      profile: VECKOMOTE,
+      people: PEOPLE,
+      script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-5", text: "Kassan är 12 000 kr" }]]) },
+    });
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3", "ag-4", "ag-5", "ag-6"]);
+    expect(sim.meeting.agenda_roles).toMatchObject({ "ag-3": "followup", "ag-6": "other" });
+    await sim.tick(block([{ at: 1000, speaker: 0, text: "Kassan är tolv tusen." }]));
+    const lines = linesOf(sim.doc);
+    expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Övrigt"))).toEqual(["Ekonomi", "– Kassan är 12 000 kr."]);
+    expect(agKeys(sim)).toHaveLength(6);
+  });
+
+  it("N6: a bulleted list nested deeper, or under an item's own text, stays that item's sub-points", () => {
+    const deeper = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Fakturan från hallen", 1), bul("Medlemsavgifter", 1)]);
+    const underText = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), paraEl("Vi går igenom:"), bul("Fakturan från hallen"), bul("Medlemsavgifter")]);
+    for (const [id, doc, text] of [
+      ["m-n6a", deeper, "Fakturan från hallen\nMedlemsavgifter"],
+      ["m-n6b", underText, "Vi går igenom:\nFakturan från hallen\nMedlemsavgifter"],
+    ] as const) {
+      const sim = FormatSim.start({ id, doc, profile: VECKOMOTE, script: {} });
+      expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3"]);
+      const tab = sim.tab();
+      expect(scanAgenda(tab, VECKOMOTE, { anchors: anchoredStarts(tab, sim.meeting.section_ranges ?? {}, id) }).items.map((i) => [i.label, i.humanText])).toEqual([
+        ["Godkänn dagordning", ""],
+        ["Må-runda", ""],
+        ["Ekonomi", text],
+      ]);
+    }
+  });
+
 });
 
 describe.skipIf(!hasLocalSupabase)("feature: formats (runTick on the local stack)", () => {
