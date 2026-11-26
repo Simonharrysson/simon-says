@@ -15,6 +15,8 @@ import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { getEnv, pickerEnabled } from "@/lib/env";
+import { storedGoogleScope } from "@/lib/google/client";
+import { hasDriveReadonly } from "@/lib/google/scopes";
 import { appOrigin } from "@/lib/origin";
 import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -75,6 +77,16 @@ async function safeOverview(
   }
 }
 
+/** Does the user's stored Google grant include drive.readonly? A read failure counts as no. */
+async function safeDriveReadonly(userId: string): Promise<boolean> {
+  try {
+    return hasDriveReadonly(await storedGoogleScope(userId));
+  } catch (err) {
+    console.error("org page: google scope unavailable", (err as Error)?.message);
+    return false;
+  }
+}
+
 /** Members for the members panel. Service role, so only called after RLS let us read the org. */
 async function safeMembers(orgId: string): Promise<OrgMember[] | undefined> {
   try {
@@ -90,10 +102,10 @@ export default async function OrgPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string }>;
 }) {
   const { id } = await params;
-  const { fel, klart, flik } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive } = await searchParams;
   const tab: OrgTab = flik === "oversikt" ? "oversikt" : "moten";
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
@@ -110,6 +122,11 @@ export default async function OrgPage({
     tab === "oversikt" ? safeOverview(db, id) : Promise.resolve(null),
   ]);
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
+  const isAdmin = role === "admin";
+  // The protocol import (admins, Översikt): has this admin's grant drive.readonly (the
+  // incremental consent)? Read only here, for the import; never required anywhere else.
+  const driveReadonly = isAdmin && tab === "oversikt" && userResult.data.user ? await safeDriveReadonly(userResult.data.user.id) : false;
+  const importBack = drive === "ok" || drive === "nej" || drive === "fel" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
@@ -143,6 +160,11 @@ export default async function OrgPage({
               goals={(dashboard?.goals ?? []).map((g) => ({ title: g.title, why: g.why }))}
               historyCount={dashboard?.historyCount ?? 0}
               loadError={!dashboard}
+              importAccess={{
+                driveReadonly,
+                meetingFolder: org.meeting_folder_id ? { id: org.meeting_folder_id, name: org.meeting_folder_name ?? "Föreningens mötesmapp" } : null,
+              }}
+              initialGoalsPhase={isAdmin && openImport === "1" ? { phase: "import", consent: importBack } : undefined}
             />
           ) : undefined,
       }}

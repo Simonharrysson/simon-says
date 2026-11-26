@@ -166,4 +166,40 @@ describe("auth callback", () => {
       },
     );
   });
+
+  describe("the protocol import's drive.readonly consent (atkomst=drive)", () => {
+    const READONLY = `${DRIVE} https://www.googleapis.com/auth/drive.readonly`;
+    const BACK = "&next=%2Forgs%2F00000000-0000-4000-8000-000000000001%2Fprotokoll&atkomst=drive";
+    const IMPORT = "https://example.com/orgs/00000000-0000-4000-8000-000000000001/protokoll";
+
+    it("granted: stores the token with its full scope and returns to the import with drive=ok", async () => {
+      grantedScope = READONLY;
+      const res = await call(BACK);
+      expect(res.headers.get("location")).toBe(`${IMPORT}?drive=ok`);
+      expect(google.storeGoogleToken).toHaveBeenCalledWith("u1", "1//google-refresh", READONLY);
+    });
+
+    it("readonly unticked in Google's consent: back to the import with drive=nej, still signed in", async () => {
+      const res = await call(BACK);
+      expect(res.headers.get("location")).toBe(`${IMPORT}?drive=nej`);
+      expect(sessionCookies().length).toBeGreaterThan(0);
+    });
+
+    it("cancelled by a signed-in admin: back to the import (drive=nej), not to the login page", async () => {
+      await call(); // a normal sign-in first: a session cookie
+      const res = await GET(new NextRequest(`https://simonsays.example/auth/callback?error=access_denied${BACK}`));
+      expect(res.headers.get("location")).toBe(`${IMPORT}?drive=nej`);
+    });
+
+    it("cancelled without a session: the usual login error", async () => {
+      const res = await GET(new NextRequest(`https://simonsays.example/auth/callback?error=access_denied${BACK}`));
+      expect(res.headers.get("location")).toBe(`https://example.com/login?fel=avbrutet&next=${encodeURIComponent("/orgs/00000000-0000-4000-8000-000000000001/protokoll")}`);
+    });
+
+    it("an unsafe next ignores the flag", async () => {
+      grantedScope = READONLY;
+      const res = await call("&next=%2F%2Fevil.com&atkomst=drive");
+      expect(res.headers.get("location")).toBe("https://example.com/");
+    });
+  });
 });
