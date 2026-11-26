@@ -9,9 +9,10 @@ import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { Notice } from "@/lib/ui/messages";
 import { NoticeBanner } from "./NoticeBanner";
+import { OrgLogo } from "@/components/onboarding/OrgLogo";
 
 export interface OrgsViewProps {
-  orgs: { id: string; name: string; role: "admin" | "member" }[];
+  orgs: { id: string; name: string; role: "admin" | "member"; logoUrl?: string | null }[];
   notice: Notice | null;
   createOrg: FormAction;
   /** True when the last create failed validation (?fel=invalid), to mark the field. */
@@ -41,7 +42,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
               <ListRow
                 key={org.id}
                 href={`/orgs/${org.id}`}
-                leading={<span className="grid size-9 flex-none place-items-center rounded-md bg-ink text-sm font-semibold text-on-ink" aria-hidden="true">{org.name.trim().charAt(0).toUpperCase()}</span>}
+                leading={<OrgLogo name={org.name} src={org.logoUrl} size="sm" />}
                 title={org.name}
                 actions={
                   <>

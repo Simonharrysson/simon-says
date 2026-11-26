@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isUuid } from "@/lib/db/ids";
-import { deletePerson, listPeople, myRole, renamePerson, setPersonRole } from "@/lib/db/orgs";
+import { deletePerson, listPeople, myRole, renamePerson, setPersonRole, updateOrgSettings } from "@/lib/db/orgs";
 import { validName } from "@/lib/names/validate";
 import { recordStep, setDismissed } from "@/lib/onboarding/store";
 import { isStepId } from "@/lib/onboarding/steps";
@@ -132,6 +132,17 @@ export async function voiceConsentAction(orgId: string, personId: string, consen
   if (!people.some((p) => p.id === personId)) return fail("Personen finns inte längre. Ladda om sidan.");
   const { data, error } = await db.rpc("set_voice_consent", { p_person_id: personId, p_consent: consent });
   if (error || data !== true) return fail(ADMIN_ONLY);
+  refresh(orgId);
+  return OK;
+}
+
+/** Step 1: the förening's name (the same rule as Inställningar). */
+export async function renameOrgAction(orgId: string, name: string): Promise<ActionResult> {
+  const db = await adminDb(orgId);
+  if (!db) return fail(ADMIN_ONLY);
+  const clean = name.trim();
+  if (clean.length < 1 || clean.length > 100) return fail("Ange ett namn på högst 100 tecken.");
+  if (!(await updateOrgSettings(db, orgId, { name: clean }))) return fail(ADMIN_ONLY);
   refresh(orgId);
   return OK;
 }
