@@ -1393,7 +1393,7 @@ export async function saveLateTaskAnswers(meetingId: string, answers: TaskAnswer
       .update({ task_answers: answers })
       .eq("id", meetingId)
       .eq("status", "ending")
-      .or(`end_lease_until.is.null,end_lease_until.lt.${now.toISOString()}`)
+      .or(`end_lease_until.is.null,end_lease_until.lt."${now.toISOString()}"`)
       .select("id"),
   ) as { id: string }[];
   return saved.length > 0;
