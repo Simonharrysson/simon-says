@@ -94,7 +94,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (err) {
     if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
     const status = googleStatus(err);
-    if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa ett av dokumenten. Välj dem igen i Google-väljaren.");
+    if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa ett av dokumenten. Kontrollera att du fortfarande har åtkomst till det i Google Drive och välj det igen.");
     console.error(`history/estimate: docs: ${(err as Error).message}`.slice(0, 200));
     return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
   }

@@ -13,7 +13,7 @@ import { Panel, panelFootClass, panelIntroClass, panelPadClass } from "@/compone
 import { formatDay, formatMonth, formatWeeks, matchesQuery } from "@/lib/dashboard/format";
 import type { Overview } from "@/lib/dashboard/overview";
 import type { GoalSuggestion } from "@/lib/history/digest-input";
-import { HistoryImport, type ImportPhase, type ImportResult } from "./HistoryImport";
+import { HistoryImport, type ImportAccess, type ImportPhase, type ImportResult } from "./HistoryImport";
 import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +34,8 @@ export type GoalsPhase =
   /** `warning`: the daily limit (429), which resets by itself. */
   | { phase: "error"; message: string; tone?: "warning" }
   | { phase: "editor"; goals: OverviewGoal[]; explanation?: string; suggestions?: GoalSuggestion[]; notice?: string }
-  /** "Läs in gamla protokoll" (todo #7). */
-  | { phase: "import"; initial?: ImportPhase };
+  /** "Läs in gamla protokoll" (todo #7). `consent`: back from Google's drive.readonly consent. */
+  | { phase: "import"; initial?: ImportPhase; consent?: "ok" | "nej" | "fel" };
 
 export interface OverviewViewProps {
   orgId: string;
@@ -48,6 +48,8 @@ export interface OverviewViewProps {
   loadError?: boolean;
   /** /design only: the goals panel's starting phase. */
   initialGoalsPhase?: GoalsPhase;
+  /** The protocol import (admins): the drive.readonly grant and the förening's meeting folder. */
+  importAccess?: ImportAccess;
   /** For dates ("24 nov" vs "24 nov 2025"); /design passes a fixed one. */
   now?: Date;
 }
@@ -60,7 +62,7 @@ const MAX_GOALS = 5;
 const rowClass = "border-t border-line px-6 py-3";
 const metaClass = "mt-0.5 text-sm text-ink-3";
 
-export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0, loadError, initialGoalsPhase, now = new Date() }: OverviewViewProps) {
+export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0, loadError, initialGoalsPhase, importAccess, now = new Date() }: OverviewViewProps) {
   if (loadError) {
     return (
       <Banner tone="danger" title="Översikten kunde inte laddas" live={false}>
@@ -76,7 +78,7 @@ export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0
           ? "Översikten fylls på när föreningen har haft sitt första möte med Simon Says."
           : `Bygger på ${plural(o.meetingCount, "avslutat möte", "avslutade möten")}${o.firstMeeting ? ` sedan ${formatDay(o.firstMeeting, now)}` : ""}. Testmöten räknas inte.`}
       </p>
-      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} historyCount={historyCount} initial={initialGoalsPhase} />
+      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} historyCount={historyCount} initial={initialGoalsPhase} importAccess={importAccess} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <OpenTasksPanel overview={o} now={now} />
@@ -101,6 +103,7 @@ function GoalsPanel({
   meetingCount,
   historyCount,
   initial,
+  importAccess = { driveReadonly: false, meetingFolder: null },
 }: {
   orgId: string;
   isAdmin: boolean;
@@ -108,6 +111,7 @@ function GoalsPanel({
   meetingCount: number;
   historyCount: number;
   initial?: GoalsPhase;
+  importAccess?: ImportAccess;
 }) {
   const router = useRouter();
   const [clearing, setClearing] = useState<"idle" | "confirm" | "busy">("idle");
@@ -200,7 +204,14 @@ function GoalsPanel({
       }
     >
       {view.phase === "import" ? (
-        <HistoryImport orgId={orgId} initial={view.initial} onDone={imported} onCancel={() => setView({ phase: "idle" })} />
+        <HistoryImport
+          orgId={orgId}
+          access={importAccess}
+          consent={view.consent}
+          initial={view.initial}
+          onDone={imported}
+          onCancel={() => setView({ phase: "idle" })}
+        />
       ) : view.phase === "editor" ? (
         <GoalsEditor
           orgId={orgId}

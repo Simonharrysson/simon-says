@@ -13,7 +13,7 @@ import {
   resolveFolders,
   type DriveLike,
   type FolderPlace,
-  type ListedFile,
+  type ImportFile,
 } from "@/lib/history/drive-list";
 import { googleStatus } from "@/lib/history/read-doc";
 import { ownDocIds } from "@/lib/history/store";
@@ -26,9 +26,6 @@ const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) => NextResponse.json({ error, message }, { status, headers: noStore });
 
 const NEEDS_ACCESS_MESSAGE = "Simon Says behöver läsrättighet till din Google Drive för att visa mötena i dina mappar.";
-
-/** A row of the import's file list, as the browser gets it. */
-export type ImportFile = Omit<ListedFile, "status"> & { status: ListedFile["status"] | "imported" | "own" };
 
 type Body =
   | { action: "folders"; place?: unknown; id?: unknown; driveId?: unknown; query?: unknown; pageToken?: unknown }

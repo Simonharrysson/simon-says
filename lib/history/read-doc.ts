@@ -3,8 +3,9 @@ import type { OAuth2Client } from "google-auth-library";
 import { docsApi, driveApi } from "@/lib/google/docs";
 import { docTabs, splitProtocols, type SplitResult } from "./doc-text";
 
-// Reads one picked protocol with the admin's own Google grant (drive.file: the Picker granted
-// exactly the picked files). The text goes to the extraction call only; never stored or logged.
+// Reads one protocol the admin ticked, with the admin's own Google grant: drive.readonly when they
+// gave it for the import (the folder browser), else drive.file (the Picker granted exactly the
+// picked files). The text goes to the extraction call only; never stored or logged.
 
 /**
  * The picked Doc split into one section per meeting (see doc-text.ts). Transcript tabs are never

@@ -115,6 +115,9 @@ export interface ListedFile {
   status: FileStatus;
 }
 
+/** A row of the import's file list as the browser gets it: also already imported, or Simon Says' own Doc. */
+export type ImportFile = Omit<ListedFile, "status"> & { status: FileStatus | "imported" | "own" };
+
 const NOT_PROTOCOL = /(?<![\p{L}])(mall|template|kallelse|dagordning|agenda|exempel|example|instruktion(er)?|instructions?)(?![\p{L}])/iu;
 const IS_PROTOCOL = /protokoll|minutes|protocol/i;
 

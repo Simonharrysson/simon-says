@@ -63,6 +63,25 @@ export const IconChevronDown = (p: IconProps) => (
   </Svg>
 );
 
+export const IconChevronRight = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Svg>
+);
+
+export const IconFolder = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4.2l2 2.25H19A1.5 1.5 0 0 1 20.5 9.25V17.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z" />
+  </Svg>
+);
+
+export const IconSearch = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="M20 20l-4.5-4.5" />
+  </Svg>
+);
+
 export const IconExternal = (p: IconProps) => (
   <Svg {...p}>
     <path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" />
