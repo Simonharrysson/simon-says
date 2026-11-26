@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OAuth2Client } from "google-auth-library";
 import { propagateDone } from "@/lib/agenda/followup";
-import type { NoteItemRow } from "@/lib/db/types";
+import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { isUuid } from "@/lib/db/ids";
 import { readNotesTab, type NotesTab } from "@/lib/docs/notes";
 import { getGoogleAuth } from "@/lib/google/client";
@@ -10,7 +10,7 @@ import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/
 import { isCopy, isTask } from "@/lib/meetings/summary";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { planDocDone } from "./doc-done";
-import { canTick, countsMeeting, isMine, myPersonIds, type HomePerson } from "./tasks";
+import { canTick, countsMeeting, isMine, myPersonIds, visible, type HomePerson } from "./tasks";
 
 // Ticking a task done in the app (Mina uppgifter, the meeting page). Checked as the user (their
 // own client: RLS shows only what membership allows), written by the server:
@@ -60,7 +60,7 @@ export async function completeNoteTask(
   if (!isUuid(meetingId) || typeof itemId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(itemId)) return { ok: false, error: "not_found" };
   const { data: meeting, error: e1 } = await db
     .from("meetings")
-    .select("id, org_id, status, is_test, doc_id, notes_tab_id, started_by")
+    .select("id, org_id, status, is_test, doc_id, notes_tab_id, started_by, agenda_roles")
     .eq("id", meetingId)
     .maybeSingle();
   if (e1) throw new Error(`completeNoteTask: meeting: ${e1.message}`);
@@ -79,7 +79,8 @@ export async function completeNoteTask(
   if (!member) return { ok: false, error: "not_found" };
   const all = (rows ?? []) as NoteItemRow[];
   const row = all.find((r) => r.id === itemId);
-  if (!row || !isTask(chainOf(row))) return { ok: false, error: "not_found" };
+  // The same rows the list shows: never one a human deleted, a Må-runda row or an info cell.
+  if (!row || !isTask(chainOf(row)) || !visible(row, (meeting.agenda_roles ?? {}) as Record<string, ItemRole>)) return { ok: false, error: "not_found" };
   const orgPeople = (people ?? []) as HomePerson[];
   const mine = isMine(row, orgPeople, myPersonIds(orgPeople, meeting.org_id, userId));
   if (!canTick({ mine, isAdmin: member.role === "admin" })) return { ok: false, error: "forbidden" };
@@ -91,12 +92,59 @@ export async function completeNoteTask(
   if (e6) throw new Error(`completeNoteTask: update: ${e6.message}`);
   // The meetings it was carried from ("Från förra veckan") are closed too.
   await propagateDone([{ ...row, done: true }, ...copies.map((c) => ({ ...c, done: true }))], meeting.org_id, false, admin);
+  // ...and the copies later meetings carried on (and theirs), so it doesn't come back as open.
+  await propagateForward(meetingId, row.id, meeting.org_id, admin);
 
   const doc = await writeDone(meeting, [row, ...copies], deps).catch((err) => {
     console.error(`completeNoteTask: Doc not written: ${(err as Error).message}`);
     return "failed" as const;
   });
   return { ok: true, doc };
+}
+
+/** Carry hops followed forward (a guard; real chains are one per meeting). */
+const MAX_FORWARD = 100;
+
+/**
+ * Mark done every later copy of a task ("Från förra veckan" in the next meeting, and the one after),
+ * with their tasks copies; only meetings of the same förening that are not Testmöten.
+ */
+export async function propagateForward(meetingId: string, itemId: string, orgId: string, admin: SupabaseClient): Promise<number> {
+  let level: { meeting: string; id: string }[] = [{ meeting: meetingId, id: itemId }];
+  const seen = new Set<string>([`${meetingId}\u0000${itemId}`]);
+  let updated = 0;
+  for (let depth = 0; level.length && depth < MAX_FORWARD; depth++) {
+    const next: { meeting: string; id: string }[] = [];
+    for (const src of level) {
+      const { data, error } = await admin
+        .from("note_items")
+        .select("meeting_id, id, meetings!inner(org_id, is_test)")
+        .eq("carried_from_meeting", src.meeting)
+        .eq("carried_from_id", src.id)
+        .eq("meetings.org_id", orgId)
+        .eq("meetings.is_test", false);
+      if (error) throw new Error(`propagateForward: ${error.message}`);
+      for (const r of (data ?? []) as { meeting_id: string; id: string }[]) {
+        const k = `${r.meeting_id}\u0000${r.id}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        next.push({ meeting: r.meeting_id, id: r.id });
+      }
+    }
+    for (const r of next) {
+      const { data, error } = await admin
+        .from("note_items")
+        .update({ done: true })
+        .eq("meeting_id", r.meeting)
+        .or(`id.eq.${r.id},copy_of.eq.${r.id},id.eq.${r.id}-t`)
+        .eq("done", false)
+        .select("id");
+      if (error) throw new Error(`propagateForward: ${error.message}`);
+      updated += data?.length ?? 0;
+    }
+    level = next;
+  }
+  return updated;
 }
 
 async function writeDone(

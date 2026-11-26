@@ -67,6 +67,11 @@ describe("isMine: by person link or role held", () => {
     expect(isMine({ owner: "Kassör", owner_person_id: null }, hookPeople, mine)).toBe(true);
     expect(isMine({ owner: "kassören", owner_person_id: null }, hookPeople, mine)).toBe(true);
   });
+  it("an owner link decides alone: a role that moved to me doesn't bring the old holder's linked task", () => {
+    // Anna linked the task when she was Kassör; the role is mine now.
+    expect(isMine({ owner: "Kassör", owner_person_id: "p-anna" }, hookPeople, mine)).toBe(false);
+    expect(isMine({ owner: "Kassör", owner_person_id: null }, hookPeople, mine)).toBe(true);
+  });
   it("never someone else's task, an unknown owner, or anything when I'm not in the people list", () => {
     expect(isMine({ owner: "Ordförande", owner_person_id: null }, hookPeople, mine)).toBe(false);
     expect(isMine({ owner: "Anna", owner_person_id: "p-anna" }, hookPeople, mine)).toBe(false);

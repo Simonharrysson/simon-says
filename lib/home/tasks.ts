@@ -88,8 +88,8 @@ export interface MyTask {
 const key = (meetingId: string, id: string) => `${meetingId}\u0000${id}`;
 const trimmed = (s: string | null | undefined) => (s ?? "").normalize("NFC").replace(/\s+/g, " ").trim() || null;
 
-/** Rows a task list may show at all (no Må-runda, no info cells, nothing deleted, not empty). */
-function visible(r: HomeNoteRow, roles: Record<string, ItemRole>): boolean {
+/** Rows a task list may show (and the app may tick) at all: no Må-runda, no info cells, nothing deleted, not empty. */
+export function visible(r: HomeNoteRow, roles: Record<string, ItemRole>): boolean {
   if (r.deleted_by_human) return false;
   if (r.anchor && (roles[r.anchor] === "checkin" || r.anchor.startsWith("info."))) return false;
   return Boolean(trimmed(r.text));
@@ -100,10 +100,14 @@ export function myPersonIds(people: HomePerson[], orgId: string, userId: string)
   return new Set(people.filter((p) => p.org_id === orgId && p.member_user_id === userId).map((p) => p.id));
 }
 
-/** Is this förening task the user's: by its owner link, or its owner text naming a person linked to them. */
+/**
+ * Is this förening task the user's. An owner link decides alone (a role that moved from Bo to Anna
+ * leaves Bo's linked task with Bo); only a row without one is matched by its owner text (name,
+ * first name or role).
+ */
 export function isMine(row: Pick<NoteItemRow, "owner" | "owner_person_id">, orgPeople: RolePerson[], mine: Set<string>): boolean {
   if (!mine.size) return false;
-  if (row.owner_person_id && mine.has(row.owner_person_id)) return true;
+  if (row.owner_person_id) return mine.has(row.owner_person_id);
   if (!row.owner) return false;
   const person = resolveOwner(row.owner, orgPeople);
   return person ? mine.has(person.id) : false;

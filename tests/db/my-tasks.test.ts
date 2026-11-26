@@ -112,6 +112,7 @@ describe.skipIf(!hasLocalSupabase)("Mina uppgifter (home)", () => {
 
     m0 = await seedMeeting(hook, boss.id, { daysAgo: 9 });
     m1 = await seedMeeting(hook, simon.id, { daysAgo: 2, docId: "doc-m1" });
+    must("roles", await adminClient().from("meetings").update({ agenda_roles: { maruna: "checkin" } }).eq("id", m1));
     live = await seedMeeting(hook, boss.id, { status: "live", daysAgo: 0 });
     aiMeeting = await seedMeeting(ai, simon.id, { daysAgo: 1 });
     otherMeeting = await seedMeeting(other, outsider.id, { daysAgo: 1 });
@@ -127,6 +128,10 @@ describe.skipIf(!hasLocalSupabase)("Mina uppgifter (home)", () => {
           task(m1, "c1-t", { owner: "Kassör", text: "Boka lokal", copy_of: "c1", anchor: "tasks", range_name: itemRangeName(m1, "c1-t"), last_rendered_text: line }),
           task(m1, "n2", { owner: "Anna", owner_person_id: annaP, text: "Skicka inbjudan" }),
           task(m1, "d1", { section: "decision", kind: "decision", text: "Vi kör" }),
+          task(m1, "gone", { owner: "Kassör", text: "Borttagen", deleted_by_human: true }),
+          task(m1, "mr", { owner: "Kassör", text: "Må-runda", anchor: "maruna" }),
+          // Carried on into the live meeting: closed with its source.
+          task(live, "c1", { owner: "Kassör", text: "Boka lokal", carried_from_meeting: m1, carried_from_id: "c1" }),
           task(live, "n1", { owner: "Simon", text: "Under mötet" }),
           task(aiMeeting, "n1", { owner: "Simon", text: "Skicka budget" }),
           task(otherMeeting, "n1", { owner: "Kassör", owner_person_id: otherP, text: "Annans uppgift" }),
@@ -169,6 +174,9 @@ describe.skipIf(!hasLocalSupabase)("Mina uppgifter (home)", () => {
     expect(await completeNoteTask(outsider.db, outsider.id, m1, "c1", deps)).toEqual({ ok: false, error: "not_found" });
     expect(await completeNoteTask(simon.db, simon.id, live, "n1", deps)).toEqual({ ok: false, error: "not_open" });
     expect(await completeNoteTask(simon.db, simon.id, m1, "d1", deps)).toEqual({ ok: false, error: "not_found" });
+    // The same rows the list leaves out: deleted by a human, under a Må-runda item.
+    expect(await completeNoteTask(simon.db, simon.id, m1, "gone", deps)).toEqual({ ok: false, error: "not_found" });
+    expect(await completeNoteTask(simon.db, simon.id, m1, "mr", deps)).toEqual({ ok: false, error: "not_found" });
     const page = await loadOrgMeeting(simon.db, simon.id, hook, m1);
     expect(page?.tasks.map((t) => [t.itemId, t.canTick]).sort()).toEqual([
       ["c1", true],
@@ -190,6 +198,9 @@ describe.skipIf(!hasLocalSupabase)("Mina uppgifter (home)", () => {
     expect(by(m1, "c1")).toMatchObject({ done: true, last_rendered_text: `${line} ✓ klart` });
     expect(by(m1, "c1-t")).toMatchObject({ done: true });
     expect(by(m0, "n1")).toMatchObject({ done: true });
+    // Forward too: the copy the live meeting carried on.
+    const { data: later } = await adminClient().from("note_items").select("done").eq("meeting_id", live).eq("id", "c1").single();
+    expect(later?.done).toBe(true);
     const home = await loadHome(simon.db, simon.id);
     expect(home.tasks.find((t) => t.text === "Boka lokal")?.done).toBe(true);
   });
