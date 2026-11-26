@@ -3,6 +3,10 @@ import { NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adminClient, createTestUser, hasLocalSupabase, seedMeeting, type TestUser } from "@/test/local-supabase";
 import { createOrg, joinOrg } from "@/lib/db/orgs";
+import { useTestEnv } from "@/test/env";
+
+// Import tickets are signed with TOKEN_ENC_KEY: a valid env for getEnv().
+useTestEnv();
 import { DOC_MIME, FOLDER_MIME } from "@/lib/history/drive-list";
 
 // The import's own Drive browser against the local stack as real signed-in users. Google is a
