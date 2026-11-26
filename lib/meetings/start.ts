@@ -6,7 +6,7 @@ import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, cleanupLosingAnchor, type AnchorResult } from "@/lib/agenda/anchor";
 import { carriedItems, carryPlan, previousMeeting, previousOnDoc } from "@/lib/agenda/followup";
 import { missingRequired } from "@/lib/agenda/scan";
-import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle, titleOfFormat, trashDoc, type DocPlace } from "@/lib/docs/create";
+import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle, trashDoc, type DocPlace } from "@/lib/docs/create";
 import { planFormatRender } from "@/lib/docs/format-render";
 import { itemSpan, readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
 import { logEvent } from "@/lib/db/events";
@@ -442,9 +442,8 @@ const sharedIds = (members: OrgMember[], shared: string[]) => {
   return members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => m.userId);
 };
 
-/** The new Doc's file name: date, the format's title, the förening; a Testmöte marked. */
-const docTitle = (ctx: SetupCtx, profile: FormatProfile) =>
-  meetingTitle(ctx.orgName, ctx.startedAt, { formatTitle: titleOfFormat(profile), test: ctx.isTest });
+/** The new Doc's file name: date and time, "Mötesprotokoll", the förening; a Testmöte marked. */
+const docTitle = (ctx: SetupCtx) => meetingTitle(ctx.orgName, ctx.startedAt, { test: ctx.isTest });
 
 /** Agenda mode: the checks (no writes), then the anchoring (the only Doc write before the guard, F14). Their Doc: never shared by us. */
 /**
@@ -506,7 +505,7 @@ async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile)
     shareFailed: 0,
     sharedWith: [],
     place: "agenda",
-    title: access.name || docTitle(ctx, profile),
+    title: access.name || docTitle(ctx),
     anchor,
   };
 }
@@ -547,7 +546,7 @@ async function earlierInfo(docId: string): Promise<Record<string, string>> {
 async function v1Setup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: boolean): Promise<DocSetup | Failure> {
   try {
     const members = await otherMembers(ctx);
-    const title = docTitle(ctx, profile);
+    const title = docTitle(ctx);
     const doc = await createMeetingDoc(ctx.auth, {
       meetingId: ctx.meetingId,
       orgName: ctx.orgName,
@@ -581,7 +580,7 @@ async function v1Setup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: b
 async function formatSetup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: boolean): Promise<DocSetup | Failure> {
   try {
     const members = await otherMembers(ctx);
-    const title = docTitle(ctx, profile);
+    const title = docTitle(ctx);
     const doc = await createFormatDoc(ctx.auth, {
       meetingId: ctx.meetingId,
       orgName: ctx.orgName,

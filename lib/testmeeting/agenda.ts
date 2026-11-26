@@ -18,7 +18,7 @@ const DOC_MIME = "application/vnd.google-apps.document";
 export const TEST_AGENDA: { sekreterare: string; items: SkeletonItem[] } = agenda;
 
 /**
- * A new Doc `<YYYY-MM-DD> Mötesprotokoll – <förening> (Testmöte)` (meetingTitle) holding the Veckomöte skeleton with the
+ * A new Doc `<YYYY-MM-DD HH.MM> Mötesprotokoll – <förening> (Testmöte)` (meetingTitle) holding the Veckomöte skeleton with the
  * fixture's items and Sekreterare filled in: in the org meeting folder when the starter's grant
  * can write there, else in the starter's "Simon Says – <org>" folder. We add no permissions, but
  * a Doc in the org meeting folder inherits the folder's sharing, so members can see it (it is
@@ -36,7 +36,7 @@ export async function createTestAgendaDoc(
   const docId = (
     await drive.files.create({
       requestBody: {
-        name: meetingTitle(opts.orgName, opts.startedAt, { formatTitle: VECKOMOTE.title, test: true }),
+        name: meetingTitle(opts.orgName, opts.startedAt, { test: true }),
         mimeType: DOC_MIME,
         parents: [parent],
         ...(folder?.sharedDrive ? {} : { writersCanShare: false }),

@@ -286,7 +286,7 @@ describe("POST /api/meetings", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.docUrl).toBe("https://docs.google.com/document/d/doc1/edit");
-    expect(json.title).toMatch(/^\d{4}-\d{2}-\d{2} Möte – Styrelsen$/); // Enkel: "Möte"
+    expect(json.title).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}\.\d{2} Mötesprotokoll – Styrelsen$/); // every format
     expect(json.docPlace).toBe("own_folder");
     expect(json.shareFailed).toBe(0); // C10: the page warns when members didn't get access
     const input = m.createMeetingDoc.mock.calls[0][1];
@@ -427,7 +427,7 @@ describe("POST /api/meetings", () => {
     const json = await res.json();
     const input = m.createFormatDoc.mock.calls[0][1];
     expect(input.meetingFolderId).toBe("meetFolder123");
-    expect(input.title).toMatch(/^\d{4}-\d{2}-\d{2} Mötesprotokoll – Styrelsen$/);
+    expect(input.title).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}\.\d{2} Mötesprotokoll – Styrelsen$/);
     expect(json).toMatchObject({ docPlace: "meeting_folder", title: input.title });
     expect(eventsOf("started")[0][2]).toMatchObject({ docPlace: "meeting_folder" });
     m.profiles = [];

@@ -494,9 +494,9 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   recorded). Otherwise, or if that create throws, the starter's own "Simon Says –
   <förening>" folder; placement never fails a start. `docPlace` / `missedMeetingFolder` go in the response and the
   `started` event, and the live page says "Dokumentet hamnade i din Drive". Shared drive: no `writersCanShare`.
-- **Name.** `<YYYY-MM-DD> <format title> – <förening>` (Enkel: "Möte"), Testmöte ends "(Testmöte)". Date first
-  so a folder sorted by name is chronological; the format title is the förening's own word when learned. No
-  file-name pattern from old minutes is stored, so none is used (would need a new read/Claude call).
+- **Name.** `<YYYY-MM-DD HH.MM> Mötesprotokoll – <förening>` for every format, Testmöte ends "(Testmöte)". Date
+  and start time first, always: a folder sorted by name is chronological and two meetings the same day never
+  collide (no extra query). No file-name pattern from old minutes is stored, so none is used.
 - **Orphans.** Meeting Docs carry `appProperties.simonSaysMeeting = "1"` and `listCandidates` drops them (a Doc
   of a deleted meeting in the meeting folder is never suggested as an agenda). A refused start trashes its new Doc.
 - **Access.** Access is what we record, not a Drive call per page view (a member's drive.file token is not

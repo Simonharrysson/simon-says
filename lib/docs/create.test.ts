@@ -16,7 +16,7 @@ vi.mock("@/lib/google/docs", async (importOriginal) => ({
 }));
 
 import { TEST_DOC_SUFFIX } from "@/lib/agenda/candidates";
-import { createMeetingDoc, INITIAL_HEADER, meetingTitle, titleOfFormat } from "./create";
+import { createMeetingDoc, INITIAL_HEADER, meetingTitle } from "./create";
 
 const auth = {} as OAuth2Client;
 const M = "11111111-2222-3333-4444-555555555555";
@@ -39,22 +39,22 @@ beforeEach(() => {
 });
 
 describe("meetingTitle", () => {
-  it("is date first in Swedish local time (CET in winter, CEST in summer)", () => {
-    expect(meetingTitle("Styrelsen", new Date("2026-11-24T13:05:00Z"))).toBe("2026-11-24 Möte – Styrelsen");
-    expect(meetingTitle("Styrelsen", new Date("2026-07-01T22:30:00Z"))).toBe("2026-07-02 Möte – Styrelsen");
+  it("is date and start time first in Swedish local time (CET in winter, CEST in summer), always Mötesprotokoll", () => {
+    expect(meetingTitle("Styrelsen", new Date("2026-11-24T13:05:00Z"))).toBe("2026-11-24 14.05 Mötesprotokoll – Styrelsen");
+    expect(meetingTitle("Styrelsen", new Date("2026-07-01T22:30:00Z"))).toBe("2026-07-02 00.30 Mötesprotokoll – Styrelsen");
   });
 
-  it("uses the format's title and marks a Testmöte so it is never an agenda candidate", () => {
-    const at = new Date("2026-11-26T18:00:00Z");
-    expect(meetingTitle("Ekdala Padelklubb", at, { formatTitle: "Mötesprotokoll" })).toBe("2026-11-26 Mötesprotokoll – Ekdala Padelklubb");
-    expect(meetingTitle("Ekdala Padelklubb", at, { formatTitle: "  ", test: true })).toBe("2026-11-26 Möte – Ekdala Padelklubb (Testmöte)");
-    expect(meetingTitle("X", at, { test: true }).endsWith(TEST_DOC_SUFFIX)).toBe(true);
+  it("two meetings the same day get different names that sort by start", () => {
+    const a = meetingTitle("Ekdala Padelklubb", new Date("2026-11-26T08:00:00Z"));
+    const b = meetingTitle("Ekdala Padelklubb", new Date("2026-11-26T18:30:00Z"));
+    expect(a).not.toBe(b);
+    expect([b, a].sort()).toEqual([a, b]);
   });
 
-  it("names the meeting for every format but Enkel", () => {
-    expect(titleOfFormat({ kind: "veckomote", title: "Mötesprotokoll" })).toBe("Mötesprotokoll");
-    expect(titleOfFormat({ kind: "learned", title: "Protokoll styrelsemöte" })).toBe("Protokoll styrelsemöte");
-    expect(titleOfFormat({ kind: "enkel", title: "Anteckningar" })).toBeNull();
+  it("marks a Testmöte so it is never an agenda candidate", () => {
+    const t = meetingTitle("Ekdala Padelklubb", new Date("2026-11-26T18:00:00Z"), { test: true });
+    expect(t).toBe("2026-11-26 19.00 Mötesprotokoll – Ekdala Padelklubb (Testmöte)");
+    expect(t.endsWith(TEST_DOC_SUFFIX)).toBe(true);
   });
 });
 

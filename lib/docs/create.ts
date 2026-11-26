@@ -63,21 +63,23 @@ export function localDate(at: Date): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 }
 
-/**
- * The file name of a meeting Doc: `2026-11-26 Mötesprotokoll – <Förening>`. Date first, so the
- * meeting folder sorts by date by name; the format's own title (a learned format keeps the
- * förening's word, e.g. "Styrelseprotokoll"), "Möte" for Enkel or none; the förening's name, so the
- * Doc is recognisable under "Delas med mig". A Testmöte ends with TEST_DOC_SUFFIX (listCandidates
- * never offers it as an agenda).
- */
-export function meetingTitle(orgName: string, startedAt: Date, opts: { formatTitle?: string | null; test?: boolean } = {}): string {
-  const label = opts.formatTitle?.trim() || "Möte";
-  return `${localDate(startedAt)} ${label} – ${orgName.trim()}${opts.test ? ` ${TEST_DOC_SUFFIX}` : ""}`;
+/** `HH.MM` in Swedish local time (a dot: Drive names stay readable, and it sorts). */
+function localTime(at: Date): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .format(at)
+    .replace(":", ".");
 }
 
-/** The format title in a meeting Doc's name: none for Enkel (its title "Anteckningar" names a tab, not a meeting). */
-export const titleOfFormat = (profile: Pick<FormatProfile, "kind" | "title">): string | null =>
-  profile.kind === "enkel" ? null : profile.title;
+/**
+ * The file name of a meeting Doc: `2026-11-26 18.05 Mötesprotokoll – <Förening>`. Date and
+ * start time first, so the meeting folder sorts chronologically by name and two meetings the same
+ * day never share a name; always "Mötesprotokoll" (every format); the förening's name, so the Doc
+ * is recognisable under "Delas med mig". A Testmöte ends with TEST_DOC_SUFFIX (listCandidates
+ * never offers it as an agenda).
+ */
+export function meetingTitle(orgName: string, startedAt: Date, opts: { test?: boolean } = {}): string {
+  return `${localDate(startedAt)} ${localTime(startedAt)} Mötesprotokoll – ${orgName.trim()}${opts.test ? ` ${TEST_DOC_SUFFIX}` : ""}`;
+}
 
 /** The starter's own folder for the org's Docs. */
 export const folderName = (orgName: string) => `Simon Says – ${orgName}`;

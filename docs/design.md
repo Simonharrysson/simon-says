@@ -151,7 +151,7 @@ it is deleted when they leave the org.
 - Default: the service **creates a new Doc per meeting** in the förening's
   meeting folder when the starter's grant can add to it (they picked the folder
   once in the Picker), else in the starter's own folder "Simon Says – <förening>".
-  Named `<YYYY-MM-DD> <format title> – <förening>` (Testmöte marked). Option: pick an existing Doc (e.g. the org's running
+  Named `<YYYY-MM-DD HH.MM> Mötesprotokoll – <förening>` (Testmöte marked). Option: pick an existing Doc (e.g. the org's running
   minutes Doc) via Picker.
 - Layout (tab 1 = notes, tab 2 = transcript, added with `addDocumentTab`):
 
