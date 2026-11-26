@@ -39,6 +39,21 @@ export async function hasGoogleToken(userId: string): Promise<boolean> {
   return data !== null;
 }
 
+/**
+ * The scopes of the user's stored grant (as Google reported them when it was stored), or null
+ * when no token is stored. drive.readonly is in it only after the admin's incremental consent
+ * for the protocol import; a later plain sign-in replaces the token with a drive.file-only one.
+ */
+export async function storedGoogleScope(userId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("google_tokens")
+    .select("scope")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`storedGoogleScope: ${error.message}`);
+  return (data?.scope as string | undefined) ?? null;
+}
+
 function isInvalidGrant(err: unknown): boolean {
   const e = err as { message?: unknown; response?: { data?: { error?: unknown } } };
   return (

@@ -38,3 +38,19 @@ describe("fetchGrantedScope", () => {
     await expect(fetchGrantedScope("bad", fetchImpl)).resolves.toBeNull();
   });
 });
+
+describe("hasDriveReadonly", () => {
+  it("is true only for the exact drive.readonly scope", async () => {
+    const { hasDriveReadonly, DRIVE_READONLY } = await import("./scopes");
+    expect(hasDriveReadonly(`openid ${DRIVE_FILE} ${DRIVE_READONLY}`)).toBe(true);
+    expect(hasDriveReadonly(`openid ${DRIVE_FILE}`)).toBe(false);
+    expect(hasDriveReadonly("https://www.googleapis.com/auth/drive.readonlyx")).toBe(false);
+    expect(hasDriveReadonly(null)).toBe(false);
+  });
+
+  it("the import asks for the sign-in scopes plus drive.readonly; sign-in never asks for it", async () => {
+    const { IMPORT_SCOPES, DRIVE_READONLY } = await import("./scopes");
+    expect(IMPORT_SCOPES).toEqual([...GOOGLE_SCOPES, DRIVE_READONLY]);
+    expect(GOOGLE_SCOPES).not.toContain(DRIVE_READONLY);
+  });
+});
