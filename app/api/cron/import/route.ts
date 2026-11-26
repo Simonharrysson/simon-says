@@ -16,7 +16,8 @@ const DIGEST_START_MS = 10_000;
  * Vercel Cron, every 5 min (`Authorization: Bearer $CRON_SECRET`): moves each open batch import
  * one step (poll Anthropic, save the results of an ended batch, or run its goals digest once:
  * only at the start of a run, so it fits the time limit), fails batch jobs whose submit never
- * finished, and removes finished imports older than 7 days (0036). Logs only counts and step names.
+ * finished, and removes finished imports older than 7 days (0036). Also sweeps hung invite e-mails
+ * (0038). Logs only counts and step names.
  */
 export async function GET(request: Request) {
   if (!verifyCron(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -39,6 +40,11 @@ export async function GET(request: Request) {
   }
   const { data: removed, error } = await db.rpc("delete_old_history_import_jobs");
   if (error) console.error(`cron import: cleanup: ${error.message}`.slice(0, 200));
+  // Invite e-mails left `sending` by a function that died (0038) become `uncertain`, so the admin
+  // can try again (Resend's Idempotency-Key keeps that from sending twice). Counts only.
+  const { data: swept, error: sweepError } = await db.rpc("sweep_stale_invite_sends");
+  if (sweepError) console.error(`cron import: invite sweep: ${sweepError.message}`.slice(0, 200));
+  else if (swept) steps.push(`invites:${swept}`);
   console.log(`cron import: ${JSON.stringify({ steps, removed: removed ?? 0 })}`);
   return Response.json({ steps, removed: removed ?? 0 });
 }

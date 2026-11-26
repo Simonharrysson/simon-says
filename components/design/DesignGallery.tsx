@@ -19,6 +19,7 @@ import { Panel } from "@/components/ui/Panel";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 import { navLinkClass, SiteHeader } from "@/components/ui/SiteHeader";
 import { AccountView } from "@/components/views/AccountView";
+import { MailPrefsView } from "@/components/views/MailPrefsView";
 import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
 import { LoginView } from "@/components/views/LoginView";
@@ -37,11 +38,15 @@ import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } fr
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
 import { designViews, type DesignGroup } from "./registry";
 import { onboardingRender } from "./onboarding-demo";
+import { SummarySettingsDemo, summaryRender } from "./summary-demo";
+import { inviteRender } from "./invite-demo";
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
 
 const noop = () => {};
 const noopAction = async () => {};
+/** Saves nothing; answers after a short wait so "Sparat" shows like it does live. */
+const fakeSave = () => new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 300));
 const ORG_ID = "00000000-0000-4000-8000-000000000001";
 const ME = "00000000-0000-4000-8000-0000000000aa";
 const NOW = Date.parse("2026-11-24T18:42:00Z");
@@ -461,6 +466,7 @@ const render: Record<string, () => ReactNode> = {
         people={people}
         meetings={meetings}
         notice={orgNotice("mote-active")}
+        summarySettings={<SummarySettingsDemo />}
         startMeetingHref="#"
         formatCard={
           <FormatCard
@@ -754,8 +760,57 @@ const render: Record<string, () => ReactNode> = {
   ),
   account: () => (
     <AppChrome>
-      <AccountView email="anna.berg@example.com" userId={ME} signOut={noopAction} />
+      <AccountView
+        email="anna.berg@example.com"
+        userId={ME}
+        signOut={noopAction}
+        emailPrefs={{ allOff: false, off: ["invite"] }}
+        saveEmailPrefs={fakeSave}
+      />
     </AppChrome>
+  ),
+  "account-mail-off": () => (
+    <AppChrome>
+      <AccountView
+        email="anna.berg@example.com"
+        userId={ME}
+        signOut={noopAction}
+        emailPrefs={{ allOff: true, off: ["invite"] }}
+        saveEmailPrefs={fakeSave}
+      />
+    </AppChrome>
+  ),
+  "account-mail-error": () => (
+    <AppChrome>
+      <AccountView email="anna.berg@example.com" userId={ME} signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} />
+    </AppChrome>
+  ),
+  "account-mail-save-fails": () => (
+    <AppChrome>
+      <AccountView
+        email="anna.berg@example.com"
+        userId={ME}
+        signOut={noopAction}
+        emailPrefs={{ allOff: false, off: [] }}
+        saveEmailPrefs={async () => false}
+      />
+    </AppChrome>
+  ),
+  "mail-link": () => (
+    <PublicChrome>
+      <MailPrefsView
+        state="ready"
+        email="erik.lund@example.com"
+        prefs={{ allOff: false, off: [] }}
+        save={fakeSave}
+        highlight="meeting_summary"
+      />
+    </PublicChrome>
+  ),
+  "mail-link-invalid": () => (
+    <PublicChrome>
+      <MailPrefsView state="invalid" />
+    </PublicChrome>
   ),
   status: () => (
     <PublicChrome>
@@ -818,6 +873,10 @@ const render: Record<string, () => ReactNode> = {
   "live-ended": () => <LiveDemo phase="ended" elapsedMs={84 * 60_000} />,
   "live-resume": () => <LiveDemo phase="resume" />,
   ...Object.fromEntries(Object.entries(onboardingRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(
+    Object.entries(summaryRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>]),
+  ),
+  ...Object.fromEntries(Object.entries(inviteRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
 };
 
 export function DesignGallery({ view }: { view: string | null }) {

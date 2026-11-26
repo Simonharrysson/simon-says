@@ -147,6 +147,8 @@ export const onboardingRender: Record<string, () => ReactNode> = {
       board={boardRows}
       inviteUrl={INVITE}
       myEmail="anna.berg@example.com"
+      invites={[]}
+      inviterName="Anna Berg"
       pickerEnabled={false}
       format={{ kind: null, name: "Enkel", profile: null }}
       stadgarSaved={{ styrelse: false, arsmote: false }}

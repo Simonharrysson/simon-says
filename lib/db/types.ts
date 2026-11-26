@@ -3,6 +3,9 @@
 // SegmentRow comes with the segments table, after the Task 0 spike.
 
 export type OrgRole = "admin" | "member";
+/** 0037: missed = people not at the meeting (default), all, selected = ticked people, off. */
+export type SummaryMode = "missed" | "all" | "selected" | "off";
+export type SummaryState = "sending" | "sent" | "partial" | "none" | "uncertain" | "no_notes" | "off" | "test" | "before";
 export type MeetingStatus = "live" | "ending" | "done" | "abandoned";
 export type NoteSection = "decision" | "action" | "now" | "attendees" | "note";
 export type NoteKind = "decision" | "task" | "note" | "attendee" | "now";
@@ -49,7 +52,8 @@ export type MeetingEventKind =
   | "agenda_anchored"
   | "format_learned"
   | "followup_prefilled"
-  | "checkin";
+  | "checkin"
+  | "summary";
 
 export interface OrgRow {
   id: string;
@@ -65,6 +69,8 @@ export interface OrgRow {
   /** 0035: the förening's own Styrelsemöte / Årsmöte formats (from the stadgar), used by Förbered möte. */
   styrelse_format_id?: string | null;
   arsmote_format_id?: string | null;
+  /** 0037: who gets the summary e-mail after a meeting (lib/summaries). */
+  summary_mode?: SummaryMode;
   created_by: string | null;
   created_at: string;
 }
@@ -87,6 +93,10 @@ export interface PersonRow {
   /** 0035: voice consent recorded for the coming voice feature (when, by whom). */
   voice_consent_at?: string | null;
   voice_consent_by?: string | null;
+  /** 0037: ticked for summary_mode 'selected' (only through set_summary_settings). */
+  summary_selected?: boolean;
+  /** 0037: set when the linked member was removed (or deleted their account); no e-mail by the old address. */
+  summary_removed_at?: string | null;
 }
 
 export interface MeetingRow {
@@ -131,6 +141,9 @@ export interface MeetingRow {
   checkin_window?: CheckinWindow | null;
   /** `ag-<n>` → the agenda item's label, safe labels only (migration 0028, org dashboard). */
   agenda_labels?: Record<string, string>;
+  /** 0037: null = summary not handled yet; else why it is done. */
+  summary_state?: SummaryState | null;
+  summary_at?: string | null;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

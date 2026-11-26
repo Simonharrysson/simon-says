@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardRows, cleanEmail, inviteMailto } from "./board";
+import { boardRows, cleanEmail } from "./board";
 
 const members = [
   { userId: "u1", email: "anna.berg@example.com", role: "admin" as const },
@@ -30,18 +30,11 @@ describe("boardRows", () => {
   });
 });
 
-describe("cleanEmail / inviteMailto", () => {
+describe("cleanEmail", () => {
   it("accepts and lowercases plausible addresses only", () => {
     expect(cleanEmail("  Sara@Example.com ")).toBe("sara@example.com");
     expect(cleanEmail("sara")).toBeNull();
     expect(cleanEmail("a b@c.se")).toBeNull();
     expect(cleanEmail(3)).toBeNull();
-  });
-
-  it("builds a mailto with the invite link", () => {
-    const href = inviteMailto("sara@example.com", "Exempelföreningen", "https://x.test/join/abc", "Sara Nyström");
-    expect(href.startsWith("mailto:sara%40example.com?subject=")).toBe(true);
-    expect(decodeURIComponent(href)).toContain("Hej Sara!");
-    expect(decodeURIComponent(href)).toContain("https://x.test/join/abc");
   });
 });

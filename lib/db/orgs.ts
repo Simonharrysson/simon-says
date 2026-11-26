@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { validName } from "@/lib/names/validate";
-import type { MeetingRow, OrgMemberRow, OrgRow, PersonRow } from "./types";
+import type { MeetingRow, OrgMemberRow, OrgRow, PersonRow, SummaryMode } from "./types";
 
 // Org, people and deletion operations. Each takes the signed-in user's client
 // (createSupabaseServerClient), so RLS decides what is allowed; the functions only turn
@@ -81,6 +81,17 @@ export async function updateOrgSettings(
   const { data, error } = await db.from("orgs").update(settings).eq("id", orgId).select("id");
   if (error) fail("updateOrgSettings", error);
   return (data ?? []).length > 0;
+}
+
+/**
+ * "Sammanfattning efter mötet" (0037), admins only (the function checks): the mode and, for
+ * "selected", the ticked people. False when the database refused (not admin, unknown person).
+ */
+export async function setSummarySettings(db: Db, orgId: string, mode: SummaryMode, personIds: string[]): Promise<boolean> {
+  const { error } = await db.rpc("set_summary_settings", { p_org_id: orgId, p_mode: mode, p_person_ids: personIds });
+  if (!error) return true;
+  if (error.code === "42501" || error.code === "22023") return false;
+  fail("setSummarySettings", error);
 }
 
 export async function rotateInviteCode(db: Db, orgId: string): Promise<string> {

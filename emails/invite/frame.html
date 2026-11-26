@@ -1,0 +1,11 @@
+<!doctype html>
+<!-- Shows an email at a fixed width (headless Chrome on macOS won't make a window narrower than ~500 px).
+     usage: frame.html?src=a.html&w=390&h=1500 -->
+<html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark">
+<style>html,body{margin:0;padding:0;background:#fff}@media (prefers-color-scheme:dark){html,body{background:#000}}iframe{border:0;display:block}</style></head>
+<body><script>
+const q = new URLSearchParams(location.search);
+const f = document.createElement("iframe");
+f.src = q.get("src"); f.width = q.get("w") || "390"; f.height = q.get("h") || "1500";
+document.body.appendChild(f);
+</script></body></html>

@@ -10,6 +10,8 @@ import type { FormatProfile } from "@/lib/formats/schema";
 import { STEP_IDS, markStep, stepNumber, type OnboardingState, type StepId } from "@/lib/onboarding/steps";
 import { logoUrl as versionedLogoUrl } from "@/lib/orgs/logo";
 import type { BoardRow } from "@/lib/people/board";
+import type { InviteRow } from "@/lib/invites/rules";
+import { InviteByEmail } from "@/components/views/InviteByEmail";
 import {
   addBoardPersonAction,
   removeBoardPersonAction,
@@ -34,6 +36,9 @@ export interface OnboardingProps {
   board: BoardRow[];
   inviteUrl: string;
   myEmail: string | null;
+  /** Invites sent by e-mail (0038) and the name the e-mail says invites. */
+  invites: InviteRow[];
+  inviterName: string;
   pickerEnabled: boolean;
   /** The förening's default format: its kind and display name (null: none yet → Enkel). */
   format: { kind: FormatProfile["kind"] | null; name: string; profile: FormatProfile | null };
@@ -62,6 +67,7 @@ export function Onboarding(p: OnboardingProps) {
   const [state, setState] = useState(p.state);
   const [busy, setBusy] = useState(false);
   const [formatError, setFormatError] = useState<string | null>(null);
+  const [invites, setInvites] = useState(p.invites);
 
   // 1. Namn och logga
   const [name, setName] = useState(p.org.name);
@@ -243,6 +249,19 @@ export function Onboarding(p: OnboardingProps) {
             rows={p.board}
             inviteUrl={p.inviteUrl}
             myEmail={p.myEmail}
+            invites={invites}
+            inviteEmail={
+              <InviteByEmail
+                orgId={orgId}
+                orgName={shell.orgName}
+                inviterName={p.inviterName}
+                inviteUrl={p.inviteUrl}
+                invites={invites}
+                memberEmails={p.board.flatMap((r) => (r.member?.email ? [r.member.email.toLowerCase()] : []))}
+                suggestions={p.board.flatMap((r) => (r.status === "invited" && r.email && !invites.some((i) => i.email === r.email!.toLowerCase()) ? [r.email.toLowerCase()] : []))}
+                onInvitesChange={setInvites}
+              />
+            }
             onAdd={(input, member) => boardAdd(addBoardPersonAction(orgId, input, member))}
             onUpdate={(id, input) => board(updateBoardPersonAction(orgId, id, input))}
             onRemove={(id) => board(removeBoardPersonAction(orgId, id))}

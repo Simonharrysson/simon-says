@@ -42,6 +42,7 @@ const orgNotices: Record<string, Notice> = {
     text: "Den rollen går inte att använda. En roll får bara ha bokstäver, siffror, mellanslag och tecknen & / - . ', högst fyra ord och 40 tecken.",
   },
   "roll-admin": { tone: "danger", text: "Bara en admin kan ändra roller." },
+  sammanfattning: { tone: "danger", text: "Inställningen för sammanfattningar kunde inte sparas. Bara en admin kan ändra den." },
   "mote-forbidden": { tone: "danger", text: "Bara den som startade mötet eller en admin kan radera det." },
   "mote-not_found": { tone: "danger", text: "Mötet finns inte längre." },
   "mote-active": { tone: "danger", text: "Avsluta mötet innan du raderar det." },

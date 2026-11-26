@@ -140,7 +140,7 @@ stays in Drive when deleting.
 Two kinds of files live here:
 
 - **shadcn primitives**, lowercase (`button.tsx`, `badge.tsx`, `input.tsx`, `label.tsx`,
-  `native-select.tsx`, `checkbox.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`).
+  `native-select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`).
   They came from `npx shadcn add` (style `radix-nova`, Radix underneath) and were then restyled
   to the tokens. They are our code now: edit them, don't re-add them over the top.
 - **App components**, PascalCase, built on the primitives and keeping their old APIs.
@@ -150,6 +150,7 @@ Two kinds of files live here:
 | `Button`, `ButtonLink` (`button.tsx`) | shadcn Button | `variant`: primary · secondary · ghost · danger · danger-quiet · danger-ghost (list trash icons); shadcn's `default`/`outline`/`destructive`/`link` are aliases. `size` sm/md/lg; `loading` (spinner, aria-busy, disabled); `icon`; `iconOnly` (label visually hidden + title); `block`; `asChild`. `buttonVariants()` styles a plain `<a>`. |
 | `SubmitButton` | Button | `useFormStatus` → loading while its form's server action runs; `pendingLabel`. |
 | `Field`, `Check` (`Field.tsx`) | Label, Input, Checkbox | label/hint/error wired with `aria-describedby` / `aria-invalid`; `Check` = Radix checkbox with title + explanation (`checked` + `onCheckedChange`, or `name` + `defaultChecked` in a form: it posts `on` like a native checkbox). |
+| `Switch` (`switch.tsx`) | Radix Switch | On/off that takes effect at once (no Save button), 40×24, ink when on. Put it in a row whose label is the target (≥ 44px). For choices saved with a form, use `Check`. |
 | `NativeSelect` | shadcn NativeSelect | a real `<select>` drawn like an Input with a chevron (forms, `defaultValue`, keyboard and phone pickers unchanged). |
 | `Banner` | shadcn Alert | `tone` info/success/warning/danger/neutral, `title`, `action`, `loud` (the stopped live meeting); role alert for warning/danger, status otherwise (`live={false}` for static). |
 | `Badge` (`badge.tsx`) | shadcn Badge | label (pill), tinted by `tone`: neutral/live (red)/alert (static red, "needs you")/success/info. |
@@ -195,6 +196,13 @@ Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) rende
 presentational view in `components/views/` (`LandingView`, `LoginView`, `OrgsView`,
 `OrgDetailView`, `JoinView`, `AccountView`, `StatusView`). All `?fel=`/`?klart=` codes map in
 `lib/ui/messages.ts`.
+
+Mejlval (`EmailPrefsForm`, categories in `lib/email/categories.ts`): one `Switch` per kind of mail
+plus "Inga mejl alls", each saved on change with "Sparat" (`role="status"`); a failed save puts
+the switch back and says so. "Inga mejl alls" greys the categories out but keeps their values.
+Shown under Konto (`AccountView`) and on `/mejl` (`MailPrefsView`, the signed link in every mail,
+no login; opening it changes nothing). Gallery: `account`, `account-mail-off`,
+`account-mail-error`, `account-mail-save-fails`, `mail-link`, `mail-link-invalid`.
 
 Touch targets: every control is ≥ 44px on screens under 48rem (`max-md:min-h-11`; Button does it).
 Term: always **förening/föreningar** in copy (routes and codes keep `org`).
@@ -531,9 +539,10 @@ Inställningar links to the guide.
 2. **Styrelsen**: ONE list (`boardRows`, `lib/people/board.ts`): people (name, role) plus members
    nobody has named yet ("Namn saknas" + Lägg till namn). An e-mail invites (`set_person_email`):
    the person is linked to the member account with that address now or when they join
-   (`org_members` trigger). Simon Says sends no mail: "Skicka inbjudan" opens the admin's own mail
-   (`mailto:`) with the invite link; the link is also shown to copy. Status line: "Har konto" (green)
-   · "Inbjuden · e-post" · "Bara namn". The Personer panel shows the same line.
+   (`org_members` trigger). Under the list, "Bjud in via mejl" (below) sends the invite e-mail; a
+   button fills in the people with an e-mail not invited yet. The link is also shown to copy. Status
+   line: "Har konto" (green) · "e-post · Inbjudan: skickad <datum>" / "ingen inbjudan skickad än" ·
+   "Bara namn". The Personer panel shows "Inbjuden · e-post".
 3. **Mötesmapp**: the existing folder Picker (`useMeetingFolderPicker`).
 4. **Så brukar ni ha möten**: Veckomöte (förvalt; Fortsätt makes it the default when the förening
    has none), "Som våra gamla protokoll" (the existing `LearnFormatView`), or "Behåll …" when a
@@ -550,3 +559,73 @@ Inställningar links to the guide.
 
 **Klart**: what was done (✓) and skipped (– · Gör nu), "Förbered första mötet →" (primary).
 `/design`: `onboarding-*`, `org-kom-igang`, `orgs-logos`.
+
+## Sammanfattning efter mötet (Simon's todo, migration 0037)
+
+**Setting** (Inställningar, admins; `SummarySettingsForm`, `updateSummaryAction` → `set_summary_settings`):
+four radio cards, **Till de som missade mötet** (default) · Till alla · Till utvalda personer · Av. "Utvalda"
+opens a checkbox list of the people list (no address: disabled, "Ingen e-postadress"). Other modes show how many people have an address. Ticks are kept when the mode changes.
+
+**When**: `finishMeeting` sets the meeting `done`, then `trySendMeetingSummaries` (best effort, never changes the
+end); the 5-minute cron (`sendPendingSummaries`) sends what that skipped: a Doc paused at the end (after its final
+pass), a failed attempt; only meetings that ended in the last 48 h. Once per meeting (`meetings.summary_state`
+claimed atomically: null → `sending` → `sent`) and per person (`meeting_summary_sends`, inserted before the
+mailer is called; a failed send is not retried). The loop stops before the caller's deadline and the cron resumes
+`sending` meetings, also one whose function died mid-loop. A recipient whose preference check can't be answered
+is not claimed (the meeting stays `sending` and the next sweep retries); a meeting still `sending` after 48 h
+becomes `partial` (event with counts). Never for a Testmöte, never when the meeting has no decision, open task or other note.
+
+**Who** (`lib/summaries/recipients.ts`): only the förening's people with an address (the linked account's,
+else `people.email`), deduplicated. Present = a named voice (speaker map, merges), a Närvarande name (full or
+first name; an ambiguous first name counts all of them as present), or the starter's account. Attendance is
+*certain* only when someone was identified by voice or Närvarande (the starter alone doesn't count) and no voice
+is unnamed ("Talare 2" on a shared mic, "Anna?") and no Närvarande text names nobody in the list ("hela
+styrelsen", "alla"); otherwise "missed" sends nothing (`uncertain`, with the count
+of unnamed voices in the event) and "alla"/"utvalda" send with neutral wording. Every send goes through the e-mail gate
+(`sendUserMail`, category `meeting_summary`, 0039): whoever said no never gets it (counted as `optedOut`); a person whose member link was removed (`summary_removed_at`) gets nothing by the old address. E-mail
+addresses are written only by the admin functions.
+
+**The e-mail** (`lib/summaries/email.ts`, design A "Calm Geist" from the invite e-mail): subject
+"Sammanfattning: <förening> <24 november>", "Du missade mötet 24 november" (or "Mötet 24 november"),
+**Dina uppgifter** first in a grey box (owner id, name or role), Beslut, (Övriga) uppgifter with owners, Övrigt
+(max 3); lists capped with "… och N till i protokollet"; no Må-runda items, no info cells, no done tasks.
+**Öppna protokollet**: the Doc for the starter and members it was shared with; other members go to the meeting's
+row on the förening page (`#mote-<id>`, Få åtkomst); people without an account get the Doc with a line on asking
+for access. Footer: "Ändra vilka som får sammanfattningar" (admins) · **Avsluta prenumeration** (the address's `/mejl`
+page, `k=meeting_summary`); headers from `listUnsubscribeHeaders` (one-click `POST /api/mejl/avsluta`). Logs and the `summary` event hold counts only.
+`/design`: `org-summary-*`, `summary-email*` and `org-admin`. Screenshots:
+`emails/summary/shoot.sh` (desktop/phone, light/dark, into `.superpowers/meeting-summary/`).
+
+## Bjud in via mejl (migration 0038)
+
+Admins type or paste addresses (comma, semicolon or new line; "Namn <adress>" works) in the Bjud in
+panel on the förening page and in Kom igång → Styrelsen (`InviteByEmail`). The hint counts valid
+addresses, marks members ("är redan medlem") and what isn't e-mail. "Visa mejlet" previews the e-mail
+(React, never injected HTML). "Skicka N inbjudningar" → `POST /api/orgs/<id>/invites`; each address
+gets a line: Skickat (green) · Redan medlem · Ogiltig adress · Misslyckades + Försök igen · Redan
+inbjuden · limits. "Skickade inbjudningar" lists every invite (Skickad · Misslyckades · Har gått med,
+with time) with "Skicka igen", once per address per 24 h ("Igen <tid>" after). The link to copy stays
+under it ("Eller dela länken själv").
+
+The e-mail is design A, "Calm Geist" (`lib/invites/email.ts`; reference rendering
+`emails/invite/a.html` + `a.txt`, screenshots with `emails/invite/shoot.sh`): wordmark, one card,
+"Gå med i <förening>", one paragraph, one black button with the förening's join link, the link as
+text, and the footer "Du får det här mejlet för att <namn> lade till din adress … Väntade du dig inte
+mejlet kan du strunta i det". Subject "<namn> bjuder in dig till <förening> på Simon Says"; Reply-To
+is the admin. Two other directions were considered and dropped: B, a warmer letter with the
+förening's initial and a "what you get" list, and C, a richer card with steps and a preview of a
+meeting Doc. A was chosen as the calmest and closest to the app.
+
+Limits (`claim_invite_send`): 50 per förening and 200 per admin in 24 h; members are skipped; the
+invite turns "Har gått med" when someone joins with that confirmed address. No addresses in logs.
+A förening or inviter name that looks like a link or address (`looksLikeLink`: `://`, `www.`, `@`,
+`x.se`) is refused with a sentence asking to rename it (the form says so up front); every dot in a
+name gets a zero-width non-joiner in the e-mail, and the subject is cut at 80 characters. The form
+sends 10 addresses per request (two at a time, no new send after 40 s: "Hann inte skickas"). A
+timeout or 5xx is "Osäkert – kan ha skickats"; Försök igen reuses the send's Resend Idempotency-Key,
+so it can't arrive twice. Sends hung in `sending` for 5 min are swept to `uncertain` by the import cron.
+Every invite goes through the mail-settings gate (0039, `sendUserMailDetailed`, category
+`invite`), checked before `claim_invite_send` so an address that said no uses no quota: its line says
+"Vill inte ha mejl" (no retry). Each e-mail carries the recipient's own settings link
+(`emailPrefsUrl`) in the footer and List-Unsubscribe headers.
+`/design`: `invite-email*`.

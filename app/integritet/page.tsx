@@ -12,7 +12,7 @@ const processors: [string, string, string][] = [
   ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
   ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."],
-  ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss, och bara till oss.", "Innehåller inga transkriptioner."],
+  ["Resend", "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, och mötessammanfattningar till personer i föreningens personlista.", "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."],
 ];
 
 export default function PrivacyPage() {
@@ -30,6 +30,7 @@ export default function PrivacyPage() {
             <a href="#kort">Kort sagt</a>
             <a href="#i-rummet">I rummet</a>
             <a href="#sparas">Vad som sparas</a>
+            <a href="#mejl">Mejl</a>
             <a href="#vem">Vilka som behandlar data</a>
             <a href="#grund">Rättslig grund</a>
             <a href="#rattigheter">Dina rättigheter</a>
@@ -74,6 +75,12 @@ export default function PrivacyPage() {
           <ul>
             <li>Namn, medlemmar, inbjudningslänk och personlistan (bara namn).</li>
             <li>
+              E-postadresser som en admin skriver in för att bjuda in någon används bara för att skicka inbjudan. De sparas
+              med när den skickades och om personen har gått med, tills föreningen raderas.
+              Inbjudan visar adminens namn, och svar på mejlet går till adminens inloggningsadress (Reply-To), så den som
+              bjuds in ser den adressen.
+            </li>
+            <li>
               Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.
               Transkriptionen och anteckningarna sparas tills mötet eller föreningen raderas.
             </li>
@@ -82,6 +89,13 @@ export default function PrivacyPage() {
               dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.
             </li>
             <li>En logg över vilket konto som skapat vilka föreningar (för gränsen på två per person).</li>
+            <li>
+              Sammanfattning efter mötet: när ett möte är klart mejlar Simon Says besluten och uppgifterna till personer i
+              föreningens personlista som har en e-postadress, som standard bara till dem som inte var med (admin kan välja
+              alla, utvalda eller ingen). Aldrig till någon utanför personlistan, aldrig efter testmöten. Varje mejl har en
+              länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet); det
+              försvinner med mötet, personen eller föreningen.
+            </li>
             <li>
               För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har
               godkänt. Rubrikerna försvinner med mötet, målen med föreningen.
@@ -109,6 +123,14 @@ export default function PrivacyPage() {
             <li>Något annat i din Google Drive, inte heller namnen på mappar och dokument som visas när admin läser in gamla protokoll.</li>
             <li>Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först.</li>
           </ul>
+
+          <h2 id="mejl">Mejl</h2>
+          <p>
+            Du bestämmer vilka mejl Simon Says skickar till dig. Under Konto kan du stänga av varje sorts mejl för sig, eller
+            välja Inga mejl alls. Längst ner i varje mejl finns en länk till samma val som fungerar utan inloggning, även om du
+            inte har något konto. Vi sparar bara dina val (och, om du saknar konto, adressen de gäller) så länge tjänsten
+            drivs, så att ett nej fortsätter att gälla. Mejla oss om du vill att vi raderar dem.
+          </p>
 
           <h2 id="vem">Vilka som behandlar data</h2>
           <table className="w-full border-collapse text-sm [&_td]:border-b [&_td]:border-line [&_td]:py-3 [&_td]:pr-3 [&_td]:text-left [&_td]:align-top [&_th]:border-b [&_th]:border-line [&_th]:py-3 [&_th]:pr-3 [&_th]:text-left [&_th]:align-top [&_th]:text-xs [&_th]:font-semibold [&_th]:text-ink-3">

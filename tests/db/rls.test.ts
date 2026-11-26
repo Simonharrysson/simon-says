@@ -39,6 +39,10 @@ const TABLES = [
   "usage_daily",
   "google_tokens",
   "org_creations",
+  "email_preferences",
+  "email_address_preferences",
+  "org_invites",
+  "org_invite_sends",
 ] as const;
 
 const MEETING_TABLES = ["el_sessions", "meeting_events", "speaker_map", "note_items"] as const;

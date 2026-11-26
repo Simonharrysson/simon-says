@@ -9,6 +9,8 @@ export interface DesignView {
 }
 
 import { onboardingViews } from "./onboarding-views";
+import { summaryViews } from "./summary-views";
+import { inviteViews } from "./invite-views";
 
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
@@ -64,9 +66,16 @@ export const designViews: DesignView[] = [
   { id: "join-out", title: "Inbjudan · utloggad", group: "Sidor" },
   { id: "join-ready", title: "Inbjudan · gå med", group: "Sidor" },
   { id: "join-invalid", title: "Inbjudan · ogiltig länk", group: "Sidor" },
-  { id: "account", title: "Konto", group: "Sidor" },
+  { id: "account", title: "Konto · mejlval", group: "Sidor" },
+  { id: "account-mail-off", title: "Konto · inga mejl alls", group: "Sidor" },
+  { id: "account-mail-error", title: "Konto · mejlvalen gick inte att hämta", group: "Sidor" },
+  { id: "account-mail-save-fails", title: "Konto · mejlval, sparandet misslyckas", group: "Sidor" },
+  { id: "mail-link", title: "Mejl · länken i ett mejl (utan inloggning)", group: "Sidor" },
+  { id: "mail-link-invalid", title: "Mejl · länken fungerar inte", group: "Sidor" },
   { id: "status", title: "Status · med data", group: "Sidor" },
   ...onboardingViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...summaryViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...inviteViews.map((v) => ({ ...v, group: "Sidor" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
   { id: "live-mic-denied", title: "Före start · mikrofonen blockerad", group: "Mötet live" },
   { id: "live-agenda-prepared", title: "Före start · förberedd dagordning", group: "Mötet live" },
