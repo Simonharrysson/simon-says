@@ -1,4 +1,5 @@
-import { createTranslator } from "next-intl";
+// use-intl/core: no React, so it also loads under react-server outside Next (scripts, e2e fakes).
+import { createTranslator } from "use-intl/core";
 import { defaultLocale, type Locale, TIME_ZONE } from "./config";
 import { messages } from "./messages";
 
