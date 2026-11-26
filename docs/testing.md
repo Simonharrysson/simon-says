@@ -2,7 +2,7 @@
 
 | Layer | Command | What it covers |
 | --- | --- | --- |
-| Unit and API | `npm test` (vitest) | Pure logic, route handlers with mocks; DB tests against the local Supabase (skipped without it, required in CI) |
+| Unit and API | `npm test` (vitest) | Pure logic, route handlers with mocks; DB tests (everything under `tests/`, the `db` project: one file at a time, they share one stack) against the local Supabase (skipped without it, required in CI) |
 | Feature suite | `npm run suite` | Scripted Claude through the real engine into `test/docsim` Docs, one scorecard row per feature |
 | E2E | `npm run e2e` (Playwright) | Real user flows clicked through in Chromium against the real app |
 
