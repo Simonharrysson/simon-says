@@ -26,7 +26,8 @@ export interface FormatCardProps {
   /** The org default: its row id (null for Enkel without a row) and profile. */
   current: { kind: FormatKind; name: string; id?: string | null; profile?: FormatProfile };
   isAdmin: boolean;
-  meetingFolder: { id: string | null };
+  /** The förening's meeting folder; `name` as picked (null for one picked before 0030). */
+  meetingFolder: { id: string | null; name?: string | null };
   /** Versions saved for this org; custom ones (learned, or with the stadgar's items) can be re-adopted. */
   formats: { id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom?: boolean; requiredCount?: number }[];
   /** Admins: hidden `orgId`, `choice` = a standard kind or `id:<profile id>`. */
@@ -58,7 +59,8 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
 
   const name = current.kind === "learned" ? "Eget format" : current.name;
   const version = currentRow ? `${currentRow.kind === "learned" ? "inlärt" : "anpassat"} ${currentRow.createdAt.slice(0, 10)}` : null;
-  const meta = capitalize([version, meetingFolder.id ? "mötesmapp vald" : "ingen mötesmapp vald"].filter(Boolean).join(" · "));
+  const folderLine = meetingFolder.id ? (meetingFolder.name ? `mötesmapp: ${meetingFolder.name}` : "mötesmapp vald") : "ingen mötesmapp vald";
+  const meta = capitalize([version, folderLine].filter(Boolean).join(" · "));
 
   const flow = useFormatFlow(orgId, current.profile);
   const folder = useMeetingFolderPicker(orgId);
@@ -143,7 +145,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
               {COPY.stadgar.start}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem hint="Där Simon Says letar efter dagordningar." onSelect={() => void folder.pick()}>
+            <DropdownMenuItem hint="Nya mötesdokument hamnar där." onSelect={() => void folder.pick()}>
               {meetingFolder.id ? "Byt mötesmapp" : "Välj mötesmapp"}
             </DropdownMenuItem>
           </>

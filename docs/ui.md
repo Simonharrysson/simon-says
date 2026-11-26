@@ -328,7 +328,7 @@ Google Picker (`usePicker()` in `components/google/Picker.tsx`, token from
 |---|---|---|
 | suggestion | blue "Förslag: <Doc-namn>" · **Använd** · Välj annan · Skapa nytt dokument | any of them |
 | none (no folder, or nothing new in it) | "Ingen dagordning – skapa nytt dokument i formatet <X>" · **Skapa nytt dokument** · Välj dagordning | either |
-| folder not reachable (folder set, this starter's grant has never opened it) | explanation · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` with `grantOnly: true`, so the start screen never changes the folder, admins included → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
+| folder not reachable (folder set, this starter's grant has never opened it) | explanation naming the folder (`orgs.meeting_folder_name`, 0030) · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` with `grantOnly: true`, so the start screen never changes the folder, admins included → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
 | picker off (`GOOGLE_PICKER_API_KEY`/`GOOGLE_PROJECT_NUMBER` unset) | green "Nytt dokument i formatet <X>" + "Google-väljaren är inte inställd än." | already confirmed (as before A11) |
 
 Start stays disabled until the choice is confirmed: a suggestion is never used on its own. Once
@@ -344,7 +344,8 @@ confirmed new Doc and keeps the format override. The doc Picker shows the meetin
 (when set) and all Docs as a second view.
 
 `FormatCard` (the "Mötesformat" card) leads with the state: the format's name, one grey line
-("Anpassat 2026-11-02 · mötesmapp vald" / "Ingen mötesmapp vald"), and, when the stadgar add
+("Anpassat 2026-11-02 · mötesmapp: Verksamhetsår 2026-2027"; "mötesmapp vald" for a folder picked
+before 0030, whose name was not stored; "Ingen mötesmapp vald"), and, when the stadgar add
 items, a collapsed `<details>` "Stadgarna kräver N punkter". Members see only that. Admins get one
 **Ändra** menu (`dropdown-menu.tsx`; each item has a one-line hint): Byt format (opens the
 `<select>` + Byt / Avbryt in the card), Anpassa format, Lär Simon Says ert format, Lägg in punkter
@@ -416,3 +417,21 @@ Tailwind CSS v4 (`tailwindcss`, `@tailwindcss/postcss`, `postcss.config.mjs`), s
 `clsx` + `tailwind-merge` for `cn()`, `tw-animate-css` for the dialog's enter animation). All
 pinned to exact versions. One stylesheet: `app/globals.css` (tokens, theme, base layer). Fonts via
 `next/font`.
+
+## Meeting Docs on the förening page (0030)
+
+Each meeting row shows the Doc only to someone who can open it, never a link to Google's
+access-denied page. Access comes from recorded shares (`meeting_doc_shares`), because a member's
+own drive.file grant cannot see a Doc shared with them:
+
+| Viewer | Shows |
+|---|---|
+| the starter, or a member Simon Says shared the Doc with | **Dokument** (opens in a new tab) |
+| any other member, Doc created by Simon Says | **Få åtkomst** (`DocAccessButton` → `POST /api/meetings/<id>/doc-access`, shared through the starter's grant) → **Dokument**; if that fails: "Be <starter> dela dokumentet med dig." |
+| any other member, the förening's own agenda Doc | **Dokument** + grey "Föreningens eget dokument – kommer du inte in, be <starter> dela det." (Simon Says never shares agenda Docs) |
+
+The "Ett möte pågår" banner follows the same rule. New members get the earlier Docs shared on
+join (after the redirect), so "Få åtkomst" is mostly for a failed share or a starter whose Google
+connection had lapsed. On the live page, "Dokumentet hamnade i din Drive" (warning, dismissable)
+when the förening has a meeting folder but the starter's grant could not add to it.
+

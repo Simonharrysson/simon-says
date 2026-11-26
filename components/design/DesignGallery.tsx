@@ -406,7 +406,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
       isAdmin
-      meetingFolder={{ id: "folder-exempel" }}
+      meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
       formats={savedFormats}
       changeFormat={noopAction}
       pickerEnabled
@@ -425,7 +425,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
       isAdmin={false}
-      meetingFolder={{ id: "folder-exempel" }}
+      meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
       formats={savedFormats}
     />
   ),
@@ -469,7 +469,7 @@ const render: Record<string, () => ReactNode> = {
             orgId={ORG_ID}
             current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll" }}
             isAdmin={false}
-            meetingFolder={{ id: "folder-exempel" }}
+            meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
             formats={[]}
           />
         }
@@ -517,7 +517,7 @@ const render: Record<string, () => ReactNode> = {
   "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" />,
   "live-agenda-suggestion": () => <AgendaDemo view={{ state: "suggestion", suggestion: { id: "d1", name: "Möte 25/11" } }} />,
   "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
-  "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable" }} />,
+  "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable", folderName: "Verksamhetsår 2026-2027" }} />,
   "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (

@@ -16,6 +16,7 @@ import type { MeetingStatus } from "@/lib/db/types";
 import { formatDateTime, formatDuration, formatMeetingDate, plural } from "@/lib/format";
 import { canResume, docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
 import type { Notice } from "@/lib/ui/messages";
+import { DocAccessButton } from "./DocAccessButton";
 import { NoticeBanner } from "./NoticeBanner";
 import { OrgSettingsForm } from "./OrgSettingsForm";
 import { PersonRow } from "./PersonRow";
@@ -27,7 +28,16 @@ export interface OrgDetailMeeting {
   ended_at: string | null;
   doc_id: string;
   started_by: string | null;
+  /** Started in the förening's own agenda Doc (never shared by Simon Says). */
+  agenda_doc?: boolean;
 }
+
+/**
+ * Can this viewer open a meeting's Doc? `open`: the starter, or Simon Says shared it with them
+ * (meeting_doc_shares). `request`: a Doc Simon Says created, not shared with them yet ("Få
+ * åtkomst"). `agenda`: the förening's own agenda Doc, whose sharing the förening decides.
+ */
+export type DocAccess = "open" | "request" | "agenda";
 
 export interface OrgDetailViewProps {
   org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean };
@@ -38,6 +48,8 @@ export interface OrgDetailViewProps {
   members?: { userId: string; email: string; role: "admin" | "member" }[];
   people: { id: string; name: string; role?: string | null }[];
   meetings: OrgDetailMeeting[];
+  /** Per meeting id; a meeting not in the map is `open` (e.g. the /design gallery). */
+  docAccess?: Record<string, DocAccess>;
   notice: Notice | null;
   /** The "Starta möte" form, shown while no meeting is running. Omitted: no start panel. */
   startMeeting?: ReactNode;
@@ -105,7 +117,9 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
+  const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
+  const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
   const running = liveMeetingHref && active && userId !== null && active.started_by === userId ? active : null;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
@@ -148,13 +162,20 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <div className="flex flex-col gap-6">
           {active ? (
             <Banner tone="info" title="Ett möte pågår" live={false}>
-              <p>
-                Anteckningarna skrivs i{" "}
-                <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
-                  mötesdokumentet
-                </a>
-                . Ett nytt möte kan startas när det är avslutat.
-              </p>
+              {access(active) === "request" ? (
+                <div className="flex flex-col items-start gap-2">
+                  <p>Anteckningarna skrivs i mötesdokumentet. Ett nytt möte kan startas när det är avslutat.</p>
+                  <DocAccessButton meetingId={active.id} docHref={docUrl(active.doc_id)} starter={starter(active)} />
+                </div>
+              ) : (
+                <p>
+                  Anteckningarna skrivs i{" "}
+                  <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                    mötesdokumentet
+                  </a>
+                  . Ett nytt möte kan startas när det är avslutat.
+                </p>
+              )}
             </Banner>
           ) : (
             startMeeting && (
@@ -168,6 +189,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             orgId={org.id}
             isAdmin={isAdmin}
             userId={userId}
+            access={access}
+            starter={starter}
             deleteMeeting={actions.deleteMeeting}
             liveMeetingHref={liveMeetingHref}
           />
@@ -306,7 +329,11 @@ function MeetingsPanel({
   userId,
   deleteMeeting,
   liveMeetingHref,
+  access,
+  starter,
 }: {
+  access: (m: OrgDetailMeeting) => DocAccess;
+  starter: (m: OrgDetailMeeting) => string;
   meetings: OrgDetailMeeting[];
   orgId: string;
   isAdmin: boolean;
@@ -320,8 +347,9 @@ function MeetingsPanel({
         <div className="px-6 pb-6">
           <EmptyState title="Inga möten än">
             <p>
-              När någon startar ett möte skapas ett Google-dokument i startarens Drive och delas med
-              föreningens medlemmar. Mötet hamnar här, med en länk till dokumentet.
+              När någon startar ett möte skapas ett Google-dokument i föreningens mötesmapp (eller i
+              startarens Drive) och delas med föreningens medlemmar. Mötet hamnar här, med en länk
+              till dokumentet.
             </p>
           </EmptyState>
         </div>
@@ -343,6 +371,9 @@ function MeetingsPanel({
                         <Badge tone={statusTone[meeting.status]}>{meetingStatusLabel[meeting.status]}</Badge>
                         {duration && <span>{duration}</span>}
                         {state === "active" && <span>Avsluta mötet innan du raderar det.</span>}
+                        {access(meeting) === "agenda" && !mine && (
+                          <span>Föreningens eget dokument – kommer du inte in, be {starter(meeting)} dela det.</span>
+                        )}
                       </span>
                     </span>
                     <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
@@ -356,16 +387,20 @@ function MeetingsPanel({
                           Fortsätt mötet
                         </ButtonLink>
                       )}
-                      <a
-                        className={buttonVariants({ size: "sm" })}
-                        href={docUrl(meeting.doc_id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
->
-                        Dokument
-                        <IconExternal size={16} />
-                        <span className="sr-only">(öppnas i ny flik)</span>
-                      </a>
+                      {access(meeting) === "request" && !mine ? (
+                        <DocAccessButton meetingId={meeting.id} docHref={docUrl(meeting.doc_id)} starter={starter(meeting)} />
+                      ) : (
+                        <a
+                          className={buttonVariants({ size: "sm" })}
+                          href={docUrl(meeting.doc_id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Dokument
+                          <IconExternal size={16} />
+                          <span className="sr-only">(öppnas i ny flik)</span>
+                        </a>
+                      )}
                       {state === "allowed" && (
                         <ConfirmAction
                           action={deleteMeeting}

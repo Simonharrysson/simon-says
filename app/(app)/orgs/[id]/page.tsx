@@ -7,6 +7,8 @@ import { OverviewView } from "@/components/views/OverviewView";
 import { listGoals, loadOverview, type OrgGoal } from "@/lib/dashboard/load";
 import type { Overview } from "@/lib/dashboard/overview";
 import { isUuid } from "@/lib/db/ids";
+import { sharedMeetingIds } from "@/lib/docs/access";
+import type { DocAccess } from "@/components/views/OrgDetailView";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
@@ -89,6 +91,12 @@ export default async function OrgPage({
     tab === "oversikt" ? safeOverview(db, id) : Promise.resolve(null),
   ]);
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
+  const me = userResult.data.user?.id ?? null;
+  // Who may open each Doc: recorded shares only (a member's own drive.file grant can't tell).
+  const shared = await sharedMeetingIds(db, meetings.filter((m) => m.started_by !== me).map((m) => m.id));
+  const docAccess: Record<string, DocAccess> = Object.fromEntries(
+    meetings.map((m) => [m.id, m.started_by === me || shared.has(m.id) ? "open" : m.agenda_doc ? "agenda" : "request"]),
+  );
 
   return (
     <OrgDetailView
@@ -99,6 +107,7 @@ export default async function OrgPage({
       members={members}
       people={people}
       meetings={meetings}
+      docAccess={docAccess}
       notice={orgNotice(fel, klart)}
       tabs={{
         active: tab,
@@ -119,7 +128,7 @@ export default async function OrgPage({
           orgId={org.id}
           current={{ kind: format.profile.kind, name: FORMAT_NAMES[format.profile.kind], id: format.id, profile: format.profile }}
           isAdmin={role === "admin"}
-          meetingFolder={{ id: org.meeting_folder_id ?? null }}
+          meetingFolder={{ id: org.meeting_folder_id ?? null, name: org.meeting_folder_name ?? null }}
           formats={formats}
           changeFormat={changeFormatAction}
           pickerEnabled={pickerEnabled(getEnv())}

@@ -44,6 +44,20 @@ describe.skipIf(!hasLocalSupabase)("POST /api/orgs/[id]/meeting-folder", () => {
     expect(await folderOf(orgId)).toBe("folderAAAA1111");
   });
 
+  it("admin's pick stores the folder's name (trimmed); a pick without a name clears it", async () => {
+    current.db = admin.db;
+    const nameOf = async () => (await adminClient().from("orgs").select("meeting_folder_name").eq("id", orgId).single()).data!.meeting_folder_name;
+    expect((await call(orgId, { folderId: "folderAAAA1111", folderName: "  Verksamhetsår   2026-2027 " })).status).toBe(204);
+    expect(await nameOf()).toBe("Verksamhetsår 2026-2027");
+    expect((await call(orgId, { folderId: "folderAAAA1111" })).status).toBe(204);
+    expect(await nameOf()).toBeNull();
+    // A member's grant-only pick never changes it.
+    await call(orgId, { folderId: "folderAAAA1111", folderName: "Verksamhetsår 2026-2027" });
+    current.db = member.db;
+    expect((await call(orgId, { folderId: "folderAAAA1111", folderName: "Annat namn" })).status).toBe(204);
+    expect(await nameOf()).toBe("Verksamhetsår 2026-2027");
+  });
+
   it("member with the same id → 204, nothing changes", async () => {
     current.db = member.db;
     const res = await call(orgId, { folderId: "folderAAAA1111" });

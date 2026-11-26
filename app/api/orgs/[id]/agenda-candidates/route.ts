@@ -14,6 +14,8 @@ const fail = (error: string, status: number, message: string) =>
 
 export interface AgendaCandidates {
   folderId: string | null;
+  /** The folder's name as an admin picked it (0030); null when unknown. The förening's text. */
+  folderName: string | null;
   /** The starter's own grant can see the folder (drive.file: they picked it once). */
   accessible: boolean;
   /** Ranked best first; names are the förening's text (UI only, never logged). */
@@ -37,7 +39,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!org || (await myRole(db, id)) === null) return fail("not_found", 404, "Föreningen finns inte.");
 
   const folderId = org.meeting_folder_id ?? null;
-  const none: AgendaCandidates = { folderId, accessible: false, candidates: [], suggestedId: null };
+  const folderName = org.meeting_folder_name ?? null;
+  const none: AgendaCandidates = { folderId, folderName, accessible: false, candidates: [], suggestedId: null };
   if (!folderId) return NextResponse.json(none, { headers: noStore });
 
   // Service role: every Doc the förening's meetings have used (other members' meetings too).
@@ -48,7 +51,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   try {
     const auth = await getGoogleAuth(user.id);
     const { accessible, candidates } = await listCandidates(auth, folderId, usedIds, new Date());
-    const body: AgendaCandidates = { folderId, accessible, candidates, suggestedId: candidates[0]?.id ?? null };
+    const body: AgendaCandidates = { folderId, folderName, accessible, candidates, suggestedId: candidates[0]?.id ?? null };
     return NextResponse.json(body, { headers: noStore });
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {

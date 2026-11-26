@@ -33,7 +33,7 @@ export type AgendaViewState =
   | { state: "loading" }
   | { state: "suggestion"; suggestion: { id: string; name: string } }
   | { state: "none" }
-  | { state: "folder-unreachable" }
+  | { state: "folder-unreachable"; folderName?: string | null }
   | { state: "picker-off" };
 
 /**
@@ -106,7 +106,9 @@ function announcement(p: AgendaStepViewProps, formatName: string): string {
     case "none":
       return "Ingen dagordning hittades.";
     case "folder-unreachable":
-      return "Ditt Google-konto har inte öppnat mötesmappen än.";
+      return p.view.folderName
+        ? `Ditt Google-konto har inte öppnat mötesmappen ${p.view.folderName} än.`
+        : "Ditt Google-konto har inte öppnat mötesmappen än.";
     default:
       return "";
   }
@@ -197,8 +199,17 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="flex items-baseline gap-2">
-          Föreningen har en mötesmapp, men ditt Google-konto har inte öppnat den än. Välj den en gång, så hittar vi dagens
-          dagordning.
+          {p.view.folderName ? (
+            <span>
+              Föreningens mötesmapp heter <strong className="font-medium">{p.view.folderName}</strong>. Ditt Google-konto har inte
+              öppnat den än. Välj den en gång i Google-väljaren, så hamnar mötesdokumentet där.
+            </span>
+          ) : (
+            <span>
+              Föreningen har en mötesmapp, men ditt Google-konto har inte öppnat den än. Välj den en gång i Google-väljaren, så
+              hamnar mötesdokumentet där.
+            </span>
+          )}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onUseFolder} disabled={lock}>
@@ -324,6 +335,7 @@ const CANDIDATES_TIMEOUT_MS = 15_000;
 
 interface Candidates {
   folderId: string | null;
+  folderName?: string | null;
   accessible: boolean;
   candidates: { id: string; name: string }[];
   suggestedId: string | null;
@@ -341,6 +353,7 @@ function AgendaStepOn({
   const picker = usePicker();
   const [view, setView] = useState<AgendaViewState>({ state: "loading" });
   const [folderId, setFolderId] = useState<string | null>(null);
+  const [folderName, setFolderName] = useState<string | null>(null);
   const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(startWithNewDoc ? { kind: "new" } : null);
   const [agendaDocId, setAgendaDocId] = useState<string | null>(null);
   const [formatValue, setFormatValue] = useState(() => initialValue(formats, initialFormat));
@@ -363,8 +376,9 @@ function AgendaStepOn({
         return;
       }
       setFolderId(json.folderId);
+      setFolderName(json.folderName ?? null);
       const suggestion = json.candidates.find((c) => c.id === json.suggestedId);
-      if (json.folderId && !json.accessible) setView({ state: "folder-unreachable" });
+      if (json.folderId && !json.accessible) setView({ state: "folder-unreachable", folderName: json.folderName ?? null });
       else if (suggestion) setView({ state: "suggestion", suggestion: { id: suggestion.id, name: suggestion.name } });
       else setView({ state: "none" });
     } catch {
@@ -414,7 +428,7 @@ function AgendaStepOn({
     setBusy(true);
     setMessage(null);
     try {
-      const picked = await picker.open({ mode: "folder", title: "Välj mötesmappen" });
+      const picked = await picker.open({ mode: "folder", title: folderName ? `Välj mötesmappen ”${folderName}”` : "Välj mötesmappen" });
       if (!picked?.[0]) return;
       const res = await fetch(`/api/orgs/${orgId}/meeting-folder`, {
         method: "POST",

@@ -143,10 +143,10 @@ export async function deletePerson(db: Db, personId: string): Promise<boolean> {
 export async function listMeetings(
   db: Db,
   orgId: string,
-): Promise<Pick<MeetingRow, "id" | "status" | "started_at" | "ended_at" | "doc_id" | "started_by">[]> {
+): Promise<Pick<MeetingRow, "id" | "status" | "started_at" | "ended_at" | "doc_id" | "started_by" | "agenda_doc">[]> {
   const { data, error } = await db
     .from("meetings")
-    .select("id, status, started_at, ended_at, doc_id, started_by")
+    .select("id, status, started_at, ended_at, doc_id, started_by, agenda_doc")
     .eq("org_id", orgId)
     .order("started_at", { ascending: false });
   if (error) fail("listMeetings", error);

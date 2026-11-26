@@ -58,6 +58,8 @@ export interface OrgRow {
   show_on_status: boolean;
   share_transcript: boolean;
   meeting_folder_id?: string | null;
+  /** 0030: the folder's name as picked; null when unknown. The förening's text: never logged. */
+  meeting_folder_name?: string | null;
   created_by: string | null;
   created_at: string;
 }

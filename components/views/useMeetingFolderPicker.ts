@@ -23,7 +23,8 @@ export function useMeetingFolderPicker(orgId: string) {
       const res = await fetch(`/api/orgs/${orgId}/meeting-folder`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ folderId: picked[0].id }),
+        // The name as Google shows it, so the förening page can name the folder without a Drive call.
+        body: JSON.stringify({ folderId: picked[0].id, folderName: picked[0].name }),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string } | null;
