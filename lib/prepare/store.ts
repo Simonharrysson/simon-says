@@ -91,14 +91,8 @@ export const LEASE_MS = 120_000;
  * Take the prepared agenda's lease (atomic: one conditional update), returning the row as it is
  * now, or null while someone else holds it. Every plan is made from this fresh row.
  */
-export async function acquireLease(id: string, now = new Date(), db: SupabaseClient = supabaseAdmin()): Promise<PreparedAgenda | null> {
-  const { data, error } = await db
-    .from("prepared_agendas")
-    .update({ busy_until: new Date(now.getTime() + LEASE_MS).toISOString() })
-    .eq("id", id)
-    // Quoted: the timestamp's "." would split a PostgREST filter.
-    .or(`busy_until.is.null,busy_until.lt."${now.toISOString()}"`)
-    .select(COLUMNS);
+export async function acquireLease(id: string, db: SupabaseClient = supabaseAdmin()): Promise<PreparedAgenda | null> {
+  const { data, error } = await db.rpc("acquire_prepared_lease", { p_id: id, p_ms: LEASE_MS });
   if (error) throw new Error(`prepared_agendas: lease: ${error.message}`);
   return ((data ?? []) as PreparedAgenda[])[0] ?? null;
 }

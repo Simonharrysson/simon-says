@@ -43,7 +43,8 @@ describe.skipIf(!hasLocalSupabase)("prepared agendas (0033)", () => {
     await releaseLease(id);
     expect(await acquireLease(id)).not.toBeNull();
     // An expired lease (a crashed request) is taken over.
-    expect(await acquireLease(id, new Date(Date.now() + 10 * 60_000))).not.toBeNull();
+    await adminClient().from("prepared_agendas").update({ busy_until: new Date(Date.now() - 1000).toISOString() }).eq("id", id);
+    expect(await acquireLease(id)).not.toBeNull();
     await releaseLease(id);
   });
 

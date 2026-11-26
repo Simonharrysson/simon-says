@@ -62,3 +62,18 @@ grant select, insert, update, delete on table public.prepared_agendas to service
 grant select on table public.prepared_agendas to authenticated;
 create policy prepared_agendas_select on public.prepared_agendas for select to authenticated
   using (public.is_org_member(org_id));
+
+-- The lease (service role only): one conditional update, so of two concurrent callers exactly one
+-- gets the row back; an expired lease (a crashed request) is taken over.
+create function public.acquire_prepared_lease(p_id uuid, p_ms integer)
+returns setof public.prepared_agendas
+language sql volatile security definer set search_path = ''
+as $$
+  update public.prepared_agendas
+     set busy_until = now() + make_interval(secs => p_ms / 1000.0)
+   where id = p_id
+     and (busy_until is null or busy_until < now())
+  returning *;
+$$;
+revoke all on function public.acquire_prepared_lease(uuid, integer) from public, anon, authenticated;
+grant execute on function public.acquire_prepared_lease(uuid, integer) to service_role;
