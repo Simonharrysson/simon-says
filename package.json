@@ -24,7 +24,9 @@
     "check-names": "tsx --conditions=react-server scripts/check-names.ts",
     "check-picker-folder": "tsx --conditions=react-server scripts/check-picker-folder.ts",
     "suite": "tsx --conditions=react-server scripts/suite.ts",
-    "eval:goals": "tsx --conditions=react-server scripts/goals-eval.ts"
+    "eval:goals": "tsx --conditions=react-server scripts/goals-eval.ts",
+    "e2e": "playwright test",
+    "e2e:fakes": "tsx --conditions=react-server e2e/fakes/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.13.0",
@@ -45,11 +47,14 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.0",
     "@tailwindcss/postcss": "4.3.5",
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/ws": "8.18.2",
+    "playwright-core": "1.65.0",
     "tailwindcss": "4.3.5",
     "tsx": "4.23.15",
     "typescript": "6.0.3",

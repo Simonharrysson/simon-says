@@ -19,3 +19,8 @@ next-env.d.ts
 /.check-notes/
 # scripts/notes-replay.ts logs (may quote transcripts)
 /.notes-replay/
+
+# Playwright e2e (npm run e2e)
+/test-results/
+/playwright-report/
+/e2e/.auth/
