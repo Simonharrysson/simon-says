@@ -82,7 +82,7 @@ export async function memberRole(db: Db, orgId: string, userId: string): Promise
 export async function updateOrgSettings(
   db: Db,
   orgId: string,
-  settings: Partial<Pick<OrgRow, "name" | "show_on_status" | "share_transcript">>,
+  settings: Partial<Pick<OrgRow, "name" | "show_on_status" | "share_transcript" | "about" | "website_url" | "facebook_url" | "instagram_url">>,
 ): Promise<boolean> {
   const { data, error } = await db.from("orgs").update(settings).eq("id", orgId).select("id");
   if (error) fail("updateOrgSettings", error);

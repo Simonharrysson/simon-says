@@ -1,0 +1,23 @@
+{
+  "errors": {
+    "about": "Om oss får vara högst {max} tecken.",
+    "website": "Skriv en webbadress som börjar med https://, t.ex. https://exempel.se.",
+    "facebook": "Skriv adressen till er Facebook-sida, t.ex. facebook.com/exempel.",
+    "instagram": "Skriv ert Instagram-namn, t.ex. @exempel eller instagram.com/exempel."
+  },
+  "checkFields": "Kontrollera fälten och försök igen.",
+  "offline": "Vi nådde inte servern. Försök igen.",
+  "onlineLabel": "Föreningen på nätet",
+  "website": "Webbplats: {site}",
+  "newTab": "{label} (öppnas i ny flik)",
+  "about": "Om oss",
+  "aboutHint": "Några meningar om föreningen. Alla medlemmar ser texten på föreningssidan.",
+  "websiteLabel": "Webbplats",
+  "legend": "Om föreningen",
+  "intro": "Texten och länkarna visas överst på föreningssidan. Allt är valfritt.",
+  "saving": "Sparar…",
+  "save": "Spara Om oss",
+  "saved": "Sparat",
+  "onboardingToggle": "Om föreningen och länkar (valfritt)",
+  "onboardingHint": "En kort text och länkar till webbplats, Facebook och Instagram. Medlemmarna ser dem överst på föreningssidan."
+}

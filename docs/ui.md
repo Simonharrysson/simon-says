@@ -589,7 +589,9 @@ Inställningar links to the guide.
    (`squareLogo`), uploaded to `POST /api/orgs/<id>/logo` (bytes checked: PNG/JPEG/WebP, ≤ 1 MB),
    stored privately in storage `org-logos/<id>/logo`, served member-checked at
    `GET /api/orgs/<id>/logo?v=…`. `OrgLogo` shows it on the förening page and in the list only,
-   never in the Docs; without one, the first letter on ink.
+   never in the Docs; without one, the first letter on ink. Behind a quiet disclosure, "Om
+   föreningen och länkar (valfritt)": the same fields as Inställningar → Om oss (below), saved on
+   Fortsätt only when changed.
 2. **Styrelsen**: ONE list (`boardRows`, `lib/people/board.ts`): people (name, role) plus members
    nobody has named yet ("Namn saknas" + Lägg till namn). An e-mail invites (`set_person_email`):
    the person is linked to the member account with that address now or when they join
@@ -616,6 +618,19 @@ Inställningar links to the guide.
 
 **Klart**: what was done (✓) and skipped (– · Gör nu), "Förbered första mötet →" (primary).
 `/design`: `onboarding-*`, `org-kom-igang`, `orgs-logos`.
+
+## Om oss (todo #13, migration 0044)
+
+The förening's short text (plain text, ≤ 600 characters, line breaks kept) and links to its
+website, Facebook and Instagram. Admins edit them in Inställningar (`OrgProfileForm`, "Spara Om
+oss") and in Kom igång step 1; `saveProfileAction` parses with `lib/orgs/profile.ts` (https only;
+Facebook/Instagram must be that host exactly; "@exempel" → `https://instagram.com/exempel`) and saves
+through the normal org update (column grant, `orgs_update`: admins). The columns' checks accept only
+that canonical form. Members see it in the page header under the badge (`OrgAbout`): the text, then
+ghost icon buttons (`IconGlobe`, `IconFacebook`, `IconInstagram`; outline glyphs in our stroke, not
+the brands' filled marks) with accessible names "… (öppnas i ny flik)", `target="_blank"`,
+`rel="noopener noreferrer"`. Nothing renders when everything is empty. `/design`: `org-member-about`,
+`org-admin` (the form), `onboarding-1-about`.
 
 ## Sammanfattning efter mötet (Simon's todo, migration 0037)
 

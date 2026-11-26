@@ -62,6 +62,7 @@ export default async function OnboardingPage({ params, searchParams }: { params:
         logoUpdatedAt: org.logo_updated_at ?? null,
         folderSet: Boolean(org.meeting_folder_id),
         folderName: org.meeting_folder_name ?? null,
+        profile: { about: org.about ?? null, website_url: org.website_url ?? null, facebook_url: org.facebook_url ?? null, instagram_url: org.instagram_url ?? null },
       }}
       initialStep={step}
       state={s}

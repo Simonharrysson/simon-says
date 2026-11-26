@@ -7,7 +7,7 @@ import { Button, ButtonLink, Spinner } from "@/components/ui/button";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Check, Field, hintClass } from "@/components/ui/Field";
-import { IconCheck, IconFolder, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
+import { IconCheck, IconChevronDown, IconFolder, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
@@ -18,6 +18,8 @@ import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
 import { StadgarArsmote, type StadgarPhase } from "@/components/views/StadgarArsmote";
 import { OrgLogo } from "./OrgLogo";
+import { OrgProfileFields } from "@/components/views/OrgProfileForm";
+import type { ProfileErrors, ProfileInput } from "@/lib/orgs/profile";
 
 // Kom igång's six steps and the end, presentational (no fetching): the container
 // (Onboarding.tsx) and the /design gallery give them data and callbacks.
@@ -45,6 +47,10 @@ export interface LogoStepProps {
   name: string;
   onName: (name: string) => void;
   nameError?: string;
+  /** "Om oss" and links (todo #13, optional): shown behind a quiet disclosure until opened or set. */
+  profile?: ProfileInput;
+  onProfile?: (field: keyof ProfileInput, text: string) => void;
+  profileErrors?: ProfileErrors;
 }
 
 export function LogoStep(p: LogoStepProps) {
@@ -134,6 +140,32 @@ export function LogoStep(p: LogoStepProps) {
           }}
         />
         <Note tone={p.message?.tone}>{p.message?.text}</Note>
+      </div>
+      {p.profile && p.onProfile && <ProfileSection value={p.profile} onChange={p.onProfile} errors={p.profileErrors} />}
+    </div>
+  );
+}
+
+function ProfileSection({ value, onChange, errors }: { value: ProfileInput; onChange: (field: keyof ProfileInput, text: string) => void; errors?: ProfileErrors }) {
+  const pt = useTranslations("profile");
+  const id = useId();
+  const [open, setOpen] = useState(() => Object.values(value).some((v) => v.trim()) || Boolean(errors && Object.values(errors).some(Boolean)));
+  const shown = open || Boolean(errors && Object.values(errors).some(Boolean));
+  return (
+    <div className="flex flex-col gap-4 border-t border-line pt-6">
+      <button
+        type="button"
+        className="-mx-2 inline-flex min-h-10 items-center gap-2 self-start rounded-md px-2 text-sm font-medium text-ink hover:bg-sunk max-md:min-h-11"
+        aria-expanded={shown}
+        aria-controls={`${id}-profile`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <IconChevronDown size={16} className={cn("transition-transform duration-200 ease-out", !shown && "-rotate-90")} />
+        {pt("onboardingToggle")}
+      </button>
+      <div id={`${id}-profile`} hidden={!shown}>
+        <p className={cn(hintClass, "mb-4 max-w-[40rem]")}>{pt("onboardingHint")}</p>
+        <OrgProfileFields value={value} onChange={onChange} errors={errors} />
       </div>
     </div>
   );
