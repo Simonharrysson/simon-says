@@ -694,6 +694,24 @@ const render: Record<string, () => ReactNode> = {
             meetings={[]}
             notice={orgNotice(undefined, "admin-ny", locale)}
             startMeetingHref="#"
+            boardList={(memberControls) => (
+              <BoardStep
+                orgName={org.name}
+                rows={[
+                  { ...demoBoard[0], member: { ...adminMembers[0] } },
+                  { ...demoBoard[1], member: { ...adminMembers[1], role: "admin" } },
+                  demoBoard[4],
+                ]}
+                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                myEmail="anna.berg@example.com"
+                showInvite={false}
+                memberControls={memberControls}
+                onAdd={async () => null}
+                onUpdate={async () => null}
+                onRemove={async () => null}
+              />
+            )}
+            tabs={{ active: "installningar", href: orgTabsHref }}
             actions={actions}
           />
         )}

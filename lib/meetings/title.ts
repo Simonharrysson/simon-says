@@ -56,12 +56,16 @@ export function agendaTitle(m: Pick<TitleSource, "agenda_labels" | "agenda_roles
     .map(([, label]) => label.trim());
   if (!topics.length) return null;
   const [first, ...rest] = topics;
-  return cleanMeetingTitle([first, ...rest.map(midSentence)].join(` ${and} `));
+  const pair = [first, ...rest.map(midSentence)].join(` ${and} `);
+  // Two long labels would be cut mid-phrase: then the first topic alone.
+  const fits = (t: string) => t.split(" ").length <= MAX_WORDS && t.length <= MEETING_TITLE_MAX;
+  return cleanMeetingTitle(fits(pair) ? pair : first);
 }
 
 /** The title the list shows, or null (then the date is the main line). `and`: the locale's "och"/"and". */
 export function meetingTitle(m: TitleSource, and: string): string | null {
+  // The event's title as the förening wrote it (already one line and capped, parseMeetingEvent).
   const event = parseMeetingEvent(m.calendar_event)?.title;
-  if (event) return cleanMeetingTitle(event);
+  if (event) return event;
   return cleanMeetingTitle(m.title) ?? agendaTitle(m, and);
 }

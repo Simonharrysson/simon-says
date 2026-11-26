@@ -1,4 +1,11 @@
+import type { Page } from "@playwright/test";
 import { expect, expectAccessible, seedMeeting, test } from "../fixtures";
+
+/** Nothing wider than the screen (no sideways scrolling at 390 px). */
+async function expectNoOverflow(page: Page) {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow, "horizontal overflow in px").toBeLessThanOrEqual(0);
+}
 
 // The förening page's tabs (Möten, Översikt; admins also Inställningar) and the meeting list:
 // titles as the main line with the date and "n beslut · n uppgifter" under it, newest first, five
@@ -27,6 +34,7 @@ test("tabs: a member sees Möten and Översikt, an admin also Inställningar @ph
   await expect(board.getByRole("listitem")).toHaveCount(3);
   await expect(board.getByRole("listitem").filter({ hasText: member }).getByRole("button", { name: "Gör till admin" })).toBeVisible();
   await expectAccessible(page);
+  await expectNoOverflow(page);
 
   // An old link to the settings' place on the long page lands on the tab.
   await page.goto(`${org.url}#sammanfattning`);
@@ -78,4 +86,5 @@ test("meeting list: titles, counts, five shown, Testmöten folded @phone", async
   await expect(testList.getByRole("listitem")).toHaveCount(2);
   await expect(testList.getByRole("listitem").first()).toContainText("Testmöte");
   await expectAccessible(page);
+  await expectNoOverflow(page);
 });

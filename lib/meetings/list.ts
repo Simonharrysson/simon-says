@@ -41,13 +41,16 @@ async function meetingRows(db: SupabaseClient, orgId: string): Promise<Row[]> {
   throw new Error("meeting list: meetings unreadable");
 }
 
-/** Decisions and tasks per meeting id (primary rows only, as the dashboard counts them). */
+/**
+ * Decisions and tasks per meeting id: primary rows only, and only tasks written in that meeting
+ * (a task carried in from last week, "Från förra veckan", counts where it was opened).
+ */
 export function countItems(items: ChainItem[]): Map<string, { decisions: number; tasks: number }> {
   const out = new Map<string, { decisions: number; tasks: number }>();
   for (const r of items) {
     const c = out.get(r.meeting_id) ?? { decisions: 0, tasks: 0 };
     if (isDecision(r)) c.decisions++;
-    else if (isTask(r)) c.tasks++;
+    else if (isTask(r) && r.carried_from_id == null) c.tasks++;
     out.set(r.meeting_id, c);
   }
   return out;

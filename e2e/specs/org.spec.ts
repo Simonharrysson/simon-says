@@ -77,7 +77,7 @@ test("delete a meeting, then the förening (confirm dialogs)", async ({ page, se
   expect((await fake.doc(meeting.docId))?.trashed).toBe(false);
 
   // Radera föreningen (Inställningar) needs the name typed.
-  await page.getByRole("link", { name: "Inställningar" }).click();
+  await page.getByRole("navigation", { name: "Föreningens vyer" }).getByRole("link", { name: "Inställningar" }).click();
   await expect(page).toHaveURL(/flik=installningar/);
   await page.getByRole("button", { name: "Radera föreningen" }).click();
   const confirm = page.getByRole("dialog", { name: `Radera ${org.name}?` });

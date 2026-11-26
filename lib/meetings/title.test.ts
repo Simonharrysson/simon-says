@@ -40,6 +40,11 @@ describe("agendaTitle", () => {
     expect(agendaTitle({ agenda_labels: { "ag-1": "Budget", "ag-2": "IT-frågor" } }, "och")).toBe("Budget och IT-frågor");
   });
 
+  it("falls back to the first topic when the pair would be cut", () => {
+    const long = { agenda_labels: { "ag-1": "Genomgång av föreningens ekonomi inför hösten", "ag-2": "Planering av vårens prova-på-kväll för nya" } };
+    expect(agendaTitle(long, "och")).toBe("Genomgång av föreningens ekonomi inför hösten");
+  });
+
   it("is null without topics", () => {
     expect(agendaTitle({ agenda_labels: { "ag-1": "Må-runda" }, agenda_roles: { "ag-1": "checkin" } }, "och")).toBeNull();
     expect(agendaTitle({}, "och")).toBeNull();
@@ -48,6 +53,11 @@ describe("agendaTitle", () => {
 
 describe("meetingTitle", () => {
   const agenda = { agenda_labels: { "ag-1": "Ekonomi" } };
+
+  it("a long calendar title is kept as the calendar has it", () => {
+    const title = "Styrelsemöte med budget, lokalfrågan och planering av vårens aktiviteter";
+    expect(meetingTitle({ calendar_event: { title } }, "och")).toBe(title);
+  });
 
   it("the calendar event wins", () => {
     expect(meetingTitle({ title: "Budget", calendar_event: { title: "Styrelsemöte november" }, ...agenda }, "och")).toBe("Styrelsemöte november");

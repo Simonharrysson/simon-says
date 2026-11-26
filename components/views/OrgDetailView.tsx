@@ -232,7 +232,7 @@ const TABS: { id: OrgTab; label: "tabMeetings" | "tabOverview" | "tabSettings"; 
 function OrgTabs({ active, href, isAdmin }: { active: OrgTab; href: (tab: OrgTab) => string; isAdmin: boolean }) {
   const t = useTranslations("org");
   return (
-    <nav aria-label={t("tabsLabel")} className="-mt-2 flex gap-1 overflow-x-auto border-b border-line">
+    <nav aria-label={t("tabsLabel")} className="-mt-2 flex gap-1 border-b border-line">
       {TABS.filter((tab) => isAdmin || !tab.adminOnly).map((tab) => (
         <Link
           key={tab.id}
@@ -411,7 +411,6 @@ export function OrgDetailView(props: OrgDetailViewProps) {
               endMeeting={actions.endMeeting}
               liveMeetingHref={liveMeetingHref}
             />
-            {!tabs && formatCard}
           </div>
 
           {/* Members: who is in the förening and the invite link; admins have all of it under Inställningar. */}
