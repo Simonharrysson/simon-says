@@ -3,6 +3,7 @@ import { carriedItems } from "@/lib/agenda/followup";
 import type { NoteItemRow } from "@/lib/db/types";
 import { ARSMOTE, STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 import { buildDraft, droppedSources, kindsOfType, normaliseItems, refreshDraft, validDate, type DraftItem } from "./draft";
+import { isMeetingType, isOfferedType, MEETING_TYPES, meetingTypeName } from "./types";
 
 const task = (id: string, text: string, owner: string | null, due: string | null = null): NoteItemRow =>
   ({ meeting_id: "m1", id, section: "action", kind: "task", text, owner, due, done: false, locked: false, deleted_by_human: false, position: 0 }) as NoteItemRow;
@@ -42,6 +43,17 @@ describe("buildDraft", () => {
     expect(ars.map((i) => i.label).slice(-2)).toEqual(["Övriga frågor", "Mötets avslutande"]);
     expect(kindsOfType("veckomote")).toContain(null);
     expect(kindsOfType("arsmote")).toEqual(["arsmote"]);
+  });
+});
+
+describe("meeting types (todo #15)", () => {
+  it("Veckomöte and Årsmöte are offered; a stored Styrelsemöte still has its name", () => {
+    expect(MEETING_TYPES.map((t) => t.type)).toEqual(["veckomote", "arsmote"]);
+    expect(isOfferedType("styrelsemote")).toBe(false);
+    expect(isMeetingType("styrelsemote")).toBe(true);
+    expect(isMeetingType("nope")).toBe(false);
+    expect(meetingTypeName("styrelsemote")).toBe("Styrelsemöte");
+    expect(meetingTypeName("arsmote")).toBe("Årsmöte");
   });
 });
 

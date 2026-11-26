@@ -3,17 +3,26 @@ import type { ItemRole } from "@/lib/db/types";
 // Förbered möte: the types and names the UI shares with the server (no server or Doc code here,
 // so client components stay small).
 
-/** The meeting types the ordförande chooses between; Veckomöte "almost always". */
+/**
+ * A prepared agenda's meeting type. "styrelsemote" is no longer offered (todo #15: a förening has
+ * its ordinary meetings and its årsmöte; the stadgar are for the årsmöte), but agendas prepared as
+ * one before stay readable, so the type remains for stored rows.
+ */
 export type MeetingType = "veckomote" | "styrelsemote" | "arsmote";
 
+/** The meeting types the ordförande chooses between; Veckomöte "almost always". */
 export const MEETING_TYPES: { type: MeetingType; name: string; hint: string }[] = [
-  { type: "veckomote", name: "Veckomöte", hint: "Det vanliga mötet. Följer upp förra veckans uppgifter." },
-  { type: "styrelsemote", name: "Styrelsemöte", hint: "Med paragrafer, justerare och underskrifter." },
+  { type: "veckomote", name: "Veckomöte", hint: "Det vanliga mötet, i föreningens format. Följer upp förra veckans uppgifter." },
   { type: "arsmote", name: "Årsmöte", hint: "Föreningens årsmöte, med dagordningen från era stadgar eller standarden." },
 ];
 
-export const isMeetingType = (v: unknown): v is MeetingType => MEETING_TYPES.some((t) => t.type === v);
-export const meetingTypeName = (t: MeetingType) => MEETING_TYPES.find((x) => x.type === t)!.name;
+const NAMES: Record<MeetingType, string> = { veckomote: "Veckomöte", styrelsemote: "Styrelsemöte", arsmote: "Årsmöte" };
+
+/** Any stored type (an agenda prepared as a Styrelsemöte before todo #15 included). */
+export const isMeetingType = (v: unknown): v is MeetingType => typeof v === "string" && Object.hasOwn(NAMES, v);
+/** A type that can be chosen for a new agenda. */
+export const isOfferedType = (v: unknown): v is MeetingType => MEETING_TYPES.some((t) => t.type === v);
+export const meetingTypeName = (t: MeetingType) => NAMES[t] ?? NAMES.veckomote;
 
 /** One open task under "Från förra veckan". `source`: `<meeting id>:<item id>` of the task carried. */
 export interface DraftTask {

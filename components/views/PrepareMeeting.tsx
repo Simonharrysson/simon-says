@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addBack, addItem, bodyItems, withPending } from "@/lib/prepare/edit";
-import { MEETING_TYPES, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
+import { MEETING_TYPES, meetingTypeName, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
 import { cn } from "@/lib/utils";
 
 // "Förbered möte" (todo #6): the ordförande prepares the next meeting. Step 1 chooses the kind
@@ -246,7 +246,7 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
   const off = p.items.filter((i) => !i.on);
   const saving = p.phase.saving === true;
   const held = p.existing?.held === true;
-  const typeName = MEETING_TYPES.find((t) => t.type === p.type)?.name ?? "";
+  const typeName = meetingTypeName(p.type);
   const lock = saving || held;
   const newId = p.newId ?? (() => `add:${Math.random().toString(36).slice(2, 10)}`);
 
