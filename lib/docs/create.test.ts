@@ -5,16 +5,18 @@ const g = vi.hoisted(() => ({
   list: vi.fn(),
   filesCreate: vi.fn(),
   permCreate: vi.fn(),
+  filesGet: vi.fn(),
   get: vi.fn(),
   batchUpdate: vi.fn(),
 }));
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
   docsApi: () => ({ documents: { get: g.get, batchUpdate: g.batchUpdate } }),
-  driveApi: () => ({ files: { list: g.list, create: g.filesCreate }, permissions: { create: g.permCreate } }),
+  driveApi: () => ({ files: { list: g.list, create: g.filesCreate, get: g.filesGet }, permissions: { create: g.permCreate } }),
 }));
 
-import { createMeetingDoc, INITIAL_HEADER, meetingTitle } from "./create";
+import { TEST_DOC_SUFFIX } from "@/lib/agenda/candidates";
+import { createMeetingDoc, INITIAL_HEADER, meetingTitle, titleOfFormat } from "./create";
 
 const auth = {} as OAuth2Client;
 const M = "11111111-2222-3333-4444-555555555555";
@@ -22,6 +24,7 @@ const input = {
   meetingId: M,
   orgName: "LiU AI Society",
   startedAt: new Date("2026-11-24T13:05:00Z"),
+  title: "2026-11-24 Möte – LiU AI Society",
   memberEmails: ["a@x.se", "b@x.se"],
   shareTranscript: true,
 };
@@ -36,9 +39,62 @@ beforeEach(() => {
 });
 
 describe("meetingTitle", () => {
-  it("uses Swedish local time (CET in winter, CEST in summer)", () => {
-    expect(meetingTitle("Styrelsen", new Date("2026-11-24T13:05:00Z"))).toBe("Styrelsen möte 2026-11-24 14:05");
-    expect(meetingTitle("Styrelsen", new Date("2026-07-01T22:30:00Z"))).toBe("Styrelsen möte 2026-07-02 00:30");
+  it("is date first in Swedish local time (CET in winter, CEST in summer)", () => {
+    expect(meetingTitle("Styrelsen", new Date("2026-11-24T13:05:00Z"))).toBe("2026-11-24 Möte – Styrelsen");
+    expect(meetingTitle("Styrelsen", new Date("2026-07-01T22:30:00Z"))).toBe("2026-07-02 Möte – Styrelsen");
+  });
+
+  it("uses the format's title and marks a Testmöte so it is never an agenda candidate", () => {
+    const at = new Date("2026-11-26T18:00:00Z");
+    expect(meetingTitle("Ekdala Padelklubb", at, { formatTitle: "Mötesprotokoll" })).toBe("2026-11-26 Mötesprotokoll – Ekdala Padelklubb");
+    expect(meetingTitle("Ekdala Padelklubb", at, { formatTitle: "  ", test: true })).toBe("2026-11-26 Möte – Ekdala Padelklubb (Testmöte)");
+    expect(meetingTitle("X", at, { test: true }).endsWith(TEST_DOC_SUFFIX)).toBe(true);
+  });
+
+  it("names the meeting for every format but Enkel", () => {
+    expect(titleOfFormat({ kind: "veckomote", title: "Mötesprotokoll" })).toBe("Mötesprotokoll");
+    expect(titleOfFormat({ kind: "learned", title: "Protokoll styrelsemöte" })).toBe("Protokoll styrelsemöte");
+    expect(titleOfFormat({ kind: "enkel", title: "Anteckningar" })).toBeNull();
+  });
+});
+
+describe("createMeetingDoc placement", () => {
+  it("creates the Doc in the meeting folder when this grant can add to it, tagged, not in the own folder", async () => {
+    g.filesGet.mockResolvedValue({ data: { capabilities: { canAddChildren: true } } });
+    const r = await createMeetingDoc(auth, { ...input, meetingFolderId: "meetFolder" });
+    expect(g.filesGet.mock.calls[0][0]).toMatchObject({ fileId: "meetFolder", supportsAllDrives: true });
+    expect(g.list).not.toHaveBeenCalled();
+    expect(g.filesCreate.mock.calls[0][0]).toMatchObject({
+      requestBody: { parents: ["meetFolder"], writersCanShare: false, appProperties: { simonSaysMeeting: "1" } },
+      supportsAllDrives: true,
+    });
+    expect(r.place).toBe("meeting_folder");
+  });
+
+  it("leaves writersCanShare to the shared drive", async () => {
+    g.filesGet.mockResolvedValue({ data: { driveId: "sd1", capabilities: { canAddChildren: true } } });
+    await createMeetingDoc(auth, { ...input, meetingFolderId: "meetFolder" });
+    expect(g.filesCreate.mock.calls[0][0].requestBody).not.toHaveProperty("writersCanShare");
+  });
+
+  it("falls back to the starter's own folder when the grant can't see the folder (never picked)", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    g.filesGet.mockRejectedValue(Object.assign(new Error("File not found"), { code: 404 }));
+    const r = await createMeetingDoc(auth, { ...input, meetingFolderId: "meetFolder" });
+    expect(g.filesCreate.mock.calls[0][0].requestBody.parents).toEqual(["folder1"]);
+    expect(r.place).toBe("own_folder");
+  });
+
+  it("falls back when the folder is read-only, and when the create there fails", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    g.filesGet.mockResolvedValue({ data: { capabilities: { canAddChildren: false } } });
+    expect((await createMeetingDoc(auth, { ...input, meetingFolderId: "meetFolder" })).place).toBe("own_folder");
+
+    g.filesCreate.mockReset().mockRejectedValueOnce(new Error("insufficientFilePermissions")).mockResolvedValue({ data: { id: "doc2" } });
+    g.filesGet.mockResolvedValue({ data: { capabilities: { canAddChildren: true } } });
+    const r = await createMeetingDoc(auth, { ...input, meetingFolderId: "meetFolder" });
+    expect(g.filesCreate.mock.calls[1][0].requestBody.parents).toEqual(["folder1"]);
+    expect(r).toMatchObject({ docId: "doc2", place: "own_folder" });
   });
 });
 
@@ -49,11 +105,13 @@ describe("createMeetingDoc", () => {
     expect(g.list.mock.calls[0][0].q).toContain("'me' in owners");
     expect(g.filesCreate).toHaveBeenCalledTimes(1);
     expect(g.filesCreate.mock.calls[0][0].requestBody).toEqual({
-      name: "LiU AI Society möte 2026-11-24 14:05",
+      name: "2026-11-24 Möte – LiU AI Society",
       mimeType: "application/vnd.google-apps.document",
       parents: ["folder1"],
+      appProperties: { simonSaysMeeting: "1" },
       writersCanShare: false, // members edit, only the owner shares further
     });
+    expect(g.filesGet).not.toHaveBeenCalled(); // no meeting folder
   });
 
   it("creates the folder when there is none, and escapes quotes in the name", async () => {
@@ -109,6 +167,8 @@ describe("createMeetingDoc", () => {
         action: `ss-${M}-sec-action`,
         now: `ss-${M}-sec-now`,
       },
+      place: "own_folder",
+      shared: ["a@x.se", "b@x.se"],
       shareFailed: [],
     });
   });
@@ -127,6 +187,7 @@ describe("createMeetingDoc", () => {
       expect(g.permCreate.mock.calls[i][0]).toEqual({
         fileId: "doc1",
         sendNotificationEmail: false,
+        supportsAllDrives: true,
         requestBody: { role: "writer", type: "user", emailAddress: email },
       });
     }
@@ -137,6 +198,7 @@ describe("createMeetingDoc", () => {
     g.permCreate.mockRejectedValueOnce(new Error("nope")).mockResolvedValueOnce({ data: {} });
     const r = await createMeetingDoc(auth, input);
     expect(r.shareFailed).toEqual(["a@x.se"]);
+    expect(r.shared).toEqual(["b@x.se"]);
   });
 
   it("throws when the Doc cannot be written", async () => {
@@ -164,8 +226,8 @@ describe("createFormatDoc", () => {
       return { data: {} };
     });
     const res = await createFormatDoc(auth, { ...input, profile: VECKOMOTE });
-    expect(res).toEqual({ docId: "doc1", tabId: "t.0", transcriptTabId: "t.1", shareFailed: ["b@x.se"] });
-    expect(g.filesCreate.mock.calls[0][0].requestBody.name).toBe("LiU AI Society möte 2026-11-24 14:05");
+    expect(res).toEqual({ docId: "doc1", tabId: "t.0", transcriptTabId: "t.1", place: "own_folder", shared: ["a@x.se"], shareFailed: ["b@x.se"] });
+    expect(g.filesCreate.mock.calls[0][0].requestBody.name).toBe("2026-11-24 Möte – LiU AI Society");
     expect(g.filesCreate.mock.calls[0][0].requestBody.writersCanShare).toBe(false);
     expect(g.get).toHaveBeenCalledTimes(2);
     expect(g.batchUpdate).toHaveBeenCalledTimes(2);

@@ -16,6 +16,8 @@ const m = vi.hoisted(() => ({
   getOrg: vi.fn(),
   myRole: vi.fn(),
   memberEmails: vi.fn(),
+  recordDocShares: vi.fn(),
+  trashDoc: vi.fn(),
   getGoogleAuth: vi.fn(),
   createMeetingDoc: vi.fn(),
   createFormatDoc: vi.fn(),
@@ -123,13 +125,15 @@ vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({ rpc: m.guard, from: (table: string) => builder(table) }),
 }));
 vi.mock("@/lib/db/orgs", () => ({ getOrg: m.getOrg, myRole: m.myRole }));
-vi.mock("@/lib/db/members", () => ({ memberEmails: m.memberEmails }));
+vi.mock("@/lib/db/members", () => ({ orgMemberList: m.memberEmails }));
+vi.mock("@/lib/docs/access", () => ({ recordDocShares: m.recordDocShares }));
 vi.mock("@/lib/db/events", () => ({ logEvent: m.logEvent }));
-vi.mock("@/lib/docs/create", () => ({
+vi.mock("@/lib/docs/create", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/docs/create")>()),
   createMeetingDoc: m.createMeetingDoc,
   createFormatDoc: m.createFormatDoc,
   addTranscriptTab: m.addTranscriptTab,
-  meetingTitle: (org: string) => `${org} möte`,
+  trashDoc: m.trashDoc,
 }));
 vi.mock("@/lib/agenda/access", () => ({ checkAgendaDoc: m.checkAgendaDoc }));
 vi.mock("@/lib/agenda/anchor", async (importOriginal) => ({
@@ -170,6 +174,8 @@ const doc = {
   headerRange: "ss-x-header",
   headerRendered: "LIVE · uppdaterad –",
   sectionRanges: { attendees: "a", decision: "b", action: "c", now: "d" },
+  place: "own_folder",
+  shared: ["b@x.se"],
   shareFailed: [],
 };
 
@@ -177,7 +183,12 @@ beforeEach(() => {
   Object.assign(m, { user: { id: "u1", email: "Starter@x.se" }, active: [], killSwitch: false });
   m.getOrg.mockReset().mockResolvedValue({ id: ORG, name: "Styrelsen", share_transcript: true });
   m.myRole.mockReset().mockResolvedValue("member");
-  m.memberEmails.mockReset().mockResolvedValue(["starter@x.se", "b@x.se"]);
+  m.memberEmails.mockReset().mockResolvedValue([
+    { userId: "u1", email: "starter@x.se", role: "admin" },
+    { userId: "u2", email: "b@x.se", role: "member" },
+  ]);
+  m.recordDocShares.mockReset().mockResolvedValue(undefined);
+  m.trashDoc.mockReset().mockResolvedValue(undefined);
   m.getGoogleAuth.mockReset().mockResolvedValue({});
   m.createMeetingDoc.mockReset().mockResolvedValue(doc);
   m.insert.mockReset().mockResolvedValue({ error: null });
@@ -186,7 +197,7 @@ beforeEach(() => {
   m.liveRows = () => [];
   m.recentRows = () => [];
   m.guard.mockReset().mockResolvedValue({ data: "ok", error: null });
-  m.createFormatDoc.mockReset().mockResolvedValue({ docId: "fdoc", tabId: "t.f", transcriptTabId: "t.ft", shareFailed: [] });
+  m.createFormatDoc.mockReset().mockResolvedValue({ docId: "fdoc", tabId: "t.f", transcriptTabId: "t.ft", place: "meeting_folder", shared: [], shareFailed: [] });
   m.addTranscriptTab.mockReset().mockResolvedValue("t.tr");
   m.checkAgendaDoc.mockReset().mockResolvedValue({ ok: true, name: "Mötesprotokoll v48" });
   m.anchorAgenda.mockReset().mockImplementation(async (_auth: unknown, input: { meetingId: string; tabId?: string }) =>
@@ -275,11 +286,15 @@ describe("POST /api/meetings", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.docUrl).toBe("https://docs.google.com/document/d/doc1/edit");
-    expect(json.title).toBe("Styrelsen möte");
+    expect(json.title).toMatch(/^\d{4}-\d{2}-\d{2} Möte – Styrelsen$/); // Enkel: "Möte"
+    expect(json.docPlace).toBe("own_folder");
     expect(json.shareFailed).toBe(0); // C10: the page warns when members didn't get access
     const input = m.createMeetingDoc.mock.calls[0][1];
     expect(input).toMatchObject({ orgName: "Styrelsen", shareTranscript: true, meetingId: json.meetingId });
     expect(input.memberEmails).toEqual(["b@x.se"]); // the starter is not shared with
+    expect(input.title).toBe(json.title);
+    expect(input.meetingFolderId).toBeNull();
+    expect(m.recordDocShares).toHaveBeenCalledWith(json.meetingId, ["u2"]);
     const row = m.insert.mock.calls[0][0];
     expect(row).toMatchObject({
       id: json.meetingId,
@@ -391,6 +406,31 @@ describe("POST /api/meetings", () => {
     res2 = await call({ orgId: ORG, consent: true });
     expect([res2.status, (await res2.json()).error]).toEqual([409, "agenda_used"]);
     expect(m.logEvent).not.toHaveBeenCalled();
+  });
+
+  it("a refused start trashes its new Doc (never an orphan in the förening's folder); an agenda Doc is never trashed", async () => {
+    m.guard.mockResolvedValue({ data: "org_busy", error: null });
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(409);
+    expect(m.trashDoc).toHaveBeenCalledWith({}, "doc1");
+    m.trashDoc.mockClear();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.guard.mockResolvedValue({ data: "ok", error: null });
+    m.insert.mockResolvedValue({ error: { message: "db down" } });
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(500);
+    expect(m.trashDoc).toHaveBeenCalledWith({}, "doc1");
+  });
+
+  it("creates the Doc in the förening's meeting folder, named after the format, and says where it went", async () => {
+    m.getOrg.mockResolvedValue({ id: ORG, name: "Styrelsen", share_transcript: true, meeting_folder_id: "meetFolder123" });
+    m.profiles = [{ id: "pdef", org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: true }];
+    const res = await call({ orgId: ORG, consent: true });
+    const json = await res.json();
+    const input = m.createFormatDoc.mock.calls[0][1];
+    expect(input.meetingFolderId).toBe("meetFolder123");
+    expect(input.title).toMatch(/^\d{4}-\d{2}-\d{2} Mötesprotokoll – Styrelsen$/);
+    expect(json).toMatchObject({ docPlace: "meeting_folder", title: input.title });
+    expect(eventsOf("started")[0][2]).toMatchObject({ docPlace: "meeting_folder" });
+    m.profiles = [];
   });
 
   it("a database without 0027: falls back to the 0021 guard", async () => {

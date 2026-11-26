@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
       docUrl: result.docUrl,
       title: result.title,
       shareFailed: result.shareFailed,
+      // meeting_folder | own_folder | agenda: the page says when the Doc missed the förening's folder.
+      docPlace: result.docPlace,
       agenda: result.agenda,
       appended: result.appended,
       carried: result.carried,

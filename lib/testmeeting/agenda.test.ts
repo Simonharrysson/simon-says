@@ -67,7 +67,7 @@ describe("createTestAgendaDoc", () => {
     expect(g.filesGet.mock.calls[0][0]).toMatchObject({ fileId: "meetFolder", supportsAllDrives: true });
     expect(g.filesCreate.mock.calls[0][0]).toMatchObject({
       requestBody: {
-        name: "Mötesprotokoll 2026-11-25 (Testmöte)",
+        name: "2026-11-25 Mötesprotokoll – Testföreningen (Testmöte)",
         mimeType: "application/vnd.google-apps.document",
         parents: ["meetFolder"],
         writersCanShare: false,
@@ -112,7 +112,7 @@ describe("createTestAgendaDoc", () => {
 
   it("dates the title in Swedish local time", async () => {
     await createTestAgendaDoc(auth, { orgName: "X", folderId: null, startedAt: new Date("2026-11-25T23:30:00Z") });
-    expect(g.filesCreate.mock.calls[0][0].requestBody.name).toBe("Mötesprotokoll 2026-11-26 (Testmöte)");
+    expect(g.filesCreate.mock.calls[0][0].requestBody.name).toBe("2026-11-26 Mötesprotokoll – X (Testmöte)");
   });
 });
 

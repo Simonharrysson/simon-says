@@ -3,6 +3,7 @@ import type { NoteSection } from "@/lib/db/types";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
 import { docsApi, driveApi, paragraphsWithRanges, type DocsRequest } from "@/lib/google/docs";
+import { MEETING_DOC_TAG, TEST_DOC_SUFFIX } from "@/lib/agenda/candidates";
 import { skeletonRequests, skeletonTableFill } from "./skeleton";
 import { parseNotesTab } from "./tab";
 
@@ -25,11 +26,22 @@ export interface CreateMeetingDocInput {
   meetingId: string;
   orgName: string;
   startedAt: Date;
+  /** The Doc's file name (`meetingTitle`). */
+  title: string;
+  /** The förening's meeting folder (orgs.meeting_folder_id): the Doc goes there when this grant can add to it. */
+  meetingFolderId?: string | null;
   /** Emails to share the Doc with as writers (not the starter, who owns it). */
   memberEmails: string[];
   /** Whether the transcript tab is added (the transcript is stored in the database either way). */
   shareTranscript: boolean;
 }
+
+/**
+ * Where a new Doc went: the förening's meeting folder, or the starter's own folder "Simon Says –
+ * <förening>" (no meeting folder, or this starter's grant can't add to it: drive.file only sees a
+ * folder this user picked in the Picker).
+ */
+export type DocPlace = "meeting_folder" | "own_folder";
 
 export interface MeetingDoc {
   docId: string;
@@ -39,27 +51,33 @@ export interface MeetingDoc {
   /** The exact header text written (store as header_rendered). */
   headerRendered: string;
   sectionRanges: Record<NoteSection, string>;
+  place: DocPlace;
+  /** Emails the Doc was shared with (writer). */
+  shared: string[];
   /** Emails the Doc could not be shared with (the meeting still works). */
   shareFailed: string[];
 }
 
-/** `<Org> möte 2026-11-24 14:05`, in Swedish local time. */
-export function meetingTitle(orgName: string, startedAt: Date): string {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Europe/Stockholm",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-    })
-      .formatToParts(startedAt)
-      .map((p) => [p.type, p.value]),
-  );
-  return `${orgName} möte ${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+/** `YYYY-MM-DD` in Swedish local time. */
+export function localDate(at: Date): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 }
+
+/**
+ * The file name of a meeting Doc: `2026-11-26 Mötesprotokoll – <Förening>`. Date first, so the
+ * meeting folder sorts by date by name; the format's own title (a learned format keeps the
+ * förening's word, e.g. "Styrelseprotokoll"), "Möte" for Enkel or none; the förening's name, so the
+ * Doc is recognisable under "Delas med mig". A Testmöte ends with TEST_DOC_SUFFIX (listCandidates
+ * never offers it as an agenda).
+ */
+export function meetingTitle(orgName: string, startedAt: Date, opts: { formatTitle?: string | null; test?: boolean } = {}): string {
+  const label = opts.formatTitle?.trim() || "Möte";
+  return `${localDate(startedAt)} ${label} – ${orgName.trim()}${opts.test ? ` ${TEST_DOC_SUFFIX}` : ""}`;
+}
+
+/** The format title in a meeting Doc's name: none for Enkel (its title "Anteckningar" names a tab, not a meeting). */
+export const titleOfFormat = (profile: Pick<FormatProfile, "kind" | "title">): string | null =>
+  profile.kind === "enkel" ? null : profile.title;
 
 /** The starter's own folder for the org's Docs. */
 export const folderName = (orgName: string) => `Simon Says – ${orgName}`;
@@ -81,42 +99,100 @@ export async function findOrCreateFolder(auth: OAuth2Client, name: string): Prom
   return created.data.id;
 }
 
-/** A new Doc in the starter's org folder (title `meetingTitle`, members can edit but not share) and its first tab id. */
-async function createDocFile(auth: OAuth2Client, orgName: string, startedAt: Date): Promise<{ docId: string; tabId: string }> {
+/**
+ * The meeting folder when this grant can add files to it (drive.file: only a folder this user
+ * picked in the Picker, or one the app created), else null. `sharedDrive`: the folder is in a
+ * shared drive (no writersCanShare there). Any error (404/403 for a folder never picked) is null.
+ */
+export async function writableFolder(auth: OAuth2Client, folderId: string): Promise<{ id: string; sharedDrive: boolean } | null> {
+  try {
+    const res = await driveApi(auth).files.get({ fileId: folderId, fields: "driveId,capabilities(canAddChildren)", supportsAllDrives: true });
+    return res.data.capabilities?.canAddChildren ? { id: folderId, sharedDrive: Boolean(res.data.driveId) } : null;
+  } catch (err) {
+    console.warn(`meeting folder not usable: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+
+/**
+ * A new Doc named `title`, in the meeting folder when this grant can add to it, else in the
+ * starter's own org folder (also when the create in the meeting folder fails: placement never
+ * fails a start). Members can edit but not share further (writersCanShare=false; not in a shared
+ * drive, where the drive's own settings decide). Its first tab id.
+ */
+async function createDocFile(
+  auth: OAuth2Client,
+  input: Pick<CreateMeetingDocInput, "orgName" | "title" | "meetingFolderId">,
+): Promise<{ docId: string; tabId: string; place: DocPlace }> {
   const drive = driveApi(auth);
-  const folderId = await findOrCreateFolder(auth, folderName(orgName));
-  const docId = (
-    await drive.files.create({
-      // writersCanShare=false: members get edit access, but only the owner can share it further.
-      requestBody: { name: meetingTitle(orgName, startedAt), mimeType: DOC_MIME, parents: [folderId], writersCanShare: false },
-      fields: "id",
-    })
-  ).data.id;
+  const create = async (parent: string, sharedDrive: boolean) =>
+    (
+      await drive.files.create({
+        requestBody: {
+          name: input.title,
+          mimeType: DOC_MIME,
+          parents: [parent],
+          appProperties: { ...MEETING_DOC_TAG },
+          ...(sharedDrive ? {} : { writersCanShare: false }),
+        },
+        fields: "id",
+        supportsAllDrives: true,
+      })
+    ).data.id;
+
+  let docId: string | null | undefined = null;
+  let place: DocPlace = "own_folder";
+  const folder = input.meetingFolderId ? await writableFolder(auth, input.meetingFolderId) : null;
+  if (folder) {
+    try {
+      docId = await create(folder.id, folder.sharedDrive);
+      place = "meeting_folder";
+    } catch (err) {
+      console.warn(`createMeetingDoc: create in meeting folder failed, using own folder: ${(err as Error).message}`);
+    }
+  }
+  if (!docId) {
+    docId = await create(await findOrCreateFolder(auth, folderName(input.orgName)), false);
+    place = "own_folder";
+  }
   if (!docId) throw new Error("createMeetingDoc: Doc has no id");
   const first = (await docsApi(auth).documents.get({ documentId: docId, includeTabsContent: true })).data;
   const tabId = first.tabs?.[0]?.tabProperties?.tabId;
   if (!tabId) throw new Error("createMeetingDoc: new Doc has no tab");
-  return { docId, tabId };
+  return { docId, tabId, place };
 }
 
-/** Writer access for each member, no notification email; returns the addresses that failed. */
-async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[]): Promise<string[]> {
-  const drive = driveApi(auth);
+/** Writer access for one address, no notification email. Throws on failure. */
+export async function shareWith(auth: OAuth2Client, docId: string, emailAddress: string): Promise<void> {
+  await driveApi(auth).permissions.create({
+    fileId: docId,
+    sendNotificationEmail: false,
+    supportsAllDrives: true,
+    requestBody: { role: "writer", type: "user", emailAddress },
+  });
+}
+
+/** Writer access for each member, no notification email; the addresses that worked and that failed. */
+async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[]): Promise<{ shared: string[]; shareFailed: string[] }> {
   // One failing address (e.g. not a Google account) must not stop the meeting.
+  const shared: string[] = [];
   const shareFailed: string[] = [];
   for (const emailAddress of memberEmails) {
     try {
-      await drive.permissions.create({
-        fileId: docId,
-        sendNotificationEmail: false,
-        requestBody: { role: "writer", type: "user", emailAddress },
-      });
+      await shareWith(auth, docId, emailAddress);
+      shared.push(emailAddress);
     } catch (err) {
       console.error(`createMeetingDoc: share failed: ${(err as Error).message}`);
       shareFailed.push(emailAddress);
     }
   }
-  return shareFailed;
+  return { shared, shareFailed };
+}
+
+/** Best effort after a refused start: the unused new Doc goes to the trash (we created it, drive.file may). */
+export async function trashDoc(auth: OAuth2Client, docId: string): Promise<void> {
+  await driveApi(auth).files.update({ fileId: docId, requestBody: { trashed: true }, supportsAllDrives: true });
 }
 
 const TRANSCRIPT_TAB: DocsRequest = { addDocumentTab: { tabProperties: { title: "Transkript" } } };
@@ -130,14 +206,14 @@ export async function addTranscriptTab(auth: OAuth2Client, docId: string): Promi
 }
 
 /**
- * Create the meeting's Google Doc in the starter's Drive: in the org folder, a notes tab
+ * Create the meeting's Google Doc (in the meeting folder or the starter's org folder, see createDocFile): a notes tab
  * ("Anteckningar": header line + four section headings, each with a named range), a "Transkript"
  * tab if `shareTranscript`, and writer access for the members (no notification email).
  */
 export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingDocInput): Promise<MeetingDoc> {
-  const { meetingId, orgName, startedAt, memberEmails, shareTranscript } = input;
+  const { meetingId, memberEmails, shareTranscript } = input;
   const docs = docsApi(auth);
-  const { docId, tabId: notesTabId } = await createDocFile(auth, orgName, startedAt);
+  const { docId, tabId: notesTabId, place } = await createDocFile(auth, input);
 
   const headerRange = `ss-${meetingId}-header`;
   const sectionRanges = Object.fromEntries(
@@ -170,8 +246,8 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
     : null;
   if (shareTranscript && !transcriptTabId) throw new Error("createMeetingDoc: transcript tab was not created");
 
-  const shareFailed = await shareDoc(auth, docId, memberEmails);
-  return { docId, notesTabId, transcriptTabId, headerRange, headerRendered: INITIAL_HEADER, sectionRanges, shareFailed };
+  const { shared, shareFailed } = await shareDoc(auth, docId, memberEmails);
+  return { docId, notesTabId, transcriptTabId, headerRange, headerRendered: INITIAL_HEADER, sectionRanges, place, shared, shareFailed };
 }
 
 /**
@@ -184,10 +260,10 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
 export async function createFormatDoc(
   auth: OAuth2Client,
   input: CreateMeetingDocInput & { profile: FormatProfile; blocks?: SkeletonBlock[] },
-): Promise<{ docId: string; tabId: string; transcriptTabId: string | null; shareFailed: string[] }> {
-  const { orgName, startedAt, memberEmails, shareTranscript, profile } = input;
+): Promise<{ docId: string; tabId: string; transcriptTabId: string | null; place: DocPlace; shared: string[]; shareFailed: string[] }> {
+  const { memberEmails, shareTranscript, profile } = input;
   const docs = docsApi(auth);
-  const { docId, tabId } = await createDocFile(auth, orgName, startedAt);
+  const { docId, tabId, place } = await createDocFile(auth, input);
   const blocks = input.blocks ?? skeletonBlocks(profile);
 
   const requests: DocsRequest[] = [
@@ -207,6 +283,6 @@ export async function createFormatDoc(
     if (fill.length) await docs.documents.batchUpdate({ documentId: docId, requestBody: { requests: fill } });
   }
 
-  const shareFailed = await shareDoc(auth, docId, memberEmails);
-  return { docId, tabId, transcriptTabId, shareFailed };
+  const { shared, shareFailed } = await shareDoc(auth, docId, memberEmails);
+  return { docId, tabId, transcriptTabId, place, shared, shareFailed };
 }

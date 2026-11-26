@@ -83,6 +83,14 @@ const reasonOf = (err: unknown): string | null => {
 /** 403 reasons that mean "this grant can't see the folder" (as lib/agenda/access.ts). */
 const NO_ACCESS = new Set(["forbidden", "notFound", "insufficientPermissions", "insufficientFilePermissions", "appNotAuthorizedToFile"]);
 
+/**
+ * appProperties on a Doc the app created for a meeting (lib/docs/create.ts; private to our app).
+ * Such a Doc is never a candidate, so an orphan in the meeting folder (a refused start, a deleted
+ * meeting) is never suggested as an agenda.
+ */
+export const MEETING_DOC_TAG = { simonSaysMeeting: "1" } as const;
+const isMeetingDoc = (props: Record<string, string> | null | undefined) => props?.simonSaysMeeting === MEETING_DOC_TAG.simonSaysMeeting;
+
 /** Titles of the fictional agenda Testmöte Docs (lib/testmeeting/agenda.ts): never a candidate. */
 export const TEST_DOC_SUFFIX = "(Testmöte)";
 
@@ -113,13 +121,13 @@ export async function listCandidates(
   const since = new Date(now.getTime() - WEEK_MS).toISOString();
   const res = await drive.files.list({
     q: `'${folderId}' in parents and mimeType='${DOC_MIME}' and trashed=false and modifiedTime > '${since}'`,
-    fields: "files(id,name,createdTime,modifiedTime)",
+    fields: "files(id,name,createdTime,modifiedTime,appProperties)",
     pageSize: 50,
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
   });
   const files = (res.data.files ?? [])
-    .filter((f) => f.id && !usedDocIds.has(f.id) && !(f.name ?? "").trim().endsWith(TEST_DOC_SUFFIX))
+    .filter((f) => f.id && !usedDocIds.has(f.id) && !isMeetingDoc(f.appProperties) && !(f.name ?? "").trim().endsWith(TEST_DOC_SUFFIX))
     .map((f) => ({
       id: f.id!,
       name: f.name ?? "",

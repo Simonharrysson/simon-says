@@ -960,6 +960,7 @@ async function fallback(kind: string) {
     meetingId: mid,
     orgName: "Fiktiv förening A7",
     startedAt,
+    title: `Fiktiv förening A7 ${kind} ${startedAt.toISOString()}`,
     memberEmails: [],
     shareTranscript: testmote,
     profile: chosen.skeleton,

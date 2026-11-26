@@ -1,8 +1,7 @@
 import "server-only";
 import type { OAuth2Client } from "google-auth-library";
 import agenda from "@/fixtures/agenda/veckomote.agenda.json";
-import { TEST_DOC_SUFFIX } from "@/lib/agenda/candidates";
-import { findOrCreateFolder, folderName } from "@/lib/docs/create";
+import { findOrCreateFolder, folderName, meetingTitle, trashDoc, writableFolder } from "@/lib/docs/create";
 import { skeletonRequests, skeletonTableFill } from "@/lib/docs/skeleton";
 import { parseNotesTab } from "@/lib/docs/tab";
 import { skeletonBlocks, type SkeletonItem } from "@/lib/formats/skeleton";
@@ -18,25 +17,8 @@ const DOC_MIME = "application/vnd.google-apps.document";
 /** The agenda fixture: the six items (two prepared sub-bullets under "Kommande event") and the Sekreterare. */
 export const TEST_AGENDA: { sekreterare: string; items: SkeletonItem[] } = agenda;
 
-/** `YYYY-MM-DD` in Swedish local time. */
-function localDate(at: Date): string {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
-}
-
-/** The org meeting folder when this grant can add files to it (drive.file: only if the user picked it), else null. */
-async function writableFolder(auth: OAuth2Client, folderId: string): Promise<string | null> {
-  try {
-    const res = await driveApi(auth).files.get({ fileId: folderId, fields: "capabilities(canAddChildren)", supportsAllDrives: true });
-    return res.data.capabilities?.canAddChildren ? folderId : null;
-  } catch (err) {
-    // Not visible to this grant (404/403) or any other error: the starter's own folder is fine for a test.
-    console.warn(`test agenda doc: meeting folder not usable: ${(err as Error).message}`);
-    return null;
-  }
-}
-
 /**
- * A new Doc `Mötesprotokoll <YYYY-MM-DD> (Testmöte)` holding the Veckomöte skeleton with the
+ * A new Doc `<YYYY-MM-DD> Mötesprotokoll – <förening> (Testmöte)` (meetingTitle) holding the Veckomöte skeleton with the
  * fixture's items and Sekreterare filled in: in the org meeting folder when the starter's grant
  * can write there, else in the starter's "Simon Says – <org>" folder. We add no permissions, but
  * a Doc in the org meeting folder inherits the folder's sharing, so members can see it (it is
@@ -49,11 +31,16 @@ export async function createTestAgendaDoc(
   opts: { orgName: string; folderId: string | null; startedAt: Date },
 ): Promise<{ docId: string }> {
   const drive = driveApi(auth);
-  const parent =
-    (opts.folderId ? await writableFolder(auth, opts.folderId) : null) ?? (await findOrCreateFolder(auth, folderName(opts.orgName)));
+  const folder = opts.folderId ? await writableFolder(auth, opts.folderId) : null;
+  const parent = folder?.id ?? (await findOrCreateFolder(auth, folderName(opts.orgName)));
   const docId = (
     await drive.files.create({
-      requestBody: { name: `${VECKOMOTE.title} ${localDate(opts.startedAt)} ${TEST_DOC_SUFFIX}`, mimeType: DOC_MIME, parents: [parent], writersCanShare: false },
+      requestBody: {
+        name: meetingTitle(opts.orgName, opts.startedAt, { formatTitle: VECKOMOTE.title, test: true }),
+        mimeType: DOC_MIME,
+        parents: [parent],
+        ...(folder?.sharedDrive ? {} : { writersCanShare: false }),
+      },
       fields: "id",
       supportsAllDrives: true,
     })
@@ -87,9 +74,7 @@ async function writeTestAgenda(auth: OAuth2Client, docId: string): Promise<void>
 }
 
 /** Best effort after a refused start: the unused test Doc goes to the trash (we created it, drive.file may). */
-export async function trashTestDoc(auth: OAuth2Client, docId: string): Promise<void> {
-  await driveApi(auth).files.update({ fileId: docId, requestBody: { trashed: true }, supportsAllDrives: true });
-}
+export const trashTestDoc = trashDoc;
 
 /** Which fixture week to replay: "b" once the org has a finished agenda Testmöte (its tasks are carried), else "a". */
 export async function testRun(orgId: string): Promise<"a" | "b"> {

@@ -128,7 +128,7 @@ describe("listCandidates", () => {
     expect(params.q).toContain("mimeType='application/vnd.google-apps.document'");
     expect(params.q).toContain("trashed=false");
     expect(params.q).toContain(`modifiedTime > '${daysAgo(7)}'`);
-    expect(params.fields).toBe("files(id,name,createdTime,modifiedTime)");
+    expect(params.fields).toBe("files(id,name,createdTime,modifiedTime,appProperties)");
     expect(params.pageSize).toBe(50);
   });
 
@@ -138,6 +138,19 @@ describe("listCandidates", () => {
       data: {
         files: [
           file("t1", "Mötesprotokoll 2026-11-25 (Testmöte)", daysAgo(0), daysAgo(0)),
+          file("b", "Möte 25/11", daysAgo(3), daysAgo(3)),
+        ],
+      },
+    });
+    expect((await listCandidates(auth, "folder123456", new Set(), NOW)).candidates.map((f) => f.id)).toEqual(["b"]);
+  });
+
+  it("never offers a meeting Doc Simon Says created (tagged), e.g. one left by a deleted meeting", async () => {
+    drive.get.mockResolvedValue({ data: { id: "folder123456" } });
+    drive.list.mockResolvedValue({
+      data: {
+        files: [
+          { ...file("m1", "2026-11-25 Mötesprotokoll – Ekdala Padelklubb", daysAgo(0), daysAgo(0)), appProperties: { simonSaysMeeting: "1" } },
           file("b", "Möte 25/11", daysAgo(3), daysAgo(3)),
         ],
       },

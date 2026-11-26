@@ -22,6 +22,7 @@ async function main() {
     meetingId,
     orgName: "Simon Says test",
     startedAt: new Date(),
+    title: `Simon Says test ${new Date().toISOString()}`,
     memberEmails: members,
     shareTranscript: true,
   });

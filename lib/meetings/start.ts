@@ -6,11 +6,12 @@ import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, cleanupLosingAnchor, type AnchorResult } from "@/lib/agenda/anchor";
 import { carriedItems, carryPlan, previousMeeting, previousOnDoc } from "@/lib/agenda/followup";
 import { missingRequired } from "@/lib/agenda/scan";
-import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle } from "@/lib/docs/create";
+import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle, titleOfFormat, trashDoc, type DocPlace } from "@/lib/docs/create";
 import { planFormatRender } from "@/lib/docs/format-render";
 import { itemSpan, readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
 import { logEvent } from "@/lib/db/events";
-import { memberEmails } from "@/lib/db/members";
+import { orgMemberList, type OrgMember } from "@/lib/db/members";
+import { recordDocShares } from "@/lib/docs/access";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { CheckinWindow, ItemRole, MeetingEventKind, MeetingRow, NoteItemRow } from "@/lib/db/types";
 import { parseProfile, type FormatProfile } from "@/lib/formats/schema";
@@ -49,6 +50,11 @@ export type StartResult =
       orgName: string;
       title: string;
       shareFailed: number;
+      /**
+       * Where the Doc is: the förening's meeting folder, the starter's own folder (no meeting
+       * folder, or this starter's Google account hasn't opened it), or the förening's agenda Doc.
+       */
+      docPlace: DocPlace | "agenda";
       /** Started in the förening's own agenda Doc. */
       agenda: boolean;
       /** Section headings Simon Says appended to the Doc (labels of the format, in Doc order). */
@@ -110,6 +116,9 @@ interface DocSetup {
   headerRendered: string;
   sectionRanges: Record<string, string>;
   shareFailed: number;
+  /** Members (user ids) the new Doc was shared with. */
+  sharedWith: string[];
+  place: DocPlace | "agenda";
   title: string;
   /** Format layout: the anchoring result. Null for a v1 Doc. */
   anchor: AnchorResult | null;
@@ -181,12 +190,21 @@ export async function startMeeting(
   const startedAt = new Date();
   const isTest = opts.isTest ?? eventKind === "test_started";
   const agendaMode = Boolean(opts.agendaDocId);
-  const ctx: SetupCtx = { auth, meetingId, startedAt, orgId, orgName: org.name, user };
+  const ctx: SetupCtx = {
+    auth,
+    meetingId,
+    startedAt,
+    orgId,
+    orgName: org.name,
+    meetingFolderId: org.meeting_folder_id ?? null,
+    isTest,
+    user,
+  };
 
   const setup = agendaMode
     ? await agendaSetup(ctx, opts.agendaDocId!, format.profile)
     : format.profile.kind === "enkel"
-      ? await v1Setup(ctx, org.share_transcript)
+      ? await v1Setup(ctx, format.profile, org.share_transcript)
       : await formatSetup(ctx, format.profile, org.share_transcript);
   if ("ok" in setup) return setup;
 
@@ -220,8 +238,14 @@ export async function startMeeting(
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
     });
+  // A refused start never leaves a new, empty Doc in the förening's folder (an agenda Doc is theirs).
+  const discardNewDoc = async () => {
+    if (agendaMode) return;
+    await trashDoc(auth, setup.docId).catch((e: Error) => console.error(`meetings ${meetingId}: trash unused Doc: ${e.message}`));
+  };
   if (insertError) {
-    console.error(`meetings: insert failed (Doc ${setup.docId} left in Drive): ${insertError.message}`);
+    console.error(`meetings: insert failed (Doc ${setup.docId} trashed): ${insertError.message}`);
+    await discardNewDoc();
     return failed("save_failed", 500, "Mötet kunde inte sparas. Försök igen om en liten stund.");
   }
 
@@ -238,6 +262,7 @@ export async function startMeeting(
   if (guardError) throw new Error(`meetings: start guard: ${guardError.message}`);
   const refused = guard === "starter_busy" || guard === "start_rate" || guard === "org_busy" || guard === "doc_busy";
   if (refused && agendaMode && setup.anchor) await undoLosingAnchor(auth, setup.docId, meetingId, setup.anchor);
+  if (refused) await discardNewDoc();
   if (guard === "starter_busy") return startBusy();
   if (guard === "start_rate") return startRate();
   if (guard === "org_busy") return failed("already_live", 409, "Ett möte pågår redan i föreningen. Avsluta det först.");
@@ -253,7 +278,8 @@ export async function startMeeting(
       if (error) throw new Error(error.message);
     } catch (err) {
       // Never run a meeting under the wrong format (profileFor would read Enkel): undo the start.
-      console.error(`meetings: format row failed (Doc ${setup.docId} left in Drive): ${(err as Error).message}`);
+      console.error(`meetings: format row failed (Doc ${setup.docId} trashed): ${(err as Error).message}`);
+      await discardNewDoc();
       const { error } = await admin.from("meetings").delete().eq("id", meetingId);
       if (error) {
         // The row stays: never leave it live (it would block the org and the Doc). Abandoned instead.
@@ -281,11 +307,15 @@ export async function startMeeting(
     }
   }
 
+  // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
+  await recordDocShares(meetingId, setup.sharedWith);
+
   const log = (kind: MeetingEventKind, detail: Record<string, unknown>) =>
     logEvent(meetingId, kind, detail).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
   await log(eventKind, {
     by: user.id,
     shareFailed: setup.shareFailed,
+    docPlace: setup.place,
     transcriptTab: transcriptTabId !== null,
     agenda: agendaMode,
     layout,
@@ -335,6 +365,7 @@ export async function startMeeting(
     orgName: org.name,
     title: setup.title,
     shareFailed: setup.shareFailed,
+    docPlace: setup.place,
     agenda: agendaMode,
     appended: anchor?.appended ?? [],
     carried,
@@ -381,12 +412,26 @@ interface SetupCtx {
   startedAt: Date;
   orgId: string;
   orgName: string;
+  meetingFolderId: string | null;
+  isTest: boolean;
   user: { id: string; email?: string | null };
 }
 
-async function otherMembers(ctx: SetupCtx): Promise<string[]> {
-  return (await memberEmails(ctx.orgId)).filter((e) => e.toLowerCase() !== (ctx.user.email ?? "").toLowerCase());
+/** The org's other members with an email (the starter owns the Doc). */
+async function otherMembers(ctx: SetupCtx): Promise<OrgMember[]> {
+  const me = (ctx.user.email ?? "").toLowerCase();
+  return (await orgMemberList(ctx.orgId)).filter((m) => m.userId !== ctx.user.id && m.email && m.email.toLowerCase() !== me);
 }
+
+/** The user ids of `members` whose email is in `shared`. */
+const sharedIds = (members: OrgMember[], shared: string[]) => {
+  const ok = new Set(shared.map((e) => e.toLowerCase()));
+  return members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => m.userId);
+};
+
+/** The new Doc's file name: date, the format's title, the förening; a Testmöte marked. */
+const docTitle = (ctx: SetupCtx, profile: FormatProfile) =>
+  meetingTitle(ctx.orgName, ctx.startedAt, { formatTitle: titleOfFormat(profile), test: ctx.isTest });
 
 /** Agenda mode: the checks (no writes), then the anchoring (the only Doc write before the guard, F14). Their Doc: never shared by us. */
 /**
@@ -446,7 +491,9 @@ async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile)
     headerRendered: anchor.headerRendered,
     sectionRanges: anchor.sectionRanges,
     shareFailed: 0,
-    title: access.name || meetingTitle(ctx.orgName, ctx.startedAt),
+    sharedWith: [],
+    place: "agenda",
+    title: access.name || docTitle(ctx, profile),
     anchor,
   };
 }
@@ -484,13 +531,17 @@ async function earlierInfo(docId: string): Promise<Record<string, string>> {
 }
 
 /** Fallback, Enkel: today's v1 Doc. */
-async function v1Setup(ctx: SetupCtx, shareTranscript: boolean): Promise<DocSetup | Failure> {
+async function v1Setup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: boolean): Promise<DocSetup | Failure> {
   try {
+    const members = await otherMembers(ctx);
+    const title = docTitle(ctx, profile);
     const doc = await createMeetingDoc(ctx.auth, {
       meetingId: ctx.meetingId,
       orgName: ctx.orgName,
       startedAt: ctx.startedAt,
-      memberEmails: await otherMembers(ctx),
+      title,
+      meetingFolderId: ctx.meetingFolderId,
+      memberEmails: members.map((m) => m.email),
       shareTranscript,
     });
     return {
@@ -501,7 +552,9 @@ async function v1Setup(ctx: SetupCtx, shareTranscript: boolean): Promise<DocSetu
       headerRendered: doc.headerRendered,
       sectionRanges: doc.sectionRanges,
       shareFailed: doc.shareFailed.length,
-      title: meetingTitle(ctx.orgName, ctx.startedAt),
+      sharedWith: sharedIds(members, doc.shared),
+      place: doc.place,
+      title,
       anchor: null,
     };
   } catch (err) {
@@ -514,11 +567,15 @@ async function v1Setup(ctx: SetupCtx, shareTranscript: boolean): Promise<DocSetu
 /** Fallback in a format: a new Doc with the format's skeleton, anchored like an agenda Doc. */
 async function formatSetup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: boolean): Promise<DocSetup | Failure> {
   try {
+    const members = await otherMembers(ctx);
+    const title = docTitle(ctx, profile);
     const doc = await createFormatDoc(ctx.auth, {
       meetingId: ctx.meetingId,
       orgName: ctx.orgName,
       startedAt: ctx.startedAt,
-      memberEmails: await otherMembers(ctx),
+      title,
+      meetingFolderId: ctx.meetingFolderId,
+      memberEmails: members.map((m) => m.email),
       shareTranscript,
       profile,
     });
@@ -540,7 +597,9 @@ async function formatSetup(ctx: SetupCtx, profile: FormatProfile, shareTranscrip
       headerRendered: anchor.headerRendered,
       sectionRanges: anchor.sectionRanges,
       shareFailed: doc.shareFailed.length,
-      title: meetingTitle(ctx.orgName, ctx.startedAt),
+      sharedWith: sharedIds(members, doc.shared),
+      place: doc.place,
+      title,
       anchor,
     };
   } catch (err) {
