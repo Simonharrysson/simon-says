@@ -11,14 +11,14 @@ export default function ErrorPage({ error, retry }: { error: Error & { digest?: 
   }, [error]);
 
   return (
-    <main id="innehall" className="main">
-      <div className="page page--narrow oops">
-        <p className="oops__code">Fel{error.digest ? ` · ${error.digest}` : ""}</p>
-        <h1 className="oops__title">Något gick snett</h1>
-        <p className="muted">
+    <main id="innehall" className="flex-1 pt-8 pb-16">
+      <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col items-start gap-4 py-[clamp(2rem,8vh,6rem)]">
+        <p className="font-mono text-sm text-ink-3">Fel{error.digest ? ` · ${error.digest}` : ""}</p>
+        <h1 className="text-2xl">Något gick snett</h1>
+        <p className="text-ink-2">
           Det är vårt fel, inte ditt. Försök igen om en stund.
         </p>
-        <div className="cluster">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" icon={<IconRefresh />} onClick={() => retry()}>
             Försök igen
           </Button>

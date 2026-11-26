@@ -49,8 +49,8 @@ export function StartMeetingForm({
   }
 
   return (
-    <div className="stack stack--3">
-      <p className="subtle">
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-ink-3">
         Vi skapar ett nytt Google-dokument i din Drive och delar det med föreningens medlemmar
         {shareTranscript ? ", med transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
       </p>
@@ -65,8 +65,8 @@ export function StartMeetingForm({
         </ButtonLink>
       </div>
       {showTestMeeting && (
-        <div className="stack stack--2">
-          <div className="cluster">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <Button disabled={starting !== null} loading={starting === "new"} onClick={() => startTest("new")}>
               Testmöte
             </Button>
@@ -74,7 +74,7 @@ export function StartMeetingForm({
               Testmöte med dagordning
             </Button>
           </div>
-          <p className="hint">
+          <p className="text-xs text-ink-3">
             Spelar upp ett påhittat möte — ca 3–8 min. Du kan stänga fliken. Med dagordning: ett påhittat veckomöte i
             ett nytt dagordningsdokument; andra gången följer det upp förra testmötets uppgifter.
           </p>

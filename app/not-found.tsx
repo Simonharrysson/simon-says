@@ -5,10 +5,10 @@ import { PublicShell } from "@/components/views/PublicShell";
 export default function NotFound() {
   return (
     <PublicShell signedIn={false}>
-      <div className="page page--narrow oops">
-        <p className="oops__code">404</p>
-        <h1 className="oops__title">Här finns ingenting</h1>
-        <p className="muted">
+      <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col items-start gap-4 py-[clamp(2rem,8vh,6rem)]">
+        <p className="font-mono text-sm text-ink-3">404</p>
+        <h1 className="text-2xl">Här finns ingenting</h1>
+        <p className="text-ink-2">
           Sidan har flyttats, raderats eller så har du inte tillgång till den. Är det en förening kan en admin
           bjuda in dig.
         </p>

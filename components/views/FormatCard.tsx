@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { FORMAT_NAMES, formatLabel } from "@/lib/formats/standard";
@@ -37,14 +39,14 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const selected = currentRow ? `id:${currentRow.id}` : current.kind === "learned" ? "" : current.kind;
   return (
     <Panel title="Mötesformat" titleId="format-title">
-      <div className="stack stack--3">
+      <div className="flex flex-col gap-3">
         <p>
           Mötesformat: <strong>{currentRow ? formatLabel(currentRow) : current.name}</strong>
         </p>
-        {required.length > 0 && (
-          <div className="stack stack--1">
-            <p className="subtle">Punkter som stadgarna kräver ({required.length}), med på varje dagordning:</p>
-            <ul className="hint">
+        {required.length> 0 && (
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-ink-3">Punkter som stadgarna kräver ({required.length}), med på varje dagordning:</p>
+            <ul className="list-dash pl-5 text-xs text-ink-3 marker:text-ink-3">
               {required.map((r) => (
                 <li key={r}>{r}</li>
               ))}
@@ -52,12 +54,10 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
           </div>
         )}
         {isAdmin && changeFormat && (
-          <form action={changeFormat} className="stack stack--2">
+          <form action={changeFormat} className="flex flex-col gap-2">
             <input type="hidden" name="orgId" value={orgId} />
-            <label className="label" htmlFor="format-choice">
-              Byt format
-            </label>
-            <select id="format-choice" name="choice" className="input" defaultValue={selected}>
+            <Label htmlFor="format-choice">Byt format</Label>
+            <NativeSelect id="format-choice" name="choice" defaultValue={selected}>
               {selected === "" && (
                 <option value="" disabled>
                   {FORMAT_NAMES.learned}
@@ -74,7 +74,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
                   {f.isDefault ? " · används nu" : ""}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <div>
               <SubmitButton variant="secondary" pendingLabel="Byter…">
                 Byt
@@ -83,13 +83,13 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
           </form>
         )}
         {isAdmin && current.profile && <CustomizeFormat orgId={orgId} current={current.profile} />}
-        <div className="stack stack--2">
-          <p className="subtle">Mötesmapp: {meetingFolder.id ? "vald" : "inte vald"}</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm text-ink-3">Mötesmapp: {meetingFolder.id ? "vald" : "inte vald"}</p>
           {isAdmin &&
             (pickerEnabled ? (
               <MeetingFolderButton orgId={orgId} hasFolder={meetingFolder.id !== null} />
             ) : (
-              <p className="hint">Google-väljaren är inte inställd än.</p>
+              <p className="text-xs text-ink-3">Google-väljaren är inte inställd än.</p>
             ))}
         </div>
         {isAdmin &&
@@ -103,7 +103,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
               <Button variant="ghost" disabled>
                 Lär Simon Says ert format
               </Button>
-              <p className="hint">Google-väljaren är inte inställd än.</p>
+              <p className="text-xs text-ink-3">Google-väljaren är inte inställd än.</p>
             </div>
           ))}
       </div>

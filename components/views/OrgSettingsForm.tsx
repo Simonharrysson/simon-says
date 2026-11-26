@@ -25,14 +25,14 @@ export function OrgSettingsForm({
 
   return (
     <form
-      className="stack stack--5 settings-form"
+      className="flex max-w-[40rem] flex-col gap-6"
       action={async (form) => {
         setSaved(false);
         await updateOrg(form);
         setSaved(true);
       }}
       onChange={() => setSaved(false)}
-    >
+>
       <input type="hidden" name="orgId" value={org.id} />
       <Field id="settings-name" name="name" label="Namn" defaultValue={org.name} required maxLength={100} error={nameError} />
       <Check id="settings-share" name="share_transcript" defaultChecked={org.share_transcript} onCheckedChange={() => setSaved(false)} title="Dela transkriptionen i dokumentet">
@@ -41,11 +41,11 @@ export function OrgSettingsForm({
       <Check id="settings-status" name="show_on_status" defaultChecked={org.show_on_status} onCheckedChange={() => setSaved(false)} title="Visa namnet på statussidan">
         Statussidan är offentlig. Utan kryss står det bara &quot;en förening&quot; när ni har möte.
       </Check>
-      <div className="cluster">
+      <div className="flex flex-wrap items-center gap-3">
         <SubmitButton variant="primary" pendingLabel="Sparar…">
           Spara ändringar
         </SubmitButton>
-        <span className="save-state" role="status" aria-live="polite">
+        <span className="inline-flex items-center gap-1 text-sm font-semibold text-green" role="status" aria-live="polite">
           {saved && (
             <>
               <IconCheck size={18} /> Sparat

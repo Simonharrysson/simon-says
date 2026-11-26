@@ -38,13 +38,13 @@ export function MeetingFolderButton({ orgId, hasFolder }: { orgId: string; hasFo
   };
 
   return (
-    <div className="stack stack--2">
+    <div className="flex flex-col gap-2">
       <div>
         <Button variant="secondary" loading={busy} onClick={() => void pick()}>
           {hasFolder ? "Byt mötesmapp" : "Välj mötesmapp"}
         </Button>
       </div>
-      <p className="hint" aria-live="polite">
+      <p className="text-xs text-ink-3" aria-live="polite">
         {message ?? ""}
       </p>
     </div>

@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
-import { ButtonLink } from "@/components/ui/button";
+import { ButtonLink, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -79,14 +81,14 @@ export function OrgDetailView(props: OrgDetailViewProps) {
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
 
   return (
-    <div className="page stack stack--5">
+    <div className="mx-auto w-full max-w-page px-gutter flex flex-col gap-6">
       <PageHeader
         back={{ href: "/orgs", label: "Föreningar" }}
         title={org.name}
         meta={
-          <div className="cluster" style={{ ["--cluster-gap" as string]: "0.75rem" }}>
+          <div className="flex flex-wrap items-center gap-3">
             <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? "Du är admin" : "Du är medlem"}</Badge>
-            <span className="subtle">
+            <span className="text-sm text-ink-3">
               {plural(people.length, "person", "personer")} · {plural(meetings.length, "möte", "möten")}
             </span>
           </div>
@@ -107,8 +109,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
       />
       <NoticeBanner notice={notice} />
 
-      <div className="org-grid">
-        <div className="stack stack--5">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
+        <div className="flex flex-col gap-6">
           {active ? (
             <Banner tone="info" title="Ett möte pågår" live={false}>
               <p>
@@ -138,10 +140,10 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           <PeoplePanel orgId={org.id} people={people} isAdmin={isAdmin} actions={actions} />
         </div>
 
-        <div className="stack stack--5">
+        <div className="flex flex-col gap-6">
           <Panel title="Bjud in" titleId="invite-title">
-            <div className="stack stack--3">
-              <p className="subtle">
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-ink-3">
                 Den som öppnar länken och loggar in med Google blir medlem och kan starta möten.
               </p>
               <CopyField id="invite-url" value={inviteUrl} label="Inbjudningslänk" />
@@ -165,19 +167,19 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </Panel>
 
           {members && (
-            <Panel flush title="Medlemmar" titleId="members-title" actions={<span className="subtle">{members.length}</span>}>
-              <p className="subtle panel-intro">Kan logga in, starta möten och får tillgång till nya mötesdokument.</p>
-              <ul className="list" aria-labelledby="members-title">
+            <Panel flush title="Medlemmar" titleId="members-title" actions={<span className="text-sm text-ink-3">{members.length}</span>}>
+              <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">Kan logga in, starta möten och får tillgång till nya mötesdokument.</p>
+              <ul  aria-labelledby="members-title">
                 {members.map((m) => {
                   const me = userId !== null && m.userId === userId;
                   const label = m.email || "Okänd medlem";
                   return (
                     <li key={m.userId}>
-                      <div className="row row--compact">
-                        <span className="row__main">
-                          <span className="row__title member-email">{label}</span>
+                      <div className="flex items-center gap-3 border-t border-line px-6 [li:first-child>&]:border-t-0 min-h-11 py-2">
+                        <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+                          <span className="text-sm font-medium wrap-anywhere">{label}</span>
                           {(m.role === "admin" || me) && (
-                            <span className="subtle">{[m.role === "admin" ? "admin" : null, me ? "du" : null].filter(Boolean).join(" · ")}</span>
+                            <span className="text-sm text-ink-3">{[m.role === "admin" ? "admin" : null, me ? "du" : null].filter(Boolean).join(" · ")}</span>
                           )}
                         </span>
                         {me && actions.leaveOrg ? (
@@ -225,9 +227,9 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
           </Panel>
 
-          <Panel title="Radera föreningen" titleId="danger-title" className="panel--danger">
-            <div className="danger-zone">
-              <p className="subtle measure">
+          <Panel title="Radera föreningen" titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <p className="text-sm text-ink-3 max-w-[68ch]">
                 Tar bort föreningen med alla möten, transkriptioner, anteckningar och personer här. Det går
                 inte att ångra. Google-dokumenten ligger kvar i Drive.
               </p>
@@ -278,7 +280,7 @@ function MeetingsPanel({
   return (
     <Panel flush title="Möten" titleId="meetings-title">
       {meetings.length === 0 ? (
-        <div className="panel-pad">
+        <div className="px-6 pb-6">
           <EmptyState title="Inga möten än">
             <p>
               När någon startar ett möte skapas ett Google-dokument i startarens Drive och delas med
@@ -288,7 +290,7 @@ function MeetingsPanel({
         </div>
       ) : (
         <>
-          <ul className="list" aria-labelledby="meetings-title">
+          <ul  aria-labelledby="meetings-title">
             {meetings.map((meeting) => {
               const state = meetingDeleteState(meeting, { isAdmin, userId });
               const mine = userId !== null && meeting.started_by === userId;
@@ -297,16 +299,16 @@ function MeetingsPanel({
                 formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000);
               return (
                 <li key={meeting.id}>
-                  <div className="row meeting-row">
-                    <span className="row__main">
-                      <span className="row__title">{formatMeetingDate(meeting.started_at)}</span>
-                      <span className="row__meta cluster" style={{ ["--cluster-gap" as string]: "0.5rem" }}>
+                  <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
+                    <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+                      <span className="font-medium wrap-anywhere">{formatMeetingDate(meeting.started_at)}</span>
+                      <span className="mt-[0.15rem] flex flex-wrap items-center gap-2 text-xs text-ink-3">
                         <Badge tone={statusTone[meeting.status]}>{meetingStatusLabel[meeting.status]}</Badge>
                         {duration && <span>{duration}</span>}
                         {state === "active" && <span>Avsluta mötet innan du raderar det.</span>}
                       </span>
                     </span>
-                    <span className="row__actions">
+                    <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
                       {state === "active" && mine && liveMeetingHref && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
                           Till mötet
@@ -318,14 +320,14 @@ function MeetingsPanel({
                         </ButtonLink>
                       )}
                       <a
-                        className="btn btn--sm"
+                        className={buttonVariants({ size: "sm" })}
                         href={docUrl(meeting.doc_id)}
                         target="_blank"
                         rel="noopener noreferrer"
-                      >
+>
                         Dokument
                         <IconExternal size={16} />
-                        <span className="visually-hidden">(öppnas i ny flik)</span>
+                        <span className="sr-only">(öppnas i ny flik)</span>
                       </a>
                       {state === "allowed" && (
                         <ConfirmAction
@@ -347,7 +349,7 @@ function MeetingsPanel({
               );
             })}
           </ul>
-          <p className="subtle panel-foot">
+          <p className="text-sm text-ink-3 border-t border-line px-6 pt-3 pb-4">
             Att radera ett möte tar bort transkription, anteckningar och logg här. Google-dokumentet ligger kvar.
           </p>
         </>
@@ -368,30 +370,30 @@ function PeoplePanel({
   actions: OrgDetailViewProps["actions"];
 }) {
   return (
-    <Panel flush title="Personer" titleId="people-title" actions={<span className="subtle">{people.length}</span>}>
-      <p className="subtle panel-intro">
+    <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length}</span>}>
+      <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
         Alla som brukar vara med på mötena. Namnen används för att känna igen vem som talar. De behöver inget konto.
       </p>
-      <form action={actions.addPerson} className="inline-form panel-pad add-person">
+      <form action={actions.addPerson} className="flex items-end gap-2 px-6 pb-4">
         <input type="hidden" name="orgId" value={orgId} />
-        <div className="field">
-          <label className="visually-hidden" htmlFor="new-person">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <Label className="sr-only" htmlFor="new-person">
             Namn på ny person
-          </label>
-          <input id="new-person" className="input" name="name" placeholder="Namn, t.ex. Anna Berg" required maxLength={100} autoComplete="off" />
+          </Label>
+          <Input id="new-person" name="name" placeholder="Namn, t.ex. Anna Berg" required maxLength={100} autoComplete="off" />
         </div>
         <SubmitButton icon={<IconPlus />} pendingLabel="Lägger till…">
           Lägg till
         </SubmitButton>
       </form>
       {people.length === 0 ? (
-        <div className="panel-pad">
+        <div className="px-6 pb-6">
           <EmptyState title="Inga personer än">
             <p>Lägg till de som brukar vara med. Det går också bra att låta namnrundan i första mötet fylla på listan.</p>
           </EmptyState>
         </div>
       ) : (
-        <ul className="list people-list" aria-labelledby="people-title">
+        <ul aria-labelledby="people-title">
           {people.map((person) => (
             <PersonRow
               key={person.id}

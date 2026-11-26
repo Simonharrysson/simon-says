@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/ui/SiteFooter";
-import { SiteHeader } from "@/components/ui/SiteHeader";
+import { navLinkClass, SiteHeader } from "@/components/ui/SiteHeader";
 
 /** Header + main + footer for pages outside the logged-in area. */
 /** `noLoginLink` hides the header's "Logga in" (on /login itself). */
@@ -20,17 +20,17 @@ export function PublicShell({
       <SiteHeader
         nav={
           signedIn ? (
-            <a className="nav-link" href="/orgs">
+            <a className={navLinkClass} href="/orgs">
               Föreningar
             </a>
           ) : noLoginLink ? null : (
-            <a className="nav-link" href="/login">
+            <a className={navLinkClass} href="/login">
               Logga in
             </a>
           )
         }
       />
-      <main id="innehall" className={flush ? undefined : "main"} style={flush ? { flex: 1 } : undefined}>
+      <main id="innehall" className={flush ? "flex-1" : "flex-1 pt-8 pb-16"}>
         {children}
       </main>
       <SiteFooter />

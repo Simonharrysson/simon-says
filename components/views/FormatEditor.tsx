@@ -4,7 +4,13 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/button";
+import { Button, Spinner } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
+import { docHeadingClass, docLineClass, docPaperClass, docTitleClass } from "./doc-paper";
 import { Check } from "@/components/ui/Field";
 import type { ItemRole } from "@/lib/db/types";
 import { editorToProfile, profileToEditor, ROLE_NAMES, type EditorItem, type EditorState } from "@/lib/formats/editor";
@@ -31,11 +37,11 @@ export function FormatPreview({ profile }: { profile: FormatProfile }) {
   const blocks = skeletonBlocks(profile);
   let n = 0;
   return (
-    <div className="doc format-preview" aria-label="Förhandsvisning av dokumentet">
+    <div className={cn(docPaperClass, "min-[60rem]:sticky min-[60rem]:top-4")} aria-label="Förhandsvisning av dokumentet">
       {blocks.map((b: SkeletonBlock, i) => {
         if (b.type === "table") {
           return (
-            <table key={i} className="format-preview__table">
+            <table key={i} className="mt-[0.75em] w-full border-collapse [&_td]:border [&_td]:border-[#dadce0] [&_td]:px-[0.5em] [&_td]:py-[0.25em] [&_th]:w-[40%] [&_th]:border [&_th]:border-[#dadce0] [&_th]:px-[0.5em] [&_th]:py-[0.25em] [&_th]:text-left [&_th]:font-normal [&_th]:text-[#5f6368]">
               <tbody>
                 {b.rows.map(([field]) => (
                   <tr key={field}>
@@ -47,19 +53,19 @@ export function FormatPreview({ profile }: { profile: FormatProfile }) {
             </table>
           );
         }
-        if (b.type === "title") return <p key={i} className="doc__title">{b.text}</p>;
-        if (b.type === "heading") return <p key={i} className="doc__h">{b.text}</p>;
+        if (b.type === "title") return <p key={i} className={docTitleClass}>{b.text}</p>;
+        if (b.type === "heading") return <p key={i} className={docHeadingClass}>{b.text}</p>;
         if (b.type === "item") {
           n++;
           return (
-            <p key={i} className="doc__line">
+            <p key={i} className={docLineClass}>
               {profile.numbering === "numbered" && <span>{n}.</span>}
               <span>{b.text}</span>
             </p>
           );
         }
-        if (b.type === "subitem") return <p key={i} className="doc__line format-preview__sub">{b.text}</p>;
-        return <p key={i} className="doc__line">{b.text}</p>;
+        if (b.type === "subitem") return <p key={i} className={cn(docLineClass, "pl-[1.5em]")}>{b.text}</p>;
+        return <p key={i} className={docLineClass}>{b.text}</p>;
       })}
     </div>
   );
@@ -85,14 +91,13 @@ function TextList({
   hint?: string;
 }) {
   return (
-    <fieldset className="format-editor__group">
-      <legend className="label">{label}</legend>
-      {hint && <p className="hint">{hint}</p>}
+    <fieldset className="grid gap-2">
+      <legend className="text-sm font-medium text-ink">{label}</legend>
+      {hint && <p className="text-xs text-ink-3">{hint}</p>}
       {values.map((v, i) => (
-        <div key={i} className="format-editor__row">
-          <input
+        <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+          <Input
             id={`${id}-${i}`}
-            className="input"
             aria-label={`${label} ${i + 1}`}
             value={v}
             maxLength={80}
@@ -105,9 +110,9 @@ function TextList({
             onClick={() => {
               onChange(values.filter((_, j) => j !== i));
               // Focus stays in the list: the next row, else the previous one, else "add".
-              focusSoon(values.length > 1 ? `${id}-${Math.min(i, values.length - 2)}` : `${id}-add`);
+              focusSoon(values.length> 1 ? `${id}-${Math.min(i, values.length - 2)}` : `${id}-add`);
             }}
-          >
+>
             Ta bort
           </Button>
         </div>
@@ -149,7 +154,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
     setState((s) => ({ ...s, items: s.items.map((it, j) => (j === i ? { ...it, ...patch } : it)) }));
   const moveItem = (i: number, by: number) => {
     const j = i + by;
-    if (j < 0 || j >= state.items.length) return;
+    if (j < 0 || j>= state.items.length) return;
     setState((s) => {
       const items = [...s.items];
       [items[i], items[j]] = [items[j], items[i]];
@@ -161,7 +166,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
   };
   const removeItem = (i: number) => {
     set({ items: state.items.filter((_, j) => j !== i) });
-    focusSoon(state.items.length > 1 ? itemId(Math.min(i, state.items.length - 2), "label") : `${uid}-add-item`);
+    focusSoon(state.items.length> 1 ? itemId(Math.min(i, state.items.length - 2), "label") : `${uid}-add-item`);
   };
   const hasCheckin = state.items.some((it) => it.role === "checkin");
 
@@ -194,20 +199,20 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
   };
 
   return (
-    <div className="stack stack--4 format-editor">
+    <div className="flex flex-col gap-4">
       {proposal.explanation && <p>{proposal.explanation}</p>}
       {proposal.qualityNote && (
         <Banner tone="neutral" title="Om era gamla protokoll" live={false}>
           {proposal.qualityNote}
         </Banner>
       )}
-      <div className="format-editor__layout">
-        <div className="stack stack--3">
-          <div className="field">
-            <label className="label" htmlFor="fe-title">
+      <div className="grid grid-cols-1 items-start gap-6 min-[60rem]:grid-cols-2">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="fe-title">
               Titel
-            </label>
-            <input id="fe-title" className="input" value={state.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} />
+            </Label>
+            <Input id="fe-title" value={state.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} />
           </div>
           <TextList
             id="fe-info"
@@ -217,13 +222,12 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
             addLabel="Lägg till fält"
             hint="Inga fält = ingen tabell."
           />
-          <div className="field">
-            <label className="label" htmlFor="fe-agenda">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="fe-agenda">
               Rubrik för dagordningen
-            </label>
-            <input
+            </Label>
+            <Input
               id="fe-agenda"
-              className="input"
               value={state.agendaHeading}
               maxLength={80}
               placeholder="Agenda"
@@ -231,39 +235,37 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
               onChange={(e) => set({ agendaHeading: e.target.value })}
             />
             {/* The skeleton always writes one (the scan finds heading items only below it). */}
-            <p id="fe-agenda-hint" className="hint">
+            <p id="fe-agenda-hint" className="text-xs text-ink-3">
               Tomt fält ger rubriken ”Agenda”.
             </p>
           </div>
-          <fieldset className="format-editor__group">
-            <legend className="label">Punkter varje möte</legend>
-            {hasCheckin && <p className="hint">Har ni ingen Må-runda? Ta bort den punkten.</p>}
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium text-ink">Punkter varje möte</legend>
+            {hasCheckin && <p className="text-xs text-ink-3">Har ni ingen Må-runda? Ta bort den punkten.</p>}
             {state.items.map((item, i) => (
-              <div key={i} className="format-editor__item">
-                <input
+              <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)] items-center gap-2 border-b border-line pb-2">
+                <Input
                   id={itemId(i, "label")}
-                  className="input"
                   aria-label={`Punkt ${i + 1}`}
                   value={item.label}
                   maxLength={80}
                   onChange={(e) => setItem(i, { label: e.target.value })}
                 />
-                <select
-                  className="input"
+                <NativeSelect
                   aria-label={`Typ av punkt ${i + 1}`}
                   value={item.role}
                   onChange={(e) => setItem(i, { role: e.target.value as ItemRole })}
-                >
+>
                   {ROLES.map((r) => (
                     <option key={r} value={r}>
                       {ROLE_NAMES[r]}
                     </option>
                   ))}
-                </select>
-                <label className="format-editor__last">
-                  <input type="checkbox" checked={item.last} onChange={(e) => setItem(i, { last: e.target.checked })} /> Sist
+                </NativeSelect>
+                <label className="inline-flex cursor-pointer items-center gap-1">
+                  <Checkbox checked={item.last} onCheckedChange={(on) => setItem(i, { last: on === true })} /> Sist
                 </label>
-                <div className="cluster">
+                <div className="flex flex-wrap items-center gap-3">
                   <Button id={itemId(i, "up")} variant="ghost" size="sm" aria-label={`Flytta upp punkt ${i + 1}`} disabled={i === 0} onClick={() => moveItem(i, -1)}>
                     ↑
                   </Button>
@@ -274,7 +276,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
                     aria-label={`Flytta ner punkt ${i + 1}`}
                     disabled={i === state.items.length - 1}
                     onClick={() => moveItem(i, 1)}
-                  >
+>
                     ↓
                   </Button>
                   <Button variant="danger-ghost" size="sm" aria-label={`Ta bort punkt ${i + 1}`} onClick={() => removeItem(i)}>
@@ -289,7 +291,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
               </Button>
             </div>
           </fieldset>
-          {(showRequired || proposal.profile.requiredItems.length > 0) && (
+          {(showRequired || proposal.profile.requiredItems.length> 0) && (
             <TextList
               id="fe-required"
               label="Punkter som stadgarna kräver"
@@ -299,51 +301,47 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
               hint="Kommer med på dagordningen varje möte."
             />
           )}
-          <div className="field">
-            <label className="label" htmlFor="fe-numbering">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="fe-numbering">
               Numrering
-            </label>
-            <select
+            </Label>
+            <NativeSelect
               id="fe-numbering"
-              className="input"
               value={state.numbering}
               onChange={(e) => set({ numbering: e.target.value as EditorState["numbering"] })}
-            >
+>
               <option value="numbered">1. 2. 3.</option>
               <option value="paragraph">§1 §2 §3</option>
               <option value="none">Ingen</option>
-            </select>
+            </NativeSelect>
           </div>
-          <fieldset className="format-editor__group">
-            <legend className="label">Uppgifter</legend>
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium text-ink">Uppgifter</legend>
             <Check id="fe-tasks-on" title="Egen rubrik för uppgifter" checked={state.tasks.on} onCheckedChange={(on) => set({ tasks: { ...state.tasks, on: on === true } })} />
             {state.tasks.on && (
               <>
-                <input
-                  className="input"
+                <Input
                   aria-label="Rubrik för uppgifter"
                   value={state.tasks.label}
                   maxLength={80}
                   onChange={(e) => set({ tasks: { ...state.tasks, label: e.target.value } })}
                 />
-                <select
-                  className="input"
+                <NativeSelect
                   aria-label="Gruppera uppgifter"
                   value={state.tasks.groupBy}
                   onChange={(e) => set({ tasks: { ...state.tasks, groupBy: e.target.value as "role" | "person" } })}
-                >
+>
                   <option value="role">Gruppera per roll</option>
                   <option value="person">Gruppera per person</option>
-                </select>
+                </NativeSelect>
               </>
             )}
           </fieldset>
-          <fieldset className="format-editor__group">
-            <legend className="label">Anteckningar</legend>
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium text-ink">Anteckningar</legend>
             <Check id="fe-notes-on" title="Egen rubrik för anteckningar" checked={state.notes.on} onCheckedChange={(on) => set({ notes: { ...state.notes, on: on === true } })} />
             {state.notes.on && (
-              <input
-                className="input"
+              <Input
                 aria-label="Rubrik för anteckningar"
                 value={state.notes.label}
                 maxLength={80}
@@ -365,14 +363,14 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
       {!result.ok && (
         <div role="alert">
           {result.errors.map((e) => (
-            <p key={e} className="field-error">
+            <p key={e} className="flex items-center gap-2 text-xs font-medium text-red">
               {e}
             </p>
           ))}
         </div>
       )}
       {message && <Banner tone="danger">{message}</Banner>}
-      <div className="cluster">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" loading={busy} disabled={!result.ok} onClick={() => void approve()}>
           Godkänn och använd
         </Button>
@@ -441,7 +439,7 @@ export function LearnFormatView({
         orgId={orgId}
         proposal={view.proposal}
         approveKind={variant === "stadgar" || (variant === "customize" && view.proposal.profile.kind === "styrelseprotokoll") ? "styrelseprotokoll" : "learned"}
-        showRequired={variant === "stadgar" || view.proposal.profile.requiredItems.length > 0}
+        showRequired={variant === "stadgar" || view.proposal.profile.requiredItems.length> 0}
         onCancel={onCancel}
         onApproved={onApproved}
       />
@@ -449,20 +447,20 @@ export function LearnFormatView({
   }
   if (view.phase === "proposing") {
     return (
-      <p className="subtle" role="status" aria-live="polite">
-        <span className="spinner" aria-hidden="true" /> {copy.busy}
+      <p className="text-sm text-ink-3" role="status" aria-live="polite">
+        <Spinner className="align-[-0.125em]" /> {copy.busy}
       </p>
     );
   }
   return (
-    <div className="stack stack--2">
+    <div className="flex flex-col gap-2">
       {view.phase === "error" && <Banner tone="danger">{view.message}</Banner>}
       <div>
         <Button ref={startRef} variant="secondary" onClick={onStart}>
           {view.phase === "error" ? "Försök igen" : copy.start}
         </Button>
       </div>
-      <p className="hint">{copy.hint}</p>
+      <p className="text-xs text-ink-3">{copy.hint}</p>
     </div>
   );
 }
@@ -481,7 +479,7 @@ export function LearnFormat({ orgId }: { orgId: string }) {
       return;
     }
     if (!picked?.length) return;
-    if (picked.length > MAX_DOCS) {
+    if (picked.length> MAX_DOCS) {
       setView({ phase: "error", message: `Välj högst ${MAX_DOCS} dokument.` });
       return;
     }

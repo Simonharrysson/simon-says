@@ -12,10 +12,12 @@ import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Check, Field } from "@/components/ui/Field";
 import { IconArrowRight, IconMic, IconPlus, IconTrash } from "@/components/ui/icons";
+import { Label } from "@/components/ui/label";
 import { ListRow } from "@/components/ui/ListRow";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Panel } from "@/components/ui/Panel";
 import { SiteFooter } from "@/components/ui/SiteFooter";
-import { SiteHeader } from "@/components/ui/SiteHeader";
+import { navLinkClass, SiteHeader } from "@/components/ui/SiteHeader";
 import { AccountView } from "@/components/views/AccountView";
 import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
@@ -184,7 +186,7 @@ function AppChrome({ children }: { children: ReactNode }) {
   return (
     <>
       <SiteHeader homeHref="#" nav={<AppNav email="anna.berg@example.com" signOut={noopAction} />} />
-      <div className="main">{children}</div>
+      <div className="flex-1 pt-8 pb-16">{children}</div>
     </>
   );
 }
@@ -220,7 +222,7 @@ const learnedProposal = {
 function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "stadgar" }) {
   return (
     <AppChrome>
-      <div className="page">
+      <div className="mx-auto w-full max-w-page px-gutter">
         <Panel title="Mötesformat" titleId="format-title-demo">
           <LearnFormatView orgId={ORG_ID} view={view} variant={variant} onStart={noop} onCancel={noop} />
         </Panel>
@@ -236,13 +238,13 @@ function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginL
         homeHref="#"
         nav={
           noLoginLink ? undefined : (
-            <a className="nav-link" href="#">
+            <a className={navLinkClass} href="#">
               Logga in
             </a>
           )
         }
       />
-      <div className="main">{children}</div>
+      <div className="flex-1 pt-8 pb-16">{children}</div>
     </>
   );
 }
@@ -451,16 +453,16 @@ export function DesignGallery({ view }: { view: string | null }) {
   return (
     <>
       <SiteHeader homeHref="/" />
-      <main id="innehall" className="main">
-        <div className="page stack stack--4">
-          <div className="stack stack--2">
-            <h1 className="page-header__title">Designsystem</h1>
-            <p className="muted measure">
+      <main id="innehall" className="flex-1 pt-8 pb-16">
+        <div className="mx-auto flex w-full max-w-page flex-col gap-4 px-gutter">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-2xl wrap-anywhere">Designsystem</h1>
+            <p className="max-w-[68ch] text-ink-2">
               Alla komponenter och alla lägen i appen, med påhittad data. Bara i utveckling (eller med DESIGN_PREVIEW=1).
               Öppna ett läge för sig med länken bredvid rubriken.
             </p>
           </div>
-          <nav className="design-toc toc" aria-label="Lägen">
+          <nav className="sticky top-16 z-10 flex flex-wrap gap-2 border-b border-line bg-board py-3 text-sm [&_a]:rounded-md [&_a]:bg-sunk [&_a]:px-[0.7rem] [&_a]:py-[0.3rem] [&_a]:text-ink-2 [&_a]:no-underline [&_a:hover]:text-ink" aria-label="Lägen">
             {designViews.map((v) => (
               <a key={v.id} href={`#${v.id}`}>
                 {v.title}
@@ -469,20 +471,20 @@ export function DesignGallery({ view }: { view: string | null }) {
           </nav>
           {(Object.keys(groups) as DesignGroup[]).map((group) => (
             <Fragment key={group}>
-              <h2 className="section-title" style={{ marginTop: "2rem" }}>
+              <h2 className="mt-8 text-xl">
                 {group}
               </h2>
               {groups[group].map((v) => (
-                <section key={v.id} id={v.id} className="design-section" aria-labelledby={`${v.id}-h`}>
-                  <div className="cluster" style={{ justifyContent: "space-between" }}>
-                    <h3 id={`${v.id}-h`} className="panel__title">
+                <section key={v.id} id={v.id} className="flex scroll-mt-28 flex-col gap-4 border-t border-line py-8" aria-labelledby={`${v.id}-h`}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 id={`${v.id}-h`} className="text-lg tracking-[-0.02em]">
                       {v.title}
                     </h3>
-                    <a className="subtle" href={`/design?vy=${v.id}`}>
+                    <a className="text-sm text-ink-3" href={`/design?vy=${v.id}`}>
                       Öppna för sig
                     </a>
                   </div>
-                  <div className="design-frame">{render[v.id]()}</div>
+                  <div className="overflow-hidden rounded-lg bg-board shadow-[inset_0_0_0_1px_var(--line)]">{render[v.id]()}</div>
                 </section>
               ))}
             </Fragment>
@@ -514,27 +516,27 @@ function Tokens() {
     ["--amber-wash", "Bärnsten tvätt"],
   ];
   return (
-    <div className="page stack stack--6" style={{ padding: "1.5rem" }}>
-      <div className="design-swatches">
+    <div className="mx-auto flex w-full max-w-page flex-col gap-8 p-6">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3">
         {colors.map(([token, name]) => (
-          <div key={token} className="swatch">
-            <span className="swatch__chip" style={{ background: `var(${token})` }} />
+          <div key={token} className="flex flex-col gap-1 text-xs">
+            <span className="h-14 rounded-md shadow-[inset_0_0_0_1px_var(--line)]" style={{ background: `var(${token})` }} />
             <strong>{name}</strong>
             <code>{token}</code>
           </div>
         ))}
       </div>
-      <div className="stack stack--3">
-        <p className="hero__title" style={{ fontSize: "var(--text-display)" }}>
+      <div className="flex flex-col gap-3">
+        <p className="text-display leading-[1.05] font-semibold tracking-[-0.045em]">
           Display 56
         </p>
-        <p style={{ fontSize: "var(--text-2xl)", fontWeight: 600, letterSpacing: "-0.03em" }}>Rubrik 32 · Styrelsemöte</p>
-        <p style={{ fontSize: "var(--text-xl)", fontWeight: 600, letterSpacing: "-0.025em" }}>Rubrik 24 · Personer</p>
-        <p style={{ fontSize: "var(--text-lg)", fontWeight: 600 }}>Rubrik 18 · Bjud in</p>
+        <p className="text-2xl font-semibold tracking-[-0.03em]">Rubrik 32 · Styrelsemöte</p>
+        <p className="text-xl font-semibold tracking-[-0.025em]">Rubrik 24 · Personer</p>
+        <p className="text-lg font-semibold">Rubrik 18 · Bjud in</p>
         <p>Brödtext 16 · Anteckningarna skrivs i ett nytt Google-dokument och delas med föreningen.</p>
-        <p className="subtle">Liten 14 · Uppdaterad 18:42</p>
-        <p className="hint">Hjälptext 13 · Högst 100 tecken.</p>
-        <p className="mono" style={{ fontSize: "1.75rem" }}>
+        <p className="text-sm text-ink-3">Liten 14 · Uppdaterad 18:42</p>
+        <p className="text-xs text-ink-3">Hjälptext 13 · Högst 100 tecken.</p>
+        <p className="font-mono text-[1.75rem] tabular-nums">
           1:02:09 · Talare 2
         </p>
       </div>
@@ -545,8 +547,8 @@ function Tokens() {
 function Primitives() {
   const [loading, setLoading] = useState(false);
   return (
-    <div className="stack stack--6" style={{ padding: "1.5rem" }}>
-      <div className="cluster">
+    <div className="flex flex-col gap-8 p-6">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" icon={<IconMic />}>
           Starta mötet
         </Button>
@@ -577,18 +579,25 @@ function Primitives() {
         </ButtonLink>
       </div>
 
-      <div className="org-grid">
-        <div className="stack">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
+        <div className="flex flex-col gap-4">
           <Field id="d-name" label="Namn" placeholder="t.ex. LiU AI Society" hint="Högst 100 tecken." />
           <Field id="d-err" label="Namn" defaultValue="" error="Ange ett namn (högst 100 tecken)." />
           <Field id="d-dis" label="Inaktivt fält" defaultValue="Går inte att ändra" disabled />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="d-select">Format</Label>
+            <NativeSelect id="d-select" defaultValue="veckomote">
+              <option value="veckomote">Veckomöte</option>
+              <option value="styrelseprotokoll">Styrelseprotokoll</option>
+            </NativeSelect>
+          </div>
           <Check id="d-check" title="Dela transkriptionen i dokumentet" defaultChecked>
             Hela transkriptionen hamnar i en egen flik.
           </Check>
           <CopyField id="d-copy" value="https://simonsays.harrysson.co/join/Xk3fQ9pLm2" label="Inbjudningslänk" />
         </div>
-        <div className="stack">
-          <div className="cluster">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <Badge tone="live">Pågår</Badge>
             <Badge tone="success">Klart</Badge>
             <Badge tone="info">Admin</Badge>
@@ -618,10 +627,10 @@ function Primitives() {
         </div>
       </div>
 
-      <div className="org-grid">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <Panel flush title="Lista" titleId="d-list">
-          <ul className="list">
-            <ListRow href="#" leading={<span className="org-initial">E</span>} title="Exempelföreningen" actions={<Badge tone="info">Admin</Badge>} />
+          <ul>
+            <ListRow href="#" leading={<span className="grid size-9 flex-none place-items-center rounded-md bg-ink text-sm font-semibold text-on-ink">E</span>} title="Exempelföreningen" actions={<Badge tone="info">Admin</Badge>} />
             <ListRow title="Rad utan länk" meta="Metadata · 24 nov" />
           </ul>
         </Panel>

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { IconPencil, IconTrash } from "@/components/ui/icons";
 import { SubmitButton } from "@/components/ui/SubmitButton";
@@ -37,7 +39,7 @@ export function PersonRow({
     return (
       <li>
         <form
-          className="row person-edit"
+          className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap"
           action={async (form) => {
             await setPersonRole(form);
             setEditingRole(false);
@@ -45,15 +47,15 @@ export function PersonRow({
           onKeyDown={(event) => {
             if (event.key === "Escape") setEditingRole(false);
           }}
-        >
+>
           <input type="hidden" name="orgId" value={orgId} />
           <input type="hidden" name="personId" value={person.id} />
-          <label className="visually-hidden" htmlFor={`role-${person.id}`}>
+          <Label className="sr-only" htmlFor={`role-${person.id}`}>
             Roll för {person.name}
-          </label>
-          <input
+          </Label>
+          <Input
             id={`role-${person.id}`}
-            className="input"
+            className="min-w-0 flex-1"
             name="role"
             defaultValue={person.role ?? ""}
             placeholder="Roll (t.ex. Kassör)"
@@ -61,7 +63,7 @@ export function PersonRow({
             autoComplete="off"
             autoFocus
           />
-          <span className="row__actions">
+          <span className="flex flex-none items-center gap-1 max-[30rem]:w-full max-[30rem]:justify-end">
             <SubmitButton variant="primary" size="sm" pendingLabel="Sparar…">
               Spara
             </SubmitButton>
@@ -78,7 +80,7 @@ export function PersonRow({
     return (
       <li>
         <form
-          className="row person-edit"
+          className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap"
           action={async (form) => {
             await renamePerson(form);
             setEditing(false);
@@ -86,23 +88,23 @@ export function PersonRow({
           onKeyDown={(event) => {
             if (event.key === "Escape") setEditing(false);
           }}
-        >
+>
           <input type="hidden" name="orgId" value={orgId} />
           <input type="hidden" name="personId" value={person.id} />
-          <label className="visually-hidden" htmlFor={`person-${person.id}`}>
+          <Label className="sr-only" htmlFor={`person-${person.id}`}>
             Nytt namn för {person.name}
-          </label>
-          <input
+          </Label>
+          <Input
             ref={inputRef}
             id={`person-${person.id}`}
-            className="input"
+            className="min-w-0 flex-1"
             name="name"
             defaultValue={person.name}
             required
             maxLength={100}
             autoComplete="off"
           />
-          <span className="row__actions">
+          <span className="flex flex-none items-center gap-1 max-[30rem]:w-full max-[30rem]:justify-end">
             <SubmitButton variant="primary" size="sm" pendingLabel="Sparar…">
               Spara
             </SubmitButton>
@@ -117,17 +119,17 @@ export function PersonRow({
 
   return (
     <li>
-      <div className="row">
-        <span className="person-avatar" aria-hidden="true">
+      <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
+        <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold tracking-[0.02em] text-ink-2" aria-hidden="true">
           {initials(person.name)}
         </span>
-        <span className="row__main">
-          <span className="row__title">
+        <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+          <span className="font-medium wrap-anywhere">
             {person.name}
-            {person.role && <span className="subtle"> · {person.role}</span>}
+            {person.role && <span className="text-sm text-ink-3"> · {person.role}</span>}
           </span>
         </span>
-        <span className="row__actions">
+        <span className="flex flex-none items-center gap-1">
           {setPersonRole && (
             <Button variant="ghost" size="sm" onClick={() => setEditingRole(true)}>
               {person.role ? "Ändra roll" : "Lägg till roll"}
@@ -136,12 +138,12 @@ export function PersonRow({
           <button
             ref={editRef}
             type="button"
-            className="btn btn--ghost btn--sm btn--icon"
+            className={buttonVariants({ variant: "ghost", size: "sm", iconOnly: true })}
             onClick={() => setEditing(true)}
             title="Byt namn"
-          >
+>
             <IconPencil size={18} />
-            <span className="visually-hidden">Byt namn på {person.name}</span>
+            <span className="sr-only">Byt namn på {person.name}</span>
           </button>
           <ConfirmAction
             action={deletePerson}
@@ -163,6 +165,6 @@ export function PersonRow({
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] ?? "?").slice(0, 2);
+  const letters = parts.length> 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] ?? "?").slice(0, 2);
   return letters.toUpperCase();
 }

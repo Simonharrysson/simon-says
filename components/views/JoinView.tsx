@@ -13,13 +13,13 @@ export type JoinViewProps =
 /** Invite landing. Joining is always a button press (POST), never a side effect of opening the link. */
 export function JoinView(props: JoinViewProps) {
   return (
-    <div className="page page--narrow auth">
-      <div className="auth__sheet stack stack--5">
+    <div className="mx-auto w-full px-gutter max-w-[40rem] grid items-start justify-items-center pt-[clamp(1rem,6vh,4rem)]">
+      <div className="w-full max-w-[30rem] rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel flex flex-col gap-6">
         {props.state === "signed-out" && (
           <>
-            <div className="stack stack--2">
-              <h1 className="auth__title">Du är inbjuden</h1>
-              <p className="muted">
+            <div className="flex flex-col gap-2">
+              <h1 className="text-2xl">Du är inbjuden</h1>
+              <p className="text-ink-2">
                 Logga in med Google för att se vilken förening som bjudit in dig och gå med. Det tar en halv minut.
               </p>
             </div>
@@ -29,7 +29,7 @@ export function JoinView(props: JoinViewProps) {
 
         {props.state === "invalid" && (
           <>
-            <h1 className="auth__title">Länken fungerar inte längre</h1>
+            <h1 className="text-2xl">Länken fungerar inte längre</h1>
             <Banner tone="danger" title="Inbjudningslänken gäller inte">
               En admin har troligen skapat en ny länk. Be den som bjöd in dig att skicka den nya.
             </Banner>
@@ -41,10 +41,10 @@ export function JoinView(props: JoinViewProps) {
 
         {props.state === "ready" && (
           <>
-            <div className="stack stack--2">
-              <p className="muted">Du är inbjuden till</p>
-              <h1 className="auth__title join__org">{props.orgName}</h1>
-              <p className="muted">
+            <div className="flex flex-col gap-2">
+              <p className="text-ink-2">Du är inbjuden till</p>
+              <h1 className="text-[clamp(2rem,1.5rem+2vw,2.75rem)] wrap-anywhere">{props.orgName}</h1>
+              <p className="text-ink-2">
                 Som medlem kan du starta möten och får tillgång till mötesdokument som skapas från och med nu.
               </p>
             </div>

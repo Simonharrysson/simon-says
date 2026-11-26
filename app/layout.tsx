@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="sv" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
       <body>
-        <a className="skip-link" href="#innehall">
+        <a className="absolute -top-16 left-4 z-50 rounded-md bg-ink px-4 py-2 text-on-ink no-underline focus:top-3" href="#innehall">
           Hoppa till innehållet
         </a>
         {children}

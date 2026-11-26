@@ -18,15 +18,15 @@ const processors: [string, string, string][] = [
 export default function PrivacyPage() {
   return (
     <PublicShell signedIn={false}>
-      <article className="page page--read stack stack--5">
-        <div className="stack stack--3">
-          <span className="draft-flag">Utkast · uppdaterad {UPDATED} · juridisk granskning återstår</span>
-          <h1 className="page-header__title">Integritet</h1>
-          <p className="lead">
+      <article className="mx-auto w-full px-gutter max-w-[46rem] flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <span className="inline-flex items-center gap-2 rounded-full border border-dashed border-red px-[0.65rem] py-1 text-xs font-semibold text-red">Utkast · uppdaterad {UPDATED} · juridisk granskning återstår</span>
+          <h1 className="text-2xl wrap-anywhere">Integritet</h1>
+          <p className="max-w-[38rem] text-lg text-ink-2">
             Simon Says lyssnar på era möten. Här står vad det betyder: vad som skickas vart, vad som sparas, och hur ni
             tar bort det.
           </p>
-          <nav className="toc" aria-label="Innehåll">
+          <nav className="flex flex-wrap gap-2 text-sm [&_a]:rounded-md [&_a]:bg-sunk [&_a]:px-[0.7rem] [&_a]:py-[0.3rem] [&_a]:text-ink-2 [&_a]:no-underline [&_a:hover]:text-ink" aria-label="Innehåll">
             <a href="#kort">Kort sagt</a>
             <a href="#i-rummet">I rummet</a>
             <a href="#sparas">Vad som sparas</a>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           </nav>
         </div>
 
-        <div className="prose">
+        <div className="flex max-w-[68ch] flex-col gap-4 [&_h2]:mt-8 [&_h2]:text-xl [&_h3]:mt-3 [&_h3]:text-lg [&_li]:marker:text-ink-3 [&_ul]:flex [&_ul]:list-dash [&_ul]:flex-col [&_ul]:gap-2 [&_ul]:pl-5">
           <h2 id="kort">Kort sagt</h2>
           <ul>
             <li>Vi sparar ingen ljudinspelning. Ljudet går direkt från laptopen till transkriberingen och blir text medan ni pratar.</li>
@@ -95,7 +95,7 @@ export default function PrivacyPage() {
           </ul>
 
           <h2 id="vem">Vilka som behandlar data</h2>
-          <table className="processor-table">
+          <table className="w-full border-collapse text-sm [&_td]:border-b [&_td]:border-line [&_td]:py-3 [&_td]:pr-3 [&_td]:text-left [&_td]:align-top [&_th]:border-b [&_th]:border-line [&_th]:py-3 [&_th]:pr-3 [&_th]:text-left [&_th]:align-top [&_th]:text-xs [&_th]:font-semibold [&_th]:text-ink-3">
             <thead>
               <tr>
                 <th scope="col">Tjänst</th>
@@ -108,7 +108,7 @@ export default function PrivacyPage() {
                 <tr key={name}>
                   <th scope="row">{name}</th>
                   <td>{what}</td>
-                  <td className="muted">{note}</td>
+                  <td className="text-ink-2">{note}</td>
                 </tr>
               ))}
             </tbody>

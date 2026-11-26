@@ -20,10 +20,10 @@ export interface OrgsViewProps {
 
 export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) {
   return (
-    <div className="page page--narrow stack stack--6">
+    <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-8">
       <PageHeader
         title="Föreningar"
-        meta={<p className="muted">Varje förening har sin egen personlista, sina möten och sin inbjudningslänk.</p>}
+        meta={<p className="text-ink-2">Varje förening har sin egen personlista, sina möten och sin inbjudningslänk.</p>}
       />
       <NoticeBanner notice={notice} />
 
@@ -36,17 +36,17 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
         </EmptyState>
       ) : (
         <Panel flush title="Dina föreningar" titleId="orgs-title">
-          <ul className="list" aria-labelledby="orgs-title">
+          <ul  aria-labelledby="orgs-title">
             {orgs.map((org) => (
               <ListRow
                 key={org.id}
                 href={`/orgs/${org.id}`}
-                leading={<span className="org-initial" aria-hidden="true">{org.name.trim().charAt(0).toUpperCase()}</span>}
+                leading={<span className="grid size-9 flex-none place-items-center rounded-md bg-ink text-sm font-semibold text-on-ink" aria-hidden="true">{org.name.trim().charAt(0).toUpperCase()}</span>}
                 title={org.name}
                 actions={
                   <>
                     {org.role === "admin" && <Badge tone="info">Admin</Badge>}
-                    <IconArrowRight size={18} className="row__chevron" />
+                    <IconArrowRight size={18} className="text-ink-3 transition-transform duration-120 ease-out group-hover/row:translate-x-[3px] group-hover/row:text-ink" />
                   </>
                 }
               />
@@ -56,8 +56,8 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
       )}
 
       <Panel title="Skapa en förening" titleId="create-title">
-        <form action={createOrg} className="stack">
-          <div className="inline-form inline-form--stack-sm">
+        <form action={createOrg} className="flex flex-col gap-4">
+          <div className="flex items-end gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch">
             <Field
               id="org-name"
               name="name"
@@ -67,12 +67,13 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
               maxLength={100}
               autoComplete="organization"
               error={nameError}
+              className="min-w-0 flex-1"
             />
             <SubmitButton variant="primary" icon={<IconPlus />} pendingLabel="Skapar…">
               Skapa
             </SubmitButton>
           </div>
-          <p className="hint">Du kan skapa högst två föreningar. Att gå med i andras räknas inte.</p>
+          <p className="text-xs text-ink-3">Du kan skapa högst två föreningar. Att gå med i andras räknas inte.</p>
         </form>
       </Panel>
     </div>
