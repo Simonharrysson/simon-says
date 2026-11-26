@@ -92,9 +92,10 @@ describe.skipIf(!hasLocalSupabase)("Docs in the förening (0030)", () => {
     const third = await createTestUser("dsthird");
     const { data } = await adminClient().from("orgs").select("invite_code").eq("id", orgId).single();
     await joinOrg(third.db, data!.invite_code as string);
+    const before = current.perm.length;
     const res = await askFor(third, other);
     expect(res.status).toBe(409);
     expect((await res.json()).error).toBe("no_starter");
-    expect(current.perm).toHaveLength(1);
+    expect(current.perm).toHaveLength(before); // no Drive call
   });
 });
