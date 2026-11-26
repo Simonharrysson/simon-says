@@ -23,6 +23,7 @@ export function MeetingEnded({
   onReLogin,
   onEndWithoutUnsent,
   focusOnMount,
+  privat,
 }: {
   docUrl: string | null;
   durationSeconds: number;
@@ -45,6 +46,8 @@ export function MeetingEnded({
   onEndWithoutUnsent?: () => void;
   /** Move focus to the heading (after Avsluta, so screen readers hear the new state). */
   focusOnMount?: boolean;
+  /** A Privat recording (0045): where its summary is shown, and the back link's words. */
+  privat?: { summaryHref: string | null; backLabel: string } | null;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -116,7 +119,11 @@ export function MeetingEnded({
       )}
       <p className="text-ink-2">
         {autoStopped && `${autoStopText(stopReason)} `}
-        {finalizing
+        {privat
+          ? `Inspelningen var ${formatDuration(durationSeconds)}. ${
+              finalizing ? "Anteckningarna får en sista genomgång." : "Anteckningarna är färdiga."
+            } Sammanfattningen kommer på mejlen om ungefär en minut.`
+          : finalizing
           ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna får en sista genomgång, det tar ungefär en minut.${
               waiting || endFailed || signedOutUnsent != null ? "" : " Du kan stänga fliken, det blir klart ändå."
             }`
@@ -130,8 +137,13 @@ export function MeetingEnded({
             Öppna dokumentet
           </ButtonLink>
         )}
+        {privat?.summaryHref && !finalizing && (
+          <ButtonLink href={privat.summaryHref} variant={docUrl ? "secondary" : "primary"} size="lg">
+            Till sammanfattningen
+          </ButtonLink>
+        )}
         <ButtonLink href={orgHref} variant="ghost" size="lg">
-          Tillbaka till föreningen
+          {privat ? privat.backLabel : "Tillbaka till föreningen"}
         </ButtonLink>
       </div>
     </section>

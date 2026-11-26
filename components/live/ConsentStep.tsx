@@ -65,6 +65,7 @@ export function ConsentStep({
   agendaConfirmed = true,
   agendaDoc = null,
   onNewDocInstead,
+  privat = false,
 }: {
   orgName: string;
   /** Whether the transcript gets its own tab in the Doc (org setting). */
@@ -86,6 +87,8 @@ export function ConsentStep({
   agendaDoc?: { transcriptInDoc: boolean } | null;
   /** After an agenda_* start error: "Skapa nytt dokument i stället" in the error banner. */
   onNewDocInstead?: () => void;
+  /** A Privat recording (0045): the facts and hints speak of the user's own notes, not a förening's Doc. */
+  privat?: boolean;
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
@@ -108,7 +111,9 @@ export function ConsentStep({
 
       <ul className="flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">
         <li>Laptopen lyssnar med sin egen mikrofon. Ställ den mitt på bordet.</li>
-        {agendaDoc ? (
+        {privat ? (
+          <li>Anteckningarna sparas bara hos dig i Privat. Efter inspelningen får du en sammanfattning på mejlen.</li>
+        ) : agendaDoc ? (
           <li>
             Anteckningarna skrivs i den valda dagordningen
             {agendaDoc.transcriptInDoc ? ", med hela transkriptet i en egen flik." : ". Transkriptet läggs inte i dokumentet."}
@@ -189,7 +194,7 @@ export function ConsentStep({
       </Button>
       {(!confirmed || !agendaConfirmed) && (
         <p id={`${id}-why`} className="-mt-4 text-center text-xs text-ink-3">
-          {!confirmed ? "Kryssa i rutan ovan först." : "Välj dagordning eller skapa ett nytt dokument först."}
+          {!confirmed ? "Kryssa i rutan ovan först." : privat ? "Välj vad inspelningen gäller först." : "Välj dagordning eller skapa ett nytt dokument först."}
         </p>
       )}
     </section>

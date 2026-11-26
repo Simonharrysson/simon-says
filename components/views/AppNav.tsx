@@ -14,6 +14,9 @@ export function AppNav({ email, signOut }: { email: string; signOut: FormAction 
   const current = (prefix: string) => (path === prefix || path.startsWith(`${prefix}/`) ? "page" : undefined);
   return (
     <>
+      <a className={navLinkClass} href="/privat" aria-current={current("/privat")}>
+        Privat
+      </a>
       <a className={navLinkClass} href="/orgs" aria-current={current("/orgs")}>
         Föreningar
       </a>

@@ -12,7 +12,7 @@ const processors: [string, string, string][] = [
   ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
   ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."],
-  ["Resend", "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, och mötessammanfattningar till personer i föreningens personlista.", "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."],
+  ["Resend", "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, mötessammanfattningar till personer i föreningens personlista, och sammanfattningen av en inspelning i Privat till den som spelade in.", "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."],
 ];
 
 export default function PrivacyPage() {
@@ -95,6 +95,12 @@ export default function PrivacyPage() {
               alla, utvalda eller ingen). Aldrig till någon utanför personlistan, aldrig efter testmöten. Varje mejl har en
               länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet); det
               försvinner med mötet, personen eller föreningen.
+            </li>
+            <li>
+              Privat: det du spelar in i Privat ser bara du. Transkription, anteckningar, sammanfattningen (skriven av Claude
+              efter inspelningen) och uppgifterna sparas hos oss på samma sätt som en förenings möten, tills du raderar
+              inspelningen eller sammanhanget. Sammanfattningen mejlas bara till dig. Ett Google-dokument skapas bara om du
+              kryssar i det.
             </li>
             <li>
               För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har
@@ -185,6 +191,10 @@ export default function PrivacyPage() {
             <li>
               <strong>Ett möte:</strong> den som startade det, eller en admin, raderar det under föreningen. Transkription,
               anteckningar och logg försvinner hos oss.
+            </li>
+            <li>
+              <strong>En inspelning eller ett sammanhang i Privat:</strong> du raderar dem på sidan för inspelningen eller
+              sammanhanget. Transkription, anteckningar, sammanfattning och uppgifter försvinner hos oss.
             </li>
             <li>
               <strong>En förening:</strong> en admin raderar den längst ner på föreningens sida. Allt under den försvinner, utom användningsposterna som beskrivs ovan.

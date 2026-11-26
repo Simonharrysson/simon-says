@@ -20,6 +20,8 @@ import { SpeakerList } from "./SpeakerList";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
 
 export interface LiveMeetingProps {
+  /** A Privat recording (0045): Privat copy on the consent and ended screens; the summary's page. */
+  privat?: { summaryHref: string | null; backLabel: string } | null;
   phase: LivePhase;
   orgName: string;
   /** Where "← Tillbaka" leads: the förening's page. */
@@ -131,6 +133,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           agendaConfirmed={p.agendaConfirmed}
           agendaDoc={p.agendaDoc}
           onNewDocInstead={p.onNewDocInstead}
+          privat={Boolean(p.privat)}
         />
         <PrivacyNote />
       </div>
@@ -165,7 +168,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           orgHref={p.orgHref}
           autoStopped={p.autoStopped}
           stopReason={p.limitReason}
-          shareFailed={p.shareFailed}
+          shareFailed={p.privat ? null : p.shareFailed}
+          privat={p.privat}
         />
       </div>
     );
@@ -240,7 +244,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           finalizing
           autoStopped={p.autoStopped}
           stopReason={p.limitReason}
-          shareFailed={p.shareFailed}
+          shareFailed={p.privat ? null : p.shareFailed}
+          privat={p.privat}
           pendingRuns={p.pendingRuns}
           endFailed={p.endFailed}
           onRetryEnd={p.onRetryEnd}

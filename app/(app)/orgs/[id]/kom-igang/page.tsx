@@ -34,6 +34,7 @@ export default async function OnboardingPage({ params, searchParams }: { params:
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
+  if (org.kind === "privat") redirect("/privat");
   const role = await myRole(db, id);
   if (role === null) notFound();
   if (role !== "admin") redirect(`/orgs/${id}`);
