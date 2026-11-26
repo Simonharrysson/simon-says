@@ -22,7 +22,8 @@ import { summarizePrivat, type PrivatSummaryAnswer, type SummarizeFn } from "./s
 // - the meeting is claimed first (summary_state null → sending; 0037);
 // - the summary row is written once (save_private_summary: a second write changes nothing), and a
 //   resumed run with a stored summary never calls Claude again;
-// - the Claude call is counted (summary_attempts) before it is made: at most 3, then 'failed';
+// - the Claude call is counted (summary_attempts) and leased (summary_lease_until) before it is
+//   made, so a concurrent run (the cron during the end hook) skips it: at most 3, then 'failed';
 //   a spend stop (KILL_SWITCH, daily cap) is not an attempt: the meeting waits for the cron;
 // - the mail is claimed (mail_claimed_at) before the mailer is called.
 // Logs and events hold counts only, never content or addresses.
@@ -37,6 +38,8 @@ export const MAX_SUMMARY_ATTEMPTS = 3;
 /** Don't start the Claude call with less time than this before the caller's deadline. */
 const MIN_CALL_MS = 40_000;
 const CALL_TIMEOUT_MS = 90_000;
+/** How long a counted attempt holds the meeting: the call's timeout plus room to store it. */
+const LEASE_MS = CALL_TIMEOUT_MS + 60_000;
 /** Open tasks and earlier decisions given to Claude, at most. */
 const MAX_OPEN_TASKS = 30;
 const RECENT_SUMMARIES = 3;
@@ -56,6 +59,7 @@ interface MeetingForPrivat {
   context_id: string | null;
   summary_state: SummaryState | null;
   summary_attempts: number | null;
+  summary_lease_until: string | null;
 }
 
 /** The live notes as lines for the prompt. */
@@ -128,7 +132,7 @@ export async function sendPrivatSummary(
     "meeting",
     await db
       .from("meetings")
-      .select("id, org_id, status, is_test, started_at, started_by, context_id, summary_state, summary_attempts")
+      .select("id, org_id, status, is_test, started_at, started_by, context_id, summary_state, summary_attempts, summary_lease_until")
       .eq("id", meetingId)
       .maybeSingle(),
   ) as MeetingForPrivat | null;
@@ -158,6 +162,8 @@ export async function sendPrivatSummary(
   const locale: PrivatLocale = await localeForUser(m.started_by, db);
 
   if (!stored) {
+    // Another run's Claude call is out (the end hook while the cron sweeps): never a second one.
+    if (m.summary_lease_until && Date.parse(m.summary_lease_until) > now.getTime()) return null;
     const [contextRes, notesRes, openRes, recentRes, previousRes] = await Promise.all([
       db.from("contexts").select("name").eq("id", m.context_id).maybeSingle(),
       db.from("note_items").select("section, text, owner, due, deleted_by_human, position").eq("meeting_id", m.id).order("section").order("position"),
@@ -201,7 +207,12 @@ export async function sendPrivatSummary(
     if (attempts >= MAX_SUMMARY_ATTEMPTS) return finish("failed", { attempts });
     const counted = must(
       "attempt",
-      await db.from("meetings").update({ summary_attempts: attempts + 1 }).eq("id", m.id).eq("summary_attempts", attempts).select("id"),
+      await db
+        .from("meetings")
+        .update({ summary_attempts: attempts + 1, summary_lease_until: new Date(deps.now().getTime() + LEASE_MS).toISOString() })
+        .eq("id", m.id)
+        .eq("summary_attempts", attempts)
+        .select("id"),
     ) as unknown[];
     if (!counted.length) return null; // another run is on it
 
@@ -227,6 +238,8 @@ export async function sendPrivatSummary(
       { orgId: m.org_id, timeoutMs: Math.min(CALL_TIMEOUT_MS, left() - 15_000) },
     );
     if (!res.ok) {
+      // Free the lease: the cron's next sweep may try again (up to the cap).
+      must("lease", await db.from("meetings").update({ summary_lease_until: null }).eq("id", m.id));
       await logEvent(m.id, "summary", { state: "sending", privat: true, attempt: attempts + 1, error: res.reason });
       if (res.reason === "spend") return { state: "sending", sent: 0, failed: 0 };
       return attempts + 1 >= MAX_SUMMARY_ATTEMPTS ? finish("failed", { attempts: attempts + 1 }) : { state: "sending", sent: 0, failed: 0 };

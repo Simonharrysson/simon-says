@@ -280,9 +280,12 @@ as $$ select array['meeting_summary', 'invite', 'private_summary']::text[] $$;
 -- ---------------------------------------------------------------------------------------------
 -- The Privat summary goes through the same claim as the förening summary (0037: summary_state
 -- null → sending → outcome; the end hook and the 5-minute cron). Its Claude call is retried by
--- the cron at most 3 times (summary_attempts), then the state is 'failed'.
+-- the cron at most 3 times (summary_attempts), then the state is 'failed'; summary_lease_until
+-- keeps a second run from calling while the first one's call is out.
 
 alter table public.meetings add column summary_attempts int not null default 0;
+-- Held while one run's Claude call is out, so the cron (or a second end) never pays for it twice.
+alter table public.meetings add column summary_lease_until timestamptz;
 
 alter table public.meetings drop constraint if exists meetings_summary_state_check;
 alter table public.meetings add constraint meetings_summary_state_check

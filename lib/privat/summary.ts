@@ -37,7 +37,7 @@ export const PRIVAT_SUMMARY_JSON_SCHEMA = {
         type: "object",
         additionalProperties: false,
         required: ["text", "owner", "due"],
-        properties: { text: { type: "string" }, owner: { type: ["string", "null"] }, due: { type: ["string", "null"] } },
+        properties: { text: { type: "string" }, owner: { anyOf: [{ type: "string" }, { type: "null" }] }, due: { anyOf: [{ type: "string" }, { type: "null" }] } },
       },
     },
     questions: { type: "array", items: { type: "string" } },

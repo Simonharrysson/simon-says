@@ -10,7 +10,7 @@ import { ensureUser, expect, expectAccessible, fake, test } from "../fixtures";
 
 const P = SCRIPTED.privat;
 
-async function record(page: Page, db: SupabaseClient, pick: (page: Page) => Promise<void>): Promise<string> {
+async function record(page: Page, db: SupabaseClient, pick: (page: Page) => Promise<void>, opts: { withDoc?: boolean } = {}): Promise<string> {
   await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
   await expect(page.getByText("Anteckningarna sparas bara hos dig i Privat.")).toBeVisible();
   // The consent tick first, retried until it sticks: a click before hydration does nothing, and once
@@ -27,10 +27,15 @@ async function record(page: Page, db: SupabaseClient, pick: (page: Page) => Prom
   const meetingId = page.url().split("/").at(-1)!;
   await page.getByRole("button", { name: "Hoppa över" }).click();
 
-  // No Doc: the engine's notes are stored in the database only.
+  // No Doc: the engine's notes are stored in the database only. With the box ticked: the normal Doc path.
   const { data: m } = await db.from("meetings").select("doc_id, context_id").eq("id", meetingId).single();
-  expect(m?.doc_id).toBeNull();
   expect(m?.context_id).toBeTruthy();
+  if (opts.withDoc) {
+    expect(m?.doc_id).toBeTruthy();
+    await expect.poll(() => fake.docText(m!.doc_id), { timeout: 60_000, message: "scripted notes in the Doc" }).toContain(SCRIPTED.decision);
+  } else {
+    expect(m?.doc_id).toBeNull();
+  }
   await expect
     .poll(async () => ((await db.from("note_items").select("text").eq("meeting_id", meetingId)).data ?? []).map((r) => r.text), {
       timeout: 60_000,
@@ -93,9 +98,16 @@ test("Privat: record without a Doc → summary e-mail → the context keeps the 
 
   // Second recording from the context page: the context is preselected.
   await page.getByRole("link", { name: "Spela in" }).click();
-  const second = await record(page, db, async (p) => {
-    await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" }).locator("option:checked")).toHaveText("TDDE15");
-  });
+  // This time also in a Google Doc ("Skriv även i ett Google-dokument"): the förening's Doc path.
+  const second = await record(
+    page,
+    db,
+    async (p) => {
+      await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" }).locator("option:checked")).toHaveText("TDDE15");
+      await p.getByRole("checkbox", { name: /Skriv även i ett Google-dokument/ }).check();
+    },
+    { withDoc: true },
+  );
   await expect.poll(async () => (await fake.mail(email)).length, { timeout: 90_000, message: "second summary e-mail" }).toBe(2);
   const mail2 = (await fake.mail(email)).find((m) => m.text.includes(`/privat/mote/${second}`))!;
   expect(mail2.text).toContain(`SEDAN SIST\n- ${P.firstTask} — klart`);
@@ -113,7 +125,10 @@ test("Privat: record without a Doc → summary e-mail → the context keeps the 
   await expectAccessible(page);
 
   // Ticking a task by hand sticks.
-  await page.getByRole("checkbox", { name: P.nextTask }).check();
+  const tick = page.getByRole("checkbox", { name: P.nextTask });
+  await expect(async () => {
+    await tick.check({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await expect.poll(async () => (await db.from("context_tasks").select("done").eq("meeting_id", second).single()).data?.done).toBe(true);
 
   // Privat is not a förening.

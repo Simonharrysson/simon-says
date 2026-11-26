@@ -139,6 +139,27 @@ describe.skipIf(!hasLocalSupabase)("Privat summary (0045)", () => {
     expect(mail.sent[0].text).toContain("SEDAN SIST\n- Skriv inledningen (torsdag) — klart\n- Fixa figurerna (Anna) — inte nämnd");
   });
 
+  it("two runs at once (the end hook and the cron): one Claude call, one e-mail", async () => {
+    const meetingId = await doneMeeting(7);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const claude = fakeClaude(() => answer({ tasks: [] }));
+    const slow: SummarizeFn = async (input, opts) => {
+      await gate;
+      return claude.summarize(input, opts);
+    };
+    const mail = fakeMailer();
+    const deps = { mailer: mail.mailer, now: () => new Date(), summarize: slow };
+    const first = sendMeetingSummaries(meetingId, deps);
+    // Let the first run claim and count its attempt before the second one looks.
+    await expect.poll(async () => (await db().from("meetings").select("summary_attempts").eq("id", meetingId).single()).data?.summary_attempts).toBe(1);
+    expect(await sendMeetingSummaries(meetingId, deps)).toBeNull();
+    release();
+    expect((await first)?.state).toBe("sent");
+    expect(claude.calls).toHaveLength(1);
+    expect(mail.sent).toHaveLength(1);
+  });
+
   it("a malformed answer is retried by the cron, at most 3 calls, then failed (no e-mail)", async () => {
     const meetingId = await doneMeeting(5);
     const claude = fakeClaude(() => "malformed");
