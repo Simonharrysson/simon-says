@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MailMessage, MailOutcome, Mailer } from "@/lib/mail";
+import type { MailMessage, Mailer } from "@/lib/mail";
+import { checkEmailGate, sendUserMailDetailed } from "@/lib/email/prefs";
 import { inviteEmail, linkLikeName } from "./email";
 import { INVITE_LIMITS, type InviteResult, type InviteRow, type InviteStatus } from "./rules";
 
@@ -29,6 +30,8 @@ export interface SendInvitesDeps {
   gapMs?: number;
   /** Stop starting sends after this long (default 40 s); the rest are `not_sent`. */
   deadlineMs?: number;
+  /** Per recipient: the signed mail-settings link and List-Unsubscribe headers (lib/email/token.ts). */
+  links?: { prefsUrl(email: string): string; headers(email: string): Record<string, string> };
 }
 
 export interface AddressResult {
@@ -48,7 +51,8 @@ const DEADLINE_MS = 40_000;
 export async function sendInvites(input: SendInvitesInput, deps: SendInvitesDeps): Promise<AddressResult[]> {
   // Defence in depth: the route refuses these with a sentence first (I1: no links in our mail).
   if (linkLikeName(input.inviterName, input.orgName)) throw Object.assign(new Error("invite: a name looks like a link"), { code: "name_link" });
-  const message = inviteEmail({ inviterName: input.inviterName, orgName: input.orgName, inviteUrl: input.inviteUrl });
+  const base = { inviterName: input.inviterName, orgName: input.orgName, inviteUrl: input.inviteUrl };
+  inviteEmail(base); // throws on a bad link before anything is claimed
   const emails = input.emails.slice(0, INVITE_LIMITS.perRequest);
   const results: AddressResult[] = new Array(emails.length);
   const gap = deps.gapMs ?? 300;
@@ -56,6 +60,10 @@ export async function sendInvites(input: SendInvitesInput, deps: SendInvitesDeps
   let next = 0;
 
   async function one(email: string): Promise<AddressResult> {
+    // The mail-settings gate first (0039), so an address that said no never uses up the limits.
+    const gate = await checkEmailGate({ email }, "invite", deps.db);
+    if (gate === "opted_out" || gate === "invalid") return { email, result: gate };
+    if (gate === "unknown") return { email, result: "failed" };
     const { data, error } = await deps.db.rpc("claim_invite_send", {
       p_org_id: input.orgId,
       p_user_id: input.userId,
@@ -71,21 +79,22 @@ export async function sendInvites(input: SendInvitesInput, deps: SendInvitesDeps
     if (claim.result !== "ok" || claim.send_id === undefined) {
       return { email, result: claim.result as InviteResult, ...(claim.next_at ? { nextAt: claim.next_at } : {}) };
     }
-    const mail: MailMessage = {
-      to: email,
+    const message = inviteEmail({ ...base, ...(deps.links ? { prefsUrl: deps.links.prefsUrl(email) } : {}) });
+    const mail: Omit<MailMessage, "to"> = {
       subject: message.subject,
       text: message.text,
       html: message.html,
       ...(input.inviterEmail ? { replyTo: input.inviterEmail } : {}),
       // The same key on a retry of an uncertain send: Resend never delivers it twice.
       ...(claim.idem_key ? { idempotencyKey: claim.idem_key } : {}),
+      ...(deps.links ? { headers: deps.links.headers(email) } : {}),
     };
-    const outcome: MailOutcome = deps.mailer.sendWithOutcome
-      ? await deps.mailer.sendWithOutcome(mail)
-      : (await deps.mailer.send(mail)) ? "sent" : "failed";
+    // Through the gate (it checks again: a "no" saved since the check above still holds).
+    const sent = await sendUserMailDetailed(deps.mailer, { email }, "invite", mail, deps.db);
+    const outcome = sent === "sent" || sent === "uncertain" ? sent : "failed";
     const { error: finishError } = await deps.db.rpc("finish_invite_send", { p_send_id: claim.send_id, p_outcome: outcome });
     if (finishError) console.error(`finish_invite_send: ${finishError.message}`.slice(0, 200));
-    return { email, result: outcome };
+    return { email, result: sent };
   }
 
   async function worker(first: boolean) {

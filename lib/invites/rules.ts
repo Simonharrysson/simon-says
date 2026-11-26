@@ -66,6 +66,7 @@ export type InviteResult =
   | "failed" // the mail provider did not take it: "Försök igen"
   | "uncertain" // no answer from the provider: it may have gone out; a retry can't send it twice
   | "not_sent" // the request ran out of time before this address: "Försök igen"
+  | "opted_out" // the address has said no to invites (mail settings, 0039): never sent, not retried
   | "already_invited" // delivered in the last 24 h; "Skicka igen" in the list
   | "resend_limit" // already sent twice in 24 h
   | "org_limit"
@@ -79,6 +80,7 @@ export const RESULT_LABEL: Record<InviteResult, string> = {
   failed: "Misslyckades",
   uncertain: "Osäkert – kan ha skickats",
   not_sent: "Hann inte skickas",
+  opted_out: "Vill inte ha mejl",
   already_invited: "Redan inbjuden",
   resend_limit: "Skickat två gånger i dag",
   org_limit: "Dagens gräns för föreningen nådd",

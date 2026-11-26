@@ -4,6 +4,7 @@ import { getOrg, myRole } from "@/lib/db/orgs";
 import { linkLikeName } from "@/lib/invites/email";
 import { INVITE_LIMITS, LINK_NAME_MESSAGE, parseEmails } from "@/lib/invites/rules";
 import { inviterNameFor, listInvites, sendInvites, type AddressResult } from "@/lib/invites/send";
+import { emailPrefsUrl, listUnsubscribeHeaders } from "@/lib/email/token";
 import { defaultMailer } from "@/lib/mail";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -91,7 +92,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             emails: parsed.valid,
             resend: body?.resend === true,
           },
-          { db: admin, mailer: defaultMailer() },
+          {
+            db: admin,
+            mailer: defaultMailer(),
+            links: { prefsUrl: (email) => emailPrefsUrl(email, "invite"), headers: (email) => listUnsubscribeHeaders(email, "invite") },
+          },
         )),
       );
     }

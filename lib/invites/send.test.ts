@@ -3,9 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { inviterNameFor, sendInvites } from "./send";
 
 // sendInvites with a scripted database and a fake mailer (the DB rules run in tests/api/invites.test.ts).
-function fakeDb(claims: Record<string, { result: string; send_id?: number; next_at?: string }>) {
+function fakeDb(claims: Record<string, { result: string; send_id?: number; next_at?: string }>, optedOut: string[] = []) {
   const finished: [number, string][] = [];
   const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
+    if (fn === "may_email") return { data: !optedOut.includes(args.p_email as string), error: null };
     if (fn === "claim_invite_send") return { data: claims[args.p_email as string], error: null };
     if (fn === "finish_invite_send") {
       finished.push([args.p_send_id as number, args.p_outcome as string]);
@@ -77,6 +78,24 @@ describe("sendInvites: outcomes, keys, time and names", () => {
     const mailer = { send: vi.fn(async () => true) };
     await expect(sendInvites({ ...input, orgName: "Konto låst – verifiera på bank-login.se", emails: ["a@example.com"] }, { db, mailer })).rejects.toMatchObject({ code: "name_link" });
     expect(db.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendInvites and the mail-settings gate (0039)", () => {
+  it("an address that said no is 'opted_out' before any claim; others get their own settings link and List-Unsubscribe", async () => {
+    const { db } = fakeDb({ "ja@example.com": { result: "ok", send_id: 1 } }, ["nej@example.com"]);
+    const mailer = { send: vi.fn(async (_m: { to: string; text: string; headers?: Record<string, string> }) => true) };
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    const links = { prefsUrl: (e: string) => `https://app.test/mejl?for=${e}`, headers: (e: string) => ({ "List-Unsubscribe": `<https://app.test/u?${e}>` }) };
+    const res = await sendInvites({ ...input, emails: ["nej@example.com", "ja@example.com"] }, { db, mailer, gapMs: 0, links });
+    expect(res).toEqual([{ email: "nej@example.com", result: "opted_out" }, { email: "ja@example.com", result: "sent" }]);
+    const claimed = (db.rpc as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[0] === "claim_invite_send").map((c) => (c[1] as { p_email: string }).p_email);
+    expect(claimed).toEqual(["ja@example.com"]);
+    expect(mailer.send).toHaveBeenCalledTimes(1);
+    const sent = mailer.send.mock.calls[0][0];
+    expect(sent.to).toBe("ja@example.com");
+    expect(sent.text).toContain("https://app.test/mejl?for=ja@example.com");
+    expect(sent.headers).toEqual({ "List-Unsubscribe": "<https://app.test/u?ja@example.com>" });
   });
 });
 

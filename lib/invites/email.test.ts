@@ -68,6 +68,16 @@ describe("inviteEmail (design A)", () => {
   });
 });
 
+describe("mail settings link (0039)", () => {
+  it("adds the recipient's settings link to the footer, escaped, in HTML and text", () => {
+    const e = inviteEmail({ ...SAMPLE, prefsUrl: "https://app.test/mejl?t=a&b" });
+    expect(e.html).toContain('href="https://app.test/mejl?t=a&amp;b"');
+    expect(e.html).toContain("Ändra dina mejlval");
+    expect(e.text).toContain("Ändra dina mejlval: https://app.test/mejl?t=a&b");
+    expect(() => inviteEmail({ ...SAMPLE, prefsUrl: "javascript:x" })).toThrow();
+  });
+});
+
 describe("looksLikeLink / linkLikeName", () => {
   it("catches domains, URLs, www and addresses", () => {
     for (const s of ["Konto låst – verifiera på bank-login.se", "https://x", "www.exempel", "BANK.COM", "anna@example", "evil.co/x", "ftp://a"]) {

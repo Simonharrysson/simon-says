@@ -15,6 +15,10 @@ const m = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
 vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 vi.mock("@/lib/origin", () => ({ appOrigin: () => "https://app.test" }));
+vi.mock("@/lib/email/token", () => ({
+  emailPrefsUrl: (email: string) => `https://app.test/mejl?for=${encodeURIComponent(email)}`,
+  listUnsubscribeHeaders: () => ({ "List-Unsubscribe": "<https://app.test/api/mejl/avsluta>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }),
+}));
 vi.mock("@/lib/mail", () => ({
   defaultMailer: () => ({
     async send(msg: MailMessage) {
@@ -173,6 +177,19 @@ describe.skipIf(!hasLocalSupabase)("invites route", () => {
     expect(n).toBeGreaterThanOrEqual(1);
     const { data: row } = await db.from("org_invites").select("status").eq("org_id", orgId).eq("email", "hang@example.com").single();
     expect(row!.status).toBe("uncertain");
+  });
+
+  it("an address that turned invites off gets nothing and uses no quota; the others carry the settings link", async () => {
+    const { error } = await adminClient().rpc("set_email_preferences_for_address", { p_email: "nej-tack@example.com", p_all_off: false, p_off_categories: ["invite"] });
+    expect(error).toBeNull();
+    m.db = admin.db;
+    const body = (await (await post(orgId, { emails: "nej-tack@example.com, ja-tack@example.com" })).json()) as Body;
+    expect(body.results).toEqual([{ email: "nej-tack@example.com", result: "opted_out" }, { email: "ja-tack@example.com", result: "sent" }]);
+    expect(m.sent.map((x) => x.to)).toEqual(["ja-tack@example.com"]);
+    expect(m.sent[0].text).toContain("https://app.test/mejl?for=ja-tack%40example.com");
+    expect(m.sent[0].headers?.["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+    const { count } = await adminClient().from("org_invites").select("*", { count: "exact", head: true }).eq("email", "nej-tack@example.com");
+    expect(count).toBe(0);
   });
 
   it("the tables are not readable or writable by signed-in users", async () => {

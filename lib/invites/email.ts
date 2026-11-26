@@ -11,6 +11,8 @@ export interface InviteEmailInput {
   orgName: string;
   /** The förening's existing join link (`/join/<code>`), read at send time. */
   inviteUrl: string;
+  /** The recipient's signed mail-settings link (`emailPrefsUrl(email, "invite")`, 0039), per address. */
+  prefsUrl?: string;
 }
 
 export interface InviteEmail {
@@ -74,6 +76,8 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
   const url = oneLine(input.inviteUrl);
   if (!/^https?:\/\//.test(url)) throw new Error("inviteEmail: the invite URL must be http(s)");
   const subject = inviteSubject(inviter, org);
+  const prefsUrl = input.prefsUrl ? oneLine(input.prefsUrl) : null;
+  if (prefsUrl && !/^https?:\/\//.test(prefsUrl)) throw new Error("inviteEmail: the settings URL must be http(s)");
   const h = { inviter: escapeHtml(inviter), org: escapeHtml(org), url: escapeHtml(url), shown: escapeHtml(displayUrl(url)), subject: escapeHtml(subject) };
 
   const html = `<!doctype html>
@@ -168,7 +172,7 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
           </tr>
           <tr>
             <td style="padding:24px 4px 0 4px;">
-              <p class="ink-3" style="margin:0; font-family:${FONT}; font-size:13px; line-height:20px; color:#666666;">${inviteFooter(h.inviter, h.org)}</p>
+              <p class="ink-3" style="margin:0; font-family:${FONT}; font-size:13px; line-height:20px; color:#666666;">${inviteFooter(h.inviter, h.org)}${prefsUrl ? ` <a class="link" href="${escapeHtml(prefsUrl)}" target="_blank" style="color:#0068d6; text-decoration:none;">Vill du inte få inbjudningar? Ändra dina mejlval.</a>` : ""}</p>
             </td>
           </tr>
         </table>
@@ -191,6 +195,7 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
     "--",
     "Simon Says",
     `Du får det här mejlet för att ${inviter} lade till din adress i ${org}. Väntade du dig inte mejlet kan du strunta i det, inget händer förrän du går med.`,
+    ...(prefsUrl ? [`Vill du inte få inbjudningar? Ändra dina mejlval: ${prefsUrl}`] : []),
     "",
   ].join("\n");
 
