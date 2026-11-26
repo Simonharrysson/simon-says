@@ -2,15 +2,15 @@ import "server-only";
 import { logEvent } from "@/lib/db/events";
 import { orgMemberList } from "@/lib/db/members";
 import type { ItemRole, SummaryMode, SummaryState } from "@/lib/db/types";
-import { getEnv } from "@/lib/env";
 import type { Mailer } from "@/lib/mail";
+import { sendUserMail } from "@/lib/email/prefs";
+import { emailPrefsUrl, listUnsubscribeHeaders } from "@/lib/email/token";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { hasOwnNotes, summaryContent, type SummaryItem } from "./content";
 import { renderSummaryEmail } from "./email";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
-import { issueUnsubscribeToken } from "./token";
 
 // Sends a finished meeting's summary e-mails (migration 0037). Called after the end sets the
 // meeting `done` (lib/meetings/tick.ts finishMeeting) and by the 5-minute cron for whatever that
@@ -136,7 +136,7 @@ export async function sendMeetingSummaries(
       const [peopleRows, speakers, members] = await Promise.all([
         db
           .from("people")
-          .select("id, name, role, email, member_user_id, summary_selected, summary_unsubscribed_at, summary_removed_at")
+          .select("id, name, role, email, member_user_id, summary_selected, summary_removed_at")
           .eq("org_id", m.org_id),
         db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label, needs_confirm").eq("meeting_id", m.id),
         orgMemberList(m.org_id),
@@ -179,6 +179,7 @@ export async function sendMeetingSummaries(
 
   let sent = 0;
   let failed = 0;
+  let optedOut = 0;
   let stopped = false;
   const shared = new Set(
     (must("summary: shares", await db.from("meeting_doc_shares").select("user_id").eq("meeting_id", m.id)) as { user_id: string }[]).map(
@@ -186,7 +187,6 @@ export async function sendMeetingSummaries(
     ),
   );
   const origin = appOrigin();
-  const key = getEnv().TOKEN_ENC_KEY;
   const starterName = people.find((p) => m.started_by && p.member_user_id === m.started_by)?.name ?? null;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const timeLeft = () => (opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity);
@@ -208,7 +208,6 @@ export async function sendMeetingSummaries(
     if (!ledger.length) continue;
     if (mailed) await sleep(SEND_GAP_MS);
     mailed = true;
-    const token = issueUnsubscribeToken(key, r.person.id);
     const access = accessFor(r, m, shared, origin, starterName);
     const email = renderSummaryEmail({
       orgName,
@@ -219,24 +218,20 @@ export async function sendMeetingSummaries(
       buttonHref: access.href,
       accessNote: access.note,
       settingsHref: r.isAdmin ? `${origin}/orgs/${m.org_id}#installningar` : null,
-      unsubscribeHref: `${origin}/sammanfattning/avsluta?t=${encodeURIComponent(token)}`,
+      unsubscribeHref: emailPrefsUrl(r.email, "meeting_summary", origin),
     });
-    let ok = false;
-    try {
-      ok = await deps.mailer.send({
-        to: r.email,
-        subject: email.subject,
-        text: email.text,
-        html: email.html,
-        headers: {
-          "List-Unsubscribe": `<${origin}/api/summaries/unsubscribe?t=${encodeURIComponent(token)}>`,
-          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
-      });
-    } catch {
-      ok = false;
-    }
+    // Through the e-mail gate (0039): an address or account that said no to meeting summaries
+    // (Konto, /mejl, the one-click header) gets nothing; a check that can't be answered sends nothing.
+    const result = await sendUserMail(
+      deps.mailer,
+      { userId: r.userId, email: r.email },
+      "meeting_summary",
+      { subject: email.subject, text: email.text, html: email.html, headers: listUnsubscribeHeaders(r.email, "meeting_summary", origin) },
+      db,
+    );
+    const ok = result === "sent";
     if (ok) sent++;
+    else if (result === "opted_out" || result === "invalid") optedOut++;
     else failed++;
     await db.from("meeting_summary_sends").update({ sent: ok }).eq("meeting_id", m.id).eq("person_id", r.person.id);
   }
@@ -244,7 +239,7 @@ export async function sendMeetingSummaries(
   if (!stopped) {
     must("summary: done", await db.from("meetings").update({ summary_state: "sent", ...stamp }).eq("id", m.id).eq("summary_state", "sending"));
   }
-  await logEvent(m.id, "summary", { state: final, mode, recipients: recipients.length, sent, failed });
+  await logEvent(m.id, "summary", { state: final, mode, recipients: recipients.length, sent, failed, ...(optedOut ? { optedOut } : {}) });
   return { state: final, sent, failed };
 }
 

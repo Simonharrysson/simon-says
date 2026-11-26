@@ -5,7 +5,7 @@ import { resolveSpeaker } from "@/lib/segments/resolve";
 // (./send.ts) reads them. Recipients are only people in the förening's people list:
 // - an address: the linked member account's sign-in address, else the person's own (0035) e-mail;
 //   none → no e-mail; the same address twice → once;
-// - unsubscribed (the e-mail's link) → never, in every mode;
+// - opting out is the e-mail gate's job (0039, category meeting_summary), checked at send time;
 // - missed (default): only people who were NOT at the meeting. Present = a named voice (speaker
 //   map, through merges), a Närvarande name (the attendee rows, by full or first name; an
 //   ambiguous first name counts everyone it could mean as present: better one summary too few than
@@ -22,7 +22,6 @@ export interface SummaryPerson {
   email?: string | null;
   member_user_id?: string | null;
   summary_selected?: boolean | null;
-  summary_unsubscribed_at?: string | null;
   /** 0037: the linked member was removed from the förening (or deleted their account). */
   summary_removed_at?: string | null;
 }
@@ -156,7 +155,6 @@ export function summaryRecipients(input: {
   const out: Recipient[] = [];
   const people = [...input.people].sort((a, b) => a.name.localeCompare(b.name, "sv") || a.id.localeCompare(b.id));
   for (const person of people) {
-    if (person.summary_unsubscribed_at) continue;
     const member = person.member_user_id ? members.get(person.member_user_id) : undefined;
     // Removed from the förening (0018 unlinks, 0037 marks it): no e-mail by the old address.
     if (!member && person.summary_removed_at) continue;
@@ -178,7 +176,7 @@ export function summaryRecipients(input: {
 export function summaryOptions(
   people: SummaryPerson[],
   members: Pick<SummaryMember, "userId" | "email">[] | undefined,
-): { id: string; name: string; role: string | null; hasEmail: boolean; selected: boolean; unsubscribed: boolean }[] {
+): { id: string; name: string; role: string | null; hasEmail: boolean; selected: boolean }[] {
   const memberEmail = new Map((members ?? []).map((m) => [m.userId, m.email]));
   return [...people]
     .sort((a, b) => a.name.localeCompare(b.name, "sv") || a.id.localeCompare(b.id))
@@ -188,6 +186,5 @@ export function summaryOptions(
       role: p.role ?? null,
       hasEmail: Boolean((p.member_user_id && memberEmail.get(p.member_user_id)) || p.email),
       selected: Boolean(p.summary_selected),
-      unsubscribed: Boolean(p.summary_unsubscribed_at),
     }));
 }

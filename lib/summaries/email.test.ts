@@ -18,7 +18,7 @@ const base: SummaryEmailInput = {
   buttonHref: "https://docs.google.com/document/d/abc/edit",
   accessNote: null,
   settingsHref: null,
-  unsubscribeHref: "https://app.test/sammanfattning/avsluta?t=tok",
+  unsubscribeHref: "https://app.test/mejl?t=tok&k=meeting_summary",
 };
 
 describe("summary e-mail", () => {
@@ -62,7 +62,7 @@ describe("summary e-mail", () => {
     expect(admin.html).toContain("Ändra vilka som får sammanfattningar");
     expect(admin.html).toContain("Avsluta prenumeration");
     expect(admin.text).toContain("Ändra vilka som får sammanfattningar: https://app.test/orgs/o#installningar");
-    expect(admin.text).toContain("Avsluta prenumeration: https://app.test/sammanfattning/avsluta?t=tok");
+    expect(admin.text).toContain("Avsluta prenumeration: https://app.test/mejl?t=tok&k=meeting_summary");
   });
 
   it("an access note goes under the button", () => {

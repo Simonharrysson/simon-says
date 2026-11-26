@@ -111,13 +111,6 @@ describe("summaryRecipients", () => {
     expect(summaryRecipients({ mode: "off", people, members, attendance: present })).toEqual([]);
   });
 
-  it("unsubscribed people never get it, in any mode", () => {
-    const gone = people.map((p) => (p.id === "p-sara" ? { ...p, summary_unsubscribed_at: "2026-11-01T00:00:00Z", summary_selected: true } : p));
-    for (const mode of ["missed", "all", "selected"] as const) {
-      expect(summaryRecipients({ mode, people: gone, members, attendance: present }).map((x) => x.person.id)).not.toContain("p-sara");
-    }
-  });
-
   it("uncertain attendance: missed sends nothing; all and selected send with neutral wording", () => {
     const unsure = { present: new Set(["p-anna"]), certain: false };
     expect(summaryRecipients({ mode: "missed", people, members, attendance: unsure })).toEqual([]);
@@ -148,11 +141,11 @@ describe("summaryRecipients", () => {
 
 describe("summaryOptions", () => {
   it("lists everyone by name with whether they can get e-mail", () => {
-    const o = summaryOptions([nils, anna, { ...sara, summary_selected: true, summary_unsubscribed_at: "x" }], members);
-    expect(o.map((x) => [x.name, x.hasEmail, x.selected, x.unsubscribed])).toEqual([
-      ["Anna Berg", true, false, false],
-      ["Nils Ek", false, false, false],
-      ["Sara Holm", true, true, true],
+    const o = summaryOptions([nils, anna, { ...sara, summary_selected: true }], members);
+    expect(o.map((x) => [x.name, x.hasEmail, x.selected])).toEqual([
+      ["Anna Berg", true, false],
+      ["Nils Ek", false, false],
+      ["Sara Holm", true, true],
     ]);
   });
 });

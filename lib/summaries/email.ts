@@ -20,6 +20,7 @@ export interface SummaryEmailInput {
   accessNote: string | null;
   /** Admins: link to Inställningar → Sammanfattning efter mötet. */
   settingsHref: string | null;
+  /** "Avsluta prenumeration": the address's /mejl page (0039), meeting_summary preselected. */
   unsubscribeHref: string;
 }
 
