@@ -37,6 +37,7 @@ import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } fr
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
 import { designViews, type DesignGroup } from "./registry";
 import { onboardingRender } from "./onboarding-demo";
+import { SummarySettingsDemo, summaryRender } from "./summary-demo";
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
 
@@ -461,6 +462,7 @@ const render: Record<string, () => ReactNode> = {
         people={people}
         meetings={meetings}
         notice={orgNotice("mote-active")}
+        summarySettings={<SummarySettingsDemo />}
         startMeetingHref="#"
         formatCard={
           <FormatCard
@@ -818,6 +820,9 @@ const render: Record<string, () => ReactNode> = {
   "live-ended": () => <LiveDemo phase="ended" elapsedMs={84 * 60_000} />,
   "live-resume": () => <LiveDemo phase="resume" />,
   ...Object.fromEntries(Object.entries(onboardingRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(
+    Object.entries(summaryRender).map(([id, view]) => [id, () => (id.startsWith("unsubscribe") ? <PublicChrome noLoginLink>{view()}</PublicChrome> : <AppChrome>{view()}</AppChrome>)]),
+  ),
 };
 
 export function DesignGallery({ view }: { view: string | null }) {
