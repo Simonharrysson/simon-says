@@ -50,6 +50,7 @@ import { onboardingRender } from "./onboarding-demo";
 import { SummarySettingsDemo, summaryRender } from "./summary-demo";
 import { inviteRender } from "./invite-demo";
 import { privatRender } from "./privat-demo";
+import { homeRender } from "./home-demo";
 import { ContextPicker } from "@/components/privat/ContextPicker";
 
 function StadgarLead() {
@@ -1136,6 +1137,7 @@ const render: Record<string, () => ReactNode> = {
     Object.entries(summaryRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>]),
   ),
   ...Object.fromEntries(Object.entries(inviteRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(Object.entries(homeRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   ...Object.fromEntries(Object.entries(privatRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   "live-privat-consent": () => <PrivatConsentDemo contexts={[{ id: "c1", name: "TDDE15" }, { id: "c2", name: "Exjobb" }, { id: "c3", name: "Övrigt" }]} />,
   "live-privat-first": () => <PrivatConsentDemo contexts={[]} />,

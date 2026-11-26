@@ -6,6 +6,8 @@
 
 import type { Locale } from "../config";
 import enCalendar from "./en/calendar.json";
+import enHome from "./en/home.json";
+import svHome from "./sv/home.json";
 import svCalendar from "./sv/calendar.json";
 import enPrivat from "./en/privat.json";
 import svPrivat from "./sv/privat.json";
@@ -70,6 +72,7 @@ import svTasks from "./sv/tasks.json";
 
 export const sv = {
   calendar: svCalendar,
+  home: svHome,
   privat: svPrivat,
   profile: svProfile,
   stadgar: svStadgar,
@@ -106,6 +109,7 @@ export type Messages = typeof sv;
 
 export const en: Messages = {
   calendar: enCalendar,
+  home: enHome,
   privat: enPrivat,
   profile: enProfile,
   stadgar: enStadgar,

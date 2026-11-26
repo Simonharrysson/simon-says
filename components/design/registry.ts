@@ -12,6 +12,7 @@ import { onboardingViews } from "./onboarding-views";
 import { summaryViews } from "./summary-views";
 import { inviteViews } from "./invite-views";
 import { privatLiveViews, privatViews } from "./privat-views";
+import { homeViews } from "./home-demo";
 
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
@@ -84,6 +85,7 @@ export const designViews: DesignView[] = [
   ...onboardingViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...summaryViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...inviteViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...homeViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatLiveViews.map((v) => ({ ...v, group: "Mötet live" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },

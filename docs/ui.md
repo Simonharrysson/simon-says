@@ -784,3 +784,34 @@ pages redirect to `/privat`, invites are refused. Copy: `lib/i18n/messages/*/pri
   `private_summary` ("Sammanfattning av mina inspelningar") in Mejlval.
 
 `/design`: `privat-*`, `live-privat-*`.
+
+## Hem: Mina uppgifter (no migration)
+
+The page after sign-in (`/hem`, "Hem" first in the top rail, the wordmark leads there too; a
+brand-new user with no förening and nothing in Privat goes to `/orgs`). Copy:
+`lib/i18n/messages/*/home.json`. Logic: `lib/home/` (pure matching in `tasks.ts`, reads in `load.ts`
+with the user's own client, ticks in `complete.ts`).
+
+- **Mina uppgifter**: only the user's own tasks: a förening task whose owner is a person linked to
+  them (`people.member_user_id`) by link, name or a role they hold there; a Privat task with no other
+  owner. Finished real meetings only; a carried task once (its newest copy). Sorted by deadline (none
+  last). Each row says, in this order: the task; when ("Senast fre 4 dec", "Senast imorgon",
+  "Försenad, skulle vara klar …" in red text, "När: till nästa möte", or "Ingen deadline" in grey);
+  "Klart när: …"; where it came from ("Paddelklubben · Från mötet 26 nov", a link to the meeting).
+  A line above the list counts them ("6 öppna uppgifter · 1 försenad").
+- Filter per space: toggle buttons (`aria-pressed`) from 48rem, one labelled native select on phones.
+  "Visa klara" (Switch) adds the 30 newest done tasks.
+- **Ticking**: the row is done at once with "Markerad som klar. Ångra" for 5 s; only then is it saved
+  (`POST /api/mina-uppgifter/klart`, keepalive when the page closes), so undo never touches the Doc.
+  Then the row says what happened: "”✓ klart” står nu i dokumentet", or "Klar här. **Bocka av i
+  dokumentet också**…" + "Öppna dokumentet" when the line is the human's (edited, deleted, never
+  written) or the Doc couldn't be reached. Only the owner or a förening admin may tick.
+- **Senaste mötena**: 6 newest finished meetings across spaces: title (or "Möte 26 nov"), space and
+  day, "3 beslut · 5 uppgifter". A förening meeting opens `/orgs/<id>/mote/<meetingId>`
+  (`OrgMeetingView`: summary line, Beslut, Uppgifter with who · when and Klart när, tickable for the
+  owner or an admin, "Öppna dokumentet"); a Privat one its `/privat/mote/<id>`.
+- Empty states teach: no tasks ("När någon på ett möte säger att du tar något…"), all done, nothing
+  in one space, no meetings yet, and a banner when the user isn't linked to anyone in a förening's
+  people list ("Be en admin skriva in din e-postadress vid ditt namn").
+
+`/design`: `home`, `home-ticked`, `home-done`, `home-empty`, `home-all-done`, `org-meeting`.

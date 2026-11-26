@@ -4,10 +4,13 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { FormAction } from "@/components/ui/ConfirmAction";
-import { navLinkClass } from "@/components/ui/SiteHeader";
+import { navLinkClass as baseLinkClass } from "@/components/ui/SiteHeader";
+
+// Four links fit a 390px phone next to the wordmark only with less padding.
+const navLinkClass = `${baseLinkClass} max-[30rem]:px-2`;
 
 /**
- * Top-rail links for the logged-in area. Client only for aria-current. On phones the email
+ * Top-rail links for the logged-in area (Hem = Mina uppgifter, the page after sign-in). Client only for aria-current. On phones the email
  * and Logga ut drop out (Logga ut is also on the Konto page), so the rail never scrolls sideways.
  */
 export function AppNav({ email, signOut }: { email: string; signOut: FormAction }) {
@@ -16,6 +19,9 @@ export function AppNav({ email, signOut }: { email: string; signOut: FormAction 
   const current = (prefix: string) => (path === prefix || path.startsWith(`${prefix}/`) ? "page" : undefined);
   return (
     <>
+      <a className={navLinkClass} href="/hem" aria-current={current("/hem")}>
+        {t("home")}
+      </a>
       <a className={navLinkClass} href="/privat" aria-current={current("/privat")}>
         {t("privat")}
       </a>

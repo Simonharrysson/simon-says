@@ -43,7 +43,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
                 </ButtonLink>
               ) : (
                 <form action={signIn}>
-                  <input type="hidden" name="next" value="/orgs" />
+                  <input type="hidden" name="next" value="/hem" />
                   <SubmitButton variant="primary" size="lg" icon={<IconGoogle />} pendingLabel={common("sendingToGoogle")}>
                     {t("signIn")}
                   </SubmitButton>
@@ -157,7 +157,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
             </ButtonLink>
           ) : (
             <form action={signIn}>
-              <input type="hidden" name="next" value="/orgs" />
+              <input type="hidden" name="next" value="/hem" />
               <SubmitButton variant="primary" size="lg" icon={<IconGoogle />} pendingLabel={common("sendingToGoogle")}>
                 {t("signIn")}
               </SubmitButton>
