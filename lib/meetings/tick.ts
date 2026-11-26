@@ -36,7 +36,7 @@ import { updateNotes, type NotesClient, type UpdateNotesInput, type UpdateNotesR
 import type { NotesItem } from "@/lib/notes/schema";
 import { extractNames } from "@/lib/names/extract";
 import { pendingNameRounds, runNameRound, type ExtractFn } from "@/lib/names/round";
-import { autoEndStatus, lastSeenMs, presence } from "@/lib/meetings/presence";
+import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/meetings/presence";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -1293,7 +1293,7 @@ export type EndResult = "ended" | "ending" | "noop" | "not_found";
  */
 export async function endMeeting(
   meetingId: string,
-  opts: { abandon?: boolean; endedAt?: Date; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: () => Date; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
 ): Promise<EndResult> {
   const claim = await claimEnd(meetingId, opts);
   if (claim !== "claimed") return claim;
@@ -1308,13 +1308,11 @@ export async function endMeeting(
  */
 export async function claimEnd(
   meetingId: string,
-  opts: { abandon?: boolean; endedAt?: Date; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: () => Date; deps?: Partial<TickDeps> } = {},
 ): Promise<"claimed" | "noop" | "not_found"> {
   // `endedAt`: the presence end stamps when the last tab was heard from, not when the cron ran.
   const now = opts.endedAt ?? (opts.deps?.now ?? (() => new Date()))();
-  const claimed = must(
-    "end: claim",
-    await db()
+  let query = db()
       .from("meetings")
       .update({
         status: "ending",
@@ -1324,9 +1322,14 @@ export async function claimEnd(
         end_lease_until: null,
       })
       .eq("id", meetingId)
-      .eq("status", "live")
-      .select("id"),
-  ) as { id: string }[];
+      .eq("status", "live");
+  if (opts.staleBefore) {
+    // Presence end: only if still no tab, judged at the claim itself (review I1). A heartbeat
+    // that landed after the sweep read its snapshot (a laptop waking up) keeps it live.
+    const cutoff = JSON.stringify(opts.staleBefore().toISOString());
+    query = query.or(`last_heartbeat_at.lt.${cutoff},and(last_heartbeat_at.is.null,started_at.lt.${cutoff})`);
+  }
+  const claimed = must("end: claim", await query.select("id")) as { id: string }[];
   if (!claimed.length) {
     const exists = must("end: read", await db().from("meetings").select("id").eq("id", meetingId).maybeSingle());
     return exists ? "noop" : "not_found";
@@ -1408,8 +1411,15 @@ export async function finalizeSweep(
         await db().from("segments").select("segment_index").eq("meeting_id", m.id).limit(1),
       ) as unknown[];
       const status = autoEndStatus(speech.length > 0);
-      const endedAt = new Date(lastSeenMs(m));
-      const result = await endMeeting(m.id, { abandon: status === "abandoned", endedAt, deadlineAt, deps: opts.deps });
+      const result = await endMeeting(m.id, {
+        abandon: status === "abandoned",
+        // done: ended when the last tab was heard from. abandoned: the claim time, so the 2 h
+        // "Fortsätt mötet" window and the shown duration are not cut short.
+        ...(status === "done" ? { endedAt: new Date(lastSeenMs(m)) } : {}),
+        staleBefore: () => new Date(deps.now().getTime() - PRESENCE_GRACE_SEC * 1000),
+        deadlineAt,
+        deps: opts.deps,
+      });
       if (result !== "noop") summary[status === "done" ? "autoEnded" : "abandoned"]++;
     } catch (e) {
       console.error(`sweep: auto end ${m.id}: ${errorText(e)}`);
