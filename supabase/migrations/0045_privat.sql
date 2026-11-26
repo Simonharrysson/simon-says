@@ -328,9 +328,9 @@ begin
     return false;
   end if;
   insert into public.context_tasks (context_id, meeting_id, text, owner, position)
-  select v_context, p_meeting_id, t.text, nullif(btrim(coalesce(t.owner, '')), ''), t.ord::int - 1
-  from jsonb_to_recordset(coalesce(p_tasks, '[]'::jsonb)) with ordinality as t(text text, owner text, ord bigint)
-  where length(btrim(coalesce(t.text, ''))) between 1 and 500;
+  select v_context, p_meeting_id, btrim(e.value->>'text'), nullif(btrim(coalesce(e.value->>'owner', '')), ''), e.ord::int - 1
+  from jsonb_array_elements(coalesce(p_tasks, '[]'::jsonb)) with ordinality as e(value, ord)
+  where length(btrim(coalesce(e.value->>'text', ''))) between 1 and 500;
   update public.context_tasks ct
   set done = true, done_at = now(), done_meeting_id = p_meeting_id
   where ct.id = any(coalesce(p_done_task_ids, '{}'::uuid[])) and ct.context_id = v_context and not ct.done;
