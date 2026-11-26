@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hasGoogleToken, storeGoogleToken } from "@/lib/google/client";
+import { hasGoogleToken, storeGoogleToken, storeImportToken } from "@/lib/google/client";
 import { fetchGrantedScope, hasDriveFile, hasDriveReadonly } from "@/lib/google/scopes";
 import { loginErrorPath, safeNextPath } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
@@ -12,8 +12,11 @@ export const dynamic = "force-dynamic";
  * really granted, and stores the encrypted refresh token. Logs only booleans and the scope.
  *
  * `atkomst=drive`: the protocol import's incremental consent for drive.readonly (an admin who is
- * already signed in, app/(app)/orgs/drive-access.ts). It returns to the import whatever happens:
- * `?drive=ok` with the scope granted, `?drive=nej` when the admin cancelled or unticked it.
+ * already signed in, app/(app)/orgs/drive-access.ts). Its refresh token goes to the import's own
+ * store (google_import_tokens), never over the sign-in token. It returns to the import whatever
+ * happens: `?drive=ok` granted, `nej` cancelled or unticked, `fel` no token, `konto` the admin
+ * picked another Google account than the one they are signed in with (that session is signed
+ * out again, the admin's own restored, nothing stored).
  */
 export async function GET(request: NextRequest) {
   const origin = appOrigin();
@@ -22,7 +25,7 @@ export async function GET(request: NextRequest) {
   const next = request.nextUrl.searchParams.get("next");
   const fail = (fel: string) => to(loginErrorPath(fel, next));
   const driveRequest = request.nextUrl.searchParams.get("atkomst") === "drive" && safeNextPath(next) !== "/";
-  const backToImport = (result: "ok" | "nej") => to(`${safeNextPath(next)}?drive=${result}`);
+  const backToImport = (result: "ok" | "nej" | "fel" | "konto") => to(`${safeNextPath(next)}?drive=${result}`);
   const supabase = await createSupabaseServerClient();
   if (!code) {
     const cancelled = request.nextUrl.searchParams.get("error") === "access_denied";
@@ -35,6 +38,10 @@ export async function GET(request: NextRequest) {
     }
     return fail(cancelled ? "avbrutet" : "kod");
   }
+
+  // The drive consent must come back as the same user: remember who is signed in now.
+  const before = driveRequest ? (await supabase.auth.getSession()).data.session : null;
+  const beforeUser = before ? (await supabase.auth.getUser()).data.user : null;
 
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.session) {
@@ -57,6 +64,8 @@ export async function GET(request: NextRequest) {
       ...(driveRequest ? { driveReadonly: hasDriveReadonly(scope) } : {}),
     }),
   );
+
+  if (driveRequest) return finishDriveRequest();
 
   if (!driveFile) {
     await supabase.auth.signOut();
@@ -85,6 +94,35 @@ export async function GET(request: NextRequest) {
     return fail("kod");
   }
 
-  if (driveRequest) return backToImport(hasDriveReadonly(scope) ? "ok" : "nej");
   return to(safeNextPath(next));
+
+  async function finishDriveRequest() {
+    if (!beforeUser || !before || beforeUser.id !== session.user.id) {
+      console.warn("auth callback: drive consent came back as another user; signing that session out");
+      await supabase.auth.signOut({ scope: "local" });
+      if (!beforeUser || !before) return fail("kod");
+      const { error: restoreError } = await supabase.auth.setSession({ access_token: before.access_token, refresh_token: before.refresh_token });
+      if (restoreError) return fail("kod");
+      return backToImport("konto");
+    }
+    let result: "ok" | "nej" | "fel" = "nej";
+    try {
+      if (hasDriveReadonly(scope)) {
+        if (session.provider_refresh_token) {
+          await storeImportToken(session.user.id, session.provider_refresh_token, scope!);
+          result = "ok";
+        } else result = "fel";
+      }
+    } catch (err) {
+      console.error("auth callback: storing the import token failed", (err as Error)?.message);
+      result = "fel";
+    }
+    // Same as a sign-in: the session cookie must not carry Google's tokens.
+    const { error: resaveError } = await supabase.auth.setSession({ access_token: session.access_token, refresh_token: session.refresh_token });
+    if (resaveError) {
+      await supabase.auth.signOut();
+      return fail("kod");
+    }
+    return backToImport(result);
+  }
 }

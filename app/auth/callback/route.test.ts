@@ -21,6 +21,7 @@ vi.mock("next/headers", () => ({
 const google = vi.hoisted(() => ({
   storeGoogleToken: vi.fn(),
   hasGoogleToken: vi.fn(),
+  storeImportToken: vi.fn(),
 }));
 vi.mock("@/lib/google/client", () => google);
 
@@ -31,6 +32,8 @@ const user = { id: "u1", aud: "authenticated", email: "simon@example.com", app_m
 const DRIVE = "openid https://www.googleapis.com/auth/drive.file";
 
 let grantedScope = DRIVE;
+// The user the code exchange signs in (another Google account at consent → another user).
+let exchanged = { id: "u1", email: "simon@example.com" };
 let providerRefresh: string | undefined = "1//google-refresh";
 
 beforeAll(() => {
@@ -39,12 +42,12 @@ beforeAll(() => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/token")) {
       return Response.json({
-        access_token: jwt("u1"),
+        access_token: jwt(exchanged.id),
         refresh_token: "supabase-refresh",
         token_type: "bearer",
         expires_in: 3600,
         expires_at: Math.floor(Date.now() / 1000) + 3600,
-        user,
+        user: { ...user, ...exchanged },
         provider_token: "ya29.google-access",
         ...(providerRefresh ? { provider_refresh_token: providerRefresh } : {}),
       });
@@ -60,6 +63,8 @@ beforeEach(() => {
   jar.clear();
   sets.length = 0;
   grantedScope = DRIVE;
+  exchanged = { id: "u1", email: "simon@example.com" };
+  google.storeImportToken.mockReset().mockResolvedValue(undefined);
   providerRefresh = "1//google-refresh";
   google.storeGoogleToken.mockReset().mockResolvedValue(undefined);
   google.hasGoogleToken.mockReset().mockResolvedValue(false);
@@ -171,22 +176,63 @@ describe("auth callback", () => {
     const READONLY = `${DRIVE} https://www.googleapis.com/auth/drive.readonly`;
     const BACK = "&next=%2Forgs%2F00000000-0000-4000-8000-000000000001%2Fprotokoll&atkomst=drive";
     const IMPORT = "https://example.com/orgs/00000000-0000-4000-8000-000000000001/protokoll";
+    // The admin is signed in before asking for the extra access.
+    const signedIn = async () => {
+      await call();
+      google.storeGoogleToken.mockClear();
+      jar.set("sb-example-auth-token-code-verifier", { value: JSON.stringify("verifier") });
+    };
 
-    it("granted: stores the token with its full scope and returns to the import with drive=ok", async () => {
+    it("granted: the token goes to the import's own store; the sign-in token is untouched", async () => {
+      await signedIn();
       grantedScope = READONLY;
       const res = await call(BACK);
       expect(res.headers.get("location")).toBe(`${IMPORT}?drive=ok`);
-      expect(google.storeGoogleToken).toHaveBeenCalledWith("u1", "1//google-refresh", READONLY);
+      expect(google.storeImportToken).toHaveBeenCalledWith("u1", "1//google-refresh", READONLY);
+      expect(google.storeGoogleToken).not.toHaveBeenCalled();
+      const last = new Map(sets.map((x) => [x.name, x.value]));
+      for (const value of last.values()) expect(decode(value)).not.toContain("google-refresh");
     });
 
-    it("readonly unticked in Google's consent: back to the import with drive=nej, still signed in", async () => {
+    it("granted without a refresh token: drive=fel, nothing stored", async () => {
+      await signedIn();
+      grantedScope = READONLY;
+      providerRefresh = undefined;
+      expect((await call(BACK)).headers.get("location")).toBe(`${IMPORT}?drive=fel`);
+      expect(google.storeImportToken).not.toHaveBeenCalled();
+    });
+
+    it("readonly unticked in Google's consent: drive=nej, still signed in, nothing stored", async () => {
+      await signedIn();
       const res = await call(BACK);
       expect(res.headers.get("location")).toBe(`${IMPORT}?drive=nej`);
       expect(sessionCookies().length).toBeGreaterThan(0);
+      expect(google.storeImportToken).not.toHaveBeenCalled();
+      expect(google.storeGoogleToken).not.toHaveBeenCalled();
+    });
+
+    it("another Google account at consent: that session is signed out, the admin's restored, drive=konto, nothing stored", async () => {
+      await signedIn();
+      grantedScope = READONLY;
+      exchanged = { id: "u2", email: "other@example.com" };
+      const res = await call(BACK);
+      expect(res.headers.get("location")).toBe(`${IMPORT}?drive=konto`);
+      expect(google.storeImportToken).not.toHaveBeenCalled();
+      expect(google.storeGoogleToken).not.toHaveBeenCalled();
+      const session = sessionCookies().map(([, c]) => decode(c.value)).join("");
+      expect(session).toContain('"id":"u1"');
+      expect(session).not.toContain('"id":"u2"');
+    });
+
+    it("no session before the consent: the login page, nothing stored", async () => {
+      grantedScope = READONLY;
+      const res = await call(BACK);
+      expect(res.headers.get("location")).toContain("https://example.com/login?fel=kod");
+      expect(google.storeImportToken).not.toHaveBeenCalled();
     });
 
     it("cancelled by a signed-in admin: back to the import (drive=nej), not to the login page", async () => {
-      await call(); // a normal sign-in first: a session cookie
+      await signedIn();
       const res = await GET(new NextRequest(`https://simonsays.example/auth/callback?error=access_denied${BACK}`));
       expect(res.headers.get("location")).toBe(`${IMPORT}?drive=nej`);
     });
