@@ -75,9 +75,10 @@ function answer(kind: ClaudeKind, text: string): unknown {
       };
     case "names": {
       // By voice: speaker_k is SCRIPTED.names[k]. The fake ElevenLabs merges speaker_3 into speaker_1
-      // (one person heard as two voices), so both are the same person here.
+      // (one person heard as two voices): speaker_3 gets no name of its own (two labels with one
+      // name are rightly asked about, and a second name would conflict with the merge).
       const labels = [...new Set(text.match(/S\d+-speaker_\d+/g) ?? [])];
-      const nameOf = (label: string) => SCRIPTED.names[Number(label.split("_").at(-1)) === 3 ? 1 : Number(label.split("_").at(-1))];
+      const nameOf = (label: string) => (label.endsWith("speaker_3") ? undefined : SCRIPTED.names[Number(label.split("_").at(-1))]);
       return { speakers: labels.filter((l) => nameOf(l)).map((speaker) => ({ speaker, name: nameOf(speaker), needs_confirm: false })) };
     }
     case "checkin":
