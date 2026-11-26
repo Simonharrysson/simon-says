@@ -148,4 +148,36 @@ describe.skipIf(!hasLocalSupabase)("followup (db)", () => {
     };
     expect(await propagateDone([own], orgId, true, adminClient())).toBe(0);
   });
+
+  it("follows the carried chain to the root: week 3 closing a task carried 1 → 2 → 3 closes weeks 2 and 1", async () => {
+    const db = adminClient();
+    const w1 = (await seedMeeting(orgId, userId, "done")).meetingId;
+    const w2 = (await seedMeeting(orgId, userId, "done")).meetingId;
+    const o = await createTestUser("fuchain");
+    const r2 = await createOrg(o.db, "Annan kedja");
+    if (!r2.ok) throw new Error("org setup failed");
+    const foreign = (await seedMeeting(r2.id, o.id, "done")).meetingId;
+    const { error } = await db.from("note_items").insert([
+      { meeting_id: foreign, id: "n9", section: "action", text: "Annans" },
+      { meeting_id: w1, id: "n2", section: "action", kind: "task", text: "Skicka kallelsen", carried_from_meeting: foreign, carried_from_id: "n9" },
+      { meeting_id: w2, id: "c1", section: "action", kind: "task", text: "Skicka kallelsen", carried_from_meeting: w1, carried_from_id: "n2" },
+    ]);
+    if (error) throw new Error(error.message);
+    const w3c1 = {
+      meeting_id: "w3",
+      id: "c1",
+      section: "action",
+      text: "Skicka kallelsen",
+      done: true,
+      carried_from_meeting: w2,
+      carried_from_id: "c1",
+    } as NoteItemRow;
+    expect(await propagateDone([w3c1], orgId, false, db)).toBe(2);
+    const done = async (m: string, id: string) => (await db.from("note_items").select("done").eq("meeting_id", m).eq("id", id).single()).data!.done;
+    expect(await done(w2, "c1")).toBe(true);
+    expect(await done(w1, "n2")).toBe(true);
+    // The chain stops at another org's meeting.
+    expect(await done(foreign, "n9")).toBe(false);
+    expect(await propagateDone([w3c1], orgId, false, db)).toBe(0);
+  });
 });

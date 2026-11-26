@@ -149,9 +149,13 @@ export async function previousMeeting(
   return data?.[0] ? { id: data[0].id as string, startedAt: data[0].started_at as string | undefined } : null;
 }
 
+/** Carry hops followed back to the root (a guard; real chains are one per meeting). */
+const MAX_CHAIN = 100;
+
 /**
- * Flip done false -> true on the source rows of carried tasks that are done. Returns rows updated.
- * Service role bypasses RLS, so only source meetings of this org (and same is_test) are touched.
+ * Flip done false -> true on the source rows of carried tasks that are done, and on THEIR sources,
+ * up the chain to the root. Returns rows updated. Service role bypasses RLS, so only source
+ * meetings of this org (and same is_test) are touched; the chain stops at any other meeting.
  */
 export async function propagateDone(
   rows: NoteItemRow[],
@@ -172,25 +176,49 @@ export async function propagateDone(
     ids.add(r.carried_from_id);
     bySource.set(r.carried_from_meeting, ids);
   }
-  if (bySource.size === 0) return 0;
-  const { data: ok, error: e1 } = await db
-    .from("meetings")
-    .select("id")
-    .eq("org_id", orgId)
-    .eq("is_test", isTest)
-    .in("id", [...bySource.keys()]);
-  if (e1) throw new Error(`propagateDone: ${e1.message}`);
   let updated = 0;
-  for (const m of (ok ?? []) as { id: string }[]) {
-    const { data, error } = await db
-      .from("note_items")
-      .update({ done: true })
-      .eq("meeting_id", m.id)
-      .in("id", [...bySource.get(m.id)!])
-      .eq("done", false)
-      .select("id");
-    if (error) throw new Error(`propagateDone: ${error.message}`);
-    updated += data?.length ?? 0;
+  // Up the chain to the root (a task carried 1 → 2 → 3 and closed in 3 closes 2 and 1 too). Each
+  // level only reaches meetings of this org with the same is_test; `seen` stops a cycle.
+  const seen = new Set<string>();
+  let level = bySource;
+  for (let depth = 0; level.size > 0 && depth < MAX_CHAIN; depth++) {
+    const { data: ok, error: e1 } = await db
+      .from("meetings")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("is_test", isTest)
+      .in("id", [...level.keys()]);
+    if (e1) throw new Error(`propagateDone: ${e1.message}`);
+    const next = new Map<string, Set<string>>();
+    for (const m of (ok ?? []) as { id: string }[]) {
+      const ids = [...level.get(m.id)!].filter((id) => !seen.has(`${m.id}\u0000${id}`));
+      if (!ids.length) continue;
+      for (const id of ids) seen.add(`${m.id}\u0000${id}`);
+      const { data, error } = await db
+        .from("note_items")
+        .update({ done: true })
+        .eq("meeting_id", m.id)
+        .in("id", ids)
+        .eq("done", false)
+        .select("id");
+      if (error) throw new Error(`propagateDone: ${error.message}`);
+      updated += data?.length ?? 0;
+      // Where these rows were carried from (already-done ones too: the chain may continue past them).
+      const { data: sources, error: e2 } = await db
+        .from("note_items")
+        .select("carried_from_meeting, carried_from_id")
+        .eq("meeting_id", m.id)
+        .in("id", ids)
+        .not("carried_from_id", "is", null);
+      if (e2) throw new Error(`propagateDone: ${e2.message}`);
+      for (const src of (sources ?? []) as { carried_from_meeting: string | null; carried_from_id: string }[]) {
+        if (!src.carried_from_meeting) continue;
+        const set = next.get(src.carried_from_meeting) ?? new Set<string>();
+        set.add(src.carried_from_id);
+        next.set(src.carried_from_meeting, set);
+      }
+    }
+    level = next;
   }
   return updated;
 }

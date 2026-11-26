@@ -42,12 +42,16 @@ const PEOPLE = [
 ];
 const week = (n: number) => new Date(Date.UTC(2026, 10, 4 + 7 * n, 17, 5));
 
-/** propagateDone without the database: done carried rows flip their source row (one hop, as the real one). */
+/** propagateDone without the database: done carried rows flip their source rows, up the chain to the root. */
 function propagate(store: Map<string, NoteItemRow[]>, rows: NoteItemRow[]) {
   for (const r of rows) {
-    if (!r.done || !r.carried_from_meeting || !r.carried_from_id) continue;
-    const src = store.get(r.carried_from_meeting)?.find((s) => s.id === r.carried_from_id);
-    if (src) src.done = true;
+    if (!r.done) continue;
+    let at: NoteItemRow | undefined = r;
+    while (at?.carried_from_meeting && at.carried_from_id) {
+      const from: string = at.carried_from_id;
+      at = store.get(at.carried_from_meeting)?.find((s) => s.id === from);
+      if (at) at.done = true;
+    }
   }
 }
 
@@ -142,6 +146,9 @@ describe("feature: chain (information from n meetings)", () => {
     expect(linesOf(m3.doc).filter((l) => l.includes("Skicka kallelsen"))).toEqual(["– Erik Lund: Skicka kallelsen. ✓ klart"]);
     store.set("w3", m3.rows);
     propagate(store, m3.rows);
+    // Week 3's c1 came from week 2's c1, which came from week 1's n2: all three are done.
+    expect(store.get("w2")!.find((r) => r.id === "c1")!.done).toBe(true);
+    expect(store.get("w1")!.find((r) => r.id === "n2")!.done).toBe(true);
 
     const meetings = [
       { id: "w1", org_id: "o", started_at: week(0).toISOString(), status: "done" as const },
@@ -259,9 +266,9 @@ describe.skipIf(!hasLocalSupabase)("feature: chain (runTick, previousMeeting and
     expect(linesOf(f3.doc).filter((l) => l.includes("Skicka kallelsen"))).toEqual(["– Erik Lund: Skicka kallelsen. ✓ klart"]);
     const w3rows = await db.noteRows(w3.id);
     expect(w3rows.find((r) => r.id === "c1")).toMatchObject({ done: true, carried_from_meeting: w2.id, range_name: `ss-${f3.id}-c1` });
-    // One hop: the week-2 row is closed, the week-1 original stays open (finding for the dashboard).
+    // Up the chain: the week-2 row and the week-1 original are both closed.
     expect((await db.noteRows(w2.id)).find((r) => r.id === "c1")?.done).toBe(true);
-    expect((await db.noteRows(w1.id)).find((r) => r.id === "n2")?.done).toBe(false);
+    expect((await db.noteRows(w1.id)).find((r) => r.id === "n2")?.done).toBe(true);
 
     const summary = await loadMeetingChainSummary(adminClient(), orgId);
     expect(summary.map(({ startedAt: _s, ...r }) => r)).toEqual([

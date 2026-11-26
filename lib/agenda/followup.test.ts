@@ -179,6 +179,7 @@ describe("propagateDone through a tasks copy (final review N3)", () => {
       const b: Record<string, unknown> = {
         select: () => b,
         eq: () => b,
+        not: () => b,
         in: (col: string, v: string[]) => ((col === "id" ? (ids = v) : null), b),
         then: (res: (v: unknown) => unknown) => {
           if (table === "meetings") return res({ data: [{ id: "W1" }], error: null });
