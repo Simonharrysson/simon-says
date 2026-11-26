@@ -1282,6 +1282,12 @@ export async function finishMeeting(
   }
 }
 
+/** Presence end: claim only while still no tab; `hadHeartbeat` as the sweep saw it. */
+export interface StaleBefore {
+  cutoff: () => Date;
+  hadHeartbeat: boolean;
+}
+
 /** `ending`: the final pass didn't go through yet; the meeting stays `ending` and the cron retries. */
 export type EndResult = "ended" | "ending" | "noop" | "not_found";
 
@@ -1293,7 +1299,7 @@ export type EndResult = "ended" | "ending" | "noop" | "not_found";
  */
 export async function endMeeting(
   meetingId: string,
-  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: () => Date; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: StaleBefore; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
 ): Promise<EndResult> {
   const claim = await claimEnd(meetingId, opts);
   if (claim !== "claimed") return claim;
@@ -1308,7 +1314,7 @@ export async function endMeeting(
  */
 export async function claimEnd(
   meetingId: string,
-  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: () => Date; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: StaleBefore; deps?: Partial<TickDeps> } = {},
 ): Promise<"claimed" | "noop" | "not_found"> {
   // `endedAt`: the presence end stamps when the last tab was heard from, not when the cron ran.
   const now = opts.endedAt ?? (opts.deps?.now ?? (() => new Date()))();
@@ -1326,8 +1332,11 @@ export async function claimEnd(
   if (opts.staleBefore) {
     // Presence end: only if still no tab, judged at the claim itself (review I1). A heartbeat
     // that landed after the sweep read its snapshot (a laptop waking up) keeps it live.
-    const cutoff = JSON.stringify(opts.staleBefore().toISOString());
-    query = query.or(`last_heartbeat_at.lt.${cutoff},and(last_heartbeat_at.is.null,started_at.lt.${cutoff})`);
+    // No heartbeat yet: it must still have none and have started before the cutoff.
+    const cutoff = opts.staleBefore.cutoff().toISOString();
+    query = opts.staleBefore.hadHeartbeat
+      ? query.lt("last_heartbeat_at", cutoff)
+      : query.is("last_heartbeat_at", null).lt("started_at", cutoff);
   }
   const claimed = must("end: claim", await query.select("id")) as { id: string }[];
   if (!claimed.length) {
@@ -1416,7 +1425,10 @@ export async function finalizeSweep(
         // done: ended when the last tab was heard from. abandoned: the claim time, so the 2 h
         // "Fortsätt mötet" window and the shown duration are not cut short.
         ...(status === "done" ? { endedAt: new Date(lastSeenMs(m)) } : {}),
-        staleBefore: () => new Date(deps.now().getTime() - PRESENCE_GRACE_SEC * 1000),
+        staleBefore: {
+          cutoff: () => new Date(deps.now().getTime() - PRESENCE_GRACE_SEC * 1000),
+          hadHeartbeat: m.last_heartbeat_at !== null,
+        },
         deadlineAt,
         deps: opts.deps,
       });

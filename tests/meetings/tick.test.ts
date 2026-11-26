@@ -1078,7 +1078,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     const { id, sessionId } = await meeting({ heartbeatAgoSec: 6 * 60 });
     await say(id, sessionId, "hej", 1000);
     const f = fakes();
-    const cutoff = () => new Date(Date.now() - 5 * 60_000);
+    const cutoff = { cutoff: () => new Date(Date.now() - 5 * 60_000), hadHeartbeat: true };
     // The sweep saw it stale; then the laptop woke up and its heartbeat landed.
     await adminClient().from("meetings").update({ last_heartbeat_at: new Date().toISOString() }).eq("id", id);
     expect(await tick.endMeeting(id, { staleBefore: cutoff, deps: f.deps })).toBe("noop");
@@ -1096,8 +1096,8 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     const { id } = await meeting({ heartbeatAgoSec: null });
     const f = fakes();
     // started_at is 10 min ago in meeting(); a cutoff before it means "started recently".
-    expect(await tick.claimEnd(id, { staleBefore: () => new Date(Date.now() - 20 * 60_000), deps: f.deps })).toBe("noop");
-    expect(await tick.claimEnd(id, { abandon: true, staleBefore: () => new Date(Date.now() - 60_000), deps: f.deps })).toBe("claimed");
+    expect(await tick.claimEnd(id, { staleBefore: { cutoff: () => new Date(Date.now() - 20 * 60_000), hadHeartbeat: false }, deps: f.deps })).toBe("noop");
+    expect(await tick.claimEnd(id, { abandon: true, staleBefore: { cutoff: () => new Date(Date.now() - 60_000), hadHeartbeat: false }, deps: f.deps })).toBe("claimed");
     const m = await read(id);
     expect(m.status).toBe("ending");
     // Abandoned: ended_at is the claim time (the 2 h resume window starts now).
