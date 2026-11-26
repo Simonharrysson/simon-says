@@ -9,6 +9,9 @@ import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { hasOwnNotes, summaryContent, type SummaryItem } from "./content";
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
+import { localeForEmail, localeForUser } from "@/lib/i18n/user-locale";
 import { renderSummaryEmail } from "./email";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 
@@ -71,17 +74,19 @@ export function accessFor(
   shared: Set<string>,
   origin: string,
   starterName: string | null,
+  locale: Locale = defaultLocale,
 ): { href: string; note: string | null } {
+  const t = translator(locale);
   if (r.userId && (r.userId === m.started_by || shared.has(r.userId))) return { href: docUrl(m.doc_id), note: null };
   if (r.userId) {
     return {
       href: `${origin}/orgs/${m.org_id}#mote-${m.id}`,
-      note: "Knappen öppnar mötet på föreningens sida i Simon Says. Där får du tillgång till dokumentet.",
+      note: t("emails.summary.accessMember"),
     };
   }
   return {
     href: docUrl(m.doc_id),
-    note: `Protokollet är ett Google-dokument. Kommer du inte åt det, be ${starterName ?? "den som startade mötet"} dela det med dig.`,
+    note: t("emails.summary.accessOther", { starter: starterName ?? t("emails.summary.starterFallback") }),
   };
 }
 
@@ -217,8 +222,11 @@ export async function sendMeetingSummaries(
     if (!ledger.length) continue;
     if (mailed) await sleep(SEND_GAP_MS);
     mailed = true;
-    const access = accessFor(r, m, shared, origin, starterName);
+    // In the recipient's language: their account's choice, else their address's account's (0040).
+    const locale = r.userId ? await localeForUser(r.userId, db) : await localeForEmail(r.email, db);
+    const access = accessFor(r, m, shared, origin, starterName, locale);
     const email = renderSummaryEmail({
+      locale,
       orgName,
       startedAt: m.started_at,
       recipientName: r.person.name,

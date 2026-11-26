@@ -84,3 +84,16 @@ describe("summary e-mail", () => {
     ]);
   });
 });
+
+describe("summary e-mail in English (the recipient chose English)", () => {
+  it("translates the frame, keeps the meeting's own text as written", () => {
+    const { subject, text, html } = renderSummaryEmail({ ...base, locale: "en" });
+    expect(subject).toBe("Summary: LiU AI Society 24 November");
+    expect(text).toMatch(/^You missed the meeting on 24 November\n\nHi Sara! You weren't at the LiU AI Society meeting on Tuesday 24 November\./);
+    expect(text).toContain("YOUR TASKS");
+    expect(text).toContain("Betala hyran");
+    expect(html).toContain('<html lang="en"');
+    expect(html).toContain("Unsubscribe");
+    expect(html).not.toContain("Avsluta prenumeration");
+  });
+});
