@@ -54,6 +54,7 @@ export default async function MeetingPage({
     .limit(1);
   const shareFailedRaw = (started?.[0]?.detail as { shareFailed?: unknown } | undefined)?.shareFailed;
   const shareFailed = typeof shareFailedRaw === "number" ? shareFailedRaw : null;
+  const missedMeetingFolder = (started?.[0]?.detail as { missedMeetingFolder?: unknown } | undefined)?.missedMeetingFolder === true;
   return (
     <main id="innehall">
       <LiveMeetingController
@@ -64,6 +65,7 @@ export default async function MeetingPage({
         autoStopped={stoppat !== undefined}
         stopReason={stoppat && stoppat !== "1" && /^[a-z_]{1,30}$/.test(stoppat) ? stoppat : null}
         shareFailed={shareFailed}
+        missedMeetingFolder={missedMeetingFolder}
         meeting={{
           id: m.id,
           status,

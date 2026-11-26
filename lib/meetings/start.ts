@@ -55,6 +55,8 @@ export type StartResult =
        * folder, or this starter's Google account hasn't opened it), or the förening's agenda Doc.
        */
       docPlace: DocPlace | "agenda";
+      /** The förening has a meeting folder, but the new Doc is in the starter's own folder (their grant can't add to it). */
+      missedMeetingFolder: boolean;
       /** Started in the förening's own agenda Doc. */
       agenda: boolean;
       /** Section headings Simon Says appended to the Doc (labels of the format, in Doc order). */
@@ -307,6 +309,7 @@ export async function startMeeting(
     }
   }
 
+  const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
   await recordDocShares(meetingId, setup.sharedWith);
 
@@ -316,6 +319,7 @@ export async function startMeeting(
     by: user.id,
     shareFailed: setup.shareFailed,
     docPlace: setup.place,
+    missedMeetingFolder,
     transcriptTab: transcriptTabId !== null,
     agenda: agendaMode,
     layout,
@@ -366,6 +370,7 @@ export async function startMeeting(
     title: setup.title,
     shareFailed: setup.shareFailed,
     docPlace: setup.place,
+    missedMeetingFolder,
     agenda: agendaMode,
     appended: anchor?.appended ?? [],
     carried,

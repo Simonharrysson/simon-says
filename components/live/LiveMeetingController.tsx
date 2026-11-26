@@ -61,6 +61,8 @@ export interface LiveMeetingControllerProps {
   stopReason?: string | null;
   /** Members the Doc could not be shared with at start (from the `started` event); null: unknown. */
   shareFailed?: number | null;
+  /** The new Doc missed the förening's meeting folder (the starter's Google account hasn't opened it). */
+  missedMeetingFolder?: boolean;
   /** New meeting: the formats the start screen offers (default first). */
   formats?: AgendaFormatOption[];
   /** The Google Picker is configured; off: only a new Doc (as before A11). */
@@ -120,6 +122,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [shareFailed, setShareFailed] = useState<number | null>(props.shareFailed ?? null);
   /** Required items (stadgar) the agenda Doc lacks, from the start response (C2); dismissable. */
   const [missingItems, setMissingItems] = useState<string | null>(null);
+  const [missedFolder, setMissedFolder] = useState(props.missedMeetingFolder === true);
   /** After Avsluta: lines still waiting for the net, and whether POST /end failed. */
   const [pendingRuns, setPendingRuns] = useState(0);
   const [endFailed, setEndFailed] = useState(false);
@@ -369,7 +372,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         setPhase("consent");
         return;
       }
-      let created: { meetingId: string; docUrl: string; title: string; shareFailed?: number; warnings?: string[] };
+      let created: {
+        meetingId: string;
+        docUrl: string;
+        title: string;
+        shareFailed?: number;
+        missedMeetingFolder?: boolean;
+        warnings?: string[];
+      };
       try {
         const res = await fetch("/api/meetings", {
           method: "POST",
@@ -414,6 +424,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       setMeeting(m);
       setShareFailed(typeof created.shareFailed === "number" ? created.shareFailed : null);
       setMissingItems(missingItemsText(Array.isArray(created.warnings) ? created.warnings : null));
+      setMissedFolder(created.missedMeetingFolder === true);
       // The address becomes the meeting's own, so a reload offers "Fortsätt mötet".
       window.history.replaceState(null, "", `/meetings/${m.id}`);
       nameRoundOpen.current = true;
@@ -653,7 +664,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
                   title: `${shareFailed === 1 ? "En medlem" : `${shareFailed} medlemmar`} fick inte åtkomst – dela dokumentet manuellt`,
                   text: "Google lät oss inte dela mötesdokumentet med alla i föreningen. Öppna dokumentet och dela det med dem via Dela-knappen.",
                 }
-              : missingItems
+              : missedFolder
+                ? {
+                    tone: "warning",
+                    title: "Dokumentet hamnade i din Drive",
+                    text: `Ditt Google-konto har inte öppnat föreningens mötesmapp, så dokumentet ligger i ”Simon Says – ${props.orgName}”. Medlemmarna har fått det. Nästa gång: tryck ”Använd mötesmappen” före start.`,
+                    action: { label: "Okej", onClick: () => setMissedFolder(false) },
+                  }
+                : missingItems
                 ? {
                     tone: "warning",
                     title: "Punkter som stadgarna kräver saknas",
