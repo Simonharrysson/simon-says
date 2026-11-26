@@ -10,7 +10,9 @@ import { resolveSpeaker } from "@/lib/segments/resolve";
 //   map, through merges), a Närvarande name (the attendee rows, by full or first name; an
 //   ambiguous first name counts everyone it could mean as present: better one summary too few than
 //   a "Du missade mötet" to someone who was there), or the account that started the meeting.
-//   If nobody at all could be identified, nobody is mailed: we can't tell who missed it;
+//   Only when attendance is certain (someone identified by voice or Närvarande, and no unnamed
+//   voice like "Talare 2" on a shared mic); otherwise nobody is mailed in this mode;
+// - a person whose member link was removed (0018) gets nothing by their old address;
 // - all: everyone; selected: the ticked people; off: nobody.
 
 export interface SummaryPerson {
@@ -21,6 +23,8 @@ export interface SummaryPerson {
   member_user_id?: string | null;
   summary_selected?: boolean | null;
   summary_unsubscribed_at?: string | null;
+  /** 0037: the linked member was removed from the förening (or deleted their account). */
+  summary_removed_at?: string | null;
 }
 
 export interface SummaryMember {
@@ -35,6 +39,7 @@ export interface SummarySpeaker {
   person_id: string | null;
   display_name: string;
   merged_into_label?: string | null;
+  needs_confirm?: boolean | null;
 }
 
 export interface Recipient {
@@ -78,28 +83,61 @@ export function attendeeNames(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Ids of the people who were at the meeting (see the rules above). */
+/** A voice nobody has named: its own label, "Talare n", or an unsure guess ("Anna?", needs confirm). */
+function unnamedVoice(res: { label: string; displayName: string; personId: string | null }, needsConfirm: boolean): boolean {
+  if (res.personId && !needsConfirm) return false;
+  const name = res.displayName.trim();
+  return needsConfirm || name === res.label || /^talare\s*\d+$/i.test(name) || /^speaker_?\d+$/i.test(name) || name.endsWith("?");
+}
+
+export interface Attendance {
+  /** People ids who were there: named voices, Närvarande names, and the starter's account. */
+  present: Set<string>;
+  /**
+   * We know who was there: at least one attendee identified by voice or Närvarande (the starter
+   * alone doesn't count) and every voice named. Otherwise "Du missade mötet" could hit someone who
+   * sat in the room under "Talare 2" (a shared mic).
+   */
+  certain: boolean;
+  /** Voices heard that nobody named (for the event log; a count only). */
+  unnamedVoices: number;
+}
+
+/** Who was at the meeting (see the rules above). */
 export function presentPeople(input: {
   people: Pick<SummaryPerson, "id" | "name" | "member_user_id">[];
   speakers: SummarySpeaker[];
-  /** Texts of the meeting's Närvarande rows (one name each, as the Doc shows them). */
+  /** Texts of the meeting's Närvarande rows (one name or a typed list each). */
   attendeeNames: string[];
   startedBy: string | null;
-}): Set<string> {
+}): Attendance {
   const known = new Set(input.people.map((p) => p.id));
   const present = new Set<string>();
+  let identified = 0;
+  const unnamed = new Set<string>();
   const bySession = new Map<string, SummarySpeaker[]>();
   for (const s of input.speakers) bySession.set(s.el_session_id, [...(bySession.get(s.el_session_id) ?? []), s]);
-  for (const rows of bySession.values()) {
+  for (const [session, rows] of bySession) {
     for (const s of rows) {
       const res = resolveSpeaker(rows, s.speaker_label);
+      const target = rows.find((r) => r.speaker_label === res.label);
+      if (unnamedVoice(res, Boolean(target?.needs_confirm))) {
+        unnamed.add(`${session}\u0000${res.label}`);
+        continue;
+      }
+      identified++;
       if (res.personId && known.has(res.personId)) present.add(res.personId);
-      else if (res.displayName !== res.label) for (const id of peopleNamed(res.displayName, input.people)) present.add(id);
+      else for (const id of peopleNamed(res.displayName, input.people)) present.add(id);
     }
   }
-  for (const text of input.attendeeNames) for (const name of attendeeNames(text)) for (const id of peopleNamed(name, input.people)) present.add(id);
+  for (const text of input.attendeeNames) {
+    for (const name of attendeeNames(text)) {
+      identified++;
+      for (const id of peopleNamed(name, input.people)) present.add(id);
+    }
+  }
   if (input.startedBy) for (const p of input.people) if (p.member_user_id === input.startedBy) present.add(p.id);
-  return present;
+  return { present, certain: identified > 0 && unnamed.size === 0, unnamedVoices: unnamed.size };
 }
 
 /** Everyone who gets the summary, in people-list order (by name). */
@@ -107,11 +145,12 @@ export function summaryRecipients(input: {
   mode: SummaryMode;
   people: SummaryPerson[];
   members: SummaryMember[];
-  present: Set<string>;
+  attendance: Pick<Attendance, "present" | "certain">;
 }): Recipient[] {
   if (input.mode === "off") return [];
-  // "missed" without a single identified attendee: we can't tell who missed it.
-  if (input.mode === "missed" && input.present.size === 0) return [];
+  const { present, certain } = input.attendance;
+  // "missed" when we don't know who was there: nobody (the sender logs it as `uncertain`).
+  if (input.mode === "missed" && !certain) return [];
   const members = new Map(input.members.map((m) => [m.userId, m]));
   const seen = new Set<string>();
   const out: Recipient[] = [];
@@ -119,10 +158,12 @@ export function summaryRecipients(input: {
   for (const person of people) {
     if (person.summary_unsubscribed_at) continue;
     const member = person.member_user_id ? members.get(person.member_user_id) : undefined;
+    // Removed from the förening (0018 unlinks, 0037 marks it): no e-mail by the old address.
+    if (!member && person.summary_removed_at) continue;
     const email = (member?.email || person.email || "").trim();
     if (!email || !email.includes("@")) continue;
-    // Nobody identified ("all" / "selected"): neutral wording for everyone, never "missade".
-    const missed = input.present.size > 0 && !input.present.has(person.id);
+    // Uncertain attendance ("all" / "selected"): neutral wording, never "Du missade mötet".
+    const missed = certain && !present.has(person.id);
     if (input.mode === "missed" && !missed) continue;
     if (input.mode === "selected" && !person.summary_selected) continue;
     const key = email.toLowerCase();
