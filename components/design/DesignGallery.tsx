@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
 import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
 import type { Speaker } from "@/components/live/types";
@@ -27,7 +27,7 @@ import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEdito
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
 import { StatusView } from "@/components/views/StatusView";
-import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
+import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { designViews, type DesignGroup } from "./registry";
 
@@ -231,6 +231,25 @@ function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "s
   );
 }
 
+/** The format card alone, as wide as the förening page's main column. */
+function FormatCardDemo(props: Omit<ComponentProps<typeof FormatCard>, "orgId">) {
+  return (
+    <AppChrome>
+      <div className="mx-auto w-full max-w-page px-gutter">
+        <div className="max-w-[47rem]">
+          <FormatCard orgId={ORG_ID} {...props} />
+        </div>
+      </div>
+    </AppChrome>
+  );
+}
+
+const stadgarItems = ["Fråga om mötets behöriga utlysande", "Fråga om beslutsmässighet", "Ekonomisk rapport"];
+const savedFormats: ComponentProps<typeof FormatCard>["formats"] = [
+  { id: "f-stadgar", kind: "styrelseprotokoll", isDefault: true, createdAt: "2026-11-02T10:00:00Z", custom: true, requiredCount: 3 },
+  { id: "f-learned", kind: "learned", isDefault: false, createdAt: "2026-10-14T10:00:00Z" },
+];
+
 function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginLink?: boolean }) {
   return (
     <>
@@ -321,6 +340,43 @@ const render: Record<string, () => ReactNode> = {
         actions={actions}
       />
     </AppChrome>
+  ),
+  "format-card-admin": () => (
+    <FormatCardDemo
+      current={{ kind: "veckomote", name: "Veckomöte", id: null, profile: VECKOMOTE }}
+      isAdmin
+      meetingFolder={{ id: null }}
+      formats={[]}
+      changeFormat={noopAction}
+      pickerEnabled
+    />
+  ),
+  "format-card-full": () => (
+    <FormatCardDemo
+      current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
+      isAdmin
+      meetingFolder={{ id: "folder-exempel" }}
+      formats={savedFormats}
+      changeFormat={noopAction}
+      pickerEnabled
+    />
+  ),
+  "format-card-picker-off": () => (
+    <FormatCardDemo
+      current={{ kind: "veckomote", name: "Veckomöte", id: null, profile: VECKOMOTE }}
+      isAdmin
+      meetingFolder={{ id: null }}
+      formats={[]}
+      changeFormat={noopAction}
+    />
+  ),
+  "format-card-member": () => (
+    <FormatCardDemo
+      current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
+      isAdmin={false}
+      meetingFolder={{ id: "folder-exempel" }}
+      formats={savedFormats}
+    />
   ),
   "format-learn-proposing": () => <LearnDemo view={{ phase: "proposing" }} />,
   "format-learn-editor": () => <LearnDemo view={{ phase: "editor", proposal: learnedProposal }} />,

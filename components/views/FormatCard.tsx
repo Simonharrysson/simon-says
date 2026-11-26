@@ -1,13 +1,25 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuNote,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { IconChevronDown } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { FORMAT_NAMES, formatLabel } from "@/lib/formats/standard";
 import type { FormatKind, FormatProfile } from "@/lib/formats/schema";
-import { CustomizeFormat, LearnFormat, StadgarFormat } from "./FormatEditor";
-import { MeetingFolderButton } from "./MeetingFolderButton";
+import { COPY, LearnFormatView, useFormatFlow } from "./FormatEditor";
+import { useMeetingFolderPicker } from "./useMeetingFolderPicker";
 
 export interface FormatCardProps {
   orgId: string;
@@ -24,10 +36,16 @@ export interface FormatCardProps {
 }
 
 const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
+const PICKER_OFF = "Google-väljaren är inte inställd än.";
 
-const dateOf = (iso: string) => iso.slice(0, 10);
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** The org's meeting format: current default, switch (admins), meeting folder, learn a format (B2). */
+/**
+ * The förening's meeting format. Everyone sees the state (format, its version, the meeting folder,
+ * the stadgar's items behind a disclosure); admins get one "Ändra" menu that starts each change:
+ * switch format, adjust it, learn one (B2), the stadgar's items (C1), the meeting folder. The
+ * switcher, the flows' progress, errors and editor and the folder's result show in the card.
+ */
 export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
   // Custom versions (a learned format, a Styrelseprotokoll with the stadgar's items, an adjusted
   // standard) are offered by id: choosing the bare standard would drop what makes them theirs (R3-I2).
@@ -37,75 +55,185 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const currentRow = current.id ? custom.find((f) => f.id === current.id) : undefined;
   const required = current.profile?.requiredItems ?? [];
   const selected = currentRow ? `id:${currentRow.id}` : current.kind === "learned" ? "" : current.kind;
-  return (
-    <Panel title="Mötesformat" titleId="format-title">
-      <div className="flex flex-col gap-3">
-        <p>
-          Mötesformat: <strong>{currentRow ? formatLabel(currentRow) : current.name}</strong>
-        </p>
-        {required.length> 0 && (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-ink-3">Punkter som stadgarna kräver ({required.length}), med på varje dagordning:</p>
-            <ul className="list-dash pl-5 text-xs text-ink-3 marker:text-ink-3">
-              {required.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          </div>
+
+  const name = current.kind === "learned" ? "Eget format" : current.name;
+  const version = currentRow ? `${currentRow.kind === "learned" ? "inlärt" : "anpassat"} ${currentRow.createdAt.slice(0, 10)}` : null;
+  const meta = capitalize([version, meetingFolder.id ? "mötesmapp vald" : "ingen mötesmapp vald"].filter(Boolean).join(" · "));
+
+  const flow = useFormatFlow(orgId, current.profile);
+  const folder = useMeetingFolderPicker(orgId);
+  const [changing, setChanging] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const focusSelect = useRef(false);
+
+  // Back from a flow's editor (approved or cancelled) or the switcher: focus returns to "Ändra".
+  const wasOpen = useRef(false);
+  const open = changing || flow.view.phase !== "idle";
+  useEffect(() => {
+    if (open) wasOpen.current = true;
+    else if (wasOpen.current) {
+      wasOpen.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [open]);
+
+  const showChange = isAdmin && !!changeFormat;
+  const showCustomize = isAdmin && !!current.profile;
+
+  const menu = isAdmin && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button ref={triggerRef} variant="secondary" size="sm" loading={folder.busy} data-format-menu="">
+          Ändra
+          <IconChevronDown size={16} className="ml-1 inline-block align-[-0.2em] text-ink-2" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        onCloseAutoFocus={(e) => {
+          if (!focusSelect.current) return;
+          focusSelect.current = false;
+          e.preventDefault();
+          requestAnimationFrame(() => selectRef.current?.focus());
+        }}
+      >
+        {showChange && (
+          <DropdownMenuItem
+            hint="Ett standardformat eller ett ni sparat"
+            onSelect={() => {
+              flow.reset();
+              focusSelect.current = true;
+              setChanging(true);
+            }}
+          >
+            Byt format
+          </DropdownMenuItem>
         )}
-        {isAdmin && changeFormat && (
-          <form action={changeFormat} className="flex flex-col gap-2">
+        {showCustomize && (
+          <DropdownMenuItem
+            hint={COPY.customize.hint}
+            onSelect={() => {
+              setChanging(false);
+              flow.start("customize");
+            }}
+          >
+            {COPY.customize.start}
+          </DropdownMenuItem>
+        )}
+        {(showChange || showCustomize) && <DropdownMenuSeparator />}
+        <DropdownMenuItem
+          hint={COPY.learn.hint}
+          disabled={!pickerEnabled}
+          onSelect={() => {
+            setChanging(false);
+            void flow.start("learn");
+          }}
+        >
+          {COPY.learn.start}
+        </DropdownMenuItem>
+        {pickerEnabled && (
+          <>
+            <DropdownMenuItem
+              hint={COPY.stadgar.hint}
+              onSelect={() => {
+                setChanging(false);
+                void flow.start("stadgar");
+              }}
+            >
+              {COPY.stadgar.start}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem hint="Där Simon Says letar efter dagordningar." onSelect={() => void folder.pick()}>
+              {meetingFolder.id ? "Byt mötesmapp" : "Välj mötesmapp"}
+            </DropdownMenuItem>
+          </>
+        )}
+        {!pickerEnabled && <DropdownMenuNote>{PICKER_OFF}</DropdownMenuNote>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <Panel title="Mötesformat" titleId="format-title" actions={menu}>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <p className="text-base font-medium text-ink">{name}</p>
+          <p className="text-sm text-ink-3">{meta}</p>
+          {isAdmin && (
+            <p className="text-sm text-ink-2" aria-live="polite">
+              {folder.message ?? ""}
+            </p>
+          )}
+        </div>
+
+        {required.length> 0 && (
+          <details className="group text-sm">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-sm font-medium text-ink-2 select-none hover:text-ink max-md:min-h-11 [&::-webkit-details-marker]:hidden">
+              <IconChevronDown size={16} className="-rotate-90 transition-transform duration-120 group-open:rotate-0" />
+              Stadgarna kräver {required.length} punkter
+            </summary>
+            <div className="mt-2 flex flex-col gap-3 pl-5">
+              <p className="text-ink-3">De kommer med på varje dagordning:</p>
+              <ul className="list-dash pl-4 text-xs text-ink-3 marker:text-ink-3">
+                {required.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        )}
+
+        {isAdmin && changing && changeFormat && (
+          <form
+            action={async (form) => {
+              await changeFormat(form);
+              setChanging(false);
+            }}
+            className="flex flex-col gap-2 border-t border-line pt-4"
+          >
             <input type="hidden" name="orgId" value={orgId} />
             <Label htmlFor="format-choice">Byt format</Label>
-            <NativeSelect id="format-choice" name="choice" defaultValue={selected}>
-              {selected === "" && (
-                <option value="" disabled>
-                  {FORMAT_NAMES.learned}
-                </option>
-              )}
-              {STANDARD_KINDS.map((k) => (
-                <option key={k} value={k}>
-                  {FORMAT_NAMES[k]}
-                </option>
-              ))}
-              {custom.map((f) => (
-                <option key={f.id} value={`id:${f.id}`}>
-                  {formatLabel(f)}
-                  {f.isDefault ? " · används nu" : ""}
-                </option>
-              ))}
-            </NativeSelect>
-            <div>
-              <SubmitButton variant="secondary" pendingLabel="Byter…">
+            <div className="flex flex-wrap gap-2">
+              <NativeSelect ref={selectRef} id="format-choice" name="choice" defaultValue={selected} className="min-w-[14rem] flex-1 max-md:basis-full">
+                {selected === "" && (
+                  <option value="" disabled>
+                    {FORMAT_NAMES.learned}
+                  </option>
+                )}
+                {STANDARD_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {FORMAT_NAMES[k]}
+                  </option>
+                ))}
+                {custom.map((f) => (
+                  <option key={f.id} value={`id:${f.id}`}>
+                    {formatLabel(f)}
+                    {f.isDefault ? " · används nu" : ""}
+                  </option>
+                ))}
+              </NativeSelect>
+              <SubmitButton variant="primary" pendingLabel="Byter…">
                 Byt
               </SubmitButton>
+              <Button variant="ghost" onClick={() => setChanging(false)}>
+                Avbryt
+              </Button>
             </div>
           </form>
         )}
-        {isAdmin && current.profile && <CustomizeFormat orgId={orgId} current={current.profile} />}
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-ink-3">Mötesmapp: {meetingFolder.id ? "vald" : "inte vald"}</p>
-          {isAdmin &&
-            (pickerEnabled ? (
-              <MeetingFolderButton orgId={orgId} hasFolder={meetingFolder.id !== null} />
-            ) : (
-              <p className="text-xs text-ink-3">Google-väljaren är inte inställd än.</p>
-            ))}
-        </div>
-        {isAdmin &&
-          (pickerEnabled ? (
-            <>
-              <LearnFormat orgId={orgId} />
-              <StadgarFormat orgId={orgId} current={current.profile} />
-            </>
-          ) : (
-            <div>
-              <Button variant="ghost" disabled>
-                Lär Simon Says ert format
-              </Button>
-              <p className="text-xs text-ink-3">Google-väljaren är inte inställd än.</p>
-            </div>
-          ))}
+
+        {isAdmin && flow.view.phase !== "idle" && (
+          <div className="border-t border-line pt-4">
+            <LearnFormatView
+              orgId={orgId}
+              view={flow.view}
+              variant={flow.variant}
+              onStart={() => void flow.start(flow.variant)}
+              onCancel={flow.reset}
+              onApproved={flow.reset}
+            />
+          </div>
+        )}
       </div>
     </Panel>
   );

@@ -388,23 +388,25 @@ export type LearnPhase =
   | { phase: "error"; message: string }
   | { phase: "editor"; proposal: Proposal };
 
-const COPY = {
+export const COPY = {
   learn: {
     start: "Lär Simon Says ert format",
     busy: "Simon Says läser strukturen …",
-    hint: "Välj en mall eller 1–5 gamla protokoll. Simon Says läser bara strukturen, aldrig innehållet.",
+    hint: "En mall eller 1–5 gamla protokoll. Bara strukturen läses, aldrig innehållet.",
   },
   customize: {
     start: "Anpassa format",
     busy: "",
-    hint: "Ändra det format ni använder nu, till exempel ta bort Må-runda eller lägga till en egen punkt.",
+    hint: "Ta bort eller lägg till punkter, t.ex. Må-runda.",
   },
   stadgar: {
     start: "Lägg in punkter från stadgarna",
     busy: "Simon Says läser stadgarna …",
-    hint: "Styrelseprotokoll: välj stadgarna (Google-dokument eller PDF, högst 10 MB). Punkterna de kräver kommer med på varje dagordning. Stadgarna sparas inte.",
+    hint: "Google-dokument eller PDF, högst 10 MB. Stadgarna sparas inte.",
   },
 } as const;
+
+export type FlowVariant = keyof typeof COPY;
 
 /** Presentational: the learn-a-format (or stadgar, C1) part of FormatCard in each phase (used by /design). */
 export function LearnFormatView({
@@ -417,7 +419,7 @@ export function LearnFormatView({
 }: {
   orgId: string;
   view: LearnPhase;
-  variant?: "learn" | "stadgar" | "customize";
+  variant?: FlowVariant;
   onStart: () => void;
   onCancel: () => void;
   onApproved?: () => void;
@@ -455,27 +457,45 @@ export function LearnFormatView({
   return (
     <div className="flex flex-col gap-2">
       {view.phase === "error" && <Banner tone="danger">{view.message}</Banner>}
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button ref={startRef} variant="secondary" onClick={onStart}>
           {view.phase === "error" ? "Försök igen" : copy.start}
         </Button>
+        {view.phase === "error" && (
+          <Button variant="ghost" onClick={onCancel}>
+            Avbryt
+          </Button>
+        )}
       </div>
       <p className="text-xs text-ink-3">{copy.hint}</p>
     </div>
   );
 }
 
-/** Admins: the learn-a-format flow (Picker → propose → editor → approve). */
-export function LearnFormat({ orgId }: { orgId: string }) {
+/**
+ * Admins: the three ways to change the format, one at a time (the card's menu starts them; the
+ * phase, errors and editor show in the card):
+ * - learn (B2): Picker (1–5 Docs) → propose → editor → approve as a learned format;
+ * - customize (R3-I3): the editor on the current default (Enkel has no agenda: on the Veckomöte),
+ *   approved as a learned format, or as a Styrelseprotokoll when it is one (its stadgar items kept);
+ * - stadgar (C1): Picker (Doc or PDF) → read → editor on the current default when it is learned or a
+ *   Styrelseprotokoll (its own items kept), else the standard Styrelseprotokoll.
+ * `start*` call `picker.open` right away, so the click's user activation reaches the Picker.
+ */
+export function useFormatFlow(orgId: string, current?: FormatProfile) {
   const picker = usePicker();
+  const [variant, setVariant] = useState<FlowVariant>("learn");
   const [view, setView] = useState<LearnPhase>({ phase: "idle" });
+  const fail = (err: unknown) =>
+    setView({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen." });
 
-  const start = async () => {
+  const startLearn = async () => {
+    setVariant("learn");
     let picked;
     try {
       picked = await picker.open({ mode: "docs-multi", title: "Välj en mall eller 1–5 gamla protokoll" });
     } catch (err) {
-      setView({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen." });
+      fail(err);
       return;
     }
     if (!picked?.length) return;
@@ -501,52 +521,19 @@ export function LearnFormat({ orgId }: { orgId: string }) {
     }
   };
 
-  return (
-    <LearnFormatView
-      orgId={orgId}
-      view={view}
-      onStart={() => void start()}
-      onCancel={() => setView({ phase: "idle" })}
-      onApproved={() => setView({ phase: "idle" })}
-    />
-  );
-}
+  const startCustomize = () => {
+    if (!current) return;
+    setVariant("customize");
+    setView({ phase: "editor", proposal: { profile: current.kind === "enkel" ? VECKOMOTE : current } });
+  };
 
-/**
- * Admins: adjust the current default directly (R3-I3), e.g. a Veckomöte without Må-runda. Opens
- * the editor on it (Enkel has no agenda: on the Veckomöte); approved as a learned format, or as a
- * Styrelseprotokoll when it is one (its stadgar items kept).
- */
-export function CustomizeFormat({ orgId, current }: { orgId: string; current: FormatProfile }) {
-  const [view, setView] = useState<LearnPhase>({ phase: "idle" });
-  const base = current.kind === "enkel" ? VECKOMOTE : current;
-  return (
-    <LearnFormatView
-      orgId={orgId}
-      view={view}
-      variant="customize"
-      onStart={() => setView({ phase: "editor", proposal: { profile: base } })}
-      onCancel={() => setView({ phase: "idle" })}
-      onApproved={() => setView({ phase: "idle" })}
-    />
-  );
-}
-
-/**
- * Admins: Styrelseprotokoll with the stadgar's required items (C1): Picker → read → editor →
- * approve. Starts from the current default when it is a learned format or a Styrelseprotokoll
- * (its own items kept, R3-I3), else from the standard Styrelseprotokoll.
- */
-export function StadgarFormat({ orgId, current }: { orgId: string; current?: FormatProfile }) {
-  const picker = usePicker();
-  const [view, setView] = useState<LearnPhase>({ phase: "idle" });
-
-  const start = async () => {
+  const startStadgar = async () => {
+    setVariant("stadgar");
     let picked;
     try {
       picked = await picker.open({ mode: "doc-or-pdf", title: "Välj föreningens stadgar" });
     } catch (err) {
-      setView({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen." });
+      fail(err);
       return;
     }
     if (!picked?.[0]) return;
@@ -579,14 +566,6 @@ export function StadgarFormat({ orgId, current }: { orgId: string; current?: For
     }
   };
 
-  return (
-    <LearnFormatView
-      orgId={orgId}
-      view={view}
-      variant="stadgar"
-      onStart={() => void start()}
-      onCancel={() => setView({ phase: "idle" })}
-      onApproved={() => setView({ phase: "idle" })}
-    />
-  );
+  const start = (v: FlowVariant) => (v === "learn" ? startLearn() : v === "stadgar" ? startStadgar() : startCustomize());
+  return { variant, view, start, reset: () => setView({ phase: "idle" }) };
 }

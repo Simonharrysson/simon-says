@@ -140,7 +140,7 @@ stays in Drive when deleting.
 Two kinds of files live here:
 
 - **shadcn primitives**, lowercase (`button.tsx`, `badge.tsx`, `input.tsx`, `label.tsx`,
-  `native-select.tsx`, `checkbox.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `skeleton.tsx`).
+  `native-select.tsx`, `checkbox.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`).
   They came from `npx shadcn add` (style `radix-nova`, Radix underneath) and were then restyled
   to the tokens. They are our code now: edit them, don't re-add them over the top.
 - **App components**, PascalCase, built on the primitives and keeping their old APIs.
@@ -338,13 +338,23 @@ server's Swedish message with "Skapa nytt dokument i stället", which remounts t
 confirmed new Doc and keeps the format override. The doc Picker shows the meeting folder first
 (when set) and all Docs as a second view.
 
-`FormatCard`: admins get "Välj mötesmapp" / "Byt mötesmapp" (folder Picker →
-`POST /api/orgs/<id>/meeting-folder`), or "Google-väljaren är inte inställd än." with the Picker off.
-`/design`: `live-agenda-suggestion`, `live-agenda-none`, `live-agenda-folder`, `live-agenda-off`.
+`FormatCard` (the "Mötesformat" card) leads with the state: the format's name, one grey line
+("Anpassat 2026-11-02 · mötesmapp vald" / "Ingen mötesmapp vald"), and, when the stadgar add
+items, a collapsed `<details>` "Stadgarna kräver N punkter". Members see only that. Admins get one
+**Ändra** menu (`dropdown-menu.tsx`; each item has a one-line hint): Byt format (opens the
+`<select>` + Byt / Avbryt in the card), Anpassa format, Lär Simon Says ert format, Lägg in punkter
+från stadgarna, Välj/Byt mötesmapp (folder Picker → `POST /api/orgs/<id>/meeting-folder`; the
+result is a polite line under the state). With the Picker off, learning is a disabled item, the
+stadgar and folder items are hidden, and the menu says "Google-väljaren är inte inställd än.".
+One change is open at a time; its progress, error (Försök igen / Avbryt) or editor shows in the
+card, and focus returns to Ändra when it closes. Flow state lives in `useFormatFlow`
+(`FormatEditor.tsx`) and `useMeetingFolderPicker`.
+`/design`: `format-card-admin`, `format-card-full`, `format-card-picker-off`, `format-card-member`,
+`live-agenda-suggestion`, `live-agenda-none`, `live-agenda-folder`, `live-agenda-off`.
 
 ### Learning a format (B2)
 
-`FormatCard`, admins with the Picker on: **Lär Simon Says ert format** (`LearnFormat` in
+`FormatCard`, admins with the Picker on: **Lär Simon Says ert format** (`useFormatFlow` in
 `components/views/FormatEditor.tsx`) opens the Picker in `docs-multi` mode for a template or 1–5
 old minutes. More than five gives "Välj högst 5 dokument." Next comes "Simon Says läser strukturen …"
 (`POST /api/orgs/<id>/formats/propose`), then `FormatEditor`. With the Picker off, the button is
@@ -373,7 +383,7 @@ errors, **Godkänn och använd** is disabled. It posts `POST /api/orgs/<id>/form
 page. **Avbryt** drops the proposal; nothing is stored before approval.
 `/design`: `format-learn-proposing`, `format-learn-editor`, `format-learn-error`.
 
-**Lägg in punkter från stadgarna** (C1, `StadgarFormat`, below the learn button) opens the Picker
+**Lägg in punkter från stadgarna** (C1, `useFormatFlow`, in the Ändra menu) opens the Picker
 in `doc-or-pdf` mode. It shows "Simon Says läser stadgarna …" while it calls
 `POST /api/orgs/<id>/formats/stadgar`. The route reads a Google Doc as plain text, or a PDF of at
 most 10 MB (a larger one gets 413 "Filen är för stor (max 10 MB)."). Then `FormatEditor` opens on
