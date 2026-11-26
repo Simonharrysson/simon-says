@@ -4,6 +4,8 @@
   "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen.",
   "qualityTitle": "Om era gamla protokoll",
   "title": "Titel",
+  "formatName": "Formatets namn",
+  "formatNameHint": "Visas på formatkortet och när ni startar ett möte. Skrivs inte i dokumentet.",
   "infoTable": "Fält i tabellen överst",
   "addField": "Lägg till fält",
   "infoTableHint": "Inga fält = ingen tabell.",
@@ -67,6 +69,7 @@
   "errors": {
     "titleEmpty": "Titeln får inte vara tom.",
     "titleLong": "Titeln får vara högst {max} tecken.",
+    "nameLong": "Namnet får vara högst {max} tecken.",
     "tableFields": "Tabellen får ha högst {max} fält.",
     "signatures": "Högst {max} underskrifter.",
     "required": "Högst {max} punkter från stadgarna.",
@@ -84,7 +87,7 @@
   },
   "card": {
     "pickerOff": "Google-väljaren är inte inställd än.",
-    "ownFormat": "Eget format",
+    "ownFormat": "Ert format",
     "versionLearned": "inlärt {date}",
     "versionCustom": "anpassat {date}",
     "folderNamed": "mötesmapp: {name}",

@@ -4,6 +4,8 @@
   "offline": "We couldn't reach the server. Check the network and try again.",
   "qualityTitle": "About your old minutes",
   "title": "Title",
+  "formatName": "Name of the format",
+  "formatNameHint": "Shown in the format card and when you start a meeting. Not written in the document.",
   "infoTable": "Fields in the table at the top",
   "addField": "Add field",
   "infoTableHint": "No fields = no table.",
@@ -67,6 +69,7 @@
   "errors": {
     "titleEmpty": "The title can't be empty.",
     "titleLong": "The title can be at most {max} characters.",
+    "nameLong": "The name can be at most {max} characters.",
     "tableFields": "The table can have at most {max} fields.",
     "signatures": "At most {max} signatures.",
     "required": "At most {max} items from the statutes.",
@@ -84,7 +87,7 @@
   },
   "card": {
     "pickerOff": "The Google picker isn't set up yet.",
-    "ownFormat": "Your own format",
+    "ownFormat": "Your format",
     "versionLearned": "learned {date}",
     "versionCustom": "customised {date}",
     "folderNamed": "meeting folder: {name}",

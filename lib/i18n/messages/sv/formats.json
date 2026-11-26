@@ -3,10 +3,10 @@
     "veckomote": "Veckomöte",
     "styrelseprotokoll": "Styrelseprotokoll",
     "enkel": "Enkel",
-    "learned": "Eget",
+    "learned": "Ert format",
     "arsmote": "Årsmöte"
   },
-  "labelLearned": "{name} ({date})",
+  "labelLearned": "Ert format (inlärt {date})",
   "labelStatutes": "{name} med stadgarnas punkter ({date})",
   "labelCustom": "{name}, anpassat ({date})",
   "meetingTypes": {
