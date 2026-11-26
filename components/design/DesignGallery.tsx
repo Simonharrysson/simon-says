@@ -26,9 +26,11 @@ import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
+import { OverviewView, type GoalsPhase } from "@/components/views/OverviewView";
 import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
+import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { designViews, type DesignGroup } from "./registry";
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
@@ -98,6 +100,30 @@ const liveBase: LiveMeetingProps = {
   onEndUnfinished: noop,
   onRetry: noop,
 };
+
+/** The förening page on its Översikt tab (fictional data, overview-demo.ts). */
+function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
+  return (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        people={people}
+        meetings={meetings}
+        notice={null}
+        startMeetingHref="#"
+        tabs={{
+          active: "oversikt",
+          href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin"),
+          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} now={OVERVIEW_NOW} />,
+        }}
+        actions={actions}
+      />
+    </AppChrome>
+  );
+}
 
 function LiveDemo(overrides: Partial<LiveMeetingProps>) {
   return <InteractiveLive {...liveBase} {...overrides} />;
@@ -318,6 +344,28 @@ const render: Record<string, () => ReactNode> = {
           />
         }
         liveMeetingHref={() => "/design?vy=live"}
+        tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin") }}
+        actions={actions}
+      />
+    </AppChrome>
+  ),
+  "org-overview": () => <OverviewDemo />,
+  "org-overview-goals": () => <OverviewDemo goalsPhase={{ phase: "editor", ...demoProposal }} />,
+  "org-overview-empty": () => (
+    <AppChrome>
+      <OrgDetailView
+        org={{ ...org, name: "Golfklubbens styrelse" }}
+        isAdmin={false}
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Pq7Rt2Vw9z"
+        people={[]}
+        meetings={[]}
+        notice={null}
+        tabs={{
+          active: "oversikt",
+          href: (t) => (t === "oversikt" ? "/design?vy=org-overview-empty" : "/design?vy=org-member-empty"),
+          overview: <OverviewView orgId={ORG_ID} isAdmin={false} overview={emptyOverview} goals={[]} now={OVERVIEW_NOW} />,
+        }}
         actions={actions}
       />
     </AppChrome>

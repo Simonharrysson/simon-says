@@ -186,6 +186,11 @@ buttons keep `title` + a visually hidden label instead of a tooltip.
 3. Pin any new dependency to an exact version in `package.json`.
 4. Show it on `/design?vy=primitives` and check light and dark.
 
+**Förening tabs.** The förening page has two tabs, "Möten" and "Översikt" (`?flik=oversikt`): server
+links with `aria-current` (`OrgDetailView` `tabs` prop). Översikt is `OverviewView` (goals with
+propose → approve, open tasks, decisions with search, recurring topics, attendance); data from
+`lib/dashboard`. Gallery: `org-overview`, `org-overview-goals`, `org-overview-empty`.
+
 Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) renders a
 presentational view in `components/views/` (`LandingView`, `LoginView`, `OrgsView`,
 `OrgDetailView`, `JoinView`, `AccountView`, `StatusView`). All `?fel=`/`?klart=` codes map in
