@@ -11,6 +11,7 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import type { CheckinWindow } from "@/lib/db/types";
 import { formatLine } from "@/lib/docs/format-render";
 import { formatItem } from "@/lib/docs/notes";
+import { meetingRoles } from "@/lib/formats/schema";
 import { FORMAT_NAMES, STANDARD } from "@/lib/formats/standard";
 import { checkinSpan, endPassWindow, type SegmentRead } from "@/lib/meetings/tick";
 import type { AgendaContext } from "@/lib/notes/agenda-prompt";
@@ -65,6 +66,8 @@ export interface ReplayResult {
   medianStrictChurn: number;
   items: NotesItem[];
   log: TickLog[];
+  /** Agenda mode: the run hid the Må-runda (opt-in, the format's `hideCheckin`). Absent = off. */
+  hideCheckin?: boolean;
 }
 
 export function apiKey(): string {
@@ -140,14 +143,16 @@ export function agendaTabText(
 }
 
 /** What the notes engine is told about the agenda (the tick's agendaContext, from the fixture). */
-export function agendaContextOf(expected: Expected): AgendaContext {
+export function agendaContextOf(expected: Expected, opts: { hideCheckin?: boolean } = {}): AgendaContext {
   const profile = profileOf(expected);
+  // As the start (meetingRoles): the Må-runda keeps its checkin role only when hiding is opted in.
+  const roles = meetingRoles(Object.fromEntries((expected.agenda?.items ?? []).map((a) => [a.key, a.role])), { hideCheckin: opts.hideCheckin });
   return {
     formatName: FORMAT_NAMES[profile.kind],
     decisionPrefix: profile.decisionPrefix,
     groupBy: "role",
     numbering: profile.numbering,
-    anchors: (expected.agenda?.items ?? []).map((a) => ({ key: a.key, label: a.label, role: a.role, humanText: (a.sub ?? []).join("\n") })),
+    anchors: (expected.agenda?.items ?? []).map((a) => ({ key: a.key, label: a.label, role: roles[a.key], humanText: (a.sub ?? []).join("\n") })),
     people: (expected.people ?? []).map((p) => ({ name: p.name, role: p.role })),
   };
 }
@@ -221,7 +226,7 @@ const CHECKIN_CONTEXT_LINES = 20;
  * `agenda: true` (a fixture with an agenda in its expected file) replays what lib/meetings/tick.ts
  * does in the format layout: the tab holds the agenda Doc's lines plus our items as the format
  * renderer writes them (`ownLines`), last meeting's tasks are pre-filled as c1…, and while the
- * Må-runda window is open the detector reads each tick's new lines (its cost is counted) and
+ * Må-runda window is open (only with `hideCheckin`) the detector reads each tick's new lines (its cost is counted) and
  * `maskCheckin` replaces the window in that tick's block. While the window has no start and the
  * detector gave no answer the notes call is held (the lines wait for a later tick); the final
  * pass over-masks instead (`endPassWindow`). A tick with no new lines makes no call.
@@ -234,12 +239,14 @@ export async function runReplay(opts: {
   realtime?: boolean;
   speed?: number;
   agenda?: true;
+  /** Agenda mode: hide the Må-runda (detector + masking), as a format with `hideCheckin` does. Default off. */
+  hideCheckin?: boolean;
   /** Tests: a fake client in place of the SDK. */
   client?: NotesClient;
   onTick?: (t: TickLog) => void;
 }): Promise<ReplayResult> {
   const { lines, expected, tickMs } = opts;
-  const agenda = opts.agenda && expected.agenda ? agendaContextOf(expected) : null;
+  const agenda = opts.agenda && expected.agenda ? agendaContextOf(expected, { hideCheckin: opts.hideCheckin }) : null;
   const { chunks, endMs } = chunkLines(lines, tickMs);
   const blocksAll = chunks.map(blockText);
   const tickCount = chunks.length;
@@ -249,7 +256,7 @@ export async function runReplay(opts: {
 
   let items: NotesItem[] = agenda ? carriedItems(expected) : [];
   let nextId: string | undefined;
-  // Agenda mode: the Må-runda window (null without a checkin item) and how many ticks the notes engine has read.
+  // Agenda mode: the Må-runda window (null without a checkin item, i.e. unless hiding is on) and how many ticks the notes engine has read.
   let win: CheckinWindow | null = agenda?.anchors.some((a) => a.role === "checkin") ? { startMs: null, endMs: null, closed: false, failures: 0 } : null;
   let sentTick = 0;
   const log: TickLog[] = [];
@@ -381,6 +388,7 @@ export async function runReplay(opts: {
     medianStrictChurn: median(strictChurns),
     items,
     log,
+    ...(opts.hideCheckin ? { hideCheckin: true } : {}),
   };
 }
 

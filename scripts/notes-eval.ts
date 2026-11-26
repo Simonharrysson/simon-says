@@ -4,7 +4,7 @@
  * the bars: median churn ≤ 15 %, recall 100 %, no must_not item in the final notes nor live for
  * 2+ ticks in a row, ≤ $1.50 per meeting-hour.
  *
- *   npm run notes-eval -- [--only a,b] [--repeat N] [--label before] [--concurrency 7] [--budget 5] [--tick-sec 45]
+ *   npm run notes-eval -- [--only a,b] [--repeat N] [--label before] [--concurrency 7] [--budget 5] [--tick-sec 45] [--hide-checkin]
  *   npm run notes-eval -- --check            # $0: sanity-check every expected file
  *   npm run notes-eval -- --rescore <dir>    # $0: rescore a saved run with the current expected files
  *
@@ -15,8 +15,10 @@
  * (USD, default 5). `--ledger <file>` keeps the ledger elsewhere (default .notes-replay/spend.json).
  *
  * Agenda fixtures (an `agenda` in the expected file, e.g. veckomote-a/-b) replay the format layout
- * (see runReplay: agenda Doc, owner roles, Från förra veckan, Må-runda detector and masking) and add
- * four bars: placement >= 90 %, roles, followup and no Må-runda leaks. The detector's cost counts.
+ * (see runReplay: agenda Doc, owner roles, Från förra veckan) and add four bars: placement >= 90 %,
+ * roles, followup and no leaks. The Må-runda is an ordinary item by default (as every format
+ * now); `--hide-checkin` replays the opt-in (detector and masking, its cost counts) and then a
+ * leak is also Må-runda content in the notes.
  *
  * Reads ANTHROPIC_API_KEY from the environment or ~/simon-says-private/.env. Never prints it.
  */
@@ -71,7 +73,7 @@ interface Run {
   score: Score;
 }
 
-type Saved = Pick<ReplayResult, "ranTicks" | "tickMs" | "tickCount" | "endMs" | "medianChurn" | "medianStrictChurn" | "totalUsd" | "perHour" | "items" | "log">;
+type Saved = Pick<ReplayResult, "ranTicks" | "tickMs" | "tickCount" | "endMs" | "medianChurn" | "medianStrictChurn" | "totalUsd" | "perHour" | "items" | "log" | "hideCheckin">;
 
 function runOf(name: string, r: Saved): Run {
   return {
@@ -81,7 +83,7 @@ function runOf(name: string, r: Saved): Run {
     medianStrictChurn: r.medianStrictChurn,
     usd: r.totalUsd,
     perHour: r.perHour,
-    score: score(r.items, expectedOf(name), ticksOf(r)),
+    score: score(r.items, expectedOf(name), ticksOf(r), { hideCheckin: r.hideCheckin }),
   };
 }
 
@@ -158,7 +160,7 @@ function printTable(runs: Run[]) {
   console.log("must_not = in the final notes; live2+ = live for 2+ ticks in a row (both fail the bar); (1 tick) = warning.");
   if (agenda) {
     console.log("place = decisions/tasks under the expected agenda item (bar >= 90 %); roles = owner shown by role; followup = Från förra veckan done flags;");
-    console.log("leaks = Må-runda content in the final or live notes, or items under a Må-runda / Från förra veckan item (all but place must be exact).");
+    console.log("leaks = items under a Från förra veckan item; with --hide-checkin also Må-runda content in the final or live notes or items under the Må-runda (all but place must be exact).");
   }
   console.log("PASS needs every run of the fixture to meet every bar.");
 }
@@ -232,6 +234,8 @@ async function main() {
   const tickMs = Number(arg("tick-sec") ?? 45) * 1000;
   const label = arg("label") ?? "run";
   const repeat = Math.max(1, Number(arg("repeat") ?? 1));
+  // Må-runda hiding is opt-in per format (default off); --hide-checkin replays the opt-in.
+  const hideCheckin = process.argv.includes("--hide-checkin");
   const names = fixtures();
   const spentBefore = ledgerTotal(LEDGER);
   if (spentBefore >= budget) throw new Error(`spend ledger $${spentBefore.toFixed(4)} ≥ budget $${budget}: not starting`);
@@ -248,6 +252,7 @@ async function main() {
         expected: expectedOf(name),
         tickMs,
         ...(expectedOf(name).agenda ? { agenda: true as const } : {}),
+        hideCheckin,
         onTick: (t) => {
           const spent = ledgerAdd(t.usage.usd + (t.checkinUsd ?? 0), LEDGER);
           console.log(`[${tag}] tick ${t.tick}${t.final ? " FINAL" : ""} ops=${t.ops.length} $${(t.usage.usd + (t.checkinUsd ?? 0)).toFixed(4)} stop=${t.stop}  ledger $${spent.toFixed(4)}`);

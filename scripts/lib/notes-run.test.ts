@@ -45,9 +45,23 @@ function fake(detector: (newTimes: string[], call: number) => string | "fail") {
 }
 
 describe("agenda replay", () => {
+  it("by default (Må-runda hiding off) makes no detector call and masks nothing; the Må-runda is an ordinary item", async () => {
+    const f = fake(() => JSON.stringify({ start_at: "00:00:00", end_at: null }));
+    const r = await runReplay({ lines, expected, tickMs: 45_000, agenda: true, client: f.client });
+    expect(f.detectorCalls()).toBe(0);
+    expect(r.log.every((t) => t.window === null && !t.checkinUsd && t.skipped !== "held")).toBe(true);
+    expect(r.hideCheckin).toBeUndefined();
+    const all = f.notes.flat().join("\n");
+    expect(all).not.toContain("[Må-runda — utelämnad]");
+    // The agenda the engine reads has no checkin role: the Må-runda is a procedural item.
+    expect(all).toContain("Må-runda · procedural");
+    expect(all).not.toContain("· checkin");
+  });
+
   it("masks the window the detector found and counts the detector's cost", async () => {
     const f = fake((times, call) => (call === 0 ? JSON.stringify({ start_at: times[0], end_at: null }) : JSON.stringify({ start_at: null, end_at: times.at(-1) })));
-    const r = await runReplay({ lines, expected, tickMs: 45_000, agenda: true, client: f.client });
+    const r = await runReplay({ lines, expected, tickMs: 45_000, agenda: true, hideCheckin: true, client: f.client });
+    expect(r.hideCheckin).toBe(true);
     expect(r.log.some((t) => (t.checkinUsd ?? 0) > 0)).toBe(true);
     expect(r.totalUsd).toBeCloseTo(r.log.reduce((s, t) => s + t.usage.usd + (t.checkinUsd ?? 0), 0));
     const last = f.notes.at(-1)!.join("\n");
@@ -60,7 +74,7 @@ describe("agenda replay", () => {
 
   it("holds the notes call while the start is unknown and the detector fails, then closes after 3 failures", async () => {
     const f = fake(() => "fail");
-    const r = await runReplay({ lines, expected, tickMs: 45_000, agenda: true, client: f.client });
+    const r = await runReplay({ lines, expected, tickMs: 45_000, agenda: true, hideCheckin: true, client: f.client });
     expect(r.log.slice(0, 2).map((t) => t.skipped)).toEqual(["held", "held"]);
     expect(r.log[2].window?.closed).toBe(true);
     // Held ticks made no notes call; the first call came at tick 3 with the three ticks' blocks.
