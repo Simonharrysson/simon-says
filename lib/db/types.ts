@@ -5,7 +5,7 @@
 export type OrgRole = "admin" | "member";
 /** 0037: missed = people not at the meeting (default), all, selected = ticked people, off. */
 export type SummaryMode = "missed" | "all" | "selected" | "off";
-export type SummaryState = "sent" | "none" | "no_notes" | "off" | "test" | "before";
+export type SummaryState = "sending" | "sent" | "none" | "uncertain" | "no_notes" | "off" | "test" | "before";
 export type MeetingStatus = "live" | "ending" | "done" | "abandoned";
 export type NoteSection = "decision" | "action" | "now" | "attendees" | "note";
 export type NoteKind = "decision" | "task" | "note" | "attendee" | "now";
@@ -97,6 +97,8 @@ export interface PersonRow {
   summary_selected?: boolean;
   /** 0037: unsubscribed from summaries with the e-mail's link (wins in every mode). */
   summary_unsubscribed_at?: string | null;
+  /** 0037: set when the linked member was removed (or deleted their account); no e-mail by the old address. */
+  summary_removed_at?: string | null;
 }
 
 export interface MeetingRow {

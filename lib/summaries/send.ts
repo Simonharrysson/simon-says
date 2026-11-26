@@ -16,10 +16,13 @@ import { issueUnsubscribeToken } from "./token";
 // meeting `done` (lib/meetings/tick.ts finishMeeting) and by the 5-minute cron for whatever that
 // missed (a Doc that was paused at the end gets its final pass later; a crashed send).
 //
-// Never twice: the meeting is claimed first (summary_state null → its outcome, atomically), and
-// every recipient gets a ledger row (meeting_summary_sends) BEFORE the mailer is called, so a
-// retry never mails anyone again. A send that failed is not retried (at most once, by design: the
-// mailer also reports a timeout as a failure, and the mail may have gone out).
+// Never twice: the meeting is claimed first (summary_state null → `sending`, or straight to its
+// outcome when there is nobody to mail), and every recipient gets a ledger row
+// (meeting_summary_sends) BEFORE the mailer is called, so a resumed run never mails anyone again.
+// The loop stops cleanly before the caller's deadline and leaves the meeting `sending`; the cron
+// resumes it (also one whose function was killed mid-loop) and only then marks it `sent`. A send
+// that failed is not retried (at most once, by design: the mailer also reports a timeout as a
+// failure, and the mail may have gone out).
 // Logs and the meeting event hold counts only: no addresses, names or note text.
 
 export interface SummaryDeps {
@@ -31,6 +34,8 @@ export interface SummaryDeps {
 
 /** Pause between two e-mails of one meeting: stays under Resend's default rate limit. */
 export const SEND_GAP_MS = 600;
+/** Don't start another e-mail with less time than this before the caller's deadline. */
+export const SUMMARY_MIN_LEFT_MS = 15_000;
 
 export interface SummaryResult {
   state: SummaryState;
@@ -84,7 +89,11 @@ export function accessFor(
  * Handle one meeting's summary. Null when there is nothing to do (not done yet, its Doc is paused,
  * already handled, or another sender claimed it first).
  */
-export async function sendMeetingSummaries(meetingId: string, deps: SummaryDeps): Promise<SummaryResult | null> {
+export async function sendMeetingSummaries(
+  meetingId: string,
+  deps: SummaryDeps,
+  opts: { deadlineAt?: Date } = {},
+): Promise<SummaryResult | null> {
   const db = supabaseAdmin();
   const m = must(
     "summary: meeting",
@@ -94,7 +103,8 @@ export async function sendMeetingSummaries(meetingId: string, deps: SummaryDeps)
       .eq("id", meetingId)
       .maybeSingle(),
   ) as MeetingForSummary | null;
-  if (!m || m.status !== "done" || m.summary_state !== null || m.doc_paused_at) return null;
+  if (!m || m.status !== "done" || m.doc_paused_at) return null;
+  if (m.summary_state !== null && m.summary_state !== "sending") return null;
 
   let state: SummaryState;
   let recipients: Recipient[] = [];
@@ -102,6 +112,7 @@ export async function sendMeetingSummaries(meetingId: string, deps: SummaryDeps)
   let orgName = "";
   let people: SummaryPerson[] = [];
   let items: SummaryItem[] = [];
+  let unnamedVoices = 0;
   if (m.is_test) {
     state = "test";
   } else {
@@ -123,101 +134,128 @@ export async function sendMeetingSummaries(meetingId: string, deps: SummaryDeps)
     else if (!hasOwnNotes(items, m.agenda_roles)) state = "no_notes";
     else {
       const [peopleRows, speakers, members] = await Promise.all([
-        db.from("people").select("id, name, role, email, member_user_id, summary_selected, summary_unsubscribed_at").eq("org_id", m.org_id),
-        db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label").eq("meeting_id", m.id),
+        db
+          .from("people")
+          .select("id, name, role, email, member_user_id, summary_selected, summary_unsubscribed_at, summary_removed_at")
+          .eq("org_id", m.org_id),
+        db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label, needs_confirm").eq("meeting_id", m.id),
         orgMemberList(m.org_id),
       ]);
       people = must("summary: people", peopleRows) as SummaryPerson[];
-      const present = presentPeople({
+      const attendance = presentPeople({
         people,
         speakers: must("summary: speakers", speakers) as SummarySpeaker[],
         attendeeNames: items.filter((r) => r.section === "attendees" && !r.deleted_by_human).map((r) => r.text),
         startedBy: m.started_by,
       });
-      recipients = summaryRecipients({ mode, people, members, present });
-      state = recipients.length ? "sent" : "none";
+      unnamedVoices = attendance.unnamedVoices;
+      recipients = summaryRecipients({ mode, people, members, attendance });
+      state = recipients.length ? "sending" : mode === "missed" && !attendance.certain ? "uncertain" : "none";
     }
   }
 
-  // Claim: only one sender ever handles a meeting.
-  const claimed = must(
-    "summary: claim",
-    await db
-      .from("meetings")
-      .update({ summary_state: state, summary_at: deps.now().toISOString() })
-      .eq("id", m.id)
-      .eq("status", "done")
-      .is("summary_state", null)
-      .select("id"),
-  ) as unknown[];
-  if (!claimed.length) return null;
+  const stamp = { summary_at: deps.now().toISOString() };
+  if (state !== "sending") {
+    // Nothing to mail. A resumed run (`sending`) whose recipients are gone ends as sent.
+    const final: SummaryState = m.summary_state === "sending" ? "sent" : state;
+    const close = db.from("meetings").update({ summary_state: final, ...stamp }).eq("id", m.id).eq("status", "done");
+    const closed = must(
+      "summary: close",
+      await (m.summary_state === null ? close.is("summary_state", null) : close.eq("summary_state", "sending")).select("id"),
+    ) as unknown[];
+    if (!closed.length) return null;
+    await logEvent(m.id, "summary", { state: final, mode, recipients: 0, sent: 0, failed: 0, ...(unnamedVoices ? { unnamedVoices } : {}) });
+    return { state: final, sent: 0, failed: 0 };
+  }
+
+  // `sending`: claimed by this run (fresh) or resumed (a run that stopped at its deadline or died).
+  if (m.summary_state === null) {
+    const claimed = must(
+      "summary: claim",
+      await db.from("meetings").update({ summary_state: "sending", ...stamp }).eq("id", m.id).eq("status", "done").is("summary_state", null).select("id"),
+    ) as unknown[];
+    if (!claimed.length) return null;
+  }
 
   let sent = 0;
   let failed = 0;
-  if (state === "sent") {
-    const shared = new Set(
-      (must("summary: shares", await db.from("meeting_doc_shares").select("user_id").eq("meeting_id", m.id)) as { user_id: string }[]).map(
-        (s) => s.user_id,
-      ),
-    );
-    const origin = appOrigin();
-    const key = getEnv().TOKEN_ENC_KEY;
-    const starterName = people.find((p) => m.started_by && p.member_user_id === m.started_by)?.name ?? null;
-    const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-    let first = true;
-    for (const r of recipients) {
-      if (!first) await sleep(SEND_GAP_MS);
-      first = false;
-      // The ledger row first: a second sender (or a retry) never mails this person again.
-      const ledger = must(
-        "summary: ledger",
-        await db
-          .from("meeting_summary_sends")
-          .upsert({ meeting_id: m.id, person_id: r.person.id }, { onConflict: "meeting_id,person_id", ignoreDuplicates: true })
-          .select("person_id"),
-      ) as unknown[];
-      if (!ledger.length) continue;
-      const token = issueUnsubscribeToken(key, r.person.id);
-      const access = accessFor(r, m, shared, origin, starterName);
-      const email = renderSummaryEmail({
-        orgName,
-        startedAt: m.started_at,
-        recipientName: r.person.name,
-        missed: r.missed,
-        content: summaryContent(items, { agendaRoles: m.agenda_roles, people, forPerson: r.person }),
-        buttonHref: access.href,
-        accessNote: access.note,
-        settingsHref: r.isAdmin ? `${origin}/orgs/${m.org_id}#installningar` : null,
-        unsubscribeHref: `${origin}/sammanfattning/avsluta?t=${encodeURIComponent(token)}`,
-      });
-      let ok = false;
-      try {
-        ok = await deps.mailer.send({
-          to: r.email,
-          subject: email.subject,
-          text: email.text,
-          html: email.html,
-          headers: {
-            "List-Unsubscribe": `<${origin}/api/summaries/unsubscribe?t=${encodeURIComponent(token)}>`,
-            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-          },
-        });
-      } catch {
-        ok = false;
-      }
-      if (ok) sent++;
-      else failed++;
-      await db.from("meeting_summary_sends").update({ sent: ok }).eq("meeting_id", m.id).eq("person_id", r.person.id);
+  let stopped = false;
+  const shared = new Set(
+    (must("summary: shares", await db.from("meeting_doc_shares").select("user_id").eq("meeting_id", m.id)) as { user_id: string }[]).map(
+      (s) => s.user_id,
+    ),
+  );
+  const origin = appOrigin();
+  const key = getEnv().TOKEN_ENC_KEY;
+  const starterName = people.find((p) => m.started_by && p.member_user_id === m.started_by)?.name ?? null;
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const timeLeft = () => (opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity);
+  let mailed = false;
+  for (const r of recipients) {
+    // Stop cleanly before the deadline; the cron resumes `sending` meetings.
+    if (timeLeft() < SUMMARY_MIN_LEFT_MS) {
+      stopped = true;
+      break;
     }
+    // The ledger row first: a second sender (or a resumed run) never mails this person again.
+    const ledger = must(
+      "summary: ledger",
+      await db
+        .from("meeting_summary_sends")
+        .upsert({ meeting_id: m.id, person_id: r.person.id }, { onConflict: "meeting_id,person_id", ignoreDuplicates: true })
+        .select("person_id"),
+    ) as unknown[];
+    if (!ledger.length) continue;
+    if (mailed) await sleep(SEND_GAP_MS);
+    mailed = true;
+    const token = issueUnsubscribeToken(key, r.person.id);
+    const access = accessFor(r, m, shared, origin, starterName);
+    const email = renderSummaryEmail({
+      orgName,
+      startedAt: m.started_at,
+      recipientName: r.person.name,
+      missed: r.missed,
+      content: summaryContent(items, { agendaRoles: m.agenda_roles, people, forPerson: r.person }),
+      buttonHref: access.href,
+      accessNote: access.note,
+      settingsHref: r.isAdmin ? `${origin}/orgs/${m.org_id}#installningar` : null,
+      unsubscribeHref: `${origin}/sammanfattning/avsluta?t=${encodeURIComponent(token)}`,
+    });
+    let ok = false;
+    try {
+      ok = await deps.mailer.send({
+        to: r.email,
+        subject: email.subject,
+        text: email.text,
+        html: email.html,
+        headers: {
+          "List-Unsubscribe": `<${origin}/api/summaries/unsubscribe?t=${encodeURIComponent(token)}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+      });
+    } catch {
+      ok = false;
+    }
+    if (ok) sent++;
+    else failed++;
+    await db.from("meeting_summary_sends").update({ sent: ok }).eq("meeting_id", m.id).eq("person_id", r.person.id);
   }
-  await logEvent(m.id, "summary", { state, mode, recipients: recipients.length, sent, failed });
-  return { state, sent, failed };
+  const final: SummaryState = stopped ? "sending" : "sent";
+  if (!stopped) {
+    must("summary: done", await db.from("meetings").update({ summary_state: "sent", ...stamp }).eq("id", m.id).eq("summary_state", "sending"));
+  }
+  await logEvent(m.id, "summary", { state: final, mode, recipients: recipients.length, sent, failed });
+  return { state: final, sent, failed };
 }
 
 /** Best effort: never throws (the meeting's end must not depend on e-mail). */
-export async function trySendMeetingSummaries(meetingId: string, deps: SummaryDeps): Promise<SummaryResult | null> {
+export async function trySendMeetingSummaries(
+  meetingId: string,
+  deps: SummaryDeps,
+  opts: { deadlineAt?: Date } = {},
+): Promise<SummaryResult | null> {
   try {
-    return await sendMeetingSummaries(meetingId, deps);
+    return await sendMeetingSummaries(meetingId, deps, opts);
   } catch (e) {
     console.error(`summary ${meetingId}: ${(e as Error).message}`.slice(0, 300));
     return null;
@@ -230,14 +268,14 @@ export async function trySendMeetingSummaries(meetingId: string, deps: SummaryDe
  */
 export async function sendPendingSummaries(
   deps: SummaryDeps,
-  opts: { orgId?: string; left?: () => boolean } = {},
+  opts: { orgId?: string; left?: () => boolean; deadlineAt?: Date } = {},
 ): Promise<number> {
   const since = new Date(deps.now().getTime() - SUMMARY_SWEEP_WINDOW_MS).toISOString();
   let query = supabaseAdmin()
     .from("meetings")
     .select("id")
     .eq("status", "done")
-    .is("summary_state", null)
+    .or("summary_state.is.null,summary_state.eq.sending")
     .is("doc_paused_at", null)
     .gte("ended_at", since)
     .order("ended_at")
@@ -247,7 +285,7 @@ export async function sendPendingSummaries(
   let handled = 0;
   for (const r of rows) {
     if (opts.left && !opts.left()) break;
-    if (await trySendMeetingSummaries(r.id, deps)) handled++;
+    if (await trySendMeetingSummaries(r.id, deps, { deadlineAt: opts.deadlineAt })) handled++;
   }
   return handled;
 }
