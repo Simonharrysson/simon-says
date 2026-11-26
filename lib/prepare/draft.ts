@@ -78,7 +78,7 @@ export function buildDraft(input: {
   const fixed = mergeRequiredItems(input.profile);
   const tasks = input.carried.map((r) => ({
     source: sourceKey(r.carried_from_meeting ?? "", r.carried_from_id ?? r.id),
-    line: formatLine({ section: "action", text: r.text, owner: r.owner, due: r.due }, input.ctx),
+    line: formatLine({ section: "action", text: r.text, owner: r.owner ?? undefined, due: r.due ?? undefined }, input.ctx),
     on: true,
   }));
   const standing = (last: boolean): DraftItem[] =>
