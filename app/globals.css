@@ -9,11 +9,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Transitional: the pre-Tailwind stylesheets, layered under the utilities. */
-@import "./legacy.css" layer(components);
-@import "./views.css" layer(components);
-@import "../components/live/live.css" layer(components);
-
 /* Light/dark follows the operating system, as before (no theme toggle). */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
@@ -317,6 +312,8 @@
   button,
   select {
     caret-color: var(--blue);
+    /* Form controls don't inherit the body's tracking (as in the browser's own stylesheet). */
+    letter-spacing: normal;
   }
 
   button:not(:disabled),

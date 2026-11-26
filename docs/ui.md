@@ -1,6 +1,7 @@
 # Simon Says — UI
 
 The design system, page structure and live-meeting components. Swedish UI, English code.
+Built with **shadcn/ui on Tailwind CSS v4**, styled in Simon Says' own Geist-based look (below).
 Preview everything with fake data at **`/design`** (dev only; production needs `DESIGN_PREVIEW=1`).
 Screenshots: `docs/ui/` (`<state>-<width>-<scheme>.png`, fake data, Next dev badge hidden) show the
 earlier whiteboard design and are out of date since the Geist restyle. The design review and its
@@ -11,21 +12,21 @@ captures are in `docs/ui/review/`.
 The visual language follows Geist, Vercel's open design system: neutral greys, hairlines, small
 radii, Geist Sans and Geist Mono, and colour only where it means status. It is a design language,
 not a clone. Simon Says keeps its own name and logo, and uses no Vercel marks or assets. (Until
-2026-11-26 the UI used a "whiteboard" design; the class name `board` and the token
-names `--board`, `--rail`, `--ink` are left over from it and now mean what the table below says.)
+2026-11-26 the UI used a "whiteboard" design; the token names `--board`, `--rail`, `--ink` are
+left over from it and now mean what the table below says.)
 
 - **Light = white surfaces on a near-white page, dark = near-black surfaces on black**
   (follows `prefers-color-scheme`).
 - **Colour is status only:** blue (links, focus, info, action items, "who is this"),
   **green** (decisions, success, consent given), **red** (live/recording, destructive, needs
-  attention), **amber** (warnings that fix themselves, `banner--warning`). Everything else is grey.
+  attention), **amber** (warnings that fix themselves, `Banner tone="warning"`). Everything else is grey.
   Red is kept for the hot state: if something is red, it is live or it needs you. Trash icons in
-  lists are grey at rest (`danger-ghost`) and turn red only on hover/focus.
+  lists are grey at rest (Button `variant="danger-ghost"`) and turn red only on hover/focus.
 - **No status dots.** The words carry the status ("Transkriberar", "Pausat"); a tint on
-  the badge or headline only supports them. Lists use en-dash markers, not discs. (The `.magnet`
-  dot was removed 2026-11-26.) The mic level ring stays: it follows the live mic.
+  the badge or headline only supports them. Lists use en-dash markers, not discs. (The old `.magnet`
+  dot was removed 2026-11-26.) Lists that need a marker use the `list-dash` utility. The mic level ring stays: it follows the live mic.
 - **The logo** is the wordmark "Simon Says" set in Instrument Serif 400 (`next/font/google`,
-  `--font-wordmark`, used only by `.wordmark`). No mark, no dot.
+  `--font-wordmark`, Tailwind `font-logo`, used only by `Wordmark`). No mark, no dot.
 - **The Google Doc keeps its own look.** Wherever we draw the Doc (landing, edit demo, format
   preview) it is white paper in a system face, so people recognise "that's the Doc", not our UI.
 - Refused on purpose: gradients, glass, cards-with-icons grids, eyebrow labels, heavy shadows.
@@ -43,6 +44,27 @@ names `--board`, `--rail`, `--ink` are left over from it and now mean what the t
    but every server-side error code still has a designed message.
 
 ## Tokens (`app/globals.css`)
+
+The raw tokens below live on `:root` (dark values under `prefers-color-scheme: dark`, as before:
+there is no theme toggle, and Tailwind's `dark:` variant follows the same media query). Tailwind
+sees them through `@theme`, so every token is a utility: `bg-board`, `bg-surface`, `bg-sunk`,
+`border-line`, `border-control`, `border-rail`, `text-ink` / `text-ink-2` / `text-ink-3`,
+`text-on-ink`, `text-blue` / `bg-blue-wash` (same for green, red, amber), `text-on-red`,
+`text-on-green`. Tailwind's default colour palette is switched off (`--color-*: initial`), so
+`text-red-500` and friends don't exist: every colour goes through a token.
+
+shadcn's role variables are mapped onto the same tokens, so shadcn components look like ours:
+
+| shadcn | token | | shadcn | token |
+|---|---|---|---|---|
+| `--background` | `--board` | | `--muted` | `--surface-sunk` |
+| `--foreground` | `--ink` | | `--muted-foreground` | `--ink-2` |
+| `--card`, `--popover` | `--surface` | | `--accent` | `--surface-sunk` |
+| `--primary` | `--ink` | | `--destructive` | `--red` |
+| `--primary-foreground` | `--on-ink` | | `--border` | `--line` |
+| `--secondary` | `--surface` | | `--input` | `--control-border` |
+| `--ring` | `--focus` | | `--radius` | 8px |
+
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
@@ -71,27 +93,36 @@ red-wash 5.90. `--ink-3` 5.13 on sunk (light). White on the red button 5.37 (lig
 on board, 3.41 on sunk. Hairlines between rows and cards (`--line`) stay faint on purpose: they
 are decorative, not control boundaries.
 
-**Type.** Geist Sans for everything; Geist Mono only for measurements: timer, timestamps, speaker
+**Type.** Geist Sans for everything (`font-sans`); Geist Mono only for measurements: timer, timestamps, speaker
 labels, invite link, ids. Both via `next/font/google` (`Geist`, `Geist_Mono`; versions pinned by
 the pinned `next`; downloaded at build, served from our domain, no Google request from visitors).
-Scale: 13 / 14 / **16 body** / 18 / 24 / 32 / display `clamp(36px → 56px)`. Headings 600,
+Scale (Tailwind `text-*`, our own, without line heights so text keeps inheriting the body's 1.5):
+`text-2xs` 12 (badges) · `text-xs` 13 · `text-sm` 14 · **`text-base` 16 body** · `text-lg` 18 ·
+`text-xl` 24 · `text-2xl` 32 · `text-display` `clamp(36px → 56px)`. Note `text-xl`/`text-2xl`
+are 24/32, not Tailwind's defaults. Headings 600,
 tracking −0.025em (display −0.045em, section titles −0.035em), `text-wrap: balance`; body
 −0.006em. Buttons, labels and row titles 500.
 
-**Space** 4px base: `--s-1..9` = 4, 8, 12, 16, 24, 32, 48, 64, 96. **Radii** 6 (controls, chips),
-8 (cards, banners, dialogs), round only for badges and the mic ring.
+**Space** 4px base: Tailwind's spacing scale (`gap-2` = 8, `gap-6` = 24, `gap-8` = 32, `p-6` = 24).
+Page width `max-w-page` (72rem) with `px-gutter` (`clamp(16px → 32px)`). **Radii** `rounded-md` 6
+(controls, chips), `rounded-lg` 8 (cards, banners, dialogs), `rounded-full` only for badges and the
+mic ring. Breakpoints are the old ones, written as `max-[52rem]:`, `max-[30rem]:` etc. (`max-md:` =
+under 48rem).
 **Controls** sm 32px, md 40px, lg 48px (lg stays big on purpose: Paus/Fortsätt on the live page);
 on screens under 48rem every button and input is ≥ 44px. Primary = ink on light, white on dark
 (`--ink` / `--on-ink`); secondary = surface with a `--control-border` outline; ghost = transparent.
 
-**Depth.** Cards are flat: `--shadow-panel` is a 1px `--line` ring (a box-shadow, so it adds no
-size). Only floating things get a real shadow: `--shadow-lift` (dialogs, popovers, menus) = ring +
+**Depth.** Cards are flat: `shadow-panel` is a 1px `--line` ring (a box-shadow, so it adds no
+size). Only floating things get a real shadow: `shadow-lift` (dialogs, popovers, menus) = ring +
 a small soft drop. Dialog footers sit on `--board` behind a hairline.
 
-**Motion.** `--ease-out` = `cubic-bezier(0.16,1,0.3,1)`; 120 ms hovers, 200 ms enters.
+**Motion.** `ease-out` = `cubic-bezier(0.16,1,0.3,1)`; 120 ms hovers (`duration-120`), 200 ms
+enters. Named animations in the theme: `animate-write` (landing lines), `animate-caret`,
+`animate-plate-in`, `animate-notice-in`, `animate-scope-tick`, `animate-shimmer`.
 One authored moment: the landing demo's notes **write themselves** line by line (clip-path
 wipe). Elsewhere: listening ring on the mic, name plates dropping in.
-`prefers-reduced-motion` turns all of it off; content is always visible without animation.
+`prefers-reduced-motion` turns all of it off (one global rule at the end of `globals.css`, plus
+`motion-reduce:` on the mic ring); content is always visible without animation.
 
 **Browser surfaces.** Themed selection, focus ring (2px blue, offset 2; inputs get a 2px blue
 ring outside a 1px gap), caret, scrollbars.
@@ -104,29 +135,63 @@ do ("Mikrofonen är blockerad — klicka på hänglåset… välj Tillåt"). Rea
 needed ("Vi försöker igen automatiskt, du behöver inte göra något"). Always say the Google Doc
 stays in Drive when deleting.
 
-## Primitives (`components/ui/`)
+## Components (`components/ui/`)
 
-| Component | Notes |
-|---|---|
-| `Button`, `ButtonLink` | `variant`: primary · secondary · ghost · danger · danger-quiet · danger-ghost (list trash icons); `size` sm/md/lg; `loading` (spinner, aria-busy, disabled); `icon`; `iconOnly` (label becomes visually hidden + title); `block`. |
-| `SubmitButton` | Button + `useFormStatus` → loading while its form's server action runs; `pendingLabel`. |
-| `Field`, `Check` | Label/hint/error wired with `aria-describedby` / `aria-invalid`; `Check` = checkbox with title + explanation. |
-| `Banner` | `tone` info/success/warning/danger/neutral, `title`, `action`; role alert for warning/danger, status otherwise (`live={false}` for static). |
-| `Badge` | label (pill), tinted by tone: neutral/live (red)/alert (static red, "needs you")/success/info. |
-| `EmptyState` | dashed outline, title, body, optional action. |
-| `Panel` | sheet with title/actions; `flush` for edge-to-edge lists. |
-| `ListRow` | leading · title/meta · actions; `href` makes the row a link. Use in `<ul class="list">`. |
-| `ConfirmAction` | trigger + native `<dialog>` (focus trap, Esc, backdrop click). Posts `hidden` fields to a server action unchanged; `requireText` for typed confirmation. |
-| `CopyField` | read-only value + Kopiera; clipboard fallback selects the text. |
-| `PageHeader`, `SiteHeader`, `SiteFooter`, `Wordmark`, `icons` | page chrome; authored 24px icon set (1.75 stroke). |
+Two kinds of files live here:
+
+- **shadcn primitives**, lowercase (`button.tsx`, `badge.tsx`, `input.tsx`, `label.tsx`,
+  `native-select.tsx`, `checkbox.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `skeleton.tsx`).
+  They came from `npx shadcn add` (style `radix-nova`, Radix underneath) and were then restyled
+  to the tokens. They are our code now: edit them, don't re-add them over the top.
+- **App components**, PascalCase, built on the primitives and keeping their old APIs.
+
+| Component | Built on | Notes |
+|---|---|---|
+| `Button`, `ButtonLink` (`button.tsx`) | shadcn Button | `variant`: primary · secondary · ghost · danger · danger-quiet · danger-ghost (list trash icons); shadcn's `default`/`outline`/`destructive`/`link` are aliases. `size` sm/md/lg; `loading` (spinner, aria-busy, disabled); `icon`; `iconOnly` (label visually hidden + title); `block`; `asChild`. `buttonVariants()` styles a plain `<a>`. |
+| `SubmitButton` | Button | `useFormStatus` → loading while its form's server action runs; `pendingLabel`. |
+| `Field`, `Check` (`Field.tsx`) | Label, Input, Checkbox | label/hint/error wired with `aria-describedby` / `aria-invalid`; `Check` = Radix checkbox with title + explanation (`checked` + `onCheckedChange`, or `name` + `defaultChecked` in a form: it posts `on` like a native checkbox). |
+| `NativeSelect` | shadcn NativeSelect | a real `<select>` drawn like an Input with a chevron (forms, `defaultValue`, keyboard and phone pickers unchanged). |
+| `Banner` | shadcn Alert | `tone` info/success/warning/danger/neutral, `title`, `action`, `loud` (the stopped live meeting); role alert for warning/danger, status otherwise (`live={false}` for static). |
+| `Badge` (`badge.tsx`) | shadcn Badge | label (pill), tinted by `tone`: neutral/live (red)/alert (static red, "needs you")/success/info. |
+| `Panel` | shadcn Card | sheet with title/actions; `flush` for edge-to-edge lists (`panelIntroClass`, `panelPadClass`, `panelFootClass` for the padded bits). |
+| `ListRow` | — | leading · title/meta · actions; `href` makes the row a link (`group/row` for hover effects). Use inside a `<ul>`. `rowClass` & co. for hand-built rows. |
+| `ConfirmAction` | shadcn Dialog | trigger + Radix dialog (focus trap, Esc, backdrop click, focus back to the trigger). Posts `hidden` fields to a server action unchanged; `requireText` for typed confirmation. |
+| `EmptyState`, `CopyField`, `PageHeader`, `SiteHeader` (+ `navLinkClass`), `SiteFooter`, `Wordmark` | — | page chrome. |
+| `Skeleton` | shadcn Skeleton | the grey shimmer in `app/(app)/loading.tsx`. |
+| `icons.tsx` | — | the authored 24px icon set (1.75 stroke) and Google's G. shadcn's lucide imports are swapped for these; `lucide-react` is not installed. |
+
+Not added (nothing uses them yet): shadcn `textarea`, `tooltip`, `separator`, `alert-dialog`
+(every confirm is a `Dialog`, because an alert dialog can't be closed from the backdrop). Icon-only
+buttons keep `title` + a visually hidden label instead of a tooltip.
+
+### Styling rules
+
+- Utilities in `className`, merged with `cn()` from `lib/utils.ts` (clsx + tailwind-merge, taught
+  our theme keys so `text-2xs`, `shadow-panel`, `max-w-page`, `px-gutter` merge correctly).
+- No new stylesheets: tokens and the base layer only in `globals.css`. Repeated class lists become
+  exported constants next to their component (`hintClass`, `rowClass`, `navLinkClass`,
+  `docPaperClass` in `components/views/doc-paper.ts` for the Google-Doc paper).
+- Colour only through tokens; status colours only for status; no dots.
+- Focus: the base layer gives every focusable element the 2px blue ring (offset 2); inputs use a
+  2px ring outside a 1px gap instead. Don't add shadcn's `ring-ring/50` styles.
+
+### Adding a shadcn component
+
+1. `npx shadcn@latest add <name>` (it reads `components.json`; if a lowercase file would collide
+   with a PascalCase one on macOS, add it under a temporary name first).
+2. In the new file: import `cn` from `@/lib/utils` (not `cn`), swap lucide icons for `icons.tsx`,
+   drop `dark:` classes (our tokens already switch), replace shadcn's colours/radii/rings with ours
+   (`bg-surface`, `border-control`, `rounded-md`, `shadow-lift`…), remove the `size-*` defaults that
+   don't match 40/32/48px controls.
+3. Pin any new dependency to an exact version in `package.json`.
+4. Show it on `/design?vy=primitives` and check light and dark.
 
 Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) renders a
 presentational view in `components/views/` (`LandingView`, `LoginView`, `OrgsView`,
 `OrgDetailView`, `JoinView`, `AccountView`, `StatusView`). All `?fel=`/`?klart=` codes map in
 `lib/ui/messages.ts`.
 
-Layout helpers: `.stack` with `stack--2…6` for gaps on the space scale (no inline gap styles).
-Touch targets: every control is ≥ 44px on screens under 48rem (`btn--sm` grows there).
+Touch targets: every control is ≥ 44px on screens under 48rem (`max-md:min-h-11`; Button does it).
 Term: always **förening/föreningar** in copy (routes and codes keep `org`).
 
 ## Live meeting components (`components/live/`)
@@ -201,7 +266,8 @@ Building blocks (usable on their own):
   "Någon annan". Pickers are closed by default. Speakers are keyed by `(elSessionId, speakerLabel)`
   since labels restart on a new ElevenLabs session.
 - `ResumeMeeting {startedAt, orgName, onResume, onEnd?, resuming?}` — "Fortsätt mötet"; "Avsluta mötet" asks first.
-- `LiveDialog` — the shared confirm dialog (safe choice first and focused; `stayVariant="primary"`
+- `LiveDialog` — the shared confirm dialog, a shadcn Dialog opened through a `LiveDialogHandle` ref
+  (`showModal()` / `close()`) (safe choice first and focused; `stayVariant="primary"`
   in the leave dialog, where leaving is the risky choice).
 
 Weight order on the live page: Paus/Fortsätt (lg) is the strongest control; Stämmer and Välj are
@@ -330,5 +396,8 @@ transcript lines written afterwards and to the notes from the next tick.
 
 ## Dependencies
 
-No UI kit. React + plain CSS custom properties (three global stylesheets: `app/globals.css`
-tokens + primitives, `app/views.css` pages, `components/live/live.css`). Fonts via `next/font`.
+Tailwind CSS v4 (`tailwindcss`, `@tailwindcss/postcss`, `postcss.config.mjs`), shadcn/ui
+(`components.json`; Radix through `radix-ui`, variants through `class-variance-authority`,
+`clsx` + `tailwind-merge` for `cn()`, `tw-animate-css` for the dialog's enter animation). All
+pinned to exact versions. One stylesheet: `app/globals.css` (tokens, theme, base layer). Fonts via
+`next/font`.
