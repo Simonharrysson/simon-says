@@ -172,7 +172,10 @@
     "starting": "Starting…",
     "start": "Start the meeting",
     "tickFirst": "Tick the box above first.",
-    "agendaFirst": "Choose an agenda or create a new document first."
+    "agendaFirst": "Choose an agenda or create a new document first.",
+    "silent": "The microphone hasn’t heard anything yet. Say something, or test it under Meeting settings.",
+    "settings": "Meeting settings",
+    "howItWorks": "How it works"
   },
   "meeting": {
     "backTo": "Back to ",
@@ -221,7 +224,13 @@
     "pickFolderNamed": "Choose the meeting folder “{folder}”",
     "pickFolder": "Choose the meeting folder",
     "folderSaveFailed": "The meeting folder couldn't be saved. Try again.",
-    "goalsTitle": "Goals to raise"
+    "goalsTitle": "Goals to raise",
+    "lineTitle": "The meeting",
+    "newInFolder": "New document in the meeting folder, format <strong>{format}</strong>",
+    "looking": "Looking for an agenda…",
+    "change": "Change",
+    "changeLabel": "Change document or format",
+    "formatHint": "The format sets the document’s headings and how the notes are written."
   },
   "controller": {
     "tabStopped": "⚠ Stopped – Simon Says",

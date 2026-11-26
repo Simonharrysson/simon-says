@@ -304,17 +304,23 @@ or behind "Visa 1 varning till ▾" when something red is already on screen. Sta
 | `speakers`, `people` | `Speaker[]`, `PersonOption[]` | speaker list + one-tap names |
 | `nameRound` | `NameRoundEntry[]` | names heard during the name round |
 | `startError` | `mic-denied \| mic-missing \| start-failed \| limit \| null` | consent-step error |
-| `micLevel`, `onMicCheck` | number 0–1 \| null, () => void | optional consent mic check: button, then a 5-bar meter "Hör dig" |
+| `micLevel`, `onMicCheck`, `onMicCheckStop` | number 0–1 \| null, () => void, () => void | consent mic check: started by the consent tick (a gesture; `capture.ts` must open the mic from one), stopped on untick; the 5-bar meter "Hör dig" (or **Testa mikrofonen**) sits under Inställningar för mötet |
 | `busy`, `autoStopped` | boolean | request in flight; ended by the 4 h limit |
 | callbacks | `onStart, onPause, onResume, onStop, onReLogin, onAssignSpeaker(key, choice), onNameRoundDone, onNameRoundSkip?, onResumeMeeting, onEndUnfinished?, onRetry, onLeave?` | `onLeave` defaults to navigating to `orgHref` |
 
 Building blocks (usable on their own):
 
-- `ConsentStep {orgName, shareTranscript, onStart, starting?, error?, micLevel?, onMicCheck?, agenda?, agendaConfirmed?, agendaDoc?, onNewDocInstead?}` —
-  Start is disabled until "Alla i rummet vet att mötet transkriberas och kan be om paus" is ticked
-  and the agenda choice is confirmed. `agenda` (the `AgendaStep`) renders under the checkbox;
-  `agendaDoc` switches the Doc fact to "skrivs i den valda dagordningen"; `onNewDocInstead` puts
-  "Skapa nytt dokument i stället" in the error banner (the controller passes it for `agenda_*` errors).
+- `ConsentStep {orgName, shareTranscript, onStart, starting?, error?, micLevel?, onMicCheck?, onMicCheckStop?, agenda?, agendaConfirmed?, agendaDoc?, onNewDocInstead?, settingsOpen?}` —
+  the one-screen start (ten people are waiting): förening + "Innan ni börjar", then `agenda` (the
+  `AgendaStep`'s one line with **Byt**, or Privat's `ContextPicker` + its privacy line), errors, one
+  consent checkbox "Alla i rummet vet att mötet transkriberas och kan be om paus", big **Starta
+  mötet**. Start is disabled until the tick and a confirmed agenda choice. Ticking starts the mic
+  check; only a problem shows (the mic error banner, or after 8 s of silence a quiet "Mikrofonen
+  hör inget än" line, never blocking). Everything else is a closed `<details>` **Inställningar
+  för mötet**: the mic meter / Testa mikrofonen and a nested `<details>` "Så fungerar det" (laptop, Doc fact, Paus,
+  locket). `agendaDoc` switches the Doc fact to "skrivs i den valda dagordningen";
+  `onNewDocInstead` puts "Skapa nytt dokument i stället" in the error banner (the controller
+  passes it for `agenda_*` errors).
 - `MeetingControls {status: live|paused|ending, onPause, onResume, onStop, busy?, canPause?}` —
   big Paus; Avsluta asks once (dialog) before `onStop`; `canPause={false}` leaves only Avsluta.
 - `MeetingTimer {elapsedMs, paused?, limitMs = 4 h, size?}` — mm:ss / h:mm:ss + allowance rail (red in the last 15 min).
@@ -386,31 +392,41 @@ name round never reopens.
 
 ## Agenda step and the Google Picker (meeting formats A11)
 
-The consent step asks which Doc the meeting runs in. `AgendaStep` (`components/live/AgendaStep.tsx`)
+The consent step says which Doc the meeting runs in, as one line. `AgendaStep` (`components/live/AgendaStep.tsx`)
 is the container: it reads `GET /api/orgs/<id>/agenda-candidates` (the förening's meeting folder,
 read with the starter's own Google grant; Docs already used by a meeting are left out), opens the
 Google Picker (`usePicker()` in `components/google/Picker.tsx`, token from
 `POST /api/google/picker-token`) and reports an `AgendaChoice` through `onChange`.
 `AgendaStepView` is the presentational part (no fetching), used by `/design`.
 
-| State | Shows | Confirms |
-|---|---|---|
-| suggestion | blue "Förslag: <Doc-namn>" · **Använd** · Välj annan · Skapa nytt dokument | any of them |
-| none (no folder, or nothing new in it) | "Ingen dagordning – skapa nytt dokument i formatet <X>" · **Skapa nytt dokument** · Välj dagordning | either |
-| folder not reachable (folder set, this starter's grant has never opened it) | explanation naming the folder (`orgs.meeting_folder_name`, 0030) · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` with `grantOnly: true`, so the start screen never changes the folder, admins included → reload) · Välj dagordning · Skapa nytt dokument | a pick or Skapa nytt |
-| picker off (`GOOGLE_PICKER_API_KEY`/`GOOGLE_PROJECT_NUMBER` unset) | green "Nytt dokument i formatet <X>" + "Google-väljaren är inte inställd än." | already confirmed (as before A11) |
+The line ("Mötet") never waits: a **new Doc is chosen from the start** ("Nytt dokument i
+mötesmappen, format <X>" once the candidates say the folder is reachable, else "Nytt dokument i
+formatet <X>"), with a quiet "Letar efter dagordning…" under it while the candidates load (15 s
+timeout). Started from a calendar event, "Från kalendern: <titel>" stands above it. Results update
+the line in place:
 
-Start stays disabled until the choice is confirmed: a suggestion is never used on its own. Once
-confirmed, a green line shows the choice ("Dagordning: <namn>" or "Nytt dokument i formatet
-<X>") with Välj annan / Skapa nytt dokument / Välj dagordning to change it. With an agenda Doc and a
-förening that shares transcripts, "Lägg transkriptet i dokumentet?" appears (default off). The
-"Format" `<select>` (default first, marked "(förvalt)") overrides the format; the default sends
-nothing, another standard format sends `formatKind`, a learned version `formatProfileId`. Picker
-and request problems show as one polite line under the step (`aria-live`). Doc names are the
-förening's text: shown in the UI, never logged. A failed start with an `agenda_*` code shows the
-server's Swedish message with "Skapa nytt dokument i stället", which remounts the step on a
-confirmed new Doc and keeps the format override. The doc Picker shows the meeting folder first
-(when set) and all Docs as a second view.
+| Found | Line | Under it (one tap) |
+|---|---|---|
+| today's prepared agenda, editable by this starter (`autoPickPrepared`, Swedish date) | "Dagordning: <namn>" + "Förberedd för …" — picked by itself (no focus move); never over a user's choice or after "Skapa nytt dokument i stället" | — |
+| an upcoming prepared agenda, or one made with another account | new Doc | "Starta med dagordningen från <dag>" · **Använd** (or **Öppna i Google-väljaren** + why) |
+| suggestion | new Doc | "Förslag: <Doc-namn>" · **Använd** (a guess is never used on its own) |
+| folder not reachable (folder set, this starter's grant has never opened it) | new Doc | explanation naming the folder (`orgs.meeting_folder_name`, 0030) · **Använd mötesmappen** (folder Picker → `POST /api/orgs/<id>/meeting-folder` with `grantOnly: true`, so the start screen never changes the folder → reload) |
+| none / read failed | new Doc | the polite problem line, if any |
+
+**Byt** (ghost, `aria-expanded`, name "Byt dokument eller format") opens an inline panel (not a
+modal: the Google Picker opens over it): Välj dagordning / Välj annan (Picker), Skapa nytt
+dokument, "Google-väljaren är inte inställd än." when off, "Lägg transkriptet i dokumentet?" (an
+agenda Doc and a förening that shares transcripts; default off), "Mål att ta upp" (a new Doc in a
+format), and the "Format" `<select>` (default first, marked "(förvalt)", with a one-line hint;
+hidden for a prepared agenda, which runs in its own format). A choice folds the panel and moves
+focus to the line. The default format sends nothing, another standard format sends `formatKind`,
+a learned version `formatProfileId`. Picker and request problems show as one polite line
+(`aria-live`). Doc names are the förening's text: shown in the UI, never logged. A failed start
+with an `agenda_*` code shows the server's Swedish message with "Skapa nytt dokument i stället",
+which remounts the step on a new Doc (no auto-pick) and keeps the format override. The doc Picker
+shows the meeting folder first (when set) and all Docs as a second view. With the Picker off
+(`GOOGLE_PICKER_API_KEY`/`GOOGLE_PROJECT_NUMBER` unset) the same line shows; only a prepared
+agenda can be offered or picked.
 
 `FormatCard` (the "Mötesformat" card) leads with the state: the format's name, one grey line
 ("Anpassat 2026-11-02 · mötesmapp: Verksamhetsår 2026-2027"; "mötesmapp vald" for a folder picked
@@ -425,7 +441,9 @@ One change is open at a time; its progress, error (Försök igen / Avbryt) or ed
 card, and focus returns to Ändra when it closes. Flow state lives in `useFormatFlow`
 (`FormatEditor.tsx`) and `useMeetingFolderPicker`.
 `/design`: `format-card-admin`, `format-card-full`, `format-card-picker-off`, `format-card-member`,
-`live-agenda-suggestion`, `live-agenda-none`, `live-agenda-folder`, `live-agenda-off`.
+`live-consent`, `live-consent-settings`, `live-consent-silent`, `live-mic-denied`, `live-agenda-loading`,
+`live-agenda-today`, `live-agenda-calendar`, `live-agenda-suggestion`, `live-agenda-none` (Byt open),
+`live-agenda-folder`, `live-agenda-off`, `live-agenda-new-goals`.
 
 ### Learning a format (B2)
 
@@ -565,9 +583,10 @@ folder), shared with the members, the format's skeleton with the chosen items; "
 lines are written by the notes engine (`ss-prep-<id>-c<n>`), so the meeting adopts them and writes
 "✓ klart" in the same line. Preparing again changes only Simon Says' untouched lines.
 
-**Start screen.** `AgendaStep` view state `prepared` comes first: "Starta med dagordningen från
-<tisdag 1 december> kl. 18.00", grey "<typ> · <Doc-namn>", **Använd** · Välj annan · Skapa nytt
-dokument. No format select (the prepared format is used). If the starter's Google account can't edit it
+**Start screen.** Today's prepared agenda is the meeting: the line picks it by itself
+(`live-agenda-today`). An upcoming one is offered under the line: "Starta med dagordningen från
+<tisdag 1 december> kl. 18.00", grey "<typ> · <Doc-namn>", **Använd**. No format select once it
+is used (the prepared format is used). If the starter's Google account can't edit it
 yet (prepared by someone else, drive.file): a line saying so and **Öppna i Google-väljaren**. The
 Picker-off fallback shows it too. `/design`: `org-start`, `org-prepared`, `prepare-*` (incl. `prepare-draft-import`,
 `-no-meeting`, `-too-old`), `live-agenda-prepared`,

@@ -72,6 +72,10 @@ export interface LiveMeetingProps {
   /** Consent step mic check: input level 0–1 while it runs (see ConsentStep). */
   micLevel?: number | null;
   onMicCheck?: () => void;
+  /** Consent step: the consent was unticked, let go of the mic. */
+  onMicCheckStop?: () => void;
+  /** /design: "Inställningar för mötet" open. */
+  settingsOpen?: boolean;
   /** Consent step: the agenda step (AgendaStep) and its state; see ConsentStep. */
   agenda?: ReactNode;
   agendaConfirmed?: boolean;
@@ -134,6 +138,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           errorText={p.startErrorText}
           micLevel={p.micLevel}
           onMicCheck={p.onMicCheck}
+          onMicCheckStop={p.onMicCheckStop}
+          settingsOpen={p.settingsOpen}
           agenda={p.agenda}
           agendaConfirmed={p.agendaConfirmed}
           agendaDoc={p.agendaDoc}
