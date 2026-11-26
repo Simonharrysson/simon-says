@@ -23,8 +23,8 @@
   "undo": "Ångra",
   "saving": "Sparar…",
   "docWritten": "Klar, och ”✓ klart” står nu i dokumentet.",
-  "docLocked": "Klar här. Bocka av i dokumentet också: raden har ändrats där, så vi rör den inte.",
-  "docFailed": "Klar här. Vi kunde inte skriva i dokumentet just nu, så bocka av där också.",
+  "docLocked": "Klar här. <strong>Bocka av i dokumentet också</strong>: raden har ändrats där, så vi rör den inte.",
+  "docFailed": "Klar här. Vi kunde inte skriva i dokumentet just nu, så <strong>bocka av där också</strong>.",
   "openDoc": "Öppna dokumentet",
   "saveFailed": "Det gick inte att spara. Försök igen.",
   "forbidden": "Bara den som har uppgiften, eller en admin i föreningen, kan bocka av den.",
@@ -49,7 +49,7 @@
   "meeting": {
     "metaTitle": "Mötet",
     "back": "Tillbaka till {name}",
-    "summary": "{decisions} och {tasks}, varav {done} klara.",
+    "summary": "{decisions} och {tasks}, {done, plural, =0 {ingen klar än} one {# klar} other {# klara}}.",
     "summaryNoTasks": "{decisions}, inga uppgifter.",
     "decisionsTitle": "Beslut",
     "tasksTitle": "Uppgifter",
@@ -60,5 +60,7 @@
     "docHint": "Hela protokollet, med allt som sades och skrevs, finns i dokumentet.",
     "canTickHint": "Du kan bocka av dina egna uppgifter här.",
     "adminTickHint": "Som admin kan du bocka av alla uppgifter här."
-  }
+  },
+  "openCount": "{count, plural, one {# öppen uppgift} other {# öppna uppgifter}}",
+  "overdueCount": "{count, plural, one {# försenad} other {# försenade}}"
 }

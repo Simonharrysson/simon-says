@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { dueDayLabel, isOverdue, meetingDayLabel, nextDay, type MyTask } from "@/lib/home/tasks";
 import { cn } from "@/lib/utils";
@@ -69,9 +70,133 @@ export function MyTasks({
   const locale = useLocale() === "en" ? "en" : "sv";
   const [filter, setFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(initialShowDone);
+  const { states, tick, undo } = useTicks(save, initialStates);
+  const switchId = useId();
+
+  // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
+  const doneHere = (task: MyTask) => {
+    const st = states[task.key];
+    return Boolean(st && st.kind !== "error");
+  };
+  const openTasks = tasks.filter((x) => !x.done);
+  const spaces = useMemo(() => {
+    const out = new Map<string, { id: string; name: string; count: number }>();
+    for (const x of tasks) {
+      if (x.done) continue;
+      const name = x.spaceKind === "privat" ? t("privat") : x.spaceName;
+      const s = out.get(x.spaceId) ?? { id: x.spaceId, name, count: 0 };
+      s.count++;
+      out.set(x.spaceId, s);
+    }
+    return [...out.values()];
+  }, [tasks, t]);
+  const chips = [{ id: "all", name: t("all"), count: openTasks.length }, ...spaces];
+  const inFilter = (x: MyTask) => filter === "all" || x.spaceId === filter;
+  const doneShown = tasks
+    .filter((x) => x.done)
+    .sort((a, b) => b.meetingAt.localeCompare(a.meetingAt))
+    .slice(0, MAX_DONE_SHOWN);
+  const visible = [...openTasks, ...(showDone ? doneShown : [])].filter(inFilter);
+  const filterName = spaces.find((s) => s.id === filter)?.name ?? "";
+  const hasDone = tasks.some((x) => x.done);
+
+  const shownOpen = openTasks.filter(inFilter);
+  const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {(spaces.length > 1 || hasDone) && (
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+          {spaces.length > 1 ? (
+            <>
+              {/* Phones: one labelled select (the phone's own picker); wider screens: every space as a toggle. */}
+              <label className="flex w-full flex-col gap-1 text-sm font-medium md:hidden">
+                {t("filterLabel")}
+                <NativeSelect value={filter} onChange={(e) => setFilter(e.target.value)}>
+                  {chips.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {t("chip", { name: s.name, count: s.count })}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
+              <div role="group" aria-label={t("filterLabel")} className="flex flex-wrap gap-2 max-md:hidden">
+                {chips.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    aria-pressed={filter === s.id}
+                    onClick={() => setFilter(s.id)}
+                    className={cn(
+                      "inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium transition-colors duration-120",
+                      filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
+                    )}
+                  >
+                    {t("chip", { name: s.name, count: s.count })}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <span />
+          )}
+          {hasDone && (
+            <label htmlFor={switchId} className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
+              <Switch id={switchId} checked={showDone} onCheckedChange={setShowDone} />
+              {t("showDone")}
+            </label>
+          )}
+        </div>
+      )}
+
+      {shownOpen.length > 0 && (
+        <p className="text-sm text-ink-2" aria-live="polite">
+          {t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })}
+          {overdueCount > 0 && (
+            <>
+              {" · "}
+              <span className="font-medium text-red">{t("overdueCount", { count: overdueCount })}</span>
+            </>
+          )}
+        </p>
+      )}
+      {visible.length === 0 ? (
+        <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
+          {filter !== "all" ? (
+            <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
+          ) : (
+            <>
+              <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
+              <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
+            </>
+          )}
+        </div>
+      ) : (
+        <ul aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
+          {visible.map((task) => (
+            <TaskRow
+              key={task.key}
+              task={task}
+              state={states[task.key]}
+              checked={task.done || doneHere(task)}
+              today={today}
+              locale={locale}
+              docUrl={docs[task.meetingId] ?? null}
+              meetingHref={meetingHrefs[task.meetingId] ?? null}
+              onTick={() => tick(task)}
+              onUndo={() => undo(task)}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Ticks with a 5 s undo, saved when the time runs out (or right away when the page closes). */
+export function useTicks(save: SaveTick, initialStates?: Record<string, TickState>) {
   const [states, setStates] = useState<Record<string, TickState>>(initialStates ?? {});
   const timers = useRef(new Map<string, { timer: ReturnType<typeof setTimeout>; task: MyTask }>());
-  const switchId = useId();
 
   const commit = useCallback(
     async (task: MyTask, keepalive: boolean) => {
@@ -115,96 +240,23 @@ export function MyTasks({
     });
   };
 
-  // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
-  const doneHere = (task: MyTask) => {
-    const st = states[task.key];
-    return Boolean(st && st.kind !== "error");
-  };
-  const openTasks = tasks.filter((x) => !x.done);
-  const spaces = useMemo(() => {
-    const out = new Map<string, { id: string; name: string; count: number }>();
-    for (const x of tasks) {
-      if (x.done) continue;
-      const name = x.spaceKind === "privat" ? t("privat") : x.spaceName;
-      const s = out.get(x.spaceId) ?? { id: x.spaceId, name, count: 0 };
-      s.count++;
-      out.set(x.spaceId, s);
-    }
-    return [...out.values()];
-  }, [tasks, t]);
-  const inFilter = (x: MyTask) => filter === "all" || x.spaceId === filter;
-  const doneShown = tasks
-    .filter((x) => x.done)
-    .sort((a, b) => b.meetingAt.localeCompare(a.meetingAt))
-    .slice(0, MAX_DONE_SHOWN);
-  const visible = [...openTasks, ...(showDone ? doneShown : [])].filter(inFilter);
-  const filterName = spaces.find((s) => s.id === filter)?.name ?? "";
-  const hasDone = tasks.some((x) => x.done);
+  return { states, tick, undo };
+}
 
-  return (
-    <div className="flex flex-col gap-4">
-      {(spaces.length > 1 || hasDone) && (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          {spaces.length > 1 ? (
-            <div role="group" aria-label={t("filterLabel")} className="flex flex-wrap gap-2">
-              {[{ id: "all", name: t("all"), count: openTasks.length }, ...spaces].map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-pressed={filter === s.id}
-                  onClick={() => setFilter(s.id)}
-                  className={cn(
-                    "inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium transition-colors duration-120 max-md:h-11",
-                    filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
-                  )}
-                >
-                  {t("chip", { name: s.name, count: s.count })}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <span />
-          )}
-          {hasDone && (
-            <label htmlFor={switchId} className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-              <Switch id={switchId} checked={showDone} onCheckedChange={setShowDone} />
-              {t("showDone")}
-            </label>
-          )}
-        </div>
-      )}
-
-      {visible.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
-          {filter !== "all" ? (
-            <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
-          ) : (
-            <>
-              <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
-              <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
-            </>
-          )}
-        </div>
-      ) : (
-        <ul aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
-          {visible.map((task) => (
-            <TaskRow
-              key={task.key}
-              task={task}
-              state={states[task.key]}
-              checked={task.done || doneHere(task)}
-              today={today}
-              locale={locale}
-              docUrl={docs[task.meetingId] ?? null}
-              meetingHref={meetingHrefs[task.meetingId] ?? null}
-              onTick={() => tick(task)}
-              onUndo={() => undo(task)}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+/** "Senast fre 4 dec" / "Senast imorgon" / "Försenad, skulle vara klar …" / "När: till nästa möte" / "Ingen deadline". */
+export function whenLabel(
+  t: ReturnType<typeof useTranslations<"home">>,
+  task: Pick<MyTask, "dueDate" | "due" | "done">,
+  today: string,
+  locale: "sv" | "en",
+): string {
+  if (task.dueDate) {
+    if (isOverdue(task, today)) return t("overdue", { day: dueDayLabel(task.dueDate, locale) });
+    if (task.dueDate === today) return t("dueToday");
+    if (task.dueDate === nextDay(today)) return t("dueTomorrow");
+    return t("due", { day: dueDayLabel(task.dueDate, locale) });
+  }
+  return task.due ? t("dueText", { due: task.due }) : t("noDue");
 }
 
 function TaskRow({
@@ -231,17 +283,7 @@ function TaskRow({
   const t = useTranslations("home");
   const id = useId();
   const overdue = isOverdue(task, today) && !checked;
-  const when = task.dueDate
-    ? overdue
-      ? t("overdue", { day: dueDayLabel(task.dueDate, locale) })
-      : task.dueDate === today
-        ? t("dueToday")
-        : task.dueDate === nextDay(today)
-          ? t("dueTomorrow")
-          : t("due", { day: dueDayLabel(task.dueDate, locale) })
-    : task.due
-      ? t("dueText", { due: task.due })
-      : t("noDue");
+  const when = whenLabel(t, { ...task, done: checked }, today, locale);
   const space = task.spaceKind === "privat" ? (task.contextName ? `${t("privat")} · ${task.contextName}` : t("privat")) : task.spaceName;
   const from = t(task.kind === "privat" ? "fromRecording" : "fromMeeting", { day: meetingDayLabel(task.meetingAt, locale) });
   const locked = task.done || (state !== undefined && state.kind !== "pending" && state.kind !== "error");
@@ -263,17 +305,17 @@ function TaskRow({
           <label htmlFor={id} className={cn("cursor-pointer font-medium wrap-anywhere", checked && "text-ink-3 line-through")}>
             {task.text}
           </label>
-          <p id={`${id}-meta`} className="flex flex-wrap gap-x-2 text-sm text-ink-2">
-            <span className="font-medium text-ink">{space}</span>
-            <span aria-hidden="true">·</span>
+          <p id={`${id}-meta`} className="text-sm">
             {task.done ? (
               <span className="font-medium text-green">{t("done")}</span>
             ) : (
-              <span className={cn(overdue ? "font-medium text-red" : !task.dueDate && !task.due && "text-ink-3")}>{when}</span>
+              <span className={cn(overdue ? "font-medium text-red" : task.dueDate || task.due ? "text-ink" : "text-ink-3")}>{when}</span>
             )}
           </p>
           {task.doneWhen && <p className="text-sm text-ink-2 wrap-anywhere">{t("doneWhen", { text: task.doneWhen })}</p>}
           <p className="text-xs text-ink-3">
+            <span className="font-medium text-ink-2">{space}</span>
+            {" · "}
             {meetingHref ? (
               <a href={meetingHref} className="text-ink-3 underline-offset-2 hover:text-ink">
                 {from}
@@ -289,7 +331,7 @@ function TaskRow({
   );
 }
 
-function RowStatus({ state, docUrl, onUndo }: { state: TickState | undefined; docUrl: string | null; onUndo: () => void }) {
+export function RowStatus({ state, docUrl, onUndo }: { state: TickState | undefined; docUrl: string | null; onUndo: () => void }) {
   const t = useTranslations("home");
   if (!state) return null;
   const docLink = docUrl && (
@@ -312,7 +354,7 @@ function RowStatus({ state, docUrl, onUndo }: { state: TickState | undefined; do
       {state.kind === "saved" && state.doc === "none" && <span className="text-green">{t("done")}</span>}
       {state.kind === "saved" && (state.doc === "locked" || state.doc === "failed") && (
         <>
-          <span className="text-ink">{t(state.doc === "locked" ? "docLocked" : "docFailed")}</span>
+          <span className="text-ink">{t.rich(state.doc === "locked" ? "docLocked" : "docFailed", { strong: (chunks) => <strong className="font-semibold">{chunks}</strong> })}</span>
           {docLink}
         </>
       )}

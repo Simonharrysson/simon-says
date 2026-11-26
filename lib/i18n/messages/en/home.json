@@ -23,8 +23,8 @@
   "undo": "Undo",
   "saving": "Saving…",
   "docWritten": "Done, and “✓ klart” is now in the document.",
-  "docLocked": "Done here. Tick it off in the document too: the line was changed there, so we leave it alone.",
-  "docFailed": "Done here. We couldn't write to the document just now, so tick it off there too.",
+  "docLocked": "Done here. <strong>Tick it off in the document too</strong>: the line was changed there, so we leave it alone.",
+  "docFailed": "Done here. We couldn't write to the document just now, so <strong>tick it off there too</strong>.",
   "openDoc": "Open the document",
   "saveFailed": "That didn't save. Please try again.",
   "forbidden": "Only the person with the task, or an admin of the association, can tick it off.",
@@ -49,7 +49,7 @@
   "meeting": {
     "metaTitle": "The meeting",
     "back": "Back to {name}",
-    "summary": "{decisions} and {tasks}, {done} of them done.",
+    "summary": "{decisions} and {tasks}, {done, plural, =0 {none done yet} other {# done}}.",
     "summaryNoTasks": "{decisions}, no tasks.",
     "decisionsTitle": "Decisions",
     "tasksTitle": "Tasks",
@@ -60,5 +60,7 @@
     "docHint": "The full minutes, with everything said and written, are in the document.",
     "canTickHint": "You can tick off your own tasks here.",
     "adminTickHint": "As an admin you can tick off every task here."
-  }
+  },
+  "openCount": "{count, plural, one {# open task} other {# open tasks}}",
+  "overdueCount": "{count} overdue"
 }
