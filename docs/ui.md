@@ -574,4 +574,10 @@ meeting Doc. A was chosen as the calmest and closest to the app.
 
 Limits (`claim_invite_send`): 50 per förening and 200 per admin in 24 h; members are skipped; the
 invite turns "Har gått med" when someone joins with that confirmed address. No addresses in logs.
+A förening or inviter name that looks like a link or address (`looksLikeLink`: `://`, `www.`, `@`,
+`x.se`) is refused with a sentence asking to rename it (the form says so up front); every dot in a
+name gets a zero-width non-joiner in the e-mail, and the subject is cut at 80 characters. The form
+sends 10 addresses per request (two at a time, no new send after 40 s: "Hann inte skickas"). A
+timeout or 5xx is "Osäkert – kan ha skickats"; Försök igen reuses the send's Resend Idempotency-Key,
+so it can't arrive twice. Sends hung in `sending` for 5 min are swept to `uncertain` by the import cron.
 `/design`: `invite-email*`.

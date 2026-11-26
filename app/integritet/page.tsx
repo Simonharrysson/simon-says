@@ -76,6 +76,8 @@ export default function PrivacyPage() {
             <li>
               E-postadresser som en admin skriver in för att bjuda in någon används bara för att skicka inbjudan. De sparas
               med när den skickades och om personen har gått med, tills föreningen raderas.
+              Inbjudan visar adminens namn, och svar på mejlet går till adminens inloggningsadress (Reply-To), så den som
+              bjuds in ser den adressen.
             </li>
             <li>
               Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.
