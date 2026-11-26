@@ -384,6 +384,52 @@ describe("feature: formats (parked fixes N2, N4, N5, N6)", () => {
     expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Anteckningar"))).toEqual(["Ekonomi", "Kommande event", "Medlemsavgifter", "Övrigt", "– Kassan är 12 000 kr."]);
   });
 
+  it("N6: role lines under 'Från förra veckan:' (indented plain 'Ordförande:' + bullets) are item 3's sub-content", async () => {
+    const role = (text: string) => {
+      const el = paraEl(text);
+      el.paragraph!.paragraphStyle = { ...el.paragraph!.paragraphStyle, indentStart: { magnitude: 36, unit: "PT" }, indentFirstLine: { magnitude: 36, unit: "PT" } };
+      return el;
+    };
+    const doc = agendaDoc([
+      num("Godkänn dagordning"),
+      num("Må-runda"),
+      num("Från förra veckan:"),
+      role("Ordförande:"),
+      bul("Bokade lokalen"),
+      bul("Mejlade sponsorn"),
+      role("Vice-ordförande:"),
+      bul("Tryckte affischer"),
+      bul("Ringde kommunen"),
+      bul("Beställde fika"),
+      num("Kommande event"),
+      num("Övrigt"),
+    ]);
+    const sub = "Ordförande:\nBokade lokalen\nMejlade sponsorn\nVice-ordförande:\nTryckte affischer\nRingde kommunen\nBeställde fika";
+    const expected = [
+      ["Godkänn dagordning", ""],
+      ["Må-runda", ""],
+      ["Från förra veckan:", sub],
+      ["Kommande event", ""],
+      ["Övrigt", ""],
+    ];
+    expect(scanAgenda(parseNotesTab(doc, TAB), VECKOMOTE).items.map((i) => [i.label, i.humanText])).toEqual(expected);
+    const sim = FormatSim.start({
+      id: "m-n6r",
+      doc,
+      profile: VECKOMOTE,
+      people: PEOPLE,
+      script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-4", text: "Sommarfesten är bokad" }]]) },
+    });
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3", "ag-4", "ag-5"]);
+    expect(sim.meeting.agenda_roles).toMatchObject({ "ag-3": "followup", "ag-4": "topic", "ag-5": "other" });
+    await sim.tick(block([{ at: 1000, speaker: 0, text: "Sommarfesten är bokad." }]));
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3", "ag-4", "ag-5"]);
+    const tab = sim.tab();
+    expect(scanAgenda(tab, VECKOMOTE, { anchors: anchoredStarts(tab, sim.meeting.section_ranges ?? {}, "m-n6r") }).items.map((i) => i.label)).toEqual(
+      expected.map(([l]) => l),
+    );
+  });
+
   it("N6: bullets nested deeper, under an item's text, between numbered lists or before a heading item are sub-points", () => {
     const deeper = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Fakturan från hallen", 1), bul("Medlemsavgifter", 1)]);
     // Items 1–3 numbered, level-0 bullets, then "4." onward in a NEW numbered list (another list id).
