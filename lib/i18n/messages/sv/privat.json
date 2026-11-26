@@ -97,7 +97,9 @@
     "endedDone": "Inspelningen var {duration}. Anteckningarna är färdiga. Sammanfattningen kommer på mejlen om ungefär en minut.",
     "toSummary": "Till sammanfattningen",
     "back": "Tillbaka till {name}",
-    "backHome": "Tillbaka till Privat"
+    "backHome": "Tillbaka till Privat",
+    "leaveLiveText": "Lämnar du sidan slutar laptopen lyssna, men inspelningen avslutas inte. Du kan fortsätta den från Privat.",
+    "leaveText": "Inspelningen avslutas inte när du lämnar sidan. Du kan fortsätta den, eller avsluta den, från Privat."
   },
   "notices": {
     "raderad": "Inspelningen är raderad: anteckningar, transkript och sammanfattning. Ett Google-dokument ligger kvar i Drive.",

@@ -97,7 +97,9 @@
     "endedDone": "The recording lasted {duration}. The notes are done. The summary arrives by e-mail in about a minute.",
     "toSummary": "Go to the summary",
     "back": "Back to {name}",
-    "backHome": "Back to Personal"
+    "backHome": "Back to Personal",
+    "leaveLiveText": "If you leave the page the laptop stops listening, but the recording doesn't end. You can continue it from Personal.",
+    "leaveText": "The recording doesn't end when you leave the page. You can continue or end it from Personal."
   },
   "notices": {
     "raderad": "The recording is deleted: notes, transcript and summary. A Google Doc stays in Drive.",
