@@ -12,7 +12,7 @@ const processors: [string, string, string][] = [
   ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
   ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."],
-  ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss, och bara till oss.", "Innehåller inga transkriptioner."],
+  ["Resend", "Skickar e-post: driftlarm till oss, och mötessammanfattningar till personer i föreningens personlista.", "En sammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."],
 ];
 
 export default function PrivacyPage() {
@@ -82,6 +82,13 @@ export default function PrivacyPage() {
               dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.
             </li>
             <li>En logg över vilket konto som skapat vilka föreningar (för gränsen på två per person).</li>
+            <li>
+              Sammanfattning efter mötet: när ett möte är klart mejlar Simon Says besluten och uppgifterna till personer i
+              föreningens personlista som har en e-postadress, som standard bara till dem som inte var med (admin kan välja
+              alla, utvalda eller ingen). Aldrig till någon utanför personlistan, aldrig efter testmöten. Varje mejl har en
+              länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet)
+              och vem som avslutat; det försvinner med mötet, personen eller föreningen.
+            </li>
             <li>
               För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har
               godkänt. Rubrikerna försvinner med mötet, målen med föreningen.
