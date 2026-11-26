@@ -175,9 +175,12 @@ it is deleted when they leave the org.
   `/auth/callback?atkomst=kalender` makes the same account check as the import and stores the
   token apart (`google_calendar_tokens`, 0046, encrypted); "Koppla från" deletes our copy (not
   revoked at Google, same reason as above). An admin chooses the förening's calendar among their
-  own (`orgs.calendar_id/name/filter`); **every member reads it with their own grant**, never
+  own **shared** calendars only (`orgs.calendar_id/name/filter`; id `…@group.calendar.google.com`,
+  never a primary calendar, which would put each starter's private events into the Doc; written by
+  the server after checking the admin's list, no column grant, checked in 0046 too); **every member reads it with their own grant**, never
   another member's. Only titles, times and guests are fetched (`fields`), never descriptions or
-  places (`lib/calendar/api.ts`). At start the matching event (picked "Starta", else the filtered
+  places (`lib/calendar/api.ts`). The förening page renders the calendar parts in `<Suspense>`
+  with a 60 s per-user cache and a 3 s token-refresh limit, so Google never holds up the page. At start the matching event (picked "Starta", else the filtered
   event happening now ±30 min) is read with the starter's grant: its title names the Doc and
   prefixes the header line, its guests are matched to people (e-mail, or exact unique full name)
   and stored as ids only (`meetings.calendar_event`). Invited people who did not decline are

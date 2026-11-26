@@ -18,6 +18,7 @@
   "orgIntro": "Välj kalendern där föreningens möten ligger, till exempel en delad kalender. Medlemmar som har kopplat sin egen kalender och kan se den här ser de kommande mötena under Starta möte.",
   "orgConnectFirst": "Koppla din kalender först, så kan du välja bland dina kalendrar.",
   "orgUnavailable": "Vi kunde inte läsa dina kalendrar just nu. Försök igen om en liten stund.",
+  "orgNoShared": "Du har inga delade kalendrar. Skapa en kalender för föreningen i Google Kalender och dela den med medlemmarna, så kan du välja den här. Din egen huvudkalender går inte att välja.",
   "orgCurrent": "Vald nu: {name}",
   "calendarLabel": "Kalender",
   "none": "Ingen kalender",

@@ -18,6 +18,7 @@
   "orgIntro": "Choose the calendar that holds the association's meetings, for example a shared calendar. Members who have connected their own calendar and can see this one see the upcoming meetings under Start meeting.",
   "orgConnectFirst": "Connect your calendar first, then you can choose among your calendars.",
   "orgUnavailable": "We could not read your calendars right now. Try again in a little while.",
+  "orgNoShared": "You have no shared calendars. Create a calendar for the association in Google Calendar and share it with the members, then choose it here. Your own main calendar can't be chosen.",
   "orgCurrent": "Chosen now: {name}",
   "calendarLabel": "Calendar",
   "none": "No calendar",

@@ -75,6 +75,7 @@ export function OrgCalendarForm({
           onChange={() => setSaved(false)}
         >
           <input type="hidden" name="orgId" value={orgId} />
+          {options.length === 0 && <p className="text-sm text-ink-3">{t("orgNoShared")}</p>}
           <div className="flex flex-col gap-2">
             <Label htmlFor="org-calendar">{t("calendarLabel")}</Label>
             <NativeSelect id="org-calendar" name="calendar_id" defaultValue={current.id ?? ""} className="w-full">
