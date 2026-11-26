@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let auth;
   let doc: Awaited<ReturnType<typeof readProtocolDoc>>;
   try {
-    auth = await getGoogleAuth(user.id);
+    auth = await getGoogleAuth(user.id, { driveReadonly: true });
     doc = await readProtocolDoc(auth, docId, { skipTabIds });
   } catch (err) {
     if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");

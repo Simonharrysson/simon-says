@@ -106,7 +106,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (allowed !== true) return fail("rate_limited", 429, "Du har bläddrat väldigt mycket på kort tid. Vänta några minuter och försök igen.");
 
   try {
-    const auth = await getGoogleAuth(user.id);
+    const auth = await getGoogleAuth(user.id, { driveReadonly: true });
     const api = driveApi(auth) as unknown as DriveLike;
     if (at) {
       const r = await listFolders(api, at, body?.action === "folders" && typeof body.pageToken === "string" ? body.pageToken : undefined);

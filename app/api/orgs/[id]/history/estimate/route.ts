@@ -70,7 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const docs: EstimateDoc[] = [];
   const chars: number[] = [];
   try {
-    const auth = await getGoogleAuth(user.id);
+    const auth = await getGoogleAuth(user.id, { driveReadonly: true });
     for (let i = 0; i < docIds.length; i += PARALLEL) {
       const part = await Promise.all(
         docIds.slice(i, i + PARALLEL).map(async (docId): Promise<{ doc: EstimateDoc; chars: number[] }> => {
