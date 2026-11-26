@@ -365,24 +365,26 @@ describe("feature: formats (parked fixes N2, N4, N5, N6)", () => {
   const body = (doc: Doc) => doc.tabs![0].documentTab!.body!.content!;
   const elOf = (doc: Doc, text: string) => body(doc).find((el) => el.paragraph?.elements?.[0]?.textRun?.content === `${text}\n`)!;
 
-  it("N6: a mixed agenda (1–3 numbered, then 4–6 bulleted at the same level) gives six items, notes under item 5", async () => {
-    const doc = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Från förra veckan"), bul("Kommande event"), bul("Ekonomi"), bul("Övrigt")]);
+  it("N6 (Simon's ruling): bullets right after numbered items 1–3, same level, are notes under item 3, not items", async () => {
+    const doc = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Kommande event"), bul("Medlemsavgifter"), bul("Övrigt")]);
     const sim = FormatSim.start({
       id: "m-n6",
       doc,
       profile: VECKOMOTE,
       people: PEOPLE,
-      script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-5", text: "Kassan är 12 000 kr" }]]) },
+      script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-3", text: "Kassan är 12 000 kr" }]]) },
     });
-    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3", "ag-4", "ag-5", "ag-6"]);
-    expect(sim.meeting.agenda_roles).toMatchObject({ "ag-3": "followup", "ag-6": "other" });
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3"]);
     await sim.tick(block([{ at: 1000, speaker: 0, text: "Kassan är tolv tusen." }]));
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3"]);
+    const tab = sim.tab();
+    const items = scanAgenda(tab, VECKOMOTE, { anchors: anchoredStarts(tab, sim.meeting.section_ranges ?? {}, "m-n6") }).items;
+    expect(items.map((i) => i.label)).toEqual(["Godkänn dagordning", "Må-runda", "Ekonomi"]);
     const lines = linesOf(sim.doc);
-    expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Övrigt"))).toEqual(["Ekonomi", "– Kassan är 12 000 kr."]);
-    expect(agKeys(sim)).toHaveLength(6);
+    expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Anteckningar"))).toEqual(["Ekonomi", "Kommande event", "Medlemsavgifter", "Övrigt", "– Kassan är 12 000 kr."]);
   });
 
-  it("N6: a bulleted list nested deeper, or under an item's own text, stays that item's sub-points", () => {
+  it("N6: bullets nested deeper, under an item's text, between numbered lists or before a heading item are sub-points", () => {
     const deeper = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Fakturan från hallen", 1), bul("Medlemsavgifter", 1)]);
     // Items 1–3 numbered, level-0 bullets, then "4." onward in a NEW numbered list (another list id).
     const NUM2 = "list-n2";
@@ -395,15 +397,13 @@ describe("feature: formats (parked fixes N2, N4, N5, N6)", () => {
       ["Ekonomi", "Fakturan från hallen\nMedlemsavgifter"],
       ["Övrigt", ""],
     ]);
-    // The same bullets, but a heading item comes before the next numbered list: 4–6 are items.
-    const afterBoundary = agendaDoc([
-      num("Godkänn dagordning"), num("Må-runda"), num("Från förra veckan"),
-      bul("Kommande event"), bul("Ekonomi"), bul("Övrigt"),
-      paraEl("Extra punkt", { style: "HEADING_3" }), paraEl("Punkt A", { level: 0, listId: NUM2 }),
-    ]);
-    afterBoundary.tabs![0].documentTab!.lists![NUM2] = { listProperties: { nestingLevels: [{ glyphType: "DECIMAL" }] } };
-    expect(scanAgenda(parseNotesTab(afterBoundary, TAB), VECKOMOTE).items.map((i) => i.label).slice(0, 7)).toEqual([
-      "Godkänn dagordning", "Må-runda", "Från förra veckan", "Kommande event", "Ekonomi", "Övrigt", "Extra punkt",
+    // Bullets followed by a heading item: still notes under the numbered item above them.
+    const beforeHeading = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Fakturan från hallen"), bul("Medlemsavgifter"), paraEl("Extra punkt", { style: "HEADING_3" })]);
+    expect(scanAgenda(parseNotesTab(beforeHeading, TAB), VECKOMOTE).items.map((i) => [i.label, i.humanText])).toEqual([
+      ["Godkänn dagordning", ""],
+      ["Må-runda", ""],
+      ["Ekonomi", "Fakturan från hallen\nMedlemsavgifter"],
+      ["Extra punkt", ""],
     ]);
     const underText = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), paraEl("Vi går igenom:"), bul("Fakturan från hallen"), bul("Medlemsavgifter")]);
     for (const [id, doc, text] of [

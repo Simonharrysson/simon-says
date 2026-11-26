@@ -241,40 +241,22 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
     // of the preceding item: a false sub-point only merges two items, a false item splits a block.
     const firstNonList = region.findIndex(nonListItem);
     const boundary = firstNonList >= 0 ? region[firstNonList].start : Infinity;
-    const lists = new Map<string, { first: number; last: number; minLevel: number }>();
+    const lists = new Map<string, { first: number; minLevel: number }>();
     for (const p of listParas) {
       const b = paraBullet(p)!;
       const l = lists.get(b.listId);
-      if (!l) lists.set(b.listId, { first: p.start, last: p.end, minLevel: b.level });
-      else {
-        l.minLevel = Math.min(l.minLevel, b.level);
-        l.last = p.end;
-      }
+      if (!l) lists.set(b.listId, { first: p.start, minLevel: b.level });
+      else l.minLevel = Math.min(l.minLevel, b.level);
     }
     // A bulleted list that starts after an early numbered list's first item is that item's
-    // sub-points, not items (final review R1-I1 probe at the start; glyph known as a bullet only).
-    const numbered = [...lists].filter(([id, l]) => l.first < boundary && isNumberedGlyph(listGlyph(tab, id, l.minLevel)));
-    const firstNumbered = Math.min(...numbered.map(([, l]) => l.first));
-    // Parked N6: except a mixed agenda (items 1–3 numbered, 4–6 bulleted): a bulleted list at the
-    // numbered items' level that starts right after the numbered list ends (it never resumes),
-    // nothing but empty paragraphs between, and no numbered list at that level after it (a new
-    // "4." list after the bullets: they are item 3's sub-points), holds items. Deeper, or under an
-    // item's own text → sub-points.
-    const nothingBetween = (from: number, to: number) =>
-      !region.some((p) => p.start >= from && p.start < to && !isEmpty(p)) && !(tab.tables ?? []).some((t) => t.start >= from && t.start < to);
-    // Only up to the next boundary (a non-list item such as a heading item, or a section): a
-    // numbered list after it belongs to another part of the agenda.
-    const nextBoundary = (from: number) => region.find((p) => p.start > from && nonListItem(p))?.start ?? Infinity;
-    const numberedAfter = (l: { first: number; minLevel: number }) => {
-      const stop = nextBoundary(l.first);
-      return [...lists].some(([id, a]) => a.first > l.first && a.first < stop && a.minLevel === l.minLevel && isNumberedGlyph(listGlyph(tab, id, a.minLevel)));
-    };
-    const continuesNumbered = (l: { first: number; minLevel: number }) =>
-      !numberedAfter(l) && numbered.some(([, a]) => a.minLevel === l.minLevel && a.last <= l.first && nothingBetween(a.last, l.first));
+    // sub-points, not items (final review R1-I1 probe at the start; glyph known as a bullet only),
+    // whatever its level and whether more numbered items follow: Simon's ruling (parked N6),
+    // bullets after numbered items are notes.
+    const firstNumbered = Math.min(
+      ...[...lists].filter(([id, l]) => l.first < boundary && isNumberedGlyph(listGlyph(tab, id, l.minLevel))).map(([, l]) => l.first),
+    );
     const subLists = new Set(
-      [...lists]
-        .filter(([id, l]) => l.first < boundary && l.first > firstNumbered && listGlyph(tab, id, l.minLevel) === "BULLET" && !continuesNumbered(l))
-        .map(([id]) => id),
+      [...lists].filter(([id, l]) => l.first < boundary && l.first > firstNumbered && listGlyph(tab, id, l.minLevel) === "BULLET").map(([id]) => id),
     );
     const early = [...lists].filter(([id, l]) => l.first < boundary && !subLists.has(id)).map(([, l]) => l);
     const earlyMin = early.length ? Math.min(...early.map((l) => l.minLevel)) : 0;
