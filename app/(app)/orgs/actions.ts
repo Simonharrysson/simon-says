@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
 import {
@@ -19,6 +20,7 @@ import {
   setPersonRole,
   updateOrgSettings,
 } from "@/lib/db/orgs";
+import { shareOrgDocsWithNewMember } from "@/lib/docs/access";
 import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
 import { validRole } from "@/lib/people/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -43,6 +45,17 @@ export async function createOrgAction(form: FormData): Promise<void> {
 export async function joinOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const orgId = await joinOrg(db, field(form, "code"));
+  if (orgId) {
+    // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
+    const { data } = await db.auth.getUser();
+    const user = data.user;
+    if (user?.email) {
+      const member = { id: user.id, email: user.email };
+      after(() =>
+        shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
+      );
+    }
+  }
   redirect(orgId ? `/orgs/${orgId}` : "/orgs?fel=inbjudan");
 }
 
