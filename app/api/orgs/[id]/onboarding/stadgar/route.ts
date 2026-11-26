@@ -1,0 +1,46 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { DRIVE_ID } from "@/lib/agenda/candidates";
+import { isUuid } from "@/lib/db/ids";
+import { myRole } from "@/lib/db/orgs";
+import { extractStadgarAgendas } from "@/lib/formats/arsmote";
+import { readStadgarFile } from "@/lib/formats/stadgar-file";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 120;
+
+const noStore = { "cache-control": "no-store" };
+const fail = (error: string, status: number, message: string) => NextResponse.json({ error, message }, { status, headers: noStore });
+
+/**
+ * Onboarding step 4: the stadgar → the items every Styrelsemöte must have AND the Årsmöte's agenda,
+ * in one Claude call. Body `{ fileId }` (a Doc or PDF the admin picked). → `{ board, arsmote }`.
+ * Stores nothing: the admin checks both lists and saves them with POST …/onboarding/formats.
+ */
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const db = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
+  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  const role = await myRole(db, id);
+  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
+  if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan byta mötesformat.");
+
+  const body = (await request.json().catch(() => null)) as { fileId?: unknown } | null;
+  const fileId = typeof body?.fileId === "string" ? body.fileId : "";
+  if (!DRIVE_ID.test(fileId)) return fail("bad_request", 400, "Välj stadgarna i Google-väljaren igen.");
+
+  const file = await readStadgarFile(user.id, fileId, "onboarding/stadgar");
+  if (!file.ok) return fail(file.error, file.status, file.message);
+
+  const res = await extractStadgarAgendas(file.input, { orgId: id });
+  if (!res.ok) {
+    if (res.error === "spend") return fail("spend", 503, "Simon Says kan inte läsa stadgarna just nu. Försök igen i morgon.");
+    return fail(res.error, 502, "Simon Says kunde inte läsa stadgarna. Försök igen.");
+  }
+  console.info(`onboarding/stadgar: ${file.input.kind}, ${res.board.length} board items, ${res.arsmote.length} årsmöte items`);
+  return NextResponse.json({ board: res.board, arsmote: res.arsmote }, { headers: noStore });
+}

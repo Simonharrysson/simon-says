@@ -14,7 +14,7 @@ import { parseNotesTab } from "@/lib/docs/tab";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks } from "@/lib/formats/skeleton";
 import { FORMAT_NAMES, STANDARD } from "@/lib/formats/standard";
-import { ensureStandardRow, orgDefaultFormat } from "@/lib/formats/store";
+import { ensureStandardRow, formatById, orgDefaultFormat } from "@/lib/formats/store";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/docs";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
@@ -51,12 +51,32 @@ export function preparedTitle(orgName: string, date: string, time: string | null
   return `${date}${time ? ` ${time.replace(":", ".")}` : ""} Dagordning – ${orgName.trim()}`;
 }
 
-/** The format a meeting type runs in: the förening's own version of that kind when it is the default, else the standard. */
+/**
+ * The format a meeting type runs in: the förening's own version of that kind when it is the
+ * default; else its own Styrelsemöte / Årsmöte format from the stadgar (onboarding, 0035);
+ * else the standard.
+ */
 async function formatForType(orgId: string, type: MeetingType): Promise<{ id: string | null; profile: FormatProfile }> {
   const def = await orgDefaultFormat(supabaseAdmin(), orgId);
   const k = def.profile.kind;
   if (def.id && ((type === "veckomote" && (k === "veckomote" || k === "learned")) || (type === "styrelsemote" && k === "styrelseprotokoll"))) return def;
+  if (type !== "veckomote") {
+    const own = await typeFormat(orgId, type);
+    if (own) return own;
+  }
   return { id: null, profile: STANDARD[standardKindOf(type)] };
+}
+
+/** The förening's own format for a meeting type (orgs.styrelse_format_id / arsmote_format_id), if valid. */
+async function typeFormat(orgId: string, type: "styrelsemote" | "arsmote"): Promise<{ id: string; profile: FormatProfile } | null> {
+  const column = type === "arsmote" ? "arsmote_format_id" : "styrelse_format_id";
+  const { data, error } = await supabaseAdmin().from("orgs").select(column).eq("id", orgId).maybeSingle();
+  // Before 0035 the column is missing: fall back to the standard.
+  if (error || !data) return null;
+  const id = (data as Record<string, string | null>)[column];
+  if (!id) return null;
+  const profile = await formatById(id).catch(() => null);
+  return profile && profile.kind === standardKindOf(type) ? { id, profile } : null;
 }
 
 interface Sources {

@@ -1,0 +1,137 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { isUuid } from "@/lib/db/ids";
+import { deletePerson, listPeople, myRole, renamePerson, setPersonRole } from "@/lib/db/orgs";
+import { validName } from "@/lib/names/validate";
+import { recordStep, setDismissed } from "@/lib/onboarding/store";
+import { isStepId } from "@/lib/onboarding/steps";
+import { cleanEmail } from "@/lib/people/board";
+import { validRole } from "@/lib/people/roles";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+// Kom igång (todo #5): actions the wizard calls directly. All run as the signed-in user; RLS and
+// the 0035 functions decide; the checks here only turn refusals into Swedish sentences.
+
+export type ActionResult = { ok: true } | { ok: false; message: string };
+const fail = (message: string): ActionResult => ({ ok: false, message });
+const OK: ActionResult = { ok: true };
+const ADMIN_ONLY = "Bara administratörer kan ändra det här.";
+
+async function adminDb(orgId: string) {
+  if (!isUuid(orgId)) return null;
+  const db = await createSupabaseServerClient();
+  return (await myRole(db, orgId)) === "admin" ? db : null;
+}
+
+const refresh = (orgId: string) => {
+  revalidatePath(`/orgs/${orgId}`);
+  revalidatePath(`/orgs/${orgId}/kom-igang`);
+};
+
+export async function stepAction(orgId: string, step: string, how: "done" | "skipped"): Promise<ActionResult> {
+  const db = await adminDb(orgId);
+  if (!db) return fail(ADMIN_ONLY);
+  if (!isStepId(step) || (how !== "done" && how !== "skipped")) return fail("Okänt steg.");
+  // A missing row (förening from before onboarding, opened from Inställningar) is fine: nothing to save.
+  await recordStep(db, orgId, step, how);
+  refresh(orgId);
+  return OK;
+}
+
+export async function dismissAction(orgId: string, dismissed: boolean): Promise<ActionResult> {
+  const db = await adminDb(orgId);
+  if (!db) return fail(ADMIN_ONLY);
+  await setDismissed(db, orgId, dismissed);
+  refresh(orgId);
+  return OK;
+}
+
+export interface BoardInput {
+  name: string;
+  role: string;
+  email: string;
+}
+
+function checkInput(input: BoardInput): { name: string; role: string | null; email: string | null } | string {
+  const name = validName(input.name);
+  if (!name) return "Skriv ett namn, t.ex. Anna Berg.";
+  const role = input.role.trim() ? validRole(input.role) : null;
+  if (input.role.trim() && !role) return "Rollen kan vara högst fyra ord, t.ex. Kassör.";
+  const email = input.email.trim() ? cleanEmail(input.email) : null;
+  if (input.email.trim() && !email) return "Det ser inte ut som en e-postadress.";
+  return { name, role, email };
+}
+
+async function setEmail(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, personId: string, email: string | null): Promise<string | null> {
+  const { data, error } = await db.rpc("set_person_email", { p_person_id: personId, p_email: email ?? "" });
+  if (error) throw new Error(`set_person_email: ${error.message}`);
+  if (data === "taken") return "Någon annan i listan har redan den e-postadressen.";
+  if (data === "invalid") return "Det ser inte ut som en e-postadress.";
+  if (data !== "ok") return ADMIN_ONLY;
+  return null;
+}
+
+/**
+ * Adds someone to the board: a person (name, role) and, with an e-mail, an invite that links
+ * them to their account when they join. `memberUserId`: names a member who has no person yet.
+ */
+export async function addBoardPersonAction(orgId: string, input: BoardInput, memberUserId?: string): Promise<ActionResult> {
+  const db = await adminDb(orgId);
+  if (!db) return fail(ADMIN_ONLY);
+  const v = checkInput(input);
+  if (typeof v === "string") return fail(v);
+  const row: Record<string, unknown> = { org_id: orgId, name: v.name };
+  if (memberUserId && isUuid(memberUserId)) row.member_user_id = memberUserId;
+  const { data, error } = await db.from("people").insert(row).select("id").single();
+  if (error?.code === "23505") return fail(`${v.name} finns redan i listan.`);
+  if (error || !data) return fail("Personen kunde inte läggas till. Försök igen.");
+  const id = data.id as string;
+  if (v.role && !(await setPersonRole(db, id, v.role))) return fail("Rollen kunde inte sparas. Försök igen.");
+  if (v.email) {
+    const msg = await setEmail(db, id, v.email);
+    if (msg) return fail(msg);
+  }
+  refresh(orgId);
+  return OK;
+}
+
+export async function updateBoardPersonAction(orgId: string, personId: string, input: BoardInput): Promise<ActionResult> {
+  const db = await adminDb(orgId);
+  if (!db) return fail(ADMIN_ONLY);
+  const v = checkInput(input);
+  if (typeof v === "string") return fail(v);
+  const people = isUuid(personId) ? await listPeople(db, orgId) : [];
+  const current = people.find((p) => p.id === personId);
+  if (!current) return fail("Personen finns inte längre. Ladda om sidan.");
+  if (current.name !== v.name && !(await renamePerson(db, personId, v.name))) return fail(`${v.name} finns redan i listan.`);
+  if ((current.role ?? null) !== v.role && !(await setPersonRole(db, personId, v.role))) return fail("Rollen kunde inte sparas. Försök igen.");
+  if ((current.email ?? null) !== v.email) {
+    const msg = await setEmail(db, personId, v.email);
+    if (msg) return fail(msg);
+  }
+  refresh(orgId);
+  return OK;
+}
+
+export async function removeBoardPersonAction(orgId: string, personId: string): Promise<ActionResult> {
+  const db = await adminDb(orgId);
+  if (!db) return fail(ADMIN_ONLY);
+  const people = isUuid(personId) ? await listPeople(db, orgId) : [];
+  if (!people.some((p) => p.id === personId)) return fail("Personen finns inte längre. Ladda om sidan.");
+  await deletePerson(db, personId);
+  refresh(orgId);
+  return OK;
+}
+
+/** Step 6: records (or withdraws) that a person has said yes to having their voice learned later. */
+export async function voiceConsentAction(orgId: string, personId: string, consent: boolean): Promise<ActionResult> {
+  if (!isUuid(orgId) || !isUuid(personId)) return fail("Personen finns inte längre. Ladda om sidan.");
+  const db = await createSupabaseServerClient();
+  const people = await listPeople(db, orgId);
+  if (!people.some((p) => p.id === personId)) return fail("Personen finns inte längre. Ladda om sidan.");
+  const { data, error } = await db.rpc("set_voice_consent", { p_person_id: personId, p_consent: consent });
+  if (error || data !== true) return fail(ADMIN_ONLY);
+  refresh(orgId);
+  return OK;
+}

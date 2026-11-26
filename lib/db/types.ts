@@ -60,6 +60,11 @@ export interface OrgRow {
   meeting_folder_id?: string | null;
   /** 0030: the folder's name as picked; null when unknown. The förening's text: never logged. */
   meeting_folder_name?: string | null;
+  /** 0035: when the logo (storage org-logos/<id>/logo) was last set; null = no logo. */
+  logo_updated_at?: string | null;
+  /** 0035: the förening's own Styrelsemöte / Årsmöte formats (from the stadgar), used by Förbered möte. */
+  styrelse_format_id?: string | null;
+  arsmote_format_id?: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -77,6 +82,11 @@ export interface PersonRow {
   name: string;
   member_user_id: string | null;
   role?: string | null;
+  /** 0035: invite e-mail (admins set it; links the person to the member with that address). */
+  email?: string | null;
+  /** 0035: voice consent recorded for the coming voice feature (when, by whom). */
+  voice_consent_at?: string | null;
+  voice_consent_by?: string | null;
 }
 
 export interface MeetingRow {
