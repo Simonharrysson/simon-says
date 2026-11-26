@@ -54,7 +54,7 @@
     "noneTitle": "Inget att sammanfatta",
     "noneText": "Inspelningen innehöll inget tal som gick att skriva ner.",
     "failedTitle": "Sammanfattningen kunde inte skrivas",
-    "failedText": "Inspelningen sparades, men sammanfattningen blev inte av. Du kan radera inspelningen om du inte behöver den.",
+    "failedText": "Inspelningen sparades, men sammanfattningen blev inte av. Försök igen, eller radera inspelningen om du inte behöver den.",
     "summaryTitle": "Sammanfattning",
     "tasksTitle": "Uppgifter",
     "tasksLabel": "Uppgifter från inspelningen",
@@ -71,7 +71,9 @@
     "deleteTitle": "Radera inspelningen?",
     "deleteText": "Anteckningar, transkript, sammanfattning och uppgifter från inspelningen raderas. Det går inte att ångra.",
     "deleteDocKept": "Google-dokumentet ligger kvar i Drive.",
-    "deleting": "Raderar…"
+    "deleting": "Raderar…",
+    "retry": "Försök igen",
+    "retrying": "Försöker…"
   },
   "tasks": {
     "saveFailed": "Det gick inte att spara bocken. Kontrollera nätet och försök igen."
@@ -107,6 +109,7 @@
     "aktiv": "En inspelning pågår. Avsluta den först, sedan kan du radera.",
     "active": "Inspelningen pågår. Avsluta den först, sedan kan du radera den.",
     "forbidden": "Inspelningen gick inte att radera. Ladda om sidan och försök igen.",
-    "not_found": "Inspelningen finns inte längre."
+    "not_found": "Inspelningen finns inte längre.",
+    "nytt": "Sammanfattningen skrivs igen. Den kommer på mejlen om ungefär en minut."
   }
 }

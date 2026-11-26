@@ -54,7 +54,7 @@
     "noneTitle": "Nothing to summarise",
     "noneText": "The recording had no speech that could be written down.",
     "failedTitle": "The summary couldn't be written",
-    "failedText": "The recording was saved, but the summary didn't happen. You can delete the recording if you don't need it.",
+    "failedText": "The recording was saved, but the summary didn't happen. Try again, or delete the recording if you don't need it.",
     "summaryTitle": "Summary",
     "tasksTitle": "Tasks",
     "tasksLabel": "Tasks from the recording",
@@ -71,7 +71,9 @@
     "deleteTitle": "Delete the recording?",
     "deleteText": "The recording's notes, transcript, summary and tasks are deleted. This can't be undone.",
     "deleteDocKept": "The Google Doc stays in Drive.",
-    "deleting": "Deleting…"
+    "deleting": "Deleting…",
+    "retry": "Try again",
+    "retrying": "Trying…"
   },
   "tasks": {
     "saveFailed": "The tick couldn't be saved. Check your connection and try again."
@@ -107,6 +109,7 @@
     "aktiv": "A recording is in progress. End it first, then you can delete.",
     "active": "The recording is in progress. End it first, then you can delete it.",
     "forbidden": "The recording couldn't be deleted. Reload the page and try again.",
-    "not_found": "The recording no longer exists."
+    "not_found": "The recording no longer exists.",
+    "nytt": "The summary is being written again. It arrives by e-mail in about a minute."
   }
 }

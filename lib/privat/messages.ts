@@ -5,6 +5,7 @@ import type { Notice } from "@/lib/ui/messages";
 const tones: Record<string, Notice["tone"]> = {
   raderad: "success",
   raderat: "success",
+  nytt: "success",
   aktiv: "danger",
   active: "danger",
   forbidden: "danger",

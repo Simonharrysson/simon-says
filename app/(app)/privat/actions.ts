@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
@@ -9,6 +10,10 @@ import { createContext, deleteContext } from "@/lib/privat/contexts-db";
 import type { ContextRow } from "@/lib/privat/contexts";
 import { ensurePrivatSpace } from "@/lib/privat/space";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { defaultMailer } from "@/lib/mail";
+import { trySendMeetingSummaries } from "@/lib/summaries/send";
+import { getEnv } from "@/lib/env";
 
 // Server actions of the Privat pages (0045). All run as the signed-in user: RLS keeps them to
 // their own space.
@@ -74,4 +79,31 @@ export async function deleteContextAction(form: FormData): Promise<void> {
   if (result !== "deleted") redirect(`/privat/${contextId}?fel=aktiv`);
   revalidatePath("/privat");
   redirect("/privat?klart=raderat");
+}
+
+/**
+ * "Försök igen" on a recording whose summary failed: the summary (one more Claude call) or, when
+ * it was written, only its e-mail, sent again now. Only the recording's own (RLS) recorder.
+ */
+export async function retrySummaryAction(form: FormData): Promise<void> {
+  const meetingId = field(form, "meetingId");
+  if (!isUuid(meetingId)) redirect("/privat");
+  const db = await signedIn();
+  const { data: user } = await db.auth.getUser();
+  const { data: m } = await db.from("meetings").select("id, status, started_by, context_id").eq("id", meetingId).maybeSingle();
+  if (!m || m.status !== "done" || !m.context_id || m.started_by !== user.user?.id) redirect(`/privat/mote/${meetingId}?fel=forbidden`);
+  if (getEnv().KILL_SWITCH) redirect(`/privat/mote/${meetingId}?fel=forbidden`);
+  const admin = supabaseAdmin();
+  const { data: stored } = await admin.from("private_summaries").select("mailed").eq("meeting_id", meetingId).maybeSingle();
+  if (stored) {
+    // Written but surely not mailed: the e-mail only (never one that went or may have gone out).
+    if (stored.mailed === false) {
+      await admin.from("private_summaries").update({ mail_claimed_at: null, mail_attempts: 0, mailed: null }).eq("meeting_id", meetingId).eq("mailed", false);
+    }
+    await admin.from("meetings").update({ summary_state: "sending" }).eq("id", meetingId).neq("summary_state", "sending");
+  } else {
+    await admin.from("meetings").update({ summary_state: null, summary_attempts: 0, summary_lease_until: null }).eq("id", meetingId);
+  }
+  after(() => trySendMeetingSummaries(meetingId, { mailer: defaultMailer(), now: () => new Date() }, { deadlineAt: new Date(Date.now() + 200_000) }));
+  redirect(`/privat/mote/${meetingId}?klart=nytt`);
 }

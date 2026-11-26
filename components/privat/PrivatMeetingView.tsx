@@ -4,6 +4,7 @@ import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { Banner } from "@/components/ui/Banner";
 import { IconExternal, IconTrash } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Panel } from "@/components/ui/Panel";
 import { NoticeBanner } from "@/components/views/NoticeBanner";
 import { longDay, shortWhen } from "@/lib/privat/format";
@@ -20,8 +21,8 @@ export interface PrivatMeetingSummary {
   sinceLast: SinceLastItem[];
 }
 
-/** "pending": not summarised yet; "none": nothing was heard; "failed": the summary could not be made. */
-export type SummaryStatus = "ready" | "pending" | "none" | "failed";
+import type { SummaryStatus } from "@/lib/privat/status";
+export type { SummaryStatus };
 
 /**
  * /privat/mote/<id>: one recording and its summary (what the e-mail said, with the tasks tickable).
@@ -38,6 +39,7 @@ export function PrivatMeetingView({
   notice,
   toggle,
   deleteMeeting,
+  retry,
 }: {
   meetingId: string;
   context: { id: string; name: string };
@@ -49,6 +51,8 @@ export function PrivatMeetingView({
   notice: Notice | null;
   toggle: (taskId: string, done: boolean) => Promise<boolean>;
   deleteMeeting: FormAction;
+  /** "Försök igen" when the summary failed: writes it (and mails it) again. */
+  retry?: FormAction;
 }) {
   const t = useTranslations("privat.meeting");
   const locale = useLocale() === "en" ? "en" : "sv";
@@ -92,7 +96,19 @@ export function PrivatMeetingView({
         </Banner>
       )}
       {status === "failed" && (
-        <Banner tone="warning" title={t("failedTitle")} live={false}>
+        <Banner
+          tone="warning"
+          title={t("failedTitle")}
+          live={false}
+          action={
+            retry && (
+              <form action={retry}>
+                <input type="hidden" name="meetingId" value={meetingId} />
+                <SubmitButton pendingLabel={t("retrying")}>{t("retry")}</SubmitButton>
+              </form>
+            )
+          }
+        >
           {t("failedText")}
         </Banner>
       )}
