@@ -55,6 +55,8 @@ export interface OrgDetailViewProps {
   startMeeting?: ReactNode;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
+  /** Admins: "Bjud in via mejl" (`InviteByEmail`), in the Bjud in panel under the link. */
+  inviteByEmail?: ReactNode;
   /** The meeting-format card (`FormatCard`), shown above the people panel. */
   formatCard?: ReactNode;
   /**
@@ -239,7 +241,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions, logoUrl, komIgang } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
@@ -344,8 +346,16 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <div className="flex flex-col gap-6">
           <Panel title="Bjud in" titleId="invite-title">
             <div className="flex flex-col gap-3">
+              {inviteByEmail && (
+                <section aria-labelledby="invite-email-title" className="flex flex-col gap-3 border-b border-line pb-5">
+                  <h3 id="invite-email-title" className="text-sm font-semibold">
+                    Bjud in via mejl
+                  </h3>
+                  {inviteByEmail}
+                </section>
+              )}
               <p className="text-sm text-ink-3">
-                Den som öppnar länken och loggar in med Google blir medlem och kan starta möten.
+                {inviteByEmail ? "Eller dela länken själv. " : ""}Den som öppnar länken och loggar in med Google blir medlem och kan starta möten.
               </p>
               <CopyField id="invite-url" value={inviteUrl} label="Inbjudningslänk" />
               {isAdmin && (

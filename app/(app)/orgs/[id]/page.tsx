@@ -27,6 +27,9 @@ import { docUrl } from "@/lib/ui/meetings";
 import { localDate } from "@/lib/docs/create";
 import { upcomingPrepared } from "@/lib/prepare/store";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
+import { InviteByEmail } from "@/components/views/InviteByEmail";
+import { inviterNameFor, listInvites } from "@/lib/invites/send";
+import type { InviteRow } from "@/lib/invites/rules";
 import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
@@ -109,6 +112,16 @@ async function safeDriveReadonly(userId: string): Promise<boolean> {
   }
 }
 
+/** The admin's sent invites (0038). Service role, so only after the admin check; never breaks the page. */
+async function safeInvites(orgId: string): Promise<InviteRow[]> {
+  try {
+    return await listInvites(supabaseAdmin(), orgId);
+  } catch (err) {
+    console.error("org page: invites unavailable", (err as Error)?.message);
+    return [];
+  }
+}
+
 /** Members for the members panel. Service role, so only called after RLS let us read the org. */
 async function safeMembers(orgId: string): Promise<OrgMember[] | undefined> {
   try {
@@ -154,6 +167,7 @@ export default async function OrgPage({
   const importJob = isAdmin && tab === "oversikt" ? await safeImportJob(id) : null;
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
+  const invites = isAdmin ? await safeInvites(id) : [];
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
   const docAccess = docAccessFor(
@@ -202,6 +216,18 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
+      inviteByEmail={
+        isAdmin ? (
+          <InviteByEmail
+            orgId={org.id}
+            orgName={org.name}
+            inviterName={inviterNameFor(people.find((p) => p.member_user_id === me)?.name, userResult.data.user?.user_metadata)}
+            inviteUrl={inviteUrl}
+            invites={invites}
+            memberEmails={(members ?? []).map((m) => m.email.toLowerCase()).filter(Boolean)}
+          />
+        ) : undefined
+      }
       formatCard={
         <FormatCard
           orgId={org.id}
