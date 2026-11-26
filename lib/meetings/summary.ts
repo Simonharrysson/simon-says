@@ -34,9 +34,9 @@ export interface MeetingSummary {
   tasksOpen: number;
 }
 
-const isCopy = (r: ChainItem) => Boolean(r.copy_of) || r.id.endsWith("-t");
-const isTask = (r: ChainItem) => (r.kind === "task" || (r.kind == null && r.section === "action")) && !isCopy(r) && !r.deleted_by_human;
-const isDecision = (r: ChainItem) => (r.kind === "decision" || (r.kind == null && r.section === "decision")) && !isCopy(r) && !r.deleted_by_human;
+export const isCopy = (r: Pick<ChainItem, "id" | "copy_of">) => Boolean(r.copy_of) || r.id.endsWith("-t");
+export const isTask = (r: ChainItem) => (r.kind === "task" || (r.kind == null && r.section === "action")) && !isCopy(r) && !r.deleted_by_human;
+export const isDecision = (r: ChainItem) => (r.kind === "decision" || (r.kind == null && r.section === "decision")) && !isCopy(r) && !r.deleted_by_human;
 const key = (meetingId: string, id: string) => `${meetingId}\u0000${id}`;
 
 export function meetingChainSummary(

@@ -21,6 +21,7 @@ import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { MAX_STARTS_PER_HOUR } from "@/lib/limits";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
+import { saveAgendaLabels } from "@/lib/dashboard/labels";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { docUrl } from "@/lib/ui/meetings";
@@ -298,6 +299,8 @@ export async function startMeeting(
       appended: anchor.appended.length,
       roles: [...new Set(Object.values(anchor.agendaRoles))].sort(),
     });
+    // The org dashboard's agenda labels (0028): safe labels only, best effort, never a Testmöte.
+    if (!isTest) await saveAgendaLabels(meetingId, orgId, anchor.scan.items.filter((i) => i.key in anchor.sectionRanges));
     try {
       carried = await prefill({
         auth,
