@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ItemRole } from "@/lib/db/types";
+import { docUrl } from "@/lib/ui/meetings";
 import {
   countsMeeting,
   meetingCounts,
@@ -45,6 +46,10 @@ export interface HomeData {
   recent: RecentMeeting[];
   /** The user is in no förening and has never recorded in Privat. */
   brandNew: boolean;
+  /** Föreningar where no one in the people list is linked to the user: their tasks can't be found. */
+  unlinked: { id: string; name: string }[];
+  /** The Doc of each förening meeting a task came from (for "Öppna dokumentet"). */
+  docs: Record<string, string>;
 }
 
 export async function loadHome(db: SupabaseClient, userId: string): Promise<HomeData> {
@@ -52,7 +57,7 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
   if (e1) fail("members", e1);
   const roleOf = new Map((memberships ?? []).map((m) => [m.org_id as string, m.role as string]));
   const orgIds = [...roleOf.keys()];
-  if (!orgIds.length) return { spaces: [], tasks: [], recent: [], brandNew: true };
+  if (!orgIds.length) return { spaces: [], tasks: [], recent: [], brandNew: true, unlinked: [], docs: {} };
 
   const { data: orgs, error: e2 } = await db.from("orgs").select("id, name, kind").in("id", orgIds);
   if (e2) fail("orgs", e2);
@@ -145,5 +150,10 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
     });
 
   const brandNew = foreningIds.length === 0 && privatMeetings.length === 0 && privatTasks.length === 0;
-  return { spaces, tasks, recent, brandNew };
+  const unlinked = spaces
+    .filter((s) => s.kind === "forening" && !people.some((p) => p.org_id === s.id && p.member_user_id === userId))
+    .map((s) => ({ id: s.id, name: s.name }));
+  const docs: Record<string, string> = {};
+  for (const m of foreningMeetings) if (m.doc_id) docs[m.id] = docUrl(m.doc_id);
+  return { spaces, tasks, recent, brandNew, unlinked, docs };
 }

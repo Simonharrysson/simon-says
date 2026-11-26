@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <SiteHeader homeHref="/orgs" nav={<AppNav email={user.email ?? ""} signOut={signOut} />} />
+      <SiteHeader homeHref="/hem" nav={<AppNav email={user.email ?? ""} signOut={signOut} />} />
       <main id="innehall" className="flex-1 pt-8 pb-16">
         {children}
       </main>

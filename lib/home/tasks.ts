@@ -258,3 +258,23 @@ export function meetingCounts(rows: HomeNoteRow[], roles: Record<string, ItemRol
   }
   return { decisions, tasks };
 }
+
+const TZ = "Europe/Stockholm";
+const tag = (locale: "sv" | "en") => (locale === "en" ? "en-GB" : "sv-SE");
+
+/** A deadline day (YYYY-MM-DD) as "fre 4 dec" / "Fri 4 Dec". */
+export function dueDayLabel(day: string, locale: "sv" | "en" = "sv"): string {
+  const at = new Date(`${day}T12:00:00Z`);
+  return new Intl.DateTimeFormat(tag(locale), { weekday: "short", day: "numeric", month: "short", timeZone: TZ }).format(at).replace(/\./g, "");
+}
+
+/** A meeting's day as "26 nov" / "26 Nov". */
+export function meetingDayLabel(iso: string, locale: "sv" | "en" = "sv"): string {
+  return new Intl.DateTimeFormat(tag(locale), { day: "numeric", month: "short", timeZone: TZ }).format(new Date(iso)).replace(/\./g, "");
+}
+
+/** The day after `day` (YYYY-MM-DD). */
+export function nextDay(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
