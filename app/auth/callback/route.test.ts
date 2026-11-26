@@ -22,6 +22,7 @@ const google = vi.hoisted(() => ({
   storeGoogleToken: vi.fn(),
   hasGoogleToken: vi.fn(),
   storeImportToken: vi.fn(),
+  storeCalendarToken: vi.fn(),
 }));
 vi.mock("@/lib/google/client", () => google);
 
@@ -68,6 +69,7 @@ beforeEach(() => {
   grantedScope = DRIVE;
   exchanged = { id: "u1", email: "simon@example.com" };
   google.storeImportToken.mockReset().mockResolvedValue(undefined);
+  google.storeCalendarToken.mockReset().mockResolvedValue(undefined);
   providerRefresh = "1//google-refresh";
   google.storeGoogleToken.mockReset().mockResolvedValue(undefined);
   google.hasGoogleToken.mockReset().mockResolvedValue(false);
@@ -262,6 +264,51 @@ describe("auth callback", () => {
       grantedScope = READONLY;
       const res = await call("&next=%2F%2Fevil.com&atkomst=drive");
       expect(res.headers.get("location")).toBe("https://example.com/");
+    });
+  });
+  describe("Koppla kalender: the calendar.readonly consent (atkomst=kalender)", () => {
+    const CAL = "openid email profile https://www.googleapis.com/auth/calendar.readonly";
+    const BACK = "&next=%2Finstallningar&atkomst=kalender";
+    const signedIn = async () => {
+      await call();
+      google.storeGoogleToken.mockClear();
+      jar.set("sb-example-auth-token-code-verifier", { value: JSON.stringify("verifier") });
+    };
+
+    it("granted: the token goes to the calendar's own store; nothing else is stored", async () => {
+      await signedIn();
+      grantedScope = CAL;
+      const res = await call(BACK);
+      expect(res.headers.get("location")).toBe("https://example.com/installningar?kalender=ok");
+      expect(google.storeCalendarToken).toHaveBeenCalledWith("u1", "1//google-refresh", CAL);
+      expect(google.storeGoogleToken).not.toHaveBeenCalled();
+      expect(google.storeImportToken).not.toHaveBeenCalled();
+      const last = new Map(sets.map((x) => [x.name, x.value]));
+      for (const value of last.values()) expect(decode(value)).not.toContain("google-refresh");
+    });
+
+    it("drive.readonly granted on a calendar consent is not a calendar grant: kalender=nej", async () => {
+      await signedIn();
+      grantedScope = `${DRIVE} https://www.googleapis.com/auth/drive.readonly`;
+      expect((await call(BACK)).headers.get("location")).toBe("https://example.com/installningar?kalender=nej");
+      expect(google.storeCalendarToken).not.toHaveBeenCalled();
+      expect(google.storeImportToken).not.toHaveBeenCalled();
+    });
+
+    it("another Google account: kalender=konto, the user's own session restored, nothing stored", async () => {
+      await signedIn();
+      grantedScope = CAL;
+      exchanged = { id: "u2", email: "other@example.com" };
+      expect((await call(BACK)).headers.get("location")).toBe("https://example.com/installningar?kalender=konto");
+      expect(google.storeCalendarToken).not.toHaveBeenCalled();
+      const session = sessionCookies().map(([, c]) => decode(c.value)).join("");
+      expect(session).toContain('"id":"u1"');
+    });
+
+    it("cancelled by a signed-in user: back with kalender=nej", async () => {
+      await signedIn();
+      const res = await GET(new NextRequest(`https://simonsays.example/auth/callback?error=access_denied${BACK}`));
+      expect(res.headers.get("location")).toBe("https://example.com/installningar?kalender=nej");
     });
   });
 });

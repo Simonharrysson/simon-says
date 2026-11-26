@@ -37,6 +37,7 @@ const orgTones: Record<string, Notice["tone"]> = {
   rollnamn: "danger",
   "roll-admin": "danger",
   sammanfattning: "danger",
+  kalender: "danger",
   "mote-forbidden": "danger",
   "mote-not_found": "danger",
   "mote-active": "danger",

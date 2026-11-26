@@ -126,6 +126,9 @@
     },
     "admin-invalid": {
       "text": "The role couldn't be changed. Reload the page and try again."
+    },
+    "kalender": {
+      "text": "The calendar could not be saved. Choose one of your own calendars and try again. Only an admin can change it."
     }
   }
 }

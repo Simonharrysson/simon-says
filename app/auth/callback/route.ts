@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hasGoogleToken, storeGoogleToken, storeImportToken } from "@/lib/google/client";
-import { fetchGrantedScope, hasDriveFile, hasDriveReadonly } from "@/lib/google/scopes";
+import { hasGoogleToken, storeCalendarToken, storeGoogleToken, storeImportToken } from "@/lib/google/client";
+import { fetchGrantedScope, hasCalendarReadonly, hasDriveFile, hasDriveReadonly } from "@/lib/google/scopes";
 import { defaultLocale, isLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from "@/lib/i18n/config";
 import { loadMyLocale, saveMyLocale } from "@/lib/i18n/user-locale";
 import { loginErrorPath, safeNextPath } from "@/lib/next-path";
@@ -19,6 +19,10 @@ export const dynamic = "force-dynamic";
  * happens: `?drive=ok` granted, `nej` cancelled or unticked, `fel` no token, `konto` the admin
  * picked another Google account than the one they are signed in with (that session is signed
  * out again, the admin's own restored, nothing stored).
+ *
+ * `atkomst=kalender`: "Koppla kalender" (calendar.readonly, todo #14), the same way: the same
+ * account check, the token stored apart (google_calendar_tokens, never over the sign-in token), and
+ * back to where it was asked (`?kalender=ok|nej|fel|konto`).
  */
 export async function GET(request: NextRequest) {
   const origin = appOrigin();
@@ -26,8 +30,11 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const next = request.nextUrl.searchParams.get("next");
   const fail = (fel: string) => to(loginErrorPath(fel, next));
-  const driveRequest = request.nextUrl.searchParams.get("atkomst") === "drive" && safeNextPath(next) !== "/";
-  const backToImport = (result: "ok" | "nej" | "fel" | "konto") => to(`${safeNextPath(next)}?drive=${result}`);
+  const atkomst = request.nextUrl.searchParams.get("atkomst");
+  // An extra-access consent of a signed-in user: drive.readonly (the import) or calendar.readonly.
+  const access = (atkomst === "drive" || atkomst === "kalender") && safeNextPath(next) !== "/" ? atkomst : null;
+  const driveRequest = access !== null;
+  const backToImport = (result: "ok" | "nej" | "fel" | "konto") => to(`${safeNextPath(next)}?${access}=${result}`);
   const supabase = await createSupabaseServerClient();
   if (!code) {
     const cancelled = request.nextUrl.searchParams.get("error") === "access_denied";
@@ -63,7 +70,8 @@ export async function GET(request: NextRequest) {
       hasProviderRefreshToken: hasRefreshToken,
       grantedScope: scope,
       driveFile,
-      ...(driveRequest ? { driveReadonly: hasDriveReadonly(scope) } : {}),
+      ...(access === "drive" ? { driveReadonly: hasDriveReadonly(scope) } : {}),
+      ...(access === "kalender" ? { calendarReadonly: hasCalendarReadonly(scope) } : {}),
     }),
   );
 
@@ -116,7 +124,7 @@ export async function GET(request: NextRequest) {
 
   async function finishDriveRequest() {
     if (!beforeUser || !before || beforeUser.id !== session.user.id) {
-      console.warn("auth callback: drive consent came back as another user; signing that session out");
+      console.warn(`auth callback: ${access} consent came back as another user; signing that session out`);
       await supabase.auth.signOut({ scope: "local" });
       if (!beforeUser || !before) return fail("kod");
       const { error: restoreError } = await supabase.auth.setSession({ access_token: before.access_token, refresh_token: before.refresh_token });
@@ -125,14 +133,16 @@ export async function GET(request: NextRequest) {
     }
     let result: "ok" | "nej" | "fel" = "nej";
     try {
-      if (hasDriveReadonly(scope)) {
+      const granted = access === "kalender" ? hasCalendarReadonly(scope) : hasDriveReadonly(scope);
+      if (granted) {
         if (session.provider_refresh_token) {
-          await storeImportToken(session.user.id, session.provider_refresh_token, scope!);
+          if (access === "kalender") await storeCalendarToken(session.user.id, session.provider_refresh_token, scope!);
+          else await storeImportToken(session.user.id, session.provider_refresh_token, scope!);
           result = "ok";
         } else result = "fel";
       }
     } catch (err) {
-      console.error("auth callback: storing the import token failed", (err as Error)?.message);
+      console.error(`auth callback: storing the ${access} token failed`, (err as Error)?.message);
       result = "fel";
     }
     // Same as a sign-in: the session cookie must not carry Google's tokens.
