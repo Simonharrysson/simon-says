@@ -70,7 +70,7 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
       seeded.push(meetingId);
       await svc
         .from("meetings")
-        .update({ started_at: `${date}T17:00:00Z`, is_test: test, agenda_roles: { "ag-1": "topic" }, agenda_labels: { "ag-1": "Ekonomi" } })
+        .update({ started_at: `${date}T17:00:00Z`, is_test: test, layout: "format", agenda_roles: { "ag-1": "topic" }, agenda_labels: { "ag-1": "Ekonomi" } })
         .eq("id", meetingId);
       await svc.from("speaker_map").update({ person_id: person!.id }).eq("meeting_id", meetingId).eq("el_session_id", sessionId);
       const items = [

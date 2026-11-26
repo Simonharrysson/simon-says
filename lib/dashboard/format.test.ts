@@ -12,7 +12,7 @@ describe("dashboard format", () => {
     expect(formatMonth("2027-01")).toBe("januari 2027");
   });
   it("formatWeeks", () => {
-    expect([0, 1, 3].map(formatWeeks)).toEqual(["ny i veckan", "1 vecka", "3 veckor"]);
+    expect([0, 1, 3].map(formatWeeks)).toEqual(["ny den här veckan", "1 vecka", "3 veckor"]);
   });
   it("matchesQuery: every word, any order, case-insensitive", () => {
     expect(matchesQuery("Hyran höjs till 2 000 kr · Ekonomi", "ekonomi hyran")).toBe(true);

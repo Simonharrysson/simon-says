@@ -27,6 +27,7 @@ const meeting = (id: string, date: string, over: Partial<DashMeeting> = {}): Das
   started_at: `${date}T17:00:00Z`,
   status: "done",
   is_test: false,
+  layout: "format",
   agenda_roles: { "ag-1": "checkin", "ag-2": "topic" },
   agenda_labels: { "ag-1": "Må-runda", "ag-2": "Medlemsvärvning" },
   ...over,

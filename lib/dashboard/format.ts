@@ -18,9 +18,9 @@ export function formatMonth(month: string): string {
   return `${MONTHS[(m || 1) - 1]} ${y}`;
 }
 
-/** How long a task has been open: "ny i veckan", "1 vecka", "3 veckor". */
+/** How long a task has been open: "ny den här veckan", "1 vecka", "3 veckor". */
 export function formatWeeks(weeks: number): string {
-  if (weeks < 1) return "ny i veckan";
+  if (weeks < 1) return "ny den här veckan";
   return weeks === 1 ? "1 vecka" : `${weeks} veckor`;
 }
 

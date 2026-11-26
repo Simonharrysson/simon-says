@@ -32,7 +32,7 @@ export async function loadOverviewInput(db: SupabaseClient, orgId: string): Prom
   const [meetingsRes, peopleRes] = await Promise.all([
     db
       .from("meetings")
-      .select("id, org_id, started_at, status, is_test, agenda_roles, agenda_labels")
+      .select("id, org_id, started_at, status, is_test, layout, agenda_roles, agenda_labels")
       .eq("org_id", orgId)
       .eq("is_test", false)
       .in("status", ["done", "abandoned"])

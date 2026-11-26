@@ -18,6 +18,8 @@ export interface DashMeeting {
   started_at: string;
   status: MeetingStatus;
   is_test?: boolean | null;
+  /** Only "format" meetings carry and close tasks (lib/agenda/followup). */
+  layout?: "v1" | "format" | null;
   agenda_roles?: Record<string, ItemRole> | null;
   agenda_labels?: Record<string, string> | null;
 }
@@ -144,13 +146,26 @@ function scoped(orgId: string, input: DashInput) {
   return { meetings, byId, items };
 }
 
+/**
+ * Tasks only from meetings that take part in carrying (lib/agenda/followup): status done (an
+ * abandoned false start is never a carry source, and its rows may be adopted by the next start on
+ * the same Doc, so they would show twice) and the format layout (v1-layout tasks are never carried
+ * or closed, so all of them would look open forever).
+ */
+const carriesTasks = (m: DashMeeting) => m.status === "done" && m.layout === "format";
+
 export function openTasks(orgId: string, input: DashInput, now: Date): TaskGroup[] {
-  const { byId, items } = scoped(orgId, input);
+  const scope = scoped(orgId, input);
+  const byId = new Map([...scope.byId].filter(([, m]) => carriesTasks(m)));
+  const items = scope.items.filter((r) => byId.has(r.meeting_id));
   const doneCopies = new Set(items.filter((r) => isCopy(r) && r.done).map((r) => key(r.meeting_id, r.copy_of ?? r.id.slice(0, -2))));
   const tasks = items.filter(isTask);
   const byKey = new Map(tasks.map((r) => [key(r.meeting_id, r.id), r]));
+  // Every carried primary row, a deleted one too: a human deleting the carried line closes the task.
   const carriedOn = new Set(
-    tasks.filter((r) => r.carried_from_meeting && r.carried_from_id).map((r) => key(r.carried_from_meeting!, r.carried_from_id!)),
+    items
+      .filter((r) => !isCopy(r) && r.carried_from_meeting && r.carried_from_id)
+      .map((r) => key(r.carried_from_meeting!, r.carried_from_id!)),
   );
   const people = new Map(input.people.map((p) => [p.id, p]));
   const groups = new Map<string, TaskGroup>();

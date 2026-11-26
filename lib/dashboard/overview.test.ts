@@ -12,6 +12,7 @@ const meeting = (id: string, date: string, over: Partial<DashMeeting> = {}): Das
   started_at: `${date}T17:00:00Z`,
   status: "done",
   is_test: false,
+  layout: "format",
   agenda_roles: { "ag-1": "checkin", "ag-2": "topic", "ag-3": "topic", "ag-4": "other" },
   agenda_labels: { "ag-1": "Må-runda", "ag-2": "Ekonomi", "ag-3": "Spelkväll", "ag-4": "Övrigt" },
   ...over,
@@ -105,6 +106,17 @@ describe("openTasks", () => {
     ];
     const groups = openTasks(ORG, input({ items }), NOW);
     expect(groups.flatMap((g) => g.tasks.map((t) => t.key))).toEqual(["m2:n5"]);
+  });
+
+  it("a carried line a human deleted closes the task (the source is not a tip)", () => {
+    const items = [item("m1", "n1"), item("m2", "c1", { carried_from_meeting: "m1", carried_from_id: "n1", deleted_by_human: true })];
+    expect(openTasks(ORG, input({ items }), NOW)).toEqual([]);
+  });
+
+  it("abandoned false starts and v1-layout meetings never hold open tasks", () => {
+    const meetings = [...input().meetings, meeting("ab", "2026-11-20", { status: "abandoned" }), meeting("v1", "2026-11-21", { layout: "v1" })];
+    const items = [item("ab", "n1"), item("v1", "n2"), item("m3", "n3")];
+    expect(openTasks(ORG, input({ meetings, items }), NOW).flatMap((g) => g.tasks.map((t) => t.key))).toEqual(["m3:n3"]);
   });
 
   it("Testmöten and Må-runda items never count", () => {
