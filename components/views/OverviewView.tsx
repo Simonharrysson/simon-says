@@ -10,7 +10,7 @@ import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Panel, panelFootClass, panelIntroClass, panelPadClass } from "@/components/ui/Panel";
-import { formatDay, formatMonth, formatWeeks, matchesQuery } from "@/lib/dashboard/format";
+import { basisLine, formatDay, formatMonth, formatWeeks, matchesQuery } from "@/lib/dashboard/format";
 import type { Overview } from "@/lib/dashboard/overview";
 import type { GoalSuggestion } from "@/lib/history/digest-input";
 import type { JobView } from "@/lib/history/progress";
@@ -76,12 +76,8 @@ export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0
   const o = overview;
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-sm text-ink-3 max-w-[68ch]">
-        {o.meetingCount === 0
-          ? "Översikten fylls på när föreningen har haft sitt första möte med Simon Says."
-          : `Bygger på ${plural(o.meetingCount, "avslutat möte", "avslutade möten")}${o.firstMeeting ? ` sedan ${formatDay(o.firstMeeting, now)}` : ""}. Testmöten räknas inte.`}
-      </p>
-      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} historyCount={historyCount} initial={initialGoalsPhase ?? (isAdmin && importJob ? { phase: "import", initial: { phase: "job", job: importJob } } : undefined)} importAccess={importAccess} />
+      <p className="text-sm text-ink-3 max-w-[68ch]">{basisLine(o, now)}</p>
+      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} canPropose={o.meetingCount >= 3 || historyCount > 0 || o.imported.count > 0} historyCount={historyCount} initial={initialGoalsPhase ?? (isAdmin && importJob ? { phase: "import", initial: { phase: "job", job: importJob } } : undefined)} importAccess={importAccess} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <OpenTasksPanel overview={o} now={now} />
@@ -103,7 +99,7 @@ function GoalsPanel({
   orgId,
   isAdmin,
   goals,
-  meetingCount,
+  canPropose,
   historyCount,
   initial,
   importAccess = { driveReadonly: false, email: null, meetingFolder: null },
@@ -111,7 +107,8 @@ function GoalsPanel({
   orgId: string;
   isAdmin: boolean;
   goals: OverviewGoal[];
-  meetingCount: number;
+  /** At least 3 own meetings, or imported protocols (the proposal reads the whole history). */
+  canPropose: boolean;
   historyCount: number;
   initial?: GoalsPhase;
   importAccess?: ImportAccess;
@@ -260,7 +257,7 @@ function GoalsPanel({
               <EmptyState title="Inga mål än">
                 <p>
                   {isAdmin
-                    ? meetingCount >= 3
+                    ? canPropose
                       ? "Låt Simon Says föreslå 3–5 mål utifrån det som återkommer på era möten. Du ändrar och godkänner dem innan någon annan ser dem."
                       : "Simon Says kan föreslå mål när föreningen har haft minst 3 möten. Du kan skriva egna mål redan nu."
                     : "När en admin har godkänt föreningens mål syns de här."}
@@ -492,13 +489,18 @@ function SuggestionList({
 
 function OpenTasksPanel({ overview, now }: { overview: Overview; now: Date }) {
   const count = overview.openTasks.reduce((n, g) => n + g.tasks.length, 0);
+  const oldTasks = overview.imported.tasks;
   return (
     <Panel flush title="Öppna uppgifter" titleId="tasks-title" actions={<span className="text-sm text-ink-3 tabular-nums">{count}</span>}>
       <p className={cn(panelIntroClass, "text-sm text-ink-3")}>Det som inte är klart, äldst först. Uppgifter som följt med i {LONG_OPEN_WEEKS} veckor eller mer är markerade.</p>
       {count === 0 ? (
         <div className={panelPadClass}>
           <EmptyState title="Inga öppna uppgifter">
-            <p>Uppgifter från mötena hamnar här tills någon bockar av dem i protokollet.</p>
+            <p>
+              {overview.meetingCount === 0 && overview.imported.count > 0
+                ? "Uppgifter från möten med Simon Says hamnar här tills någon bockar av dem i protokollet."
+                : "Uppgifter från mötena hamnar här tills någon bockar av dem i protokollet."}
+            </p>
           </EmptyState>
         </div>
       ) : (
@@ -524,6 +526,11 @@ function OpenTasksPanel({ overview, now }: { overview: Overview; now: Date }) {
           ))}
         </div>
       )}
+      {oldTasks > 0 && (
+        <p className={cn(panelFootClass, "text-sm text-ink-3")}>
+          {plural(oldTasks, "uppgift", "uppgifter")} i importerade protokoll räknas inte som öppna.
+        </p>
+      )}
     </Panel>
   );
 }
@@ -545,7 +552,7 @@ function DecisionsPanel({ overview, now }: { overview: Overview; now: Date }) {
       {overview.decisions.length === 0 ? (
         <div className={panelPadClass}>
           <EmptyState title="Inga beslut än">
-            <p>Besluten från föreningens möten det senaste året hamnar här, med datum och dagordningspunkt.</p>
+            <p>Besluten från föreningens möten och importerade protokoll hamnar här, med datum och dagordningspunkt.</p>
           </EmptyState>
         </div>
       ) : (
@@ -562,7 +569,11 @@ function DecisionsPanel({ overview, now }: { overview: Overview; now: Date }) {
               onChange={(e) => setQuery(e.target.value)}
             />
             <p id="decision-search-hint" className="text-sm text-ink-3" aria-live="polite">
-              {searching ? plural(hits.length, "beslut matchar", "beslut matchar") : "Det senaste året, nyast först."}
+              {searching
+                ? plural(hits.length, "beslut matchar", "beslut matchar")
+                : overview.imported.count > 0
+                  ? "Nyast först, också från de importerade protokollen."
+                  : "Nyast först."}
             </p>
           </div>
           {shown.length === 0 ? (
@@ -573,7 +584,7 @@ function DecisionsPanel({ overview, now }: { overview: Overview; now: Date }) {
                 <li key={d.key} className={rowClass}>
                   <p className="wrap-anywhere">{d.text}</p>
                   <p className={metaClass}>
-                    <span>{[formatDay(d.date, now), d.item].filter(Boolean).join(" · ")}</span>
+                    <span>{[formatDay(d.date, now), d.item, d.imported && "Importerat"].filter(Boolean).join(" · ")}</span>
                   </p>
                 </li>
               ))}
@@ -644,12 +655,14 @@ function TopicsPanel({ overview }: { overview: Overview }) {
 
 function AttendancePanel({ overview, now }: { overview: Overview; now: Date }) {
   const a = overview.attendance;
+  const hasImported = overview.imported.count > 0;
   return (
     <Panel flush title="Närvaro" titleId="attendance-title">
       <p className={cn(panelIntroClass, "text-sm text-ink-3")}>
         {a.meetings > 0
           ? `Vem som hördes och fick sitt namn på ${plural(a.meetings, "möte", "möten")}. Den som var med men inte sa något syns inte.`
           : "Vem som hördes och fick sitt namn på mötena. Syns efter första mötet med namnrunda."}
+        {hasImported && " Närvaro räknas från möten med Simon Says, de importerade protokollen har ingen."}
       </p>
       {a.meetings > 0 && a.people.length > 0 && (
         <ul aria-labelledby="attendance-title">
