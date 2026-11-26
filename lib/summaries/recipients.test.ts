@@ -69,6 +69,16 @@ describe("presentPeople", () => {
     expect([[...alone.present], alone.certain]).toEqual([["p-anna"], false]);
   });
 
+  it("Närvarande text that names nobody in the list ('hela styrelsen', 'alla', a stranger) is not attendance", () => {
+    for (const text of ["hela styrelsen", "Alla", "Kalle Okänd"]) {
+      const a = presentPeople({ people, speakers: [], attendeeNames: [text], startedBy: "u-anna" });
+      expect([a.certain, a.unmatchedNames], text).toEqual([false, 1]);
+    }
+    // Even next to a matched name: we can't tell who else was there.
+    const mixed = presentPeople({ people, speakers: [], attendeeNames: ["Erik, hela styrelsen"], startedBy: null });
+    expect([[...mixed.present], mixed.certain]).toEqual([["p-erik"], false]);
+  });
+
   it("a typed Närvarande list counts everyone in it", () => {
     expect(attendeeNames("Närvarande: Anna, Erik och Sara")).toEqual(["Anna", "Erik", "Sara"]);
     expect(attendeeNames("Nils & Sara Holm")).toEqual(["Nils", "Sara Holm"]);

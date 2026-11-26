@@ -10,8 +10,9 @@ import { resolveSpeaker } from "@/lib/segments/resolve";
 //   map, through merges), a Närvarande name (the attendee rows, by full or first name; an
 //   ambiguous first name counts everyone it could mean as present: better one summary too few than
 //   a "Du missade mötet" to someone who was there), or the account that started the meeting.
-//   Only when attendance is certain (someone identified by voice or Närvarande, and no unnamed
-//   voice like "Talare 2" on a shared mic); otherwise nobody is mailed in this mode;
+//   Only when attendance is certain (someone identified by voice or Närvarande, no unnamed voice
+//   like "Talare 2" on a shared mic, and no Närvarande text that names nobody in the list, like
+//   "hela styrelsen"); otherwise nobody is mailed in this mode;
 // - a person whose member link was removed (0018) gets nothing by their old address;
 // - all: everyone; selected: the ticked people; off: nobody.
 
@@ -100,6 +101,8 @@ export interface Attendance {
   certain: boolean;
   /** Voices heard that nobody named (for the event log; a count only). */
   unnamedVoices: number;
+  /** Närvarande entries that name nobody in the people list (a count only). */
+  unmatchedNames: number;
 }
 
 /** Who was at the meeting (see the rules above). */
@@ -129,14 +132,22 @@ export function presentPeople(input: {
       else for (const id of peopleNamed(res.displayName, input.people)) present.add(id);
     }
   }
+  // Närvarande text counts only when it names people in the list; anything else ("hela styrelsen",
+  // "alla", a name we don't know) leaves attendance uncertain.
+  let unmatched = 0;
   for (const text of input.attendeeNames) {
     for (const name of attendeeNames(text)) {
+      const ids = peopleNamed(name, input.people);
+      if (!ids.length) {
+        unmatched++;
+        continue;
+      }
       identified++;
-      for (const id of peopleNamed(name, input.people)) present.add(id);
+      for (const id of ids) present.add(id);
     }
   }
   if (input.startedBy) for (const p of input.people) if (p.member_user_id === input.startedBy) present.add(p.id);
-  return { present, certain: identified > 0 && unnamed.size === 0, unnamedVoices: unnamed.size };
+  return { present, certain: identified > 0 && unnamed.size === 0 && unmatched === 0, unnamedVoices: unnamed.size, unmatchedNames: unmatched };
 }
 
 /** Everyone who gets the summary, in people-list order (by name). */
