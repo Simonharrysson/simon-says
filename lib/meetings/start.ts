@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
-import { AgendaShapeError, anchorAgenda, type AnchorResult } from "@/lib/agenda/anchor";
+import { AgendaShapeError, anchorAgenda, cleanupLosingAnchor, type AnchorResult } from "@/lib/agenda/anchor";
 import { carriedItems, carryPlan, previousMeeting, previousOnDoc } from "@/lib/agenda/followup";
 import { missingRequired } from "@/lib/agenda/scan";
 import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle } from "@/lib/docs/create";
@@ -225,8 +225,8 @@ export async function startMeeting(
   }
 
   // Re-check after the insert, atomically (0027: per starter, per org and per Doc): of concurrent
-  // starts exactly one survives; the guard deletes a losing row itself (its Doc stays in Drive; an
-  // agenda Doc keeps the loser's anchor ranges, which change no text, docs/learnings.md A10).
+  // starts exactly one survives; the guard deletes a losing row itself (a new Doc stays in Drive).
+  // A losing start on an agenda Doc then removes its own anchoring from the Doc (parked N5).
   const guardArgs = { p_meeting_id: meetingId, p_max_per_hour: MAX_STARTS_PER_HOUR };
   let { data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start_v2", guardArgs);
   // A database without 0027 yet (deploy order): the 0021 guard, so a start never fails on it.
@@ -235,6 +235,8 @@ export async function startMeeting(
     ({ data: guard, error: guardError } = await supabaseAdmin().rpc("guard_meeting_start", guardArgs));
   }
   if (guardError) throw new Error(`meetings: start guard: ${guardError.message}`);
+  const refused = guard === "starter_busy" || guard === "start_rate" || guard === "org_busy" || guard === "doc_busy";
+  if (refused && agendaMode && setup.anchor) await undoLosingAnchor(auth, setup.docId, meetingId, setup.anchor);
   if (guard === "starter_busy") return startBusy();
   if (guard === "start_rate") return startRate();
   if (guard === "org_busy") return failed("already_live", 409, "Ett möte pågår redan i föreningen. Avsluta det först.");
@@ -384,6 +386,20 @@ async function otherMembers(ctx: SetupCtx): Promise<string[]> {
 }
 
 /** Agenda mode: the checks (no writes), then the anchoring (the only Doc write before the guard, F14). Their Doc: never shared by us. */
+/**
+ * A start the guard refused after anchoring the förening's Doc (parked N5): remove its ranges and
+ * its status line (handing back a status line it took over), revision-guarded. Best effort: a
+ * failure is logged (ids and counts only, never the Doc's text) and the refusal stands.
+ */
+async function undoLosingAnchor(auth: OAuth2Client, docId: string, meetingId: string, anchor: AnchorResult): Promise<void> {
+  try {
+    const n = await cleanupLosingAnchor(auth, { docId, tabId: anchor.tabId, meetingId, replaced: anchor.replacedStatus });
+    console.warn(`meetings ${meetingId}: start refused; anchoring removed from Doc ${docId} (${n} requests)`);
+  } catch (err) {
+    console.error(`meetings ${meetingId}: start refused; anchoring cleanup failed: ${(err as Error).message}`);
+  }
+}
+
 async function agendaSetup(ctx: SetupCtx, docId: string, profile: FormatProfile): Promise<DocSetup | Failure> {
   let access;
   try {

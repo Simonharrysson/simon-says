@@ -40,7 +40,10 @@ const { proposeFormat } = await import("@/lib/formats/learn");
 const { extractRequiredItems } = await import("@/lib/formats/stadgar");
 const { docStructure } = await import("@/lib/formats/structure");
 const { docOf, paraEl, TAB } = await import("@/test/docsim");
-const { INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
+const { applyDoc, anchoredDoc } = await import("@/test/formatdoc");
+const { planLoserCleanup, INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
+const { parseNotesTab } = await import("@/lib/docs/tab");
+const { itemSpan } = await import("@/lib/docs/notes");
 const { anchoredStarts, scanAgenda } = await import("@/lib/agenda/scan");
 const { createOrg } = await import("@/lib/db/orgs");
 const { ensureStandardRow } = await import("@/lib/formats/store");
@@ -344,8 +347,8 @@ describe("feature: formats (document formats)", () => {
   });
 });
 
-// Parked findings from the final re-review: fictional agendas in docsim.
-describe("feature: formats (parked fixes)", () => {
+// Parked findings from the final re-review (N2, N4, N5, N6): fictional agendas in docsim.
+describe("feature: formats (parked fixes N2, N4, N5, N6)", () => {
   const BUL = "list-b";
   type El = docs_v1.Schema$StructuralElement;
   /** An agenda Doc: H1 title, H2 "Agenda", `items`, H2 "Anteckningar"; list-b is a bulleted list. */
@@ -493,6 +496,63 @@ describe("feature: formats (parked fixes)", () => {
     }
   });
 
+  describe("N5: a start that lost the race removes its own anchoring", () => {
+    const anchorAs = (doc: Doc, id: string) => anchoredDoc(id, { doc }).plan;
+    const ours = (doc: Doc, id: string) => [...parseNotesTab(doc, TAB).ranges.keys()].filter((n) => n.startsWith(`ss-${id}-`));
+    const cleanup = (doc: Doc, id: string, plan: ReturnType<typeof anchorAs>) => applyDoc(doc, planLoserCleanup(parseNotesTab(doc, TAB), id, plan.replacedStatus));
+
+    it("winner anchored first: the loser took over the winner's status line and hands it back (text and range)", () => {
+      const doc = fixtureDoc();
+      const human = linesOf(doc).filter((l) => l !== "");
+      const w = anchorAs(doc, "w");
+      const winnerLines = linesOf(doc);
+      const winnerRanges = ours(doc, "w");
+      const l = anchorAs(doc, "l");
+      expect(l.replacedStatus).toEqual({ name: "ss-w-header", text: INITIAL_LIVE_LINE });
+      // Measured: the API drops a range whose text is deleted, so the winner has lost its LIVE range.
+      expect(itemSpan(parseNotesTab(doc, TAB), w.headerRange)).toBeNull();
+      cleanup(doc, "l", l);
+      expect(linesOf(doc)).toEqual(winnerLines);
+      expect(ours(doc, "l")).toEqual([]);
+      expect(ours(doc, "w").sort()).toEqual(winnerRanges.sort());
+      expect(itemSpan(parseNotesTab(doc, TAB), w.headerRange)).toMatchObject({ rangeText: INITIAL_LIVE_LINE, paraText: INITIAL_LIVE_LINE, ambiguous: false });
+      expect(isSubsequence(human, linesOf(doc))).toBe(true);
+    });
+
+    it("loser anchored first: the winner reused the loser's line, which stays; only the loser's ranges go", () => {
+      const doc = fixtureDoc();
+      const l = anchorAs(doc, "l");
+      const w = anchorAs(doc, "w");
+      expect(w.replacedStatus).toEqual({ name: "ss-l-header", text: INITIAL_LIVE_LINE });
+      const before = linesOf(doc);
+      cleanup(doc, "l", l);
+      expect(linesOf(doc)).toEqual(before);
+      expect(ours(doc, "l")).toEqual([]);
+      expect(itemSpan(parseNotesTab(doc, TAB), w.headerRange)).toMatchObject({ rangeText: INITIAL_LIVE_LINE });
+    });
+
+    it("no winner in this Doc (another Doc in the förening won): the loser's own LIVE line goes; a human edit in it stays", () => {
+      const doc = fixtureDoc();
+      const original = linesOf(doc);
+      const l = anchorAs(doc, "l");
+      expect(l.replacedStatus).toBeNull();
+      cleanup(doc, "l", l);
+      const lines = linesOf(doc);
+      expect(lines).not.toContain(INITIAL_LIVE_LINE);
+      // Our line was the tab's last paragraph: its text goes, the newline before it is the
+      // human's heading's and stays (never merge a human paragraph into ours), so one empty line.
+      expect(lines).toEqual([...original.slice(0, 3), "2026-11-25", original[4], "18:05", ...original.slice(6), ""]);
+      expect(ours(doc, "l")).toEqual([]);
+      // A human typed inside our line before the cleanup: never removed.
+      const doc2 = fixtureDoc();
+      const l2 = anchorAs(doc2, "l");
+      const span = itemSpan(parseNotesTab(doc2, TAB), l2.headerRange)!;
+      applyDoc(doc2, [{ insertText: { text: " (Elin)", location: { tabId: TAB, index: span.rangeStart + "Simon Says".length } } }]);
+      cleanup(doc2, "l", l2);
+      expect(linesOf(doc2)).toContain("Simon Says (Elin) antecknar live · uppdaterad –");
+      expect(ours(doc2, "l")).toEqual([]);
+    });
+  });
 });
 
 describe.skipIf(!hasLocalSupabase)("feature: formats (runTick on the local stack)", () => {

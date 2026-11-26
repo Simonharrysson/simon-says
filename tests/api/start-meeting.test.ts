@@ -22,6 +22,7 @@ const m = vi.hoisted(() => ({
   addTranscriptTab: vi.fn(),
   checkAgendaDoc: vi.fn(),
   anchorAgenda: vi.fn(),
+  cleanupLosingAnchor: vi.fn(async (..._a: unknown[]) => 3),
   readNotesTab: vi.fn(),
   renderItems: vi.fn(),
   insert: vi.fn(),
@@ -134,6 +135,7 @@ vi.mock("@/lib/agenda/access", () => ({ checkAgendaDoc: m.checkAgendaDoc }));
 vi.mock("@/lib/agenda/anchor", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/agenda/anchor")>()),
   anchorAgenda: m.anchorAgenda,
+  cleanupLosingAnchor: m.cleanupLosingAnchor,
 }));
 vi.mock("@/lib/docs/notes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/docs/notes")>()),
@@ -190,6 +192,7 @@ beforeEach(() => {
   m.anchorAgenda.mockReset().mockImplementation(async (_auth: unknown, input: { meetingId: string; tabId?: string }) =>
     anchored(input.meetingId, input.tabId ?? "t.0"),
   );
+  m.cleanupLosingAnchor.mockReset().mockResolvedValue(3);
   m.readNotesTab.mockReset().mockResolvedValue({ revisionId: "r3" });
   m.renderItems.mockReset().mockImplementation(async (_a: unknown, meeting: { id: string }, rows: Record<string, unknown>[]) => ({
     status: "ok",
@@ -773,6 +776,31 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect((await agendaCall()).status).toBe(409);
     expect(m.noteInsert).not.toHaveBeenCalled();
     expect(m.renderItems).not.toHaveBeenCalled();
+  });
+
+  it("a losing start on an agenda Doc removes its own anchoring (parked N5); best effort, the refusal stands", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    for (const guard of ["doc_busy", "org_busy", "starter_busy", "start_rate"]) {
+      m.cleanupLosingAnchor.mockClear();
+      m.guard.mockResolvedValue({ data: guard, error: null });
+      expect((await agendaCall()).status).toBeGreaterThanOrEqual(409);
+      const id = m.insert.mock.calls.at(-1)![0].id;
+      expect(m.cleanupLosingAnchor).toHaveBeenCalledTimes(1);
+      expect(m.cleanupLosingAnchor.mock.calls[0][1]).toMatchObject({ docId: AGENDA_DOC, tabId: "t.0", meetingId: id });
+    }
+    m.cleanupLosingAnchor.mockRejectedValueOnce(new Error("Google down"));
+    m.guard.mockResolvedValue({ data: "doc_busy", error: null });
+    const res = await agendaCall();
+    expect([res.status, (await res.json()).error]).toEqual([409, "agenda_used"]);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("anchoring cleanup failed"));
+    // A won start, and a refused start on a new Doc of ours (no agenda Doc), clean nothing.
+    m.cleanupLosingAnchor.mockClear();
+    m.guard.mockResolvedValue({ data: "ok", error: null });
+    expect((await agendaCall()).status).toBe(200);
+    m.guard.mockResolvedValue({ data: "doc_busy", error: null });
+    await call({ orgId: ORG, consent: true });
+    expect(m.cleanupLosingAnchor).not.toHaveBeenCalled();
   });
 
   it("400 bad_request for a malformed agendaDocId, formatProfileId, formatKind or transcriptInDoc", async () => {

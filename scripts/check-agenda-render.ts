@@ -37,10 +37,12 @@
  *             after it: deleting the line WITH its newline (the newline before the table), then only its
  *             text; and deleting the line after the table with the newline before it (the table's end).
  *             Prints whether each delete was accepted. No Claude call, no DB write.
- *   parked    (parked N4) fresh fictional Docs: our bulleted line, and our indented "– " line,
+ *   parked    (parked N4, N5) fresh fictional Docs. N4: our bulleted line, and our indented "– " line,
  *             directly before a table: text-only delete + deleteParagraphBullets + zero indent on the
  *             empty paragraph left, in one batch; prints whether it was accepted and the paragraph's
- *             bullet/indent after. No Claude call, no DB write.
+ *             bullet/indent after. N5: a status line under range A replaced as planAnchoring does
+ *             (delete its text, insert ours, range B): does A survive? Then the loser's cleanup:
+ *             restore the text + re-create A, or delete our mid-Doc paragraph. No Claude call, no DB write.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
  */
@@ -1115,6 +1117,7 @@ async function tableNewline() {
 
 async function parked() {
   const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const LIVE = "Simon Says antecknar live · uppdaterad –";
   const create = async (title: string) => {
     const id = (await docsApi().documents.create({ requestBody: { title: `Simon Says ${title} (fiktivt) ${stamp}` } })).data.documentId!;
     tabId = (await get(id)).tabs![0].tabProperties!.tabId!;
@@ -1183,6 +1186,71 @@ async function parked() {
   await n4("parked.n4.bulletBeforeTable", true);
   await n4("parked.n4.dashBeforeTable", false);
 
+  // N5: the winner's status line (range A = ss-w-header) taken over as planAnchoring does.
+  await measure("parked.n5.takeover", async () => {
+    const id = await create("N5-status");
+    await batch(id, [{ insertText: { text: `Rubrik\nAnteckningar\n${LIVE}\nEn mänsklig rad`, location: { index: 1, tabId } } }]);
+    let doc = await get(id);
+    const live = paragraphs(doc).find((p) => p.text === LIVE)!;
+    const s = live.start;
+    const e = live.end - 1;
+    await batch(id, [{ createNamedRange: { name: "ss-w-header", range: range(s, e) } }]);
+    doc = await get(id);
+    await batch(
+      id,
+      [
+        { deleteContentRange: { range: range(s, e) } },
+        { insertText: { text: LIVE, location: { index: s, tabId } } },
+        { createNamedRange: { name: "ss-l-header", range: range(s, s + LIVE.length) } },
+      ],
+      doc.revisionId!,
+    );
+    doc = await get(id);
+    rec("parked.n5.takeover.ranges", namedRanges(doc));
+    // Cleanup, hand back: restore the text, drop ours, re-create A.
+    await batch(
+      id,
+      [
+        { deleteNamedRange: { name: "ss-l-header", tabsCriteria: { tabIds: [tabId] } } },
+        { deleteContentRange: { range: range(s, s + LIVE.length) } },
+        { insertText: { text: LIVE, location: { index: s, tabId } } },
+        { createNamedRange: { name: "ss-w-header", range: range(s, s + LIVE.length) } },
+      ],
+      doc.revisionId!,
+    );
+    doc = await get(id);
+    rec("parked.n5.handback.ranges", namedRanges(doc));
+    rec("parked.n5.handback.paras", paragraphs(doc).map((p) => p.text));
+    console.log(`  Doc: ${urlOf(id)}`);
+  });
+  // N5: our own fresh status line mid-Doc (after the notes heading): delete the paragraph with its newline.
+  await measure("parked.n5.deleteOwnLine", async () => {
+    const id = await create("N5-egen");
+    await batch(id, [{ insertText: { text: "Rubrik\nAnteckningar\nEn mänsklig rad", location: { index: 1, tabId } } }]);
+    let doc = await get(id);
+    const notes = paragraphs(doc).find((p) => p.text === "Anteckningar")!;
+    await batch(id, [{ updateParagraphStyle: { range: range(notes.start, notes.end), paragraphStyle: { namedStyleType: "HEADING_2" }, fields: "namedStyleType" } }]);
+    const at = notes.end - 1;
+    await batch(id, [
+      { insertText: { text: `\n${LIVE}`, location: { index: at, tabId } } },
+      { updateParagraphStyle: { range: range(at + 1, at + 1 + LIVE.length), paragraphStyle: { namedStyleType: "NORMAL_TEXT" }, fields: "namedStyleType" } },
+      { createNamedRange: { name: "ss-l-header", range: range(at + 1, at + 1 + LIVE.length) } },
+    ]);
+    doc = await get(id);
+    const live = paragraphs(doc).find((p) => p.text === LIVE)!;
+    await batch(
+      id,
+      [
+        { deleteNamedRange: { name: "ss-l-header", tabsCriteria: { tabIds: [tabId] } } },
+        { deleteContentRange: { range: range(live.start, live.end) } },
+      ],
+      doc.revisionId!,
+    );
+    doc = await get(id);
+    rec("parked.n5.deleteOwnLine.paras", paragraphs(doc).map((p) => `${p.style} ${p.text}`));
+    rec("parked.n5.deleteOwnLine.ranges", namedRanges(doc));
+    console.log(`  Doc: ${urlOf(id)}`);
+  });
   mkdirSync(STATE_DIR, { recursive: true });
   writeFileSync(join(STATE_DIR, "agenda-parked.json"), JSON.stringify(R, null, 2));
 }

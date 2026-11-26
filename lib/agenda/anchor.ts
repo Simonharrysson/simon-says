@@ -47,6 +47,16 @@ export interface AnchorPlan {
   rows: NoteItemRow[];
   /** Section labels appended at the end of the tab, in Doc order. */
   appended: string[];
+  /**
+   * The status line this anchoring took over (parked N5): its text and its range (null: a bare
+   * status paragraph, or this meeting's own range). A losing start hands it back (cleanupLosingAnchor).
+   */
+  replacedStatus: ReplacedStatus | null;
+}
+
+export interface ReplacedStatus {
+  name: string | null;
+  text: string;
 }
 
 /** YYYY-MM-DD and HH:mm in Europe/Stockholm. */
@@ -83,7 +93,7 @@ function onePart(entries: { start: number; end: number }[][]): { start: number; 
  * - else a whole paragraph whose text is exactly one of our status forms.
  * Always one plain body paragraph outside every agenda item. Null when none.
  */
-function statusSpan(tab: NotesTab, body: Paragraph[], scan: AgendaScan): { start: number; end: number } | null {
+function statusSpan(tab: NotesTab, body: Paragraph[], scan: AgendaScan): { start: number; end: number; name: string | null; text: string } | null {
   const plain = (p: Paragraph | undefined): p is Paragraph => Boolean(p) && !paraBullet(p!) && itemAt(scan, p!.start) === null;
   for (const [name, entries] of tab.ranges) {
     if (!/^ss-.+-header$/.test(name)) continue;
@@ -93,10 +103,10 @@ function statusSpan(tab: NotesTab, body: Paragraph[], scan: AgendaScan): { start
     if (!plain(p)) continue;
     const text = p.text.slice(r.start - p.start, r.end - p.start);
     // Exactly one of our forms: a human who typed inside our range keeps their text (a fresh line is added).
-    if (STATUS_EXACT.test(text)) return r;
+    if (STATUS_EXACT.test(text)) return { ...r, name, text };
   }
   const p = body.find((x) => plain(x) && STATUS_EXACT.test(paraLine(x)));
-  return p ? { start: p.start, end: p.end - 1 } : null;
+  return p ? { start: p.start, end: p.end - 1, name: null, text: paraLine(p) } : null;
 }
 
 /** A Tid value we write: "18:05" at start, "18:05–19:10" after the final pass; a Datum "2026-11-25". */
@@ -367,7 +377,8 @@ export function planAnchoring(
   const stale: DocsRequest[] = [...created]
     .filter((name) => tab.ranges.has(name))
     .map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
-  return { requests: [...stale, ...requests], sectionRanges, headerRange, rows, appended };
+  const replacedStatus = old ? { name: old.name && !old.name.startsWith(`ss-${m}-`) ? old.name : null, text: old.text } : null;
+  return { requests: [...stale, ...requests], sectionRanges, headerRange, rows, appended, replacedStatus };
 }
 
 export interface AnchorResult {
@@ -383,6 +394,8 @@ export interface AnchorResult {
   /** The scan of the revision the batch was written against (indices from before the batch). */
   scan: AgendaScan;
   appended: string[];
+  /** See AnchorPlan.replacedStatus. */
+  replacedStatus: ReplacedStatus | null;
 }
 
 /**
@@ -447,5 +460,93 @@ export async function anchorAgenda(
     rows: plan.rows,
     scan,
     appended: plan.appended,
+    replacedStatus: plan.replacedStatus,
   };
+}
+
+/**
+ * Undo a losing start's anchoring (parked N5: two starts raced on one Doc and the start guard
+ * refused this one after it anchored), planned from a fresh read of the tab:
+ * - every `ss-<meeting>-*` named range of the loser goes (ranges change no text);
+ * - its status line, only while its own header range covers one of our exact status forms (a
+ *   human's edit inside it wins: then the text stays):
+ *   - if the anchoring took over an earlier status line (`replaced`) whose range is gone (the
+ *     winner's, when the winner anchored first: measured, the API drops a range whose text is
+ *     deleted), that line's text and range are restored;
+ *   - else the line was ours alone: its paragraph goes when it holds nothing else (its text only
+ *     when it is the tab's last paragraph or a table follows), else just our text.
+ * - Datum / Tid text and appended headings stay (the winner may have ranged them).
+ */
+export function planLoserCleanup(tab: NotesTab, meetingId: string, replaced: ReplacedStatus | null): DocsRequest[] {
+  const tabId = tab.tabId;
+  const range = (startIndex: number, endIndex: number) => ({ tabId, startIndex, endIndex });
+  const prefix = `ss-${meetingId}-`;
+  const live = (name: string) => (tab.ranges.get(name) ?? []).flat().some((x) => x.end > x.start);
+  const requests: DocsRequest[] = [...tab.ranges.keys()]
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
+  const r = onePart(tab.ranges.get(`${prefix}header`) ?? []);
+  if (!r) return requests;
+  const body = tab.paragraphs.filter((p) => !paraInTable(p));
+  const p = body.find((x) => r.start >= x.start && r.end <= x.end - 1);
+  if (!p) return requests;
+  const text = p.text.slice(r.start - p.start, r.end - p.start);
+  if (!STATUS_EXACT.test(text)) return requests;
+  // Another meeting's header range on the same line: the line is theirs too, never removed.
+  const shared = [...tab.ranges]
+    .filter(([name]) => /^ss-.+-header$/.test(name) && !name.startsWith(prefix))
+    .some(([, entries]) => entries.flat().some((x) => x.end > x.start && x.start < p.end && x.end > p.start));
+  if (shared) return requests;
+  if (replaced && !(replaced.name && live(replaced.name))) {
+    requests.push(
+      { deleteContentRange: { range: range(r.start, r.end) } },
+      { insertText: { text: replaced.text, location: { index: r.start, tabId } } },
+      {
+        updateTextStyle: {
+          range: range(r.start, r.start + replaced.text.length),
+          textStyle: { bold: false, italic: false, underline: false, strikethrough: false },
+          fields: "bold,italic,underline,strikethrough,link",
+        },
+      },
+    );
+    if (replaced.name) requests.push({ createNamedRange: { name: replaced.name, range: range(r.start, r.start + replaced.text.length) } });
+    return requests;
+  }
+  const whole = r.start === p.start && r.end === p.end - 1;
+  const last = body[body.length - 1] === p;
+  const beforeTable = (tab.tables ?? []).some((t) => t.start === p.end);
+  const [s, e] = whole && !last && !beforeTable ? [p.start, p.end] : [r.start, r.end];
+  requests.push({ deleteContentRange: { range: range(s, e) } });
+  return requests;
+}
+
+/**
+ * planLoserCleanup on a fresh read, written revision-guarded (a conflict re-reads and re-plans).
+ * Returns how many requests went out (0: nothing of the loser's left).
+ */
+export async function cleanupLosingAnchor(
+  auth: OAuth2Client,
+  input: { docId: string; tabId: string; meetingId: string; replaced: ReplacedStatus | null },
+  guard: GuardOptions = {},
+): Promise<number> {
+  const docs = docsApi(auth);
+  const { value } = await writeWithRevisionGuard(
+    async () => {
+      const doc = (
+        await docs.documents.get({ documentId: input.docId, includeTabsContent: true, suggestionsViewMode: "SUGGESTIONS_INLINE" })
+      ).data;
+      const tab = parseNotesTab(doc, input.tabId);
+      return { tab, requests: planLoserCleanup(tab, input.meetingId, input.replaced) };
+    },
+    async ({ tab, requests }) => {
+      if (!requests.length) return 0;
+      await docs.documents.batchUpdate({
+        documentId: input.docId,
+        requestBody: { requests, writeControl: { requiredRevisionId: tab.revisionId } },
+      });
+      return requests.length;
+    },
+    guard,
+  );
+  return value;
 }

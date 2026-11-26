@@ -455,10 +455,15 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 
 - `npm run suite -- --paid --budget 1.50`: free tier PASS on all 5 features; paid PASS on all 5 fixtures — veckomote-a, styrelse-ekdala (place 10/11), owner-styles (roles 6/6, every way of naming an owner), veckomote-b (followup 4/4), boardgames. $0.53 this run ($1.14/h); ledger .notes-replay/spend-formats.json total $1.27.
 
-## 2026-11-26 · Parked fix N4 · Measured on fresh fictional Docs
+## 2026-11-26 · Parked fixes N4, N5 · Measured on fresh fictional Docs
 
 `npm run check-agenda-render -- <user> parked` (state `.check-notes/agenda-parked.json`):
 - N4: our line directly before a table (a bulleted one, indent 36/18; and a "– " line with the (c) indent 54/36). One guarded
   batch: delete its text only, then `deleteParagraphBullets` + `updateParagraphStyle` indentStart/indentFirstLine 0 on
   `[start, start+1)`: **accepted**; the empty paragraph left has no bullet and no indent. `deleteRuns` (format layout) now adds
   both after a text-only delete before a table; v1 requests unchanged.
+- N5: a status line under range A, replaced as `planAnchoring` does (delete its text, insert ours at the same index, range B):
+  **A is gone** (a range whose whole text is deleted is removed; text inserted at its old place is outside it). So a losing
+  start that took over the winner's line must hand it back (restore the text, re-create A), not delete it. Handing back and
+  deleting our own mid-Doc paragraph with its newline are both accepted (the heading before it keeps HEADING_2).
+  `test/docsim.ts` now drops a range whose text is all deleted.

@@ -6,7 +6,8 @@ import type { docs_v1 } from "@googleapis/docs";
 // text is inserted strictly inside it (typing at an edge lands outside, A1 human stage);
 // createParagraphBullets on non-list paragraphs strips leading tabs (N tabs = level N) and makes
 // one new list (M7c); insertTable at an empty paragraph leaves an empty paragraph before the
-// table and one after it (M6). Anything else throws, so a test never passes on an unmodelled request.
+// table and one after it (M6); a named range whose text is all deleted is removed (parked N5).
+// Anything else throws, so a test never passes on an unmodelled request.
 
 type Doc = docs_v1.Schema$Document;
 type El = docs_v1.Schema$StructuralElement;
@@ -167,14 +168,20 @@ function deleteRange(doc: Doc, s: number, e: number) {
   for (const el of removed) container.splice(container.indexOf(el), 1);
   if (text === "") container.splice(container.indexOf(first), 1);
   else setText(first, text);
-  for (const group of Object.values(tabOf(doc).namedRanges ?? {})) {
+  const named = tabOf(doc).namedRanges ?? {};
+  for (const [name, group] of Object.entries(named)) {
     for (const nr of group.namedRanges ?? []) {
       for (const r2 of nr.ranges ?? []) {
         const map = (i: number) => (i <= s ? i : i >= e ? i - (e - s) : s);
         r2.startIndex = map(r2.startIndex!);
         r2.endIndex = map(r2.endIndex!);
       }
+      // Measured (parked N5, check-agenda-render parked): a named range whose whole text is
+      // deleted is gone; text inserted at its old place later is outside every range.
+      nr.ranges = (nr.ranges ?? []).filter((r2) => r2.endIndex! > r2.startIndex!);
     }
+    group.namedRanges = (group.namedRanges ?? []).filter((nr) => nr.ranges!.length > 0);
+    if (!group.namedRanges.length) delete named[name];
   }
   reindex(doc);
 }
