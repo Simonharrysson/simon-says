@@ -110,7 +110,7 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     expect(mail.subject).toMatch(/^Sammanfattning: Sammanfattningsföreningen \d+ \p{L}+$/u);
     expect(mail.text).toContain("Du missade mötet");
     expect(mail.text).toContain("DINA UPPGIFTER\n- Boka lokal");
-    expect(mail.headers!["List-Unsubscribe"]).toMatch(/^<https:\/\/app\.test\/api\/summaries\/unsubscribe\?t=.+>$/);
+    expect(mail.headers!["List-Unsubscribe"]).toMatch(/^<https:\/\/app\.test\/api\/mejl\/avsluta\?t=.+&k=meeting_summary>$/);
     expect(mail.headers!["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
     // Sara has no account: the Doc link with a note on access.
     expect(mail.text).toContain(`https://docs.google.com/document/d/doc-`);
