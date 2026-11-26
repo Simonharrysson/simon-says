@@ -9,10 +9,15 @@ describe("e-mail categories", () => {
     }
   });
 
-  it("matches the database's one list (0039 email_categories())", async () => {
-    const { readFileSync } = await import("node:fs");
-    const sql = readFileSync(new URL("../../supabase/migrations/0039_email_preferences.sql", import.meta.url), "utf8");
-    const m = /function public\.email_categories\(\)[\s\S]*?array\[([^\]]*)\]::text\[\]/.exec(sql);
+  it("matches the database's one list (the last migration that defines email_categories())", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const dir = new URL("../../supabase/migrations/", import.meta.url);
+    const re = /function public\.email_categories\(\)[\s\S]*?array\[([^\]]*)\]::text\[\]/;
+    const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    const defining = files.filter((f) => re.test(readFileSync(new URL(f, dir), "utf8")));
+    expect(defining[0]).toBe("0039_email_preferences.sql");
+    const sql = readFileSync(new URL(defining.at(-1)!, dir), "utf8");
+    const m = re.exec(sql);
     expect(m).not.toBeNull();
     expect(m![1].replace(/['\s]/g, "").split(",")).toEqual([...EMAIL_CATEGORIES]);
     // No other hard-coded list: constraints and writers all call email_categories().

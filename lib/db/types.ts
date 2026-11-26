@@ -55,6 +55,9 @@ export type MeetingEventKind =
   | "checkin"
   | "summary";
 
+/** 0045: a förening (the default), the user's own Privat space, or (later) a company. */
+export type SpaceKind = "forening" | "privat" | "foretag";
+
 export interface OrgRow {
   id: string;
   name: string;
@@ -76,6 +79,8 @@ export interface OrgRow {
   website_url?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
+  /** 0045: the kind of space; absent on rows read before 0045 (= förening). */
+  kind?: SpaceKind;
   created_by: string | null;
   created_at: string;
 }
@@ -108,6 +113,11 @@ export interface MeetingRow {
   id: string;
   org_id: string;
   started_by: string | null;
+  /**
+   * The meeting's Google Doc. Typed as always set because every Doc code path needs it; a Privat
+   * recording without a Doc (0045) has null here and never reaches that code: check with
+   * `isDocless()` (lib/privat/docless.ts) first.
+   */
   doc_id: string;
   notes_tab_id: string;
   transcript_tab_id: string | null;
@@ -149,6 +159,8 @@ export interface MeetingRow {
   /** 0037: null = summary not handled yet; else why it is done. */
   summary_state?: SummaryState | null;
   summary_at?: string | null;
+  /** 0045: the Privat context the recording belongs to. */
+  context_id?: string | null;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */
