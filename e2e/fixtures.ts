@@ -43,25 +43,40 @@ export async function guardContext(context: BrowserContext, blocked: string[], n
       return route.abort("blockedbyclient");
     },
   );
-  await context.route("**/auth/v1/authorize**", async (route) => {
-    const url = new URL(route.request().url());
+  // Where the browser goes instead of Supabase's Google authorize URL.
+  const instead = (authorizeUrl: string): string => {
+    const url = new URL(authorizeUrl);
     const redirectTo = new URL(url.searchParams.get("redirect_to") ?? `${APP_URL}/auth/callback`);
-    let location: string;
+    const next = redirectTo.searchParams.get("next") ?? "/";
     if (redirectTo.searchParams.get("atkomst") === "drive") {
       // The protocol import's drive.readonly consent, as the signed-in admin (login_hint).
       const email = url.searchParams.get("login_hint") ?? nextLogin.email ?? "";
-      const next = redirectTo.searchParams.get("next") ?? "/";
-      location = `${APP_URL}/api/e2e/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}&drive=1`;
-    } else if (nextLogin.cancel) {
-      redirectTo.searchParams.set("error", "access_denied");
-      location = redirectTo.toString();
-    } else {
-      if (!nextLogin.email) throw new Error("e2e: set nextLogin.email before pressing Logga in med Google");
-      const next = redirectTo.searchParams.get("next") ?? "/";
-      location = `${APP_URL}/api/e2e/login?email=${encodeURIComponent(nextLogin.email)}&next=${encodeURIComponent(next)}`;
+      return `${APP_URL}/api/e2e/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}&drive=1`;
     }
-    return route.fulfill({ status: 302, headers: { location } });
-  });
+    if (nextLogin.cancel) {
+      redirectTo.searchParams.set("error", "access_denied");
+      return redirectTo.toString();
+    }
+    if (!nextLogin.email) throw new Error("e2e: set nextLogin.email before pressing Logga in med Google");
+    return `${APP_URL}/api/e2e/login?email=${encodeURIComponent(nextLogin.email)}&next=${encodeURIComponent(next)}`;
+  };
+  const isAuthorize = (u: string) => /\/auth\/v1\/authorize\?/.test(u);
+  await context.route("**/auth/v1/authorize**", (route) => route.fulfill({ status: 302, headers: { location: instead(route.request().url()) } }));
+  // A sign-in form submitted before hydration posts natively and gets a 303 straight to Supabase;
+  // Playwright never routes a redirect's target, so rewrite that 303 here.
+  await context.route(
+    (url) => url.origin === APP_URL,
+    async (route) => {
+      const req = route.request();
+      if (req.method() !== "POST" || !req.isNavigationRequest()) return route.fallback();
+      const res = await route.fetch({ maxRedirects: 0 });
+      const location = res.headers()["location"];
+      if (res.status() >= 300 && res.status() < 400 && location && isAuthorize(location)) {
+        return route.fulfill({ status: 303, headers: { location: instead(location) } });
+      }
+      return route.fulfill({ response: res });
+    },
+  );
 }
 
 export function adminDb(): SupabaseClient {
@@ -184,7 +199,7 @@ export async function expectAccessible(page: Page, opts: { exclude?: string[] } 
   ).toEqual([]);
 }
 
-interface Fixtures {
+export interface Fixtures {
   /** Non-loopback requests this test's pages tried (aborted); must stay empty. */
   blocked: string[];
   nextLogin: NextLogin;

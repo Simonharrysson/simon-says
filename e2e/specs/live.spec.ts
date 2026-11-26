@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { SCRIPTED } from "../fakes/scripted";
 import { APP_URL } from "../env";
-import { expect, expectAccessible, fake, test, type SeededOrg } from "../fixtures";
+import { expect, expectAccessible, fake, test, type Fixtures, type SeededOrg } from "../fixtures";
 
 // Starta möte → consent → name round → live with the fake ElevenLabs transcript (the fake mic
 // plays a tone; the fake server commits a scripted line per second of audio) → the scripted
@@ -38,15 +38,22 @@ async function expectNotesInDoc(docId: string) {
   expect(text).toContain(SCRIPTED.action);
 }
 
-test("Starta möte → namnrunda → live notes in the Doc → Avsluta → listed @phone", async ({ page, seedOrg, db }) => {
-  const org = await seedOrg({ people: ["Anna Berg", "Erik Lund"] });
+// A starter may have one live meeting at a time (and a few starts an hour): every meeting spec
+// starts as a fresh admin of its own förening.
+async function freshStarter(seedOrg: Fixtures["seedOrg"], signedIn: Fixtures["signedIn"], newEmail: Fixtures["newEmail"], people: string[] = []) {
+  const email = newEmail("ordf");
+  const org = await seedOrg({ admin: email, people });
+  const { page } = await signedIn(email, org.url);
+  return { org, page };
+}
+
+test("Starta möte → namnrunda → live notes in the Doc → Avsluta → listed @phone", async ({ seedOrg, signedIn, newEmail, db }) => {
+  const { org, page } = await freshStarter(seedOrg, signedIn, newEmail, ["Anna Berg", "Erik Lund"]);
   const { meetingId, docId } = await startMeeting(page, org);
 
   await page.getByRole("button", { name: "Klar, alla har sagt sitt namn" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toHaveCount(0, { timeout: 30_000 });
   await expectNotesInDoc(docId);
-  // The transcript tab gets the fake's lines.
-  await expect.poll(async () => (await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text ?? "", { timeout: 60_000 }).toContain("välkomna");
   await expectAccessible(page);
 
   await page.getByRole("button", { name: "Avsluta", exact: true }).click();
@@ -59,6 +66,8 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   await expect.poll(() => fake.docText(docId), { timeout: 30_000 }).toMatch(/Avslutat \d{2}:\d{2}/);
   const { data } = await db.from("meetings").select("status").eq("id", meetingId).single();
   expect(data?.status).toBe("done");
+  // The transcript tab got the fake's lines (held during the name round, written by the final pass).
+  expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toContain("välkomna");
 
   await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
   const meetings = page.getByRole("list", { name: "Möten" });
@@ -66,8 +75,8 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   await expect(meetings).toContainText("Klart");
 });
 
-test("auto-end like Meet: no tab heard from, the cron ends the meeting", async ({ page, seedOrg, db, request }) => {
-  const org = await seedOrg();
+test("auto-end like Meet: no tab heard from, the cron ends the meeting", async ({ seedOrg, signedIn, newEmail, db, request }) => {
+  const { org, page } = await freshStarter(seedOrg, signedIn, newEmail);
   const { meetingId, docId } = await startMeeting(page, org);
   await page.getByRole("button", { name: "Hoppa över" }).click();
   await expectNotesInDoc(docId);

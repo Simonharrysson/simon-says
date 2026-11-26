@@ -85,7 +85,7 @@ test("person roles: the admin sets a role on a person", async ({ page, seedOrg }
   const row = people.getByRole("listitem").filter({ hasText: "Erik Lund" });
   await row.getByRole("button", { name: "Lägg till roll" }).click();
   await page.getByLabel("Roll för Erik Lund").fill("Kassör");
-  await page.getByRole("button", { name: "Spara" }).click();
+  await row.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(people.getByRole("listitem").filter({ hasText: "Erik Lund" })).toContainText("Kassör");
   await expect(people.getByRole("button", { name: "Ändra roll" })).toBeVisible();
 });

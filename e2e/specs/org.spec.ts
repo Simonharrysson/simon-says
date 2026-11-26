@@ -1,3 +1,4 @@
+import { OPERATORS } from "../env";
 import { expect, expectAccessible, fake, queuePick, seedMeeting, test } from "../fixtures";
 
 // The förening page: the Mötesformat "Ändra" menu, settings, deleting a meeting and the förening,
@@ -9,9 +10,11 @@ test("Mötesformat: Ändra → Byt format, and Välj mötesmapp in the Picker @p
   const card = page.locator("section", { has: page.getByRole("heading", { name: "Mötesformat" }) });
   await expect(card).toBeVisible();
 
+  await expectAccessible(page);
   await card.getByRole("button", { name: "Ändra" }).click();
   await expect(page.getByRole("menu")).toBeVisible();
-  await expectAccessible(page);
+  // (No axe while the menu is open: Radix aria-hides the page behind its modal menu, which axe
+  // reports as focusable content under aria-hidden although focus is trapped in the menu.)
   await page.getByRole("menuitem", { name: /Byt format/ }).click();
   await card.getByLabel("Byt format").selectOption({ label: "Styrelseprotokoll" });
   await card.getByRole("button", { name: "Byt", exact: true }).click();
@@ -32,7 +35,7 @@ test("settings: rename the förening and stop sharing the transcript", async ({ 
   await page.goto(org.url);
   const settings = page.locator("section", { has: page.getByRole("heading", { name: "Inställningar" }) });
   const newName = `${org.name} (ny)`;
-  await settings.getByLabel("Namn").fill(newName);
+  await settings.getByRole("textbox", { name: "Namn", exact: true }).fill(newName);
   await settings.getByRole("checkbox", { name: /Dela transkriptionen i dokumentet/ }).uncheck();
   await settings.getByRole("button", { name: "Spara ändringar" }).click();
   await expect(settings.getByText("Sparat")).toBeVisible();
@@ -83,9 +86,10 @@ test("delete a meeting, then the förening (confirm dialogs)", async ({ page, se
   await expect(page.getByText("Föreningen är raderad.")).toBeVisible();
 });
 
-test("Testmöte menu: Utan dagordning starts a replay, Avsluta mötet ends it from the row", async ({ page, seedOrg, db }) => {
-  const org = await seedOrg();
-  await page.goto(org.url);
+test("Testmöte menu: Utan dagordning starts a replay, Avsluta mötet ends it from the row", async ({ seedOrg, signedIn, db }, testInfo) => {
+  const operator = OPERATORS[testInfo.retry % OPERATORS.length];
+  const org = await seedOrg({ admin: operator });
+  const { page } = await signedIn(operator, org.url);
   await page.getByRole("button", { name: "Testmöte" }).click();
   await expect(page.getByRole("menuitem", { name: /Med dagordning/ })).toBeVisible();
   await page.getByRole("menuitem", { name: /Utan dagordning/ }).click();

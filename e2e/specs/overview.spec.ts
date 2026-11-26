@@ -69,6 +69,9 @@ test("protocol import, small path: read access → folder → Docs → goals", a
   await page.getByRole("button", { name: "Läs in 3 protokoll" }).click();
 
   // Read directly (small import), then the goals over the whole history.
+  await expect(page.getByRole("status").filter({ hasText: "3 protokoll inlästa" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("list", { name: "Protokoll" }).getByRole("listitem")).toHaveCount(3);
+  await page.getByRole("button", { name: "Fortsätt till målen" }).click();
   await expect(page.getByLabel("Mål 1", { exact: true })).toHaveValue("Ett hackathon i februari", { timeout: 60_000 });
   expect(await fake.claudeCalls("extract")).not.toHaveLength(0);
   await page.getByRole("button", { name: "Godkänn målen" }).click();

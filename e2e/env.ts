@@ -18,6 +18,12 @@ export const STORAGE_ADMIN = fileURLToPath(new URL("./.auth/admin.json", import.
 /** The shared signed-in admin (storage state): may run Testmöte (ADMIN_EMAILS). */
 export const ADMIN_EMAIL = "admin@e2e.test";
 
+/**
+ * Service admins who may run Testmöte, one per attempt (a starter may have one live meeting and a
+ * few starts an hour, so a retry starts as someone new).
+ */
+export const OPERATORS = ["operator-0@e2e.test", "operator-1@e2e.test", "operator-2@e2e.test", "operator-3@e2e.test"];
+
 function localSupabase(): { url: string; anon: string; service: string } {
   const { LOCAL_SUPABASE_API_URL: url, LOCAL_SUPABASE_ANON_KEY: anon, LOCAL_SUPABASE_SERVICE_ROLE_KEY: service } = process.env;
   if (url && anon && service) return { url, anon, service };
@@ -62,7 +68,7 @@ export function e2eEnv(): Record<string, string> {
     ANTHROPIC_BASE_URL: `${FAKE_URL}/anthropic`,
     RESEND_API_KEY: "",
     ALARM_EMAIL: "alarm@e2e.test",
-    ADMIN_EMAILS: ADMIN_EMAIL,
+    ADMIN_EMAILS: [ADMIN_EMAIL, ...OPERATORS].join(","),
     CRON_SECRET: runSecret("E2E_CRON_SECRET", () => randomBytes(16).toString("hex")),
     APP_URL,
     E2E_FAKE_PORT: String(FAKE_PORT),
