@@ -8,6 +8,8 @@ export interface DesignView {
   group: DesignGroup;
 }
 
+import { onboardingViews } from "./onboarding-views";
+
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
   { id: "primitives", title: "Komponenter", group: "Grunder" },
@@ -26,10 +28,14 @@ export const designViews: DesignView[] = [
   { id: "format-learn-editor", title: "Mötesformat · förslag att godkänna", group: "Sidor" },
   { id: "format-learn-error", title: "Mötesformat · fel", group: "Sidor" },
   { id: "format-stadgar-editor", title: "Mötesformat · punkter från stadgarna", group: "Sidor" },
-  { id: "org-prepared", title: "Förening · Förbered möte, förberett möte i listan", group: "Sidor" },
+  { id: "org-prepared", title: "Förening · Starta möte, nästa möte förberett", group: "Sidor" },
+  { id: "org-start", title: "Förening · Starta möte, inget förberett", group: "Sidor" },
   { id: "prepare-type", title: "Förbered möte · 1. vilket möte", group: "Sidor" },
   { id: "prepare-loading", title: "Förbered möte · tar fram dagordningen", group: "Sidor" },
   { id: "prepare-draft", title: "Förbered möte · 2. dagordningen", group: "Sidor" },
+  { id: "prepare-draft-import", title: "Förbered möte · 2. uppgifter från inläst protokoll", group: "Sidor" },
+  { id: "prepare-draft-no-meeting", title: "Förbered möte · 2. inget tidigare möte", group: "Sidor" },
+  { id: "prepare-draft-too-old", title: "Förbered möte · 2. protokollet för gammalt", group: "Sidor" },
   { id: "prepare-draft-edited", title: "Förbered möte · 2. egen punkt tillagd, uppgift bortbockad", group: "Sidor" },
   { id: "prepare-draft-empty", title: "Förbered möte · 2. årsmöte, inga förslag", group: "Sidor" },
   { id: "prepare-saving", title: "Förbered möte · skapar dokumentet", group: "Sidor" },
@@ -60,6 +66,7 @@ export const designViews: DesignView[] = [
   { id: "join-invalid", title: "Inbjudan · ogiltig länk", group: "Sidor" },
   { id: "account", title: "Konto", group: "Sidor" },
   { id: "status", title: "Status · med data", group: "Sidor" },
+  ...onboardingViews.map((v) => ({ ...v, group: "Sidor" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
   { id: "live-mic-denied", title: "Före start · mikrofonen blockerad", group: "Mötet live" },
   { id: "live-agenda-prepared", title: "Före start · förberedd dagordning", group: "Mötet live" },

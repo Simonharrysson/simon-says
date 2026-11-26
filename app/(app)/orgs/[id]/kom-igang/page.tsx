@@ -1,0 +1,69 @@
+import type { Metadata } from "next";
+import { notFound, redirect } from "next/navigation";
+import { Onboarding } from "@/components/onboarding/Onboarding";
+import { isUuid } from "@/lib/db/ids";
+import { orgMemberList, type OrgMember } from "@/lib/db/members";
+import { getOrg, listPeople, myRole } from "@/lib/db/orgs";
+import { getEnv, pickerEnabled } from "@/lib/env";
+import { FORMAT_NAMES } from "@/lib/formats/standard";
+import { orgDefaultFormat } from "@/lib/formats/store";
+import { historySummary } from "@/lib/history/store";
+import { loadOnboarding } from "@/lib/onboarding/store";
+import { resumeStep, stepFromNumber, type OnboardingState } from "@/lib/onboarding/steps";
+import { appOrigin } from "@/lib/origin";
+import { boardRows } from "@/lib/people/board";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Kom igång", robots: { index: false, follow: false } };
+
+const EMPTY: OnboardingState = { done: [], skipped: [], completedAt: null, dismissedAt: null };
+
+/**
+ * Kom igång (todo #5): the förening's admins set it up one calm step at a time. `?steg=1..6`
+ * (or `klart`) opens a step; without it the first step not done yet. Members go to the förening.
+ * A förening from before onboarding has no row: the steps still work, progress is not stored.
+ */
+export default async function OnboardingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ steg?: string }> }) {
+  const { id } = await params;
+  const { steg } = await searchParams;
+  if (!isUuid(id)) notFound();
+  const db = await createSupabaseServerClient();
+  const org = await getOrg(db, id);
+  if (!org) notFound();
+  const role = await myRole(db, id);
+  if (role === null) notFound();
+  if (role !== "admin") redirect(`/orgs/${id}`);
+
+  const [state, people, members, format, history, user] = await Promise.all([
+    loadOnboarding(db, id),
+    listPeople(db, id),
+    orgMemberList(id).catch((): OrgMember[] => []),
+    orgDefaultFormat(db, id),
+    historySummary(db, id).catch(() => ({ count: 0 })),
+    db.auth.getUser(),
+  ]);
+  const s = state ?? EMPTY;
+  const step = steg === "klart" ? "klart" : (stepFromNumber(steg) ?? resumeStep(s) ?? "klart");
+
+  return (
+    <Onboarding
+      org={{
+        id,
+        name: org.name,
+        logoUpdatedAt: org.logo_updated_at ?? null,
+        folderSet: Boolean(org.meeting_folder_id),
+        folderName: org.meeting_folder_name ?? null,
+      }}
+      initialStep={step}
+      state={s}
+      board={boardRows(people, members)}
+      inviteUrl={`${appOrigin()}/join/${org.invite_code}`}
+      myEmail={user.data.user?.email?.toLowerCase() ?? null}
+      pickerEnabled={pickerEnabled(getEnv())}
+      format={{ kind: format.id ? format.profile.kind : null, name: format.profile.kind === "learned" ? "ert eget format" : FORMAT_NAMES[format.profile.kind], profile: format.id ? format.profile : null }}
+      stadgarSaved={{ styrelse: Boolean(org.styrelse_format_id), arsmote: Boolean(org.arsmote_format_id) }}
+      historyCount={history.count}
+    />
+  );
+}

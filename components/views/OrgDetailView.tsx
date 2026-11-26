@@ -22,6 +22,7 @@ import { NoticeBanner } from "./NoticeBanner";
 import type { DocAccess } from "@/lib/docs/access-state";
 import { OrgSettingsForm } from "./OrgSettingsForm";
 import { PersonRow } from "./PersonRow";
+import { OrgLogo } from "@/components/onboarding/OrgLogo";
 
 export interface OrgDetailMeeting {
   id: string;
@@ -39,8 +40,12 @@ export interface OrgDetailViewProps {
   inviteUrl: string;
   /** Members (email, role), oldest first. Omitted when unavailable. */
   members?: { userId: string; email: string; role: "admin" | "member" }[];
-  people: { id: string; name: string; role?: string | null }[];
+  people: { id: string; name: string; role?: string | null; email?: string | null; member_user_id?: string | null }[];
   meetings: OrgDetailMeeting[];
+  /** The förening's logo (0035), shown next to its name; null: the first letter. */
+  logoUrl?: string | null;
+  /** The "Kom igång" card (admins, onboarding not done), above everything else. */
+  komIgang?: ReactNode;
   /** The viewer's sign-in address: meeting Docs are shared to it. */
   viewerEmail?: string | null;
   /** Per meeting id; a meeting not in the map is `open` (e.g. the /design gallery). */
@@ -234,7 +239,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions, logoUrl, komIgang } = props;
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
@@ -246,7 +251,12 @@ export function OrgDetailView(props: OrgDetailViewProps) {
     <div className="mx-auto w-full max-w-page px-gutter flex flex-col gap-6">
       <PageHeader
         back={{ href: "/orgs", label: "Föreningar" }}
-        title={org.name}
+        title={
+          <span className="flex items-center gap-4">
+            <OrgLogo name={org.name} src={logoUrl} size="md" />
+            <span className="min-w-0">{org.name}</span>
+          </span>
+        }
         meta={
           <div className="flex flex-wrap items-center gap-3">
             <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? "Du är admin" : "Du är medlem"}</Badge>
@@ -271,6 +281,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
       />
       {tabs && <OrgTabs active={tabs.active} href={tabs.href} />}
       <NoticeBanner notice={notice} />
+      {komIgang}
 
       {tabs?.active === "oversikt" ? (
         tabs.overview
@@ -327,7 +338,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             liveMeetingHref={liveMeetingHref}
           />
           {formatCard}
-          <PeoplePanel orgId={org.id} people={people} isAdmin={isAdmin} actions={actions} />
+          <PeoplePanel orgId={org.id} people={people} members={members} isAdmin={isAdmin} actions={actions} />
         </div>
 
         <div className="flex flex-col gap-6">
@@ -382,6 +393,9 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <>
           <Panel title="Inställningar" titleId="settings-title" id="installningar">
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
+            <p className="mt-6 border-t border-line pt-4 text-sm text-ink-3">
+              Logga, styrelsen, stadgar och röster: <a href={`/orgs/${org.id}/kom-igang`}>öppna Kom igång</a>.
+            </p>
           </Panel>
 
           <Panel title="Radera föreningen" titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
@@ -550,21 +564,39 @@ function MeetingsPanel({
   );
 }
 
+/** The account line under a person (0035): linked to a member, or invited by e-mail. */
+function personStatus(p: OrgDetailViewProps["people"][number], members: OrgDetailViewProps["members"]): string | null {
+  const member = p.member_user_id ? members?.find((m) => m.userId === p.member_user_id) : undefined;
+  if (member) return `Har konto${member.email ? ` · ${member.email}` : ""}`;
+  if (p.email) return `Inbjuden · ${p.email}`;
+  return null;
+}
+
 function PeoplePanel({
   orgId,
   people,
+  members,
   isAdmin,
   actions,
 }: {
   orgId: string;
-  people: { id: string; name: string; role?: string | null }[];
+  people: OrgDetailViewProps["people"];
+  members?: OrgDetailViewProps["members"];
   isAdmin: boolean;
   actions: OrgDetailViewProps["actions"];
 }) {
+  // Members nobody has named yet (0035): shown here too, so the list holds everyone (audit U3).
+  const unnamed = (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId));
   return (
-    <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length}</span>}>
+    <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length + unnamed.length}</span>}>
       <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
         Alla som brukar vara med på mötena. Namnen används för att känna igen vem som talar. De behöver inget konto.
+        {isAdmin && (
+          <>
+            {" "}
+            <a href={`/orgs/${orgId}/kom-igang?steg=2`}>Bjud in med e-post och sätt roller under Styrelsen</a>.
+          </>
+        )}
       </p>
       <form action={actions.addPerson} className="flex items-end gap-2 px-6 pb-4">
         <input type="hidden" name="orgId" value={orgId} />
@@ -578,7 +610,7 @@ function PeoplePanel({
           Lägg till
         </SubmitButton>
       </form>
-      {people.length === 0 ? (
+      {people.length === 0 && unnamed.length === 0 ? (
         <div className="px-6 pb-6">
           <EmptyState title="Inga personer än">
             <p>Lägg till de som brukar vara med. Det går också bra att låta namnrundan i första mötet fylla på listan.</p>
@@ -591,10 +623,27 @@ function PeoplePanel({
               key={person.id}
               orgId={orgId}
               person={person}
+              status={personStatus(person, members)}
               renamePerson={actions.renamePerson}
               setPersonRole={isAdmin ? actions.setPersonRole : undefined}
               deletePerson={actions.deletePerson}
             />
+          ))}
+          {unnamed.map((m) => (
+            <li key={m.userId}>
+              <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
+                <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+                  <span className="font-medium wrap-anywhere">{m.email}</span>
+                  <span className="text-sm text-ink-3">Har konto, men inget namn i listan</span>
+                </span>
+                {isAdmin && (
+                  <a className={buttonVariants({ size: "sm" })} href={`/orgs/${orgId}/kom-igang?steg=2`}>
+                    Koppla till namn
+                  </a>
+                )}
+              </div>
+            </li>
           ))}
         </ul>
       )}

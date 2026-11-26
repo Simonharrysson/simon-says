@@ -3,6 +3,7 @@ import { OrgsView } from "@/components/views/OrgsView";
 import { listMyOrgs } from "@/lib/db/orgs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgsNotice } from "@/lib/ui/messages";
+import { logoUrl } from "@/lib/orgs/logo";
 import { createOrgAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function OrgsPage({ searchParams }: { searchParams: Promise
 
   return (
     <OrgsView
-      orgs={orgs.map(({ id, name, role }) => ({ id, name, role }))}
+      orgs={orgs.map(({ id, name, role, logo_updated_at }) => ({ id, name, role, logoUrl: logoUrl(id, logo_updated_at) }))}
       notice={fel === "invalid" ? null : notice}
       nameError={fel === "invalid" ? notice?.text : undefined}
       createOrg={createOrgAction}

@@ -14,12 +14,13 @@ import { parseNotesTab } from "@/lib/docs/tab";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks } from "@/lib/formats/skeleton";
 import { FORMAT_NAMES, STANDARD } from "@/lib/formats/standard";
-import { ensureStandardRow, orgDefaultFormat } from "@/lib/formats/store";
+import { ensureStandardRow, formatById, orgDefaultFormat } from "@/lib/formats/store";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/docs";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
+import { followupSource, importedCarried, type ImportedItem } from "./carry-source";
 import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine, type Journal } from "./doc";
 import { runReprepare } from "./reprepare";
 import { preparedDocState } from "./stale";
@@ -51,12 +52,32 @@ export function preparedTitle(orgName: string, date: string, time: string | null
   return `${date}${time ? ` ${time.replace(":", ".")}` : ""} Dagordning – ${orgName.trim()}`;
 }
 
-/** The format a meeting type runs in: the förening's own version of that kind when it is the default, else the standard. */
-async function formatForType(orgId: string, type: MeetingType): Promise<{ id: string | null; profile: FormatProfile }> {
+/**
+ * The format a meeting type runs in: the förening's own version of that kind when it is the
+ * default; else its own Styrelsemöte / Årsmöte format from the stadgar (onboarding, 0035);
+ * else the standard.
+ */
+export async function formatForType(orgId: string, type: MeetingType): Promise<{ id: string | null; profile: FormatProfile }> {
   const def = await orgDefaultFormat(supabaseAdmin(), orgId);
   const k = def.profile.kind;
   if (def.id && ((type === "veckomote" && (k === "veckomote" || k === "learned")) || (type === "styrelsemote" && k === "styrelseprotokoll"))) return def;
+  if (type !== "veckomote") {
+    const own = await typeFormat(orgId, type);
+    if (own) return own;
+  }
   return { id: null, profile: STANDARD[standardKindOf(type)] };
+}
+
+/** The förening's own format for a meeting type (orgs.styrelse_format_id / arsmote_format_id), if valid. */
+async function typeFormat(orgId: string, type: "styrelsemote" | "arsmote"): Promise<{ id: string; profile: FormatProfile } | null> {
+  const column = type === "arsmote" ? "arsmote_format_id" : "styrelse_format_id";
+  const { data, error } = await supabaseAdmin().from("orgs").select(column).eq("id", orgId).maybeSingle();
+  // Before 0035 the column is missing: fall back to the standard.
+  if (error || !data) return null;
+  const id = (data as Record<string, string | null>)[column];
+  if (!id) return null;
+  const profile = await formatById(id).catch(() => null);
+  return profile && profile.kind === standardKindOf(type) ? { id, profile } : null;
 }
 
 interface Sources {
@@ -69,23 +90,61 @@ interface Sources {
   fresh: DraftItem[];
 }
 
-/** Everything the draft is made from (service role, after the caller's membership check). */
-async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType, now: Date): Promise<Sources> {
+/**
+ * The newest imported protocol of the org on or before `date` (0032); null when
+ * there is none or it can't be read (a failed read never fails the draft).
+ */
+async function latestProtocol(orgId: string, date: string): Promise<{ id: string; date: string } | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("history_protocols")
+    .select("id, meeting_date")
+    .eq("org_id", orgId)
+    .lte("meeting_date", date)
+    .order("meeting_date", { ascending: false })
+    .order("imported_at", { ascending: false })
+    .limit(1);
+  if (error) {
+    console.error(`prepare: protocols unavailable: ${error.message}`);
+    return null;
+  }
+  const row = (data ?? [])[0] as { id: string; meeting_date: string } | undefined;
+  return row ? { id: row.id, date: row.meeting_date } : null;
+}
+
+/** Everything the draft is made from (service role, after the caller's membership check). `date`: the prepared date. */
+async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType, now: Date, date: string): Promise<Sources> {
   const db = supabaseAdmin();
   const { id: formatId, profile } = await formatForType(orgId, type);
   const groupBy = profile.tasksSection?.groupBy ?? "role";
   const hasFollowup = profile.fixedAgendaItems.some((i) => i.role === "followup");
-  const [prev, ppl] = await Promise.all([
+  const [prev, protocol, ppl] = await Promise.all([
     hasFollowup ? previousMeetingOfKinds(orgId, now, kindsOfType(type), db) : Promise.resolve(null),
+    hasFollowup ? latestProtocol(orgId, date) : Promise.resolve(null),
     db.from("people").select("id, name, role").eq("org_id", orgId),
   ]);
   if (ppl.error) throw new Error(`prepare: people: ${ppl.error.message}`);
   const people = (ppl.data ?? []) as RolePerson[];
+  // The previous meeting, or an imported protocol newer than it (carry-source.ts).
+  const pick = followupSource({
+    prev: prev ? { id: prev.id, date: prev.startedAt ? localDate(new Date(prev.startedAt)) : "0000-00-00" } : null,
+    protocol,
+    preparedDate: date,
+  });
   let carried: NoteItemRow[] = [];
-  if (prev) {
+  if (pick.use === "meeting" && prev) {
     const { data, error } = await db.from("note_items").select("*").eq("meeting_id", prev.id);
     if (error) throw new Error(`prepare: previous rows: ${error.message}`);
     carried = carriedItems(prev.id, openTasks((data ?? []) as NoteItemRow[]), "followup", people, groupBy);
+  } else if (pick.use === "import" && protocol) {
+    const { data, error } = await db
+      .from("history_items")
+      .select("position, kind, text, owner, done")
+      .eq("org_id", orgId)
+      .eq("protocol_id", protocol.id)
+      .eq("kind", "task")
+      .order("position");
+    if (error) console.error(`prepare: protocol items unavailable: ${error.message}`);
+    else carried = importedCarried(protocol.id, (data ?? []) as ImportedItem[], "followup", people, groupBy);
   }
   // Recurring topics (Översikt), read with the caller's client (RLS); never fails the draft.
   let topics: { label: string; meetings: number }[] = [];
@@ -95,8 +154,8 @@ async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType,
     console.error(`prepare: topics unavailable: ${(err as Error).message}`);
   }
   const label = (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy);
-  const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics });
-  return { profile, formatId, prevId: prev?.id ?? null, carried, people, ownerLabel: label, fresh };
+  const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics, ...(hasFollowup ? { origin: pick.origin } : {}) });
+  return { profile, formatId, prevId: pick.use === "meeting" ? (prev?.id ?? null) : null, carried, people, ownerLabel: label, fresh };
 }
 
 /** A meeting has been held (or runs) in the prepared Doc: it is the meeting's now. */
@@ -140,7 +199,7 @@ export async function loadDraft(
   if (!validDate(date)) return failed("bad_request", 400, "Datumet är ogiltigt.");
   const existing = await preparedForDate(orgId, date);
   const kind = existing?.kind ?? type;
-  const src = await sources(userDb, orgId, kind, now);
+  const src = await sources(userDb, orgId, kind, now, date);
   const items = existing ? refreshDraft(existing.items, src.fresh, new Set(existing.dropped)) : src.fresh;
   return {
     ok: true,
@@ -180,7 +239,7 @@ export async function savePrepared(
     return failed("save_failed", 500, "Dagordningen kunde inte sparas. Försök igen om en liten stund.");
   }
   const type = existing?.kind ?? body.type;
-  const src = await sources(userDb, orgId, type, now);
+  const src = await sources(userDb, orgId, type, now, body.date);
   const items = normaliseItems(body.items, src.fresh);
   if (!items) return failed("empty", 400, "Dagordningen behöver minst en punkt.");
   if (existing && (await usedByMeeting(orgId, existing.doc_id))) {

@@ -36,6 +36,7 @@ import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
 import { designViews, type DesignGroup } from "./registry";
+import { onboardingRender } from "./onboarding-demo";
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
 
@@ -238,6 +239,7 @@ const prepareDraft: DraftItem[] = [
     role: "followup",
     source: "standing",
     on: true,
+    origin: { kind: "meeting", date: "2026-11-24" },
     tasks: [
       { source: "m1:n2", line: "Erik Lund: Skicka kallelsen till medlemsmötet.", on: true },
       { source: "m1:n1", line: "Kassör: Boka Kårallen (fredag).", on: true },
@@ -611,13 +613,35 @@ const render: Record<string, () => ReactNode> = {
         inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
         members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
         people={people}
-        meetings={meetings}
+        meetings={meetings.slice(1)}
         notice={null}
         startMeeting={
           <StartMeetingForm
             orgId={ORG_ID}
-            shareTranscript
+            showTestMeeting
             prepared={[{ date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }]}
+          />
+        }
+        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
+        actions={actions}
+      />
+    </AppChrome>
+  ),
+  "org-start": () => (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
+        people={people}
+        meetings={meetings.slice(1)}
+        notice={null}
+        startMeeting={
+          <StartMeetingForm
+            orgId={ORG_ID}
+            showTestMeeting
           />
         }
         formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
@@ -628,6 +652,32 @@ const render: Record<string, () => ReactNode> = {
   "prepare-type": () => <PrepareDemo phase={{ step: "type" }} />,
   "prepare-loading": () => <PrepareDemo phase={{ step: "loading" }} />,
   "prepare-draft": () => <PrepareDemo phase={{ step: "draft" }} />,
+  "prepare-draft-import": () => (
+    <PrepareDemo
+      phase={{ step: "draft" }}
+      items={prepareDraft.map((i) =>
+        i.tasks
+          ? {
+              ...i,
+              origin: { kind: "import", date: "2026-11-19" },
+              tasks: [
+                { source: "p1:h4", line: "Kassör: Beställa nya bollar.", on: true },
+                { source: "p1:h7", line: "Ordförande: Boka banan till vårens första tävling.", on: true },
+              ],
+            }
+          : i,
+      )}
+    />
+  ),
+  "prepare-draft-no-meeting": () => (
+    <PrepareDemo phase={{ step: "draft" }} items={prepareDraft.map((i) => (i.tasks ? { ...i, origin: { kind: "none" }, tasks: [] } : i))} />
+  ),
+  "prepare-draft-too-old": () => (
+    <PrepareDemo
+      phase={{ step: "draft" }}
+      items={prepareDraft.map((i) => (i.tasks ? { ...i, origin: { kind: "too_old", date: "2026-08-20" }, tasks: [] } : i))}
+    />
+  ),
   "prepare-draft-edited": () => <PrepareDemo phase={{ step: "draft" }} items={prepareEdited} />,
   "prepare-draft-empty": () => <PrepareDemo phase={{ step: "draft" }} type="arsmote" items={[...arsmoteDraft, ...arsmoteLast]} />,
   "prepare-saving": () => <PrepareDemo phase={{ step: "draft", saving: true }} items={prepareEdited} />,
@@ -767,6 +817,7 @@ const render: Record<string, () => ReactNode> = {
   "live-ending": () => <LiveDemo phase="ending" elapsedMs={84 * 60_000} />,
   "live-ended": () => <LiveDemo phase="ended" elapsedMs={84 * 60_000} />,
   "live-resume": () => <LiveDemo phase="resume" />,
+  ...Object.fromEntries(Object.entries(onboardingRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
 };
 
 export function DesignGallery({ view }: { view: string | null }) {

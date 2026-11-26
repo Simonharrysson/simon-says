@@ -12,12 +12,15 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 export function PersonRow({
   orgId,
   person,
+  status,
   renamePerson,
   setPersonRole,
   deletePerson,
 }: {
   orgId: string;
   person: { id: string; name: string; role?: string | null };
+  /** One grey line under the name: the account link ("Har konto · …", "Inbjuden · …"), 0035. */
+  status?: string | null;
   renamePerson: FormAction;
   /** Only passed for admins: roles are set by the admin. */
   setPersonRole?: FormAction;
@@ -128,6 +131,7 @@ export function PersonRow({
             {person.name}
             {person.role && <span className="text-sm text-ink-3"> · {person.role}</span>}
           </span>
+          {status && <span className="text-sm text-ink-3 wrap-anywhere">{status}</span>}
         </span>
         <span className="flex flex-none items-center gap-1">
           {setPersonRole && (

@@ -26,6 +26,11 @@ import { orgNotice } from "@/lib/ui/messages";
 import { docUrl } from "@/lib/ui/meetings";
 import { localDate } from "@/lib/docs/create";
 import { upcomingPrepared } from "@/lib/prepare/store";
+import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
+import { loadOnboarding } from "@/lib/onboarding/store";
+import { showCard } from "@/lib/onboarding/steps";
+import { logoUrl } from "@/lib/orgs/logo";
+import { dismissAction } from "./kom-igang/actions";
 import {
   addPersonAction,
   changeFormatAction,
@@ -128,7 +133,7 @@ export default async function OrgPage({
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
-  const [role, people, meetings, members, userResult, format, formats, dashboard, prepared] = await Promise.all([
+  const [role, people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([
     myRole(db, id),
     listPeople(db, id),
     listMeetings(db, id),
@@ -138,6 +143,7 @@ export default async function OrgPage({
     listOrgFormats(db, id),
     tab === "oversikt" ? safeOverview(db, id) : Promise.resolve(null),
     upcomingPrepared(db, id, localDate(new Date())),
+    loadOnboarding(db, id),
   ]);
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
   const isAdmin = role === "admin";
@@ -165,6 +171,12 @@ export default async function OrgPage({
       members={members}
       people={people}
       meetings={meetings}
+      logoUrl={logoUrl(org.id, org.logo_updated_at)}
+      komIgang={
+        role === "admin" && showCard(onboarding) ? (
+          <KomIgangCard orgId={org.id} state={onboarding} onDismiss={dismissAction.bind(null, org.id, true)} />
+        ) : undefined
+      }
       docAccess={docAccess}
       viewerEmail={userResult.data.user?.email ?? null}
       notice={orgNotice(fel, klart)}
@@ -204,7 +216,6 @@ export default async function OrgPage({
       liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}
       startMeeting={<StartMeetingForm
           orgId={org.id}
-          shareTranscript={org.share_transcript}
           showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
           prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
         />}

@@ -189,6 +189,8 @@
   --animate-notice-in: notice-in 200ms var(--ease-out);
   --animate-scope-tick: scope-tick 1.6s var(--ease-out) 0.4s both;
   --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-step-in: step-in 280ms var(--ease-out) both;
+  --animate-step-back: step-back 280ms var(--ease-out) both;
 
   @keyframes write {
     from {
@@ -223,6 +225,19 @@
     }
     100% {
       box-shadow: 0 0 0 10px transparent;
+    }
+  }
+  /* Kom igång: the next step slides in from the right, a step back from the left. */
+  @keyframes step-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+  }
+  @keyframes step-back {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
     }
   }
   @keyframes shimmer {

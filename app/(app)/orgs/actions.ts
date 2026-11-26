@@ -26,6 +26,8 @@ import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
 import { endFromOrgPage } from "@/lib/meetings/end-from-org";
 import { END_BUDGET_MS, finishMeeting } from "@/lib/meetings/tick";
 import { validRole } from "@/lib/people/roles";
+import { LOGO_BUCKET, logoPath } from "@/lib/orgs/logo";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Server actions for the org pages. All run as the signed-in user; RLS decides what's allowed.
@@ -42,7 +44,8 @@ export async function createOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const result = await createOrg(db, field(form, "name"));
   if (!result.ok) redirect(`/orgs?fel=${result.reason}`);
-  redirect(`/orgs/${result.id}`);
+  // A new förening starts Kom igång (todo #5); every step can be skipped.
+  redirect(`/orgs/${result.id}/kom-igang`);
 }
 
 export async function joinOrgAction(form: FormData): Promise<void> {
@@ -158,7 +161,11 @@ export async function deleteOrgAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
   const result = await deleteOrg(db, orgId, field(form, "confirmName"));
-  if (result === "deleted") redirect("/orgs?klart=raderad");
+  if (result === "deleted") {
+    // The logo is not under the org's cascade (storage): remove it as the service role.
+    await supabaseAdmin().storage.from(LOGO_BUCKET).remove([logoPath(orgId)]).catch(() => null);
+    redirect("/orgs?klart=raderad");
+  }
   redirect(`/orgs/${orgId}?fel=org-${result}`);
 }
 
