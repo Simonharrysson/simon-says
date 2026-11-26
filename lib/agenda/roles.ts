@@ -5,6 +5,7 @@ import type { FixedItem } from "@/lib/formats/schema";
 import type { NotesClient } from "@/lib/notes/engine";
 import { oneShot } from "@/lib/notes/oneshot";
 import { normLabel, type AgendaItem } from "./scan";
+import { synonymRole } from "./role-words";
 
 // Which scanned agenda item is which fixed item of the profile (spec answer 2): one cheap Claude
 // call over the labels only, at anchoring, falling back to a fuzzy string match. Every role not
@@ -13,12 +14,6 @@ import { normLabel, type AgendaItem } from "./scan";
 type Item = Pick<AgendaItem, "key" | "label">;
 
 const ROLES = ["procedural", "checkin", "followup", "other", "topic"] as const;
-const SYNONYMS: Record<Exclude<ItemRole, "topic">, string[]> = {
-  checkin: ["må-runda", "måsrunda", "incheckning", "check-in", "hur mår"],
-  followup: ["från förra", "förra veckan", "föregående protokoll", "uppföljning"],
-  procedural: ["godkänn", "dagordning", "öppnande", "val av", "justerare", "avslutande"],
-  other: ["övrigt", "övriga frågor"],
-};
 const LABEL_MAX = 200;
 
 /** Keep only the first checkin and the first followup (in item order); later ones become topics. */
@@ -43,14 +38,7 @@ export function fuzzyRoles(items: Item[], fixed: FixedItem[]): Record<string, It
   for (const item of items) {
     const n = normLabel(item.label);
     let role = byLabel.get(n);
-    if (!role) {
-      for (const [r, words] of Object.entries(SYNONYMS) as [Exclude<ItemRole, "topic">, string[]][]) {
-        if (words.some((w) => n.includes(w))) {
-          role = r;
-          break;
-        }
-      }
-    }
+    if (!role) role = synonymRole(n) ?? undefined;
     roles[item.key] = role ?? "topic";
   }
   return onePerUniqueRole(items, roles);

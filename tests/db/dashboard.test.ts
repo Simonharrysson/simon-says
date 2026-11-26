@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, seedMeeting, type TestUser } from "@/test/local-supabase";
-import { loadOverview, listGoals } from "@/lib/dashboard/load";
+import { loadOverview, loadOverviewInput, listGoals } from "@/lib/dashboard/load";
+import { recurringTopics } from "@/lib/dashboard/overview";
 import { createOrg, joinOrg } from "@/lib/db/orgs";
+import { saveImportedProtocol } from "@/lib/history/store";
 
 // Org dashboard schema (0028) and the loader against the local stack. Fictional data only.
 
@@ -38,6 +40,23 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
     expect(noTitle.error).not.toBeNull();
     // A refused call changed nothing.
     expect((await listGoals(admin.db, orgId)).map((g) => g.title)).toEqual(["Bara ett mål"]);
+  });
+
+  it("set_org_goals keeps a goal saved again under the same title: same id, first approval (0042)", async () => {
+    await admin.db.rpc("set_org_goals", { p_org_id: orgId, p_goals: [{ title: "Ny lokal" }, { title: "Fler medlemmar" }] });
+    const svc = adminClient();
+    await svc.from("org_goals").update({ approved_at: "2026-01-02T10:00:00Z" }).eq("org_id", orgId);
+    const before = await listGoals(member.db, orgId);
+    // Reordered, one renamed, whitespace and case changed on the kept one.
+    await admin.db.rpc("set_org_goals", { p_org_id: orgId, p_goals: [{ title: "Fler  medlemmar till våren" }, { title: " ny LOKAL ", why: "Ändrad." }] });
+    const after = await listGoals(member.db, orgId);
+    const lokal = after.find((g) => g.title === "ny LOKAL")!;
+    expect(lokal.id).toBe(before.find((g) => g.title === "Ny lokal")!.id);
+    expect(new Date(lokal.approved_at).toISOString()).toBe("2026-01-02T10:00:00.000Z");
+    const renamed = after.find((g) => g.title === "Fler  medlemmar till våren")!;
+    expect(before.map((g) => g.id)).not.toContain(renamed.id);
+    expect(Date.parse(renamed.approved_at)).toBeGreaterThan(Date.parse("2026-01-02T10:00:00Z"));
+    await admin.db.rpc("set_org_goals", { p_org_id: orgId, p_goals: [{ title: "Bara ett mål" }] });
   });
 
   it("org_goals: outsiders read nothing, nobody writes the table directly", async () => {
@@ -97,22 +116,37 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
     const live = await seedMeeting(orgId, admin.id, "live");
     await svc.from("note_items").insert({ meeting_id: live.meetingId, id: "d9", section: "decision", kind: "decision", text: "Pågår" });
 
-    const o = await loadOverview(member.db, orgId, new Date("2026-11-26T18:00:00Z"));
-    const texts = o.decisions.map((d) => d.text);
-    expect(texts).toContain("Beslut 2026-10-29");
-    expect(texts).toContain("Beslut 2026-10-01");
-    expect(texts.some((t) => /Test|Pågår|anteckning/.test(t))).toBe(false);
-    expect(o.decisions.find((d) => d.text === "Beslut 2026-10-29")!.item).toBe("Ekonomi");
-    expect(o.topics.map((t) => [t.label, t.meetings])).toEqual([["Ekonomi", 2]]);
-    const tasks = o.openTasks.flatMap((g) => g.tasks.map((t) => t.text));
-    expect(tasks).toEqual(expect.arrayContaining(["Uppgift 2026-10-01", "Uppgift 2026-10-29"]));
-    expect(tasks).not.toContain("Testuppgift");
-    expect(o.attendance.people.find((p) => p.name === "Ada Kask")!.attended).toBe(2);
+    const o = await loadOverview(member.db, orgId);
+    expect(o.meetingCount).toBe(2);
+    expect(o.firstMeeting).toBe("2026-10-01T17:00:00+00:00");
+    const topics = recurringTopics(orgId, await loadOverviewInput(member.db, orgId));
+    expect(topics.map((t) => [t.label, t.meetings])).toEqual([["Ekonomi", 2]]);
 
     const none = await loadOverview(outsider.db, orgId);
     expect(none.meetingCount).toBe(0);
-    expect(none.decisions).toEqual([]);
 
     await svc.from("meetings").delete().in("id", [...seeded, live.meetingId]);
+  });
+
+  it("loadOverview: imported protocols count for members, never for outsiders", async () => {
+    const saved = await saveImportedProtocol(admin.db, {
+      orgId,
+      driveFileId: "doc-ovhist0001",
+      date: "2024-10-08",
+      section: 0,
+      sections: 1,
+      dateFrom: "doc",
+      items: [
+        { kind: "topic", text: "Spelkafé", topic: null, owner: null, done: null },
+        { kind: "decision", text: "Spelkaféet hålls varannan fredag", topic: "Spelkafé", owner: null, done: null },
+        { kind: "task", text: "Boka biblioteket", topic: "Spelkafé", owner: "Eventansvarig", done: false },
+      ],
+    });
+    expect(saved.ok).toBe(true);
+    const o = await loadOverview(member.db, orgId);
+    expect(o.imported).toMatchObject({ count: 1, first: "2024-10-08" });
+    const none = await loadOverview(outsider.db, orgId);
+    expect(none.imported.count).toBe(0);
+    expect((await admin.db.rpc("clear_history_protocols", { p_org_id: orgId })).error).toBeNull();
   });
 });

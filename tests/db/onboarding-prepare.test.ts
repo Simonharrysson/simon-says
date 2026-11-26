@@ -28,7 +28,7 @@ describe.skipIf(!hasLocalSupabase)("Förbered möte uses the förening's own typ
     expect((await formatForType(orgId, "styrelsemote")).profile).toEqual(STYRELSEPROTOKOLL);
   });
 
-  it("with them: Styrelsemöte and Årsmöte follow the stadgar; Veckomöte stays the default", async () => {
+  it("with them (a Styrelsemöte one saved before todo #15): each type follows its own; Veckomöte stays the default", async () => {
     const ars = arsmoteProfile(["Mötets öppnande", "Fastställande av medlemsavgift"]);
     const { data: arsId } = await admin.db.rpc("set_type_format", { p_org_id: orgId, p_type: "arsmote", p_profile: ars });
     const { data: styrId } = await admin.db.rpc("set_type_format", {
@@ -43,5 +43,14 @@ describe.skipIf(!hasLocalSupabase)("Förbered möte uses the förening's own typ
     expect(s.id).toBe(styrId);
     expect(s.profile.requiredItems).toEqual(["Fråga om beslutsmässighet"]);
     expect((await formatForType(orgId, "veckomote")).profile.kind).toBe("veckomote");
+  });
+
+  it("a förening whose default is Styrelseprotokoll keeps it for its ordinary meeting (todo #15)", async () => {
+    const r = await createOrg(admin.db, "Styrelseföreningen");
+    if (!r.ok) throw new Error("org");
+    await chooseStandardFormat(admin.db, r.id, "styrelseprotokoll");
+    const v = await formatForType(r.id, "veckomote");
+    expect(v.id).not.toBeNull();
+    expect(v.profile).toEqual(STYRELSEPROTOKOLL);
   });
 });

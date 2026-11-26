@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addBack, addItem, bodyItems, withPending } from "@/lib/prepare/edit";
-import { MEETING_TYPES, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
+import { isGoalItem, MEETING_TYPES, meetingTypeName, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
 import { cn } from "@/lib/utils";
 
 // "Förbered möte" (todo #6): the ordförande prepares the next meeting. Step 1 chooses the kind
@@ -243,10 +243,12 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
   const [adding, setAdding] = useState("");
   const addRef = useRef<HTMLInputElement>(null);
   const on = p.items.filter((i) => i.on);
-  const off = p.items.filter((i) => !i.on);
+  // "Mål att ta upp" (todo #12): the goals Simon Says suggests, apart from the other points.
+  const offGoals = p.items.filter((i) => !i.on && isGoalItem(i));
+  const off = p.items.filter((i) => !i.on && !isGoalItem(i));
   const saving = p.phase.saving === true;
   const held = p.existing?.held === true;
-  const typeName = MEETING_TYPES.find((t) => t.type === p.type)?.name ?? "";
+  const typeName = meetingTypeName(p.type);
   const lock = saving || held;
   const newId = p.newId ?? (() => `add:${Math.random().toString(36).slice(2, 10)}`);
 
@@ -332,6 +334,30 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
         </form>
       </Panel>
 
+      {offGoals.length > 0 && (
+        <section className="flex flex-col gap-3" aria-labelledby={`${p.uid}-goals`}>
+          <div className="flex flex-col gap-1">
+            <h2 id={`${p.uid}-goals`} className="text-lg">
+              Mål att ta upp
+            </h2>
+            <p className={hintClass}>Föreningens mål som kan behöva en stund på mötet.</p>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {offGoals.map((item) => (
+              <li key={item.id} className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-rail px-4 py-2">
+                <span className="flex flex-col">
+                  <span className="wrap-anywhere">{item.label}</span>
+                  <span className={hintClass}>{item.reason ?? "Ett av föreningens mål"}</span>
+                </span>
+                <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
+                  Lägg till
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {off.length > 0 && (
         <section className="flex flex-col gap-3" aria-labelledby={`${p.uid}-more`}>
           <h2 id={`${p.uid}-more`} className="text-lg">
@@ -396,7 +422,13 @@ function AgendaRow(props: {
   const { item, n } = props;
   const inputId = `prep-item-${item.id.replace(/[^a-z0-9]/gi, "-")}`;
   const tag: ReactNode =
-    item.source === "standing" ? null : item.source === "suggested" ? <span className={hintClass}>Förslag</span> : <span className={hintClass}>Tillagd</span>;
+    item.source === "standing" ? null : isGoalItem(item) ? (
+      <span className={hintClass}>Mål</span>
+    ) : item.source === "suggested" ? (
+      <span className={hintClass}>Förslag</span>
+    ) : (
+      <span className={hintClass}>Tillagd</span>
+    );
   return (
     <li className="flex flex-col gap-3 border-b border-line px-6 py-4 last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

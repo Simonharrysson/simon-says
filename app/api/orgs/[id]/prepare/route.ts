@@ -20,7 +20,8 @@ async function signedIn() {
 }
 
 /**
- * Förbered möte, the draft: `?typ=veckomote|styrelsemote|arsmote&datum=YYYY-MM-DD`. The format's
+ * Förbered möte, the draft: `?typ=veckomote|arsmote&datum=YYYY-MM-DD` (an agenda prepared as a
+ * Styrelsemöte before todo #15 still comes back as one). The format's
  * standing items, "Från förra veckan" with the previous meeting's open tasks, recurring topics as
  * unticked suggestions; an agenda already prepared for that date comes back to be edited. Members only.
  */

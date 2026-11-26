@@ -1,16 +1,17 @@
 import type { ItemRole, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/types";
 import { normLabel } from "@/lib/agenda/scan";
 import { isCopy, isDecision, isTask, type ChainItem } from "@/lib/meetings/summary";
-import { resolveSpeaker } from "@/lib/segments/resolve";
+import type { HistoryItem, HistoryMeeting } from "@/lib/history/types";
+import { synonymRole } from "@/lib/agenda/role-words";
 
-// The org dashboard's views 1–4 ("Översikt" tab), pure over rows (decisions in
-// docs/superpowers/specs/2026-11-26-org-dashboard-proposal.md, "Builder decisions"):
+// The org dashboard's pure helpers, over rows (decisions in
+// docs/superpowers/specs/2026-11-26-org-dashboard-proposal.md, "Builder decisions"). The Översikt
+// tab itself only shows the goals (Mål) and a line about what they build on; the rest is shared:
 // - counted meetings: the org's, not a Testmöte, ended (done or abandoned);
-// - open tasks: the tip of each carry chain, not done, grouped by person / owner;
-// - decisions: newest first, with the agenda item's stored label;
-// - recurring topics: topic labels in ≥ 2 counted meetings, decisions per month;
-// - attendance: who was heard and named, per person.
-// `loadOverview` (./load.ts) reads the rows with the caller's (RLS) client.
+// - open tasks: the tip of each carry chain, not done (the goals digest);
+// - recurring topics: topic labels in ≥ 2 counted meetings (Förbered möte, the goals digest).
+// Imported old protocols (lib/history, 0032) count in the recurring topics. Their items were
+// name-scrubbed when stored.
 
 export interface DashMeeting {
   id: string;
@@ -26,21 +27,11 @@ export interface DashMeeting {
 
 export type DashItem = ChainItem & Pick<NoteItemRow, "text" | "owner" | "due" | "position"> & Pick<Partial<NoteItemRow>, "anchor" | "owner_person_id">;
 
-export interface DashSpeaker {
-  meeting_id: string;
-  el_session_id: string;
-  speaker_label: string;
-  person_id: string | null;
-  display_name: string;
-  merged_into_label?: string | null;
-}
-
 export type DashPerson = Pick<PersonRow, "id" | "name"> & { role?: string | null };
 
 export interface DashInput {
   meetings: DashMeeting[];
   items: DashItem[];
-  speakers: DashSpeaker[];
   people: DashPerson[];
 }
 
@@ -65,13 +56,6 @@ export interface TaskGroup {
   tasks: OpenTask[];
 }
 
-export interface DecisionRow {
-  key: string;
-  text: string;
-  date: string;
-  item: string | null;
-}
-
 export interface TopicMonth {
   /** `YYYY-MM`. */
   month: string;
@@ -85,37 +69,25 @@ export interface Topic {
   months: TopicMonth[];
 }
 
-export interface AttendanceRow {
-  personId: string;
-  name: string;
-  attended: number;
-  lastSeen: string | null;
-}
-
-export interface Attendance {
-  /** Counted meetings where anyone was named: the denominator. */
-  meetings: number;
-  people: AttendanceRow[];
-}
-
+/** What the Översikt's basis line needs: own counted meetings and the imported protocols. */
 export interface Overview {
   meetingCount: number;
   firstMeeting: string | null;
-  lastMeeting: string | null;
-  openTasks: TaskGroup[];
-  decisions: DecisionRow[];
-  topics: Topic[];
-  attendance: Attendance;
+  /** Imported old protocols: how many, and the first and last date (YYYY-MM-DD). */
+  imported: ImportedSummary;
 }
 
-export const NO_OWNER = "Utan ansvarig";
+export interface ImportedSummary {
+  count: number;
+  first: string | null;
+  last: string | null;
+}
+
 const WEEK_MS = 7 * 24 * 3600 * 1000;
-/** Decisions shown: the last 12 months, newest first, at most this many. */
-export const DECISION_LIMIT = 200;
-const DECISION_WINDOW_MS = 365 * 24 * 3600 * 1000;
+export const NO_OWNER = "Utan ansvarig";
+const key = (meetingId: string, id: string) => `${meetingId}\u0000${id}`;
 /** Roles that sit on every agenda and say nothing as topics. */
 const NOT_TOPICS = new Set<ItemRole>(["procedural", "checkin", "followup", "other"]);
-const key = (meetingId: string, id: string) => `${meetingId}\u0000${id}`;
 
 /** The org's meetings the dashboard counts, oldest first. */
 export function countedMeetings(orgId: string, meetings: DashMeeting[]): DashMeeting[] {
@@ -210,45 +182,66 @@ export function openTasks(orgId: string, input: DashInput, now: Date): TaskGroup
   );
 }
 
-export function recentDecisions(orgId: string, input: DashInput, now: Date, limit = DECISION_LIMIT): DecisionRow[] {
-  const { byId, items } = scoped(orgId, input);
-  const from = now.getTime() - DECISION_WINDOW_MS;
-  return items
-    .filter(isDecision)
-    .map((r) => ({ r, m: byId.get(r.meeting_id)! }))
-    .filter(({ m }) => Date.parse(m.started_at) >= from)
-    .sort((a, b) => b.m.started_at.localeCompare(a.m.started_at) || a.r.position - b.r.position || a.r.id.localeCompare(b.r.id))
-    .slice(0, limit)
-    .map(({ r, m }) => ({ key: `${m.id}:${r.id}`, text: r.text, date: m.started_at, item: itemLabel(m, r.anchor) }));
-}
+/** An imported protocol's date (YYYY-MM-DD) as a timestamp: midday UTC, the same day in Stockholm. */
+export const importedAt = (date: string) => `${date.slice(0, 10)}T12:00:00Z`;
 
-export function recurringTopics(orgId: string, input: DashInput): Topic[] {
+const monthOf = (iso: string) => iso.slice(0, 7);
+const cleanLabel = (s: string | null | undefined) => (typeof s === "string" && s.trim() ? s.trim() : null);
+
+/** Imported protocols carry no roles: a label's words say whether it is a formality or a check-in. */
+const importedTopic = (label: string | null | undefined) => {
+  const l = cleanLabel(label);
+  return l && !synonymRole(l) ? l : null;
+};
+/** An imported line under a Må-runda: never shown, like the own meetings' (`underCheckin`). */
+const importedUnderCheckin = (i: Pick<HistoryItem, "topic">) => Boolean(i.topic && synonymRole(i.topic) === "checkin");
+
+/**
+ * Topic labels on the agenda of ≥ 2 meetings, own and imported (an imported protocol's topics: its
+ * topic lines and the topics its other lines sit under), with the decisions under each per month.
+ */
+export function recurringTopics(orgId: string, input: DashInput, imported: HistoryMeeting[] = []): Topic[] {
   const { meetings, byId, items } = scoped(orgId, input);
-  const topics = new Map<string, { label: string; meetings: Set<string>; lastSeen: string; months: Map<string, string[]> }>();
+  // Every meeting as (id, when, labels, decisions), oldest first.
+  type Source = { id: string; at: string; labels: string[]; decisions: { label: string | null; text: string; order: number }[] };
+  const sources: Source[] = [];
+  const decisionsOf = new Map<string, Source["decisions"]>();
   for (const m of meetings) {
-    for (const [anchor, raw] of Object.entries(m.agenda_labels ?? {})) {
-      const role = m.agenda_roles?.[anchor] ?? "topic";
-      if (NOT_TOPICS.has(role) || typeof raw !== "string") continue;
+    const labels = Object.entries(m.agenda_labels ?? {})
+      .filter(([anchor, raw]) => !NOT_TOPICS.has(m.agenda_roles?.[anchor] ?? "topic") && typeof raw === "string")
+      .map(([, raw]) => raw as string);
+    const src: Source = { id: m.id, at: m.started_at, labels, decisions: [] };
+    decisionsOf.set(m.id, src.decisions);
+    sources.push(src);
+  }
+  for (const r of items.filter(isDecision)) decisionsOf.get(r.meeting_id)!.push({ label: itemLabel(byId.get(r.meeting_id)!, r.anchor), text: r.text, order: r.position });
+  imported.forEach((m, p) => {
+    const labels = m.items.map((i) => importedTopic(i.kind === "topic" ? i.text : i.topic)).filter((l): l is string => l !== null);
+    const decisions = m.items.flatMap((i, k) => (i.kind === "decision" && !importedUnderCheckin(i) ? [{ label: importedTopic(i.topic), text: i.text, order: k }] : []));
+    sources.push({ id: `import:${p}`, at: importedAt(m.date), labels, decisions });
+  });
+  sources.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id));
+
+  const topics = new Map<string, { label: string; meetings: Set<string>; lastSeen: string; months: Map<string, string[]> }>();
+  for (const src of sources) {
+    for (const raw of src.labels) {
       const n = normLabel(raw);
       if (!n) continue;
-      const t = topics.get(n) ?? { label: raw.trim(), meetings: new Set<string>(), lastSeen: m.started_at, months: new Map() };
-      t.meetings.add(m.id);
-      // Newest spelling wins (meetings are oldest first).
+      const t = topics.get(n) ?? { label: raw.trim(), meetings: new Set<string>(), lastSeen: src.at, months: new Map() };
+      t.meetings.add(src.id);
+      // Newest spelling wins (oldest first).
       t.label = raw.trim();
-      t.lastSeen = m.started_at;
+      t.lastSeen = src.at;
       topics.set(n, t);
     }
   }
-  const decisions = items
-    .filter(isDecision)
-    .sort((a, b) => byId.get(a.meeting_id)!.started_at.localeCompare(byId.get(b.meeting_id)!.started_at) || a.position - b.position);
-  for (const r of decisions) {
-    const m = byId.get(r.meeting_id)!;
-    const label = itemLabel(m, r.anchor);
-    const t = label ? topics.get(normLabel(label)) : undefined;
-    if (!t) continue;
-    const month = m.started_at.slice(0, 7);
-    t.months.set(month, [...(t.months.get(month) ?? []), r.text]);
+  for (const src of sources) {
+    for (const d of [...src.decisions].sort((a, b) => a.order - b.order)) {
+      const t = d.label ? topics.get(normLabel(d.label)) : undefined;
+      if (!t) continue;
+      const month = monthOf(src.at);
+      t.months.set(month, [...(t.months.get(month) ?? []), d.text]);
+    }
   }
   return [...topics.values()]
     .filter((t) => t.meetings.size >= 2)
@@ -258,56 +251,16 @@ export function recurringTopics(orgId: string, input: DashInput): Topic[] {
       lastSeen: t.lastSeen,
       months: [...t.months.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([month, decisions]) => ({ month, decisions })),
     }))
-    .sort((a, b) => b.meetings - a.meetings || b.lastSeen.localeCompare(a.lastSeen) || a.label.localeCompare(b.label, "sv"));
+    .sort((a, b) => b.meetings - a.meetings || Date.parse(b.lastSeen) - Date.parse(a.lastSeen) || a.label.localeCompare(b.label, "sv"));
 }
 
-export function attendance(orgId: string, input: DashInput): Attendance {
-  const { meetings, byId } = scoped(orgId, input);
-  const bySessionByMeeting = new Map<string, Map<string, DashSpeaker[]>>();
-  for (const s of input.speakers) {
-    if (!byId.has(s.meeting_id)) continue;
-    const sessions = bySessionByMeeting.get(s.meeting_id) ?? new Map<string, DashSpeaker[]>();
-    sessions.set(s.el_session_id, [...(sessions.get(s.el_session_id) ?? []), s]);
-    bySessionByMeeting.set(s.meeting_id, sessions);
-  }
-  const people = new Map(input.people.map((p) => [p.id, p]));
-  const rows = new Map<string, AttendanceRow>();
-  let counted = 0;
-  for (const m of meetings) {
-    const present = new Set<string>();
-    for (const rowsOfSession of bySessionByMeeting.get(m.id)?.values() ?? []) {
-      for (const s of rowsOfSession) {
-        const res = resolveSpeaker(rowsOfSession, s.speaker_label);
-        if (res.personId && people.has(res.personId)) present.add(res.personId);
-      }
-    }
-    if (!present.size) continue;
-    counted++;
-    for (const id of present) {
-      const row = rows.get(id) ?? { personId: id, name: people.get(id)!.name, attended: 0, lastSeen: null };
-      row.attended++;
-      row.lastSeen = m.started_at;
-      rows.set(id, row);
-    }
-  }
-  // Everyone in the people list shows, also those never named.
-  for (const p of input.people) if (!rows.has(p.id)) rows.set(p.id, { personId: p.id, name: p.name, attended: 0, lastSeen: null });
-  return {
-    meetings: counted,
-    // By name, not by count: the list is for everyone to see, not a ranking.
-    people: [...rows.values()].sort((a, b) => a.name.localeCompare(b.name, "sv") || a.personId.localeCompare(b.personId)),
-  };
+/** What the Översikt says about imported protocols. */
+export function importedSummary(imported: HistoryMeeting[]): ImportedSummary {
+  const dates = imported.map((m) => m.date.slice(0, 10)).sort();
+  return { count: imported.length, first: dates[0] ?? null, last: dates.at(-1) ?? null };
 }
 
-export function buildOverview(orgId: string, input: DashInput, now: Date): Overview {
-  const meetings = countedMeetings(orgId, input.meetings);
-  return {
-    meetingCount: meetings.length,
-    firstMeeting: meetings[0]?.started_at ?? null,
-    lastMeeting: meetings.at(-1)?.started_at ?? null,
-    openTasks: openTasks(orgId, input, now),
-    decisions: recentDecisions(orgId, input, now),
-    topics: recurringTopics(orgId, input),
-    attendance: attendance(orgId, input),
-  };
+export function buildOverview(orgId: string, meetings: DashMeeting[], imported: HistoryMeeting[] = []): Overview {
+  const counted = countedMeetings(orgId, meetings);
+  return { meetingCount: counted.length, firstMeeting: counted[0]?.started_at ?? null, imported: importedSummary(imported) };
 }

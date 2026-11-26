@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
-import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState } from "@/components/live/AgendaStep";
+import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState, type GoalOption } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
 import type { Speaker } from "@/components/live/types";
 import { Badge } from "@/components/ui/badge";
@@ -30,11 +30,13 @@ import { OrgsView } from "@/components/views/OrgsView";
 import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import type { DraftItem, MeetingType } from "@/lib/prepare/types";
-import { OverviewView, type GoalsPhase } from "@/components/views/OverviewView";
+import { OverviewView, type GoalsPhase, type OverviewGoal } from "@/components/views/OverviewView";
+import type { Overview } from "@/lib/dashboard/overview";
 import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
+import { STADGAR_COPY, StadgarArsmote } from "@/components/views/StadgarArsmote";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
-import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
+import { demoGoals, demoOverview, demoOverviewHistoryOnly, demoOverviewWithHistory, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
 import { designViews, type DesignGroup } from "./registry";
 import { onboardingRender } from "./onboarding-demo";
@@ -128,7 +130,7 @@ const demoImportFiles = {
 };
 
 /** The förening page on its Översikt tab (fictional data, overview-demo.ts). */
-function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
+function OverviewDemo({ goalsPhase, overview = demoOverview, goals = demoGoals, historyCount }: { goalsPhase?: GoalsPhase; overview?: Overview; goals?: OverviewGoal[]; historyCount?: number }) {
   return (
     <AppChrome>
       <OrgDetailView
@@ -143,7 +145,7 @@ function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
         tabs={{
           active: "oversikt",
           href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin"),
-          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, email: "kassor@rutan.example", meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
+          overview: <OverviewView orgId={ORG_ID} isAdmin overview={overview} goals={goals} historyCount={historyCount} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, email: "kassor@rutan.example", meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
         }}
         actions={actions}
       />
@@ -199,16 +201,21 @@ function MicCheckDemo() {
 
 const agendaFormats: AgendaFormatOption[] = [
   { id: "f1", kind: "veckomote", name: "Veckomöte", isDefault: true },
-  { id: null, kind: "styrelseprotokoll", name: "Styrelseprotokoll", isDefault: false },
+  { id: null, kind: "arsmote", name: "Årsmöte", isDefault: false },
   { id: null, kind: "enkel", name: "Enkel", isDefault: false },
+];
+const agendaGoals: GoalOption[] = [
+  { id: "g2", label: "Mål: Ny lokal för styrelsen", reason: "Följ upp beslutet från förra veckan" },
+  { id: "g1", label: "Mål: Fler medlemmar till vårens event", reason: "Inget nytt sedan 12 okt" },
 ];
 
 /** Consent step with the agenda step in one state; Använd / Skapa nytt dokument work locally (no Picker). */
-function AgendaDemo({ view }: { view: AgendaViewState }) {
+function AgendaDemo({ view, goals }: { view: AgendaViewState; goals?: GoalOption[] }) {
   const off = view.state === "picker-off";
-  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off ? { kind: "new" } : null);
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off || goals ? { kind: "new" } : null);
   const [formatValue, setFormatValue] = useState("id:f1");
   const [transcript, setTranscript] = useState(false);
+  const [goalIds, setGoalIds] = useState<string[]>(goals ? [goals[0].id] : []);
   return (
     <LiveDemo
       phase="consent"
@@ -226,6 +233,9 @@ function AgendaDemo({ view }: { view: AgendaViewState }) {
           onNewDoc={() => setChosen({ kind: "new" })}
           onFormatChange={setFormatValue}
           onTranscriptChange={setTranscript}
+          goals={goals}
+          goalIds={goalIds}
+          onGoalChange={(id, on) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)))}
         />
       }
       agendaConfirmed={chosen !== null}
@@ -255,6 +265,11 @@ const prepareDraft: DraftItem[] = [
   { id: "topic:hemsidan", label: "Hemsidan", role: "topic", source: "suggested", on: false, meetings: 2 },
   { id: "std:other", label: "Övrigt", role: "other", source: "standing", on: true, last: true },
 ];
+// "Mål att ta upp" (todo #12): two approved goals with why Simon Says brings them up.
+const goalMedlemmar: DraftItem = { id: "goal:fler medlemmar till vårens event", label: "Mål: Fler medlemmar till vårens event", role: "topic", source: "suggested", on: false, reason: "Inget nytt sedan 12 okt" };
+const goalLokal: DraftItem = { id: "goal:ny lokal för styrelsen", label: "Mål: Ny lokal för styrelsen", role: "topic", source: "suggested", on: false, reason: "Följ upp beslutet från förra veckan" };
+const prepareGoals: DraftItem[] = [...prepareDraft.slice(0, -1), goalLokal, goalMedlemmar, prepareDraft[prepareDraft.length - 1]];
+const prepareGoalTicked: DraftItem[] = [...prepareDraft.slice(0, 3), { ...goalLokal, on: true }, ...prepareDraft.slice(3, -1), goalMedlemmar, prepareDraft[prepareDraft.length - 1]];
 const prepareEdited: DraftItem[] = [
   prepareDraft[0],
   prepareDraft[1],
@@ -360,7 +375,7 @@ const learnedProposal = {
   folderId: null,
 };
 
-function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "stadgar" }) {
+function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "customize" }) {
   return (
     <AppChrome>
       <div className="mx-auto w-full max-w-page px-gutter">
@@ -370,6 +385,12 @@ function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "s
       </div>
     </AppChrome>
   );
+}
+
+/** Mötesformat → "Lägg in årsmötet från stadgarna": the stadgar's årsmöte agenda to check (todo #15). */
+function StadgarArsmoteDemo() {
+  const [items, setItems] = useState(["Mötets öppnande", "Fråga om mötets behöriga utlysande", "Val av mötesordförande", "Verksamhetsberättelse", "Fråga om ansvarsfrihet för styrelsen", "Val av styrelse", "Val av revisorer"]);
+  return <StadgarArsmote uid="demo-stadgar" stadgar={{ phase: "review", arsmote: items }} pickerEnabled onPick={noop} onChange={setItems} onSave={noop} onCancel={noop} />;
 }
 
 /** The format card alone, as wide as the förening page's main column. */
@@ -534,6 +555,8 @@ const render: Record<string, () => ReactNode> = {
   "org-overview-limit": () => (
     <OverviewDemo goalsPhase={{ phase: "error", tone: "warning", message: "Du har bett om förslag tre gånger i dag. Försök igen i morgon." }} />
   ),
+  "org-overview-history": () => <OverviewDemo overview={demoOverviewWithHistory} historyCount={48} />,
+  "org-overview-history-only": () => <OverviewDemo overview={demoOverviewHistoryOnly} goals={[]} historyCount={48} />,
   "org-overview-empty": () => (
     <AppChrome>
       <OrgDetailView
@@ -595,20 +618,17 @@ const render: Record<string, () => ReactNode> = {
   "format-learn-error": () => (
     <LearnDemo view={{ phase: "error", message: "Simon Says kan inte läsa ett av dokumenten. Välj dem igen i Google-väljaren." }} />
   ),
-  "format-stadgar-editor": () => (
-    <LearnDemo
-      variant="stadgar"
-      view={{
-        phase: "editor",
-        proposal: {
-          profile: {
-            ...STYRELSEPROTOKOLL,
-            requiredItems: ["Fråga om mötets behöriga utlysande", "Fråga om beslutsmässighet", "Ekonomisk rapport"],
-          },
-          explanation: "Stadgarna kräver 3 punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.",
-        },
-      }}
-    />
+  "format-stadgar-arsmote": () => (
+    <AppChrome>
+      <div className="mx-auto w-full max-w-page px-gutter">
+        <Panel title="Mötesformat" titleId="format-title-demo">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-ink-2">{STADGAR_COPY.lead}</p>
+            <StadgarArsmoteDemo />
+          </div>
+        </Panel>
+      </div>
+    </AppChrome>
   ),
   "org-prepared": () => (
     <AppChrome>
@@ -685,6 +705,8 @@ const render: Record<string, () => ReactNode> = {
     />
   ),
   "prepare-draft-edited": () => <PrepareDemo phase={{ step: "draft" }} items={prepareEdited} />,
+  "prepare-draft-goals": () => <PrepareDemo phase={{ step: "draft" }} items={prepareGoals} />,
+  "prepare-draft-goal-added": () => <PrepareDemo phase={{ step: "draft" }} items={prepareGoalTicked} />,
   "prepare-draft-empty": () => <PrepareDemo phase={{ step: "draft" }} type="arsmote" items={[...arsmoteDraft, ...arsmoteLast]} />,
   "prepare-saving": () => <PrepareDemo phase={{ step: "draft", saving: true }} items={prepareEdited} />,
   "prepare-save-error": () => (
@@ -844,6 +866,7 @@ const render: Record<string, () => ReactNode> = {
   "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
   "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable", folderName: "Verksamhetsår 2026-2027" }} />,
   "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} />,
+  "live-agenda-new-goals": () => <AgendaDemo view={{ state: "none" }} goals={agendaGoals} />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (
     <LiveDemo
