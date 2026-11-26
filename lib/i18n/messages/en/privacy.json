@@ -41,10 +41,12 @@
     "overview": "For the Overview tab: the headings of the agenda items (without names) and the goals the association's admin has approved. The headings disappear with the meeting, the goals with the association.",
     "history": "Old minutes the admin chooses to import: the text is sent to Anthropic (Claude), which picks out dates, decisions, tasks (with role, not name) and short status lines. Only those lines are stored, never the document's text; the admin can remove them at any time and they disappear with the association.",
     "drive": "Optional, only for admins and only to import old minutes: the admin can give Simon Says read access to their Google Drive. It is used to show the admin's folders and the names of the documents in the folders the admin chooses; only the minutes the admin ticks are opened. Folders and document names are not stored. The key for the read access is stored encrypted and separately from the sign-in key, is used only for the import and is deleted automatically after 24 hours; the admin can also remove it right away.",
+    "calendar": "Optional, for whoever connects their Google Calendar: Simon Says only reads the calendar (never writes), and only the calendar the association's admin has chosen for its meetings. We read the events' names, times and the attendees' names and e-mail addresses, never the description or location. None of it is stored, except what is used for a meeting: when a meeting starts, the matched event's name (in the document's name and status line) and which people in the association's people list were invited or declined (as ids, never e-mail addresses) are saved. For the association we save which calendar was chosen (id, name and an optional filter word). The key for the read access is stored encrypted and apart from the sign-in key; “Disconnect” in Settings deletes it at once.",
     "kept": "<strong>The usage records and the log of created associations remain even when the association is deleted.</strong> They contain no meeting content, only numbers and ids. The usage records are kept as long as the service runs, to prevent abuse of the free service and to follow the cost over time. When an association is deleted, only its id remains in the records, not its name. The log of created associations is kept to enforce the limit of two associations per person.",
     "notTitle": "What is not stored",
     "notAudio": "The audio from the meeting.",
     "notDrive": "Nothing else in your Google Drive, and not the names of folders and documents shown when an admin imports old minutes.",
+    "notCalendar": "Anything else from your calendar: other calendars, events that don't become meetings, descriptions and locations.",
     "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first."
   },
   "mail": "You decide which e-mails Simon Says sends you. Under Account you can turn off each kind of e-mail separately, or choose No e-mail at all. At the bottom of every e-mail there is a link to the same choices that works without signing in, even if you don't have an account. We only store your choices (and, if you have no account, the address they apply to) as long as the service runs, so that a no keeps applying. E-mail us if you want us to delete them.",
@@ -62,7 +64,7 @@
     },
     "google": {
       "what": "Sign-in, and the document in the Drive of the person who starts the meeting.",
-      "note": "We may only touch files Simon Says itself created or that you have chosen. Exception: an admin importing old minutes can give read access to their Drive (see What is stored). Processing may take place outside the EU."
+      "note": "We may only touch files Simon Says itself created or that you have chosen. Exception: an admin importing old minutes can give read access to their Drive, and whoever connects their calendar gives read access to their calendar (see What is stored). Processing may take place outside the EU."
     },
     "supabase": {
       "what": "The database: accounts, associations, people lists, transcripts and notes.",
