@@ -33,7 +33,11 @@
   },
   "summary": {
     "doneWhen": "done when: {text}",
-    "overdue": "overdue"
+    "overdue": "overdue",
+    "fieldOwner": "who",
+    "fieldDue": "when",
+    "fieldDoneWhen": "done when",
+    "missing": "missing {fields}"
   },
   "settings": {
     "label": "Tasks: Require who, when and done when",

@@ -97,3 +97,26 @@ describe("summary e-mail in English (the recipient chose English)", () => {
     expect(html).not.toContain("Avsluta prenumeration");
   });
 });
+
+describe("summary e-mail: concrete tasks (0047)", () => {
+  const input: SummaryEmailInput = {
+    ...base,
+    content: {
+      ...base.content,
+      tasks: [
+        { text: "Boka lokal", owner: "Erik", due: "fredag", doneWhen: "kontraktet är påskrivet", overdue: true, missing: [], mine: false },
+        { text: "Betala hyran", owner: "Kassör", due: null, doneWhen: null, overdue: false, missing: ["due", "doneWhen"], mine: false },
+      ],
+      more: { decisions: 0, tasks: 0, other: 0 },
+    },
+  };
+
+  it("shows the deadline (overdue in words), Klart när and what is missing", () => {
+    const { text, html } = renderSummaryEmail(input);
+    expect(text).toContain("- Erik: Boka lokal (fredag, försenad) – klart när: kontraktet är påskrivet\n");
+    expect(text).toContain("- Kassör: Betala hyran – saknar när, klart när\n");
+    expect(html).toContain("(fredag, försenad)");
+    expect(html).toContain("– klart när: kontraktet är påskrivet");
+    expect(renderSummaryEmail({ ...input, locale: "en" }).text).toContain("Erik: Boka lokal (fredag, overdue) – done when: kontraktet är påskrivet");
+  });
+});

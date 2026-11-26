@@ -88,3 +88,22 @@ describe("summaryContent", () => {
     expect([c.decisions, c.tasks.map((t) => t.text)]).toEqual([["Gammalt beslut"], ["Gammal uppgift"]]);
   });
 });
+
+describe("concrete tasks in the summary (0047)", () => {
+  const rows: SummaryItem[] = [
+    item({ id: "n1", section: "action", kind: "task", text: "Boka lokal", owner: "Erik", due: "fredag", due_date: "2026-11-27", done_when: "kontraktet är påskrivet" }),
+    item({ id: "n2", section: "action", kind: "task", text: "Betala hyran", owner: "Kassör" }),
+    item({ id: "n3", section: "action", kind: "task", text: "☐ Anna: Ringa (måndag) – (klart när?)", locked: true }),
+  ];
+
+  it("deadline, Klart när and overdue (deadline day before the e-mail's day)", () => {
+    const [boka] = summaryContent(rows, { today: "2026-12-01" }).tasks;
+    expect(boka).toMatchObject({ due: "fredag", doneWhen: "kontraktet är påskrivet", overdue: true, missing: [] });
+    expect(summaryContent(rows, { today: "2026-11-27" }).tasks[0].overdue).toBe(false);
+  });
+
+  it("what each task lacks, only when the förening requires it (a locked line: its placeholders)", () => {
+    expect(summaryContent(rows, { requireFields: true }).tasks.map((t) => t.missing)).toEqual([[], ["due", "doneWhen"], ["doneWhen"]]);
+    expect(summaryContent(rows).tasks.map((t) => t.missing)).toEqual([[], [], []]);
+  });
+});

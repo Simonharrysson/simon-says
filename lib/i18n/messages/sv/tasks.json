@@ -33,7 +33,11 @@
   },
   "summary": {
     "doneWhen": "klart när: {text}",
-    "overdue": "försenad"
+    "overdue": "försenad",
+    "fieldOwner": "vem",
+    "fieldDue": "när",
+    "fieldDoneWhen": "klart när",
+    "missing": "saknar {fields}"
   },
   "settings": {
     "label": "Uppgifter: Kräv vem, när och klart när",
