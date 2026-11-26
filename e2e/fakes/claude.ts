@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { GOALS_SYSTEM_PROMPT } from "@/lib/dashboard/goals";
 import { ROLES_SYSTEM_PROMPT } from "@/lib/agenda/roles";
-import { STADGAR_BOTH_SYSTEM_PROMPT } from "@/lib/formats/arsmote";
 import { STADGAR_SYSTEM_PROMPT } from "@/lib/formats/stadgar";
 import { DIGEST_SYSTEM_PROMPT } from "@/lib/history/digest";
 import { EXTRACT_SYSTEM_PROMPT } from "@/lib/history/extract-prompt";
@@ -26,7 +25,6 @@ const KINDS: [string, ClaudeKind][] = [
   [SYSTEM_PROMPT, "notes"],
   [NAMES_SYSTEM_PROMPT, "names"],
   [CHECKIN_SYSTEM_PROMPT, "checkin"],
-  [STADGAR_BOTH_SYSTEM_PROMPT, "stadgar-both"],
   [STADGAR_SYSTEM_PROMPT, "stadgar"],
   [GOALS_SYSTEM_PROMPT, "goals"],
   [EXTRACT_SYSTEM_PROMPT, "extract"],
