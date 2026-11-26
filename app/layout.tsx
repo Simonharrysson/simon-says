@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
-import "./views.css";
-import "@/components/live/live.css";
 
 // Fonts are downloaded at build time and served from our own domain (no Google request
 // from the visitor's browser).
