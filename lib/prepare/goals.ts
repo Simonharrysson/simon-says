@@ -1,5 +1,6 @@
-import { countedMeetings, underCheckin, type DashInput } from "@/lib/dashboard/overview";
+import { countedMeetings, importedAt, itemLabel, underCheckin, type DashInput } from "@/lib/dashboard/overview";
 import { normLabel } from "@/lib/agenda/scan";
+import type { HistoryMeeting } from "@/lib/history/types";
 import { isDecision, isTask } from "@/lib/meetings/summary";
 
 // "Mål att ta upp" (todo #12): when a new agenda is prepared, at most two of the förening's approved
@@ -11,10 +12,13 @@ import { isDecision, isTask } from "@/lib/meetings/summary";
 //    → "Inget nytt sedan 12 okt" (since the last mention, or since the goal was set).
 //
 // Decisions first (newest first), then the longest-quiet goals; ties in the goals' own order.
-// "Mentioned": a meeting's agenda label, decision or task shares the goal title's significant
-// words (two of them, or its only one), compared on 5-letter stems so "medlemmar" ≈ "medlemsvärvning".
+// "Mentioned": a meeting's agenda label, decision, task (or, in an imported protocol, topic or
+// status line) shares the goal title's significant words (two of them, or its only one), compared
+// on 5-letter stems so "medlemmar" ≈ "medlemsvärvning". A decision under an agenda item that names
+// the goal ("Mål: Ny lokal") is a decision on it. Imported protocols (history_items) count too.
 // org_goals holds only approved, current goals (set_org_goals replaces them all; there is no
-// dropped/achieved state and no deadline), so every stored goal may be suggested.
+// dropped/achieved state and no deadline), so every stored goal may be suggested. approved_at is
+// the goal's first approval: 0042 keeps it (and the id) when the set is saved again.
 
 export const MAX_GOAL_SUGGESTIONS = 2;
 const DECISION_DAYS = 21;
@@ -30,9 +34,10 @@ export interface GoalRow {
 /** One counted meeting as the rule sees it: when, and its words (labels, decisions, tasks). */
 export interface GoalMeeting {
   at: string;
-  /** Agenda labels and task texts. */
+  /** Agenda labels, task texts (and an imported protocol's topics and status lines). */
   texts: string[];
-  decisions: string[];
+  /** Decisions with the agenda item they sit under, when known. */
+  decisions: { text: string; topic: string | null }[];
 }
 
 export interface GoalSuggestion {
@@ -71,10 +76,13 @@ export function shortDay(iso: string): string {
   return new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short", timeZone: "Europe/Stockholm" }).format(new Date(iso)).replace(".", "");
 }
 
-/** The counted meetings' words, oldest first; Må-runda items and Testmöten never count. */
-export function goalMeetings(orgId: string, input: DashInput): GoalMeeting[] {
+/**
+ * The counted meetings' words, oldest first; Må-runda items and Testmöten never count. `imported`:
+ * old protocols (history_items), as their own meetings.
+ */
+export function goalMeetings(orgId: string, input: Pick<DashInput, "meetings" | "items">, imported: HistoryMeeting[] = []): GoalMeeting[] {
   const meetings = countedMeetings(orgId, input.meetings);
-  const byId = new Map(meetings.map((m) => [m.id, { at: m.started_at, texts: [] as string[], decisions: [] as string[] }]));
+  const byId = new Map(meetings.map((m) => [m.id, { at: m.started_at, texts: [] as string[], decisions: [] as GoalMeeting["decisions"] }]));
   for (const m of meetings) {
     for (const [anchor, label] of Object.entries(m.agenda_labels ?? {})) {
       if (typeof label === "string" && m.agenda_roles?.[anchor] !== "checkin") byId.get(m.id)!.texts.push(label);
@@ -85,14 +93,32 @@ export function goalMeetings(orgId: string, input: DashInput): GoalMeeting[] {
     const gm = byId.get(r.meeting_id);
     const m = meetingOf.get(r.meeting_id);
     if (!gm || !m || underCheckin(m, r) || r.deleted_by_human) continue;
-    if (isDecision(r)) gm.decisions.push(r.text);
+    if (isDecision(r)) gm.decisions.push({ text: r.text, topic: itemLabel(m, r.anchor) });
     else if (isTask(r)) gm.texts.push(r.text);
   }
-  return meetings.map((m) => byId.get(m.id)!);
+  const own = meetings.map((m) => byId.get(m.id)!);
+  const old = imported.map((h) => {
+    const gm: GoalMeeting = { at: importedAt(h.date), texts: [], decisions: [] };
+    for (const i of h.items) {
+      if (i.kind === "decision") gm.decisions.push({ text: i.text, topic: i.topic });
+      else {
+        gm.texts.push(i.text);
+        if (i.topic) gm.texts.push(i.topic);
+      }
+    }
+    return gm;
+  });
+  return [...old, ...own].sort((a, b) => a.at.localeCompare(b.at));
 }
 
-/** At most two goals to bring up, with why (see the rules above). `goals` in their own order. */
-export function suggestGoals(goals: GoalRow[], meetings: GoalMeeting[], now: Date): GoalSuggestion[] {
+const decidedOn = (stems: string[], d: GoalMeeting["decisions"][number]) => mentions(stems, d.text) || (d.topic !== null && mentions(stems, d.topic));
+
+/**
+ * At most two goals to bring up, with why (see the rules above). `goals` in their own order.
+ * `from`: the start of the window `meetings` cover (the loader reads a bounded window); a goal not
+ * mentioned in it is quiet since the later of its approval and `from` (true either way).
+ */
+export function suggestGoals(goals: GoalRow[], meetings: GoalMeeting[], now: Date, opts: { from?: string } = {}): GoalSuggestion[] {
   const nowMs = now.getTime();
   const sorted = [...meetings].sort((a, b) => a.at.localeCompare(b.at));
   type Scored = GoalSuggestion & { order: number; at: number };
@@ -104,7 +130,7 @@ export function suggestGoals(goals: GoalRow[], meetings: GoalMeeting[], now: Dat
     let lastDecision: string | null = null;
     for (const m of sorted) {
       if (Date.parse(m.at) > nowMs) continue;
-      const decision = m.decisions.some((d) => mentions(stems, d));
+      const decision = m.decisions.some((d) => decidedOn(stems, d));
       if (decision) lastDecision = m.at;
       if (decision || m.texts.some((t) => mentions(stems, t))) lastMention = m.at;
     }
@@ -114,7 +140,8 @@ export function suggestGoals(goals: GoalRow[], meetings: GoalMeeting[], now: Dat
       decided.push({ goalId: g.id, title: g.title, kind: "decision", reason, order, at: Date.parse(lastDecision) });
       return;
     }
-    const since = lastMention ?? g.approved_at;
+    const floor = opts.from && Date.parse(opts.from) > Date.parse(g.approved_at) ? opts.from : g.approved_at;
+    const since = lastMention ?? floor;
     const sinceMs = Date.parse(since);
     if (!Number.isFinite(sinceMs) || nowMs - sinceMs < QUIET_DAYS * DAY_MS) return;
     // Only when the förening has met since: a quiet goal of a förening that hasn't met says nothing.

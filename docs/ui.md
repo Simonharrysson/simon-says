@@ -489,7 +489,9 @@ a signed ticket the estimate/import routes require before using the read access)
 next prepared agenda with "Dagordning" and "Ändra"). `PrepareMeeting` (container) / `PrepareMeetingView`
 (`components/views/PrepareMeeting.tsx`), three steps under the title ("1. Möte — 2. Dagordning — 3. Klart"):
 
-1. **Vilket möte?** Three radio cards, Veckomöte preselected (Styrelsemöte, Årsmöte), Datum (proposed:
+1. **Vilket möte?** Two radio cards, Veckomöte preselected (runs in the förening's default format,
+   Styrelseprotokoll included) and Årsmöte (todo #15: no Styrelsemöte type; an agenda stored as one
+   still opens as one), Datum (proposed:
    the last meeting's weekday, on or after today) and optional Tid (its time, to the quarter hour).
    "Ta fram dagordningen".
 2. **Dagordning** (`GET /api/orgs/<id>/prepare`): one numbered list, each item an editable label with ↑ ↓
@@ -503,7 +505,10 @@ next prepared agenda with "Dagordning" and "Ändra"). `PrepareMeeting` (containe
    (placeholder "T.ex. Fest på universitetet") adds before the items the format keeps last (the button
    or Enter); text still in the field when "Skapa dagordning" is pressed is added too, never lost. "Fler punkter"
    holds recurring Översikt topics ("Har tagits upp på N möten") and removed standing items, dashed, with
-   "Lägg till". "Skapa dagordning" (primary, the only one) → "Skapar dokumentet …". Preparing again for a
+   "Lägg till". Above it, **"Mål att ta upp"** (todo #12): at most two approved goals as "Mål: <titel>",
+   each with its reason ("Följ upp beslutet från förra veckan", "Inget nytt sedan 12 okt"; UI only,
+   never in the Doc); "Lägg till" puts it on the agenda as a topic. Starta möte offers the same goals
+   as checkboxes when it creates a new Doc. "Skapa dagordning" (primary, the only one) → "Skapar dokumentet …". Preparing again for a
    date that has one: info banner "Du ändrar en förberedd dagordning" and "Uppdatera dagordningen"; a
    date a meeting was held in: neutral banner, nothing editable.
 3. **Klart**: success banner with the Doc name, what happens on meeting day, "Öppna dokumentet" (primary)
@@ -549,11 +554,14 @@ Inställningar links to the guide.
 3. **Mötesmapp**: the existing folder Picker (`useMeetingFolderPicker`).
 4. **Så brukar ni ha möten**: Veckomöte (förvalt; Fortsätt makes it the default when the förening
    has none), "Som våra gamla protokoll" (the existing `LearnFormatView`), or "Behåll …" when a
-   format is already chosen. **Stadgar**: one Claude call (`extractStadgarAgendas`, oneShot spend
-   gate) gives the Styrelsemöte's required items and the Årsmöte's agenda; both lists are editable
-   and saved with `POST /api/orgs/<id>/onboarding/formats` as non-default versions the förening
-   points at (`orgs.styrelse_format_id`, `orgs.arsmote_format_id`, `set_type_format`). Förbered
-   möte uses them; no årsmöte list → the standard Årsmöte.
+   format is already chosen. **Stadgar** ("Ladda upp era stadgar så gör Simon Says årsmötets
+   dagordning", todo #15): one Claude call (`extractArsmoteItems`, oneShot spend gate) gives the
+   Årsmöte's agenda only; the list is editable and saved with `POST /api/orgs/<id>/onboarding/formats`
+   `{ arsmote }` as a non-default version the förening points at (`orgs.arsmote_format_id`,
+   `set_type_formats` with `p_styrelse` null). The same flow (`StadgarArsmote`) is Mötesformat's
+   "Lägg in årsmötet från stadgarna". No board items are added any more; stadgar items saved on a
+   Styrelseprotokoll before stay and still apply. Förbered möte uses the Årsmöte; no list → the
+   standard Årsmöte.
 5. **Era tidigare möten**: explains the import and links to `/orgs/<id>/protokoll` (the import on
    Översikt); nothing is reimplemented.
 6. **Röster (valfritt)**: says the plan honestly (the name round in the first meeting becomes the

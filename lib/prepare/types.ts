@@ -18,10 +18,10 @@ export const MEETING_TYPES: { type: MeetingType; name: string; hint: string }[] 
 
 const NAMES: Record<MeetingType, string> = { veckomote: "Veckomöte", styrelsemote: "Styrelsemöte", arsmote: "Årsmöte" };
 
-/** Any stored type (an agenda prepared as a Styrelsemöte before todo #15 included). */
 /** A draft item that is one of the förening's goals ("Mål: …"). */
 export const isGoalItem = (i: Pick<DraftItem, "id">) => i.id.startsWith("goal:");
 
+/** Any stored type (an agenda prepared as a Styrelsemöte before todo #15 included). */
 export const isMeetingType = (v: unknown): v is MeetingType => typeof v === "string" && Object.hasOwn(NAMES, v);
 /** A type that can be chosen for a new agenda. */
 export const isOfferedType = (v: unknown): v is MeetingType => MEETING_TYPES.some((t) => t.type === v);

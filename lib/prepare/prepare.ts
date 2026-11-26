@@ -4,7 +4,7 @@ import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { carriedItems, openTasks, previousMeetingOfKinds } from "@/lib/agenda/followup";
-import { recurringTopics, type DashInput } from "@/lib/dashboard/overview";
+import { recurringTopics } from "@/lib/dashboard/overview";
 import { loadOverviewInput } from "@/lib/dashboard/load";
 import { orgMemberList } from "@/lib/db/members";
 import { getOrg, myRole } from "@/lib/db/orgs";
@@ -21,7 +21,6 @@ import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { followupSource, importedCarried, type ImportedItem } from "./carry-source";
-import type { GoalSuggestion } from "./goals";
 import { goalSuggestionsFor } from "./goals-load";
 import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine, type Journal } from "./doc";
 import { runReprepare } from "./reprepare";
@@ -155,15 +154,13 @@ async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType,
   // Recurring topics (Översikt) and "Mål att ta upp" (the approved goals, todo #12), read with
   // the caller's client (RLS); neither ever fails the draft.
   let topics: { label: string; meetings: number }[] = [];
-  let goals: GoalSuggestion[] = [];
-  let overview: DashInput | null = null;
+  const goalsP = goalSuggestionsFor(userDb, orgId, now);
   try {
-    overview = await loadOverviewInput(userDb, orgId);
-    topics = recurringTopics(orgId, overview);
+    topics = recurringTopics(orgId, await loadOverviewInput(userDb, orgId));
   } catch (err) {
     console.error(`prepare: topics unavailable: ${(err as Error).message}`);
   }
-  if (overview) goals = await goalSuggestionsFor(userDb, orgId, now, overview);
+  const goals = await goalsP;
   const label = (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy);
   const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics, goals, ...(hasFollowup ? { origin: pick.origin } : {}) });
   return { profile, formatId, prevId: pick.use === "meeting" ? (prev?.id ?? null) : null, carried, people, ownerLabel: label, fresh };

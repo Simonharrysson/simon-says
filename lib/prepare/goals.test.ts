@@ -7,7 +7,7 @@ import { goalMeetings, goalStems, mentions, suggestGoals, type GoalMeeting, type
 const NOW = new Date("2026-11-26T12:00:00Z");
 const daysAgo = (n: number) => new Date(NOW.getTime() - n * 24 * 3600 * 1000).toISOString();
 const goal = (id: string, title: string, approvedDaysAgo = 90): GoalRow => ({ id, title, approved_at: daysAgo(approvedDaysAgo) });
-const meeting = (days: number, texts: string[] = [], decisions: string[] = []): GoalMeeting => ({ at: daysAgo(days), texts, decisions });
+const meeting = (days: number, texts: string[] = [], decisions: string[] = []): GoalMeeting => ({ at: daysAgo(days), texts, decisions: decisions.map((text) => ({ text, topic: null })) });
 
 const MEMBERS = goal("g1", "Fler medlemmar till vårens event");
 const LOKAL = goal("g2", "Ny lokal för styrelsen");
@@ -66,6 +66,16 @@ describe("suggestGoals", () => {
     expect(tie.map((g) => g.goalId)).toEqual(["a", "b"]);
   });
 
+  it("a decision under an agenda item named for the goal ('Mål: X') is a decision on it", () => {
+    const m = { at: daysAgo(5), texts: [], decisions: [{ text: "Att skriva till kåren", topic: "Mål: Ny lokal för styrelsen" }] };
+    expect(suggestGoals([LOKAL], [m], NOW)[0]).toMatchObject({ kind: "decision", reason: "Följ upp beslutet från förra veckan" });
+  });
+
+  it("a bounded window: never mentioned in it → quiet since the later of approval and the window's start", () => {
+    const out = suggestGoals([goal("g1", MEMBERS.title, 400)], [meeting(10, ["Kassan"])], NOW, { from: daysAgo(180) });
+    expect(out[0].reason).toBe("Inget nytt sedan 30 maj");
+  });
+
   it("no goals → nothing; meetings after `now` are ignored", () => {
     expect(suggestGoals([], [meeting(3)], NOW)).toEqual([]);
     expect(suggestGoals([LOKAL], [meeting(-2, [], ["Ny lokal för styrelsen"])], NOW)).toEqual([]);
@@ -89,7 +99,20 @@ describe("goalMeetings", () => {
       ],
       people: [],
     };
-    expect(goalMeetings("o", input)).toEqual([{ at: daysAgo(10), texts: ["Lokalen", "Ring om lokalen"], decisions: ["Ny lokal för styrelsen"] }]);
+    expect(goalMeetings("o", input)).toEqual([{ at: daysAgo(10), texts: ["Lokalen", "Ring om lokalen"], decisions: [{ text: "Ny lokal för styrelsen", topic: "Lokalen" }] }]);
+  });
+
+  it("imported protocols count as meetings, oldest first: topics, tasks and status lines as words", () => {
+    const out = goalMeetings("o", { meetings: [], items: [] }, [
+      { date: "2026-09-01", source: "import", items: [
+        { kind: "topic", text: "Lokalfrågan", topic: null, owner: null, done: null },
+        { kind: "decision", text: "Att skriva till kåren", topic: "Mål: Ny lokal för styrelsen", owner: null, done: null },
+        { kind: "report", text: "Inget svar än", topic: "Lokalfrågan", owner: null, done: null },
+      ] },
+    ]);
+    expect(out).toEqual([
+      { at: "2026-09-01T12:00:00Z", texts: ["Lokalfrågan", "Inget svar än", "Lokalfrågan"], decisions: [{ text: "Att skriva till kåren", topic: "Mål: Ny lokal för styrelsen" }] },
+    ]);
   });
 });
 

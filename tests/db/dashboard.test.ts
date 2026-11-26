@@ -42,6 +42,23 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
     expect((await listGoals(admin.db, orgId)).map((g) => g.title)).toEqual(["Bara ett mål"]);
   });
 
+  it("set_org_goals keeps a goal saved again under the same title: same id, first approval (0042)", async () => {
+    await admin.db.rpc("set_org_goals", { p_org_id: orgId, p_goals: [{ title: "Ny lokal" }, { title: "Fler medlemmar" }] });
+    const svc = adminClient();
+    await svc.from("org_goals").update({ approved_at: "2026-01-02T10:00:00Z" }).eq("org_id", orgId);
+    const before = await listGoals(member.db, orgId);
+    // Reordered, one renamed, whitespace and case changed on the kept one.
+    await admin.db.rpc("set_org_goals", { p_org_id: orgId, p_goals: [{ title: "Fler  medlemmar till våren" }, { title: " ny LOKAL ", why: "Ändrad." }] });
+    const after = await listGoals(member.db, orgId);
+    const lokal = after.find((g) => g.title === "ny LOKAL")!;
+    expect(lokal.id).toBe(before.find((g) => g.title === "Ny lokal")!.id);
+    expect(new Date(lokal.approved_at).toISOString()).toBe("2026-01-02T10:00:00.000Z");
+    const renamed = after.find((g) => g.title === "Fler  medlemmar till våren")!;
+    expect(before.map((g) => g.id)).not.toContain(renamed.id);
+    expect(Date.parse(renamed.approved_at)).toBeGreaterThan(Date.parse("2026-01-02T10:00:00Z"));
+    await admin.db.rpc("set_org_goals", { p_org_id: orgId, p_goals: [{ title: "Bara ett mål" }] });
+  });
+
   it("org_goals: outsiders read nothing, nobody writes the table directly", async () => {
     expect(await listGoals(outsider.db, orgId)).toEqual([]);
     const ins = await admin.db.from("org_goals").insert({ org_id: orgId, position: 7, title: "Direkt" });
