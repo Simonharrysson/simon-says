@@ -98,11 +98,11 @@ create policy history_import_items_select on public.history_import_items for sel
 -- ---------------------------------------------------------------------------------------------
 -- Service role only (the server checked that the caller is an admin): creates a job with its
 -- items. `p_items`: [{ drive_file_id, section, sections, label, state?, reason?, heading_date?,
--- date_inferred?, file_date? }] in order. Refuses (returns null with `p_reason` codes via
--- exception) when:
+-- date_inferred?, file_date? }] in order. Refuses with an exception whose message (and hint)
+-- is the reason code when:
 --   - another job of the förening is still running ('busy');
---   - batch: the förening's batch imports in the last 24 h plus this one pass 500 meetings
---     ('rate_limited');
+--   - batch: the meetings the förening sent in batches in the last 24 h plus this one's pass
+--     500 ('rate_limited');
 --   - batch: the estimates of every batch still in flight (all föreningar) plus this one pass
 --     `p_spend_room` USD, what the server says is left of today's Claude budget for imports
 --     ('spend'). A global advisory lock makes two concurrent creates see each other.
@@ -153,8 +153,11 @@ begin
   end if;
 
   if p_mode = 'batch' then
-    select coalesce(sum(total), 0) into v_recent from public.history_import_jobs
-     where org_id = p_org_id and mode = 'batch' and created_at > now() - interval '24 hours' and status <> 'failed';
+    -- Meetings actually sent (started_at is set when the batch was accepted; a failed submit
+    -- and Docs skipped before sending do not count).
+    select count(*) into v_recent from public.history_import_items i
+      join public.history_import_jobs j on j.id = i.job_id
+     where j.org_id = p_org_id and j.mode = 'batch' and j.created_at > now() - interval '24 hours' and i.started_at is not null;
     if v_recent + v_sent > 500 then
       raise exception 'rate_limited' using errcode = 'P0001', hint = 'rate_limited';
     end if;
