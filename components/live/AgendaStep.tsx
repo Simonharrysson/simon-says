@@ -7,10 +7,13 @@ import { Check } from "@/components/ui/Field";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { FormatKind } from "@/lib/formats/schema";
+import { meetingTypeName, type PreparedSuggestion } from "@/lib/prepare/types";
 
 // The start screen's agenda step (A11): which Doc the meeting runs in. Doc names are the
 // förening's own text: shown, never logged. Start stays disabled until the choice is confirmed
 // (Använd, a Picker pick, or "Skapa nytt dokument"); a suggestion is never used on its own.
+// An agenda Simon Says prepared (Förbered möte) is suggested first: no Picker needed, and it runs
+// in the format it was prepared in.
 
 export interface AgendaFormatOption {
   /** A format_profiles row; null: a standard format by `kind` (or the org's Enkel default without a row). */
@@ -32,6 +35,7 @@ export interface AgendaChoice {
 export type AgendaViewState =
   | { state: "loading" }
   | { state: "suggestion"; suggestion: { id: string; name: string } }
+  | { state: "prepared"; prepared: PreparedSuggestion }
   | { state: "none" }
   | { state: "folder-unreachable"; folderName?: string | null }
   | { state: "picker-off" };
@@ -75,8 +79,8 @@ export interface AgendaStepViewProps {
   view: AgendaViewState;
   formats: AgendaFormatOption[];
   formatValue: string;
-  /** The confirmed choice: an agenda Doc, a new Doc, or nothing yet. */
-  chosen: { kind: "agenda"; name: string } | { kind: "new" } | null;
+  /** The confirmed choice: an agenda Doc (`prepared`: the one Simon Says prepared), a new Doc, or nothing yet. */
+  chosen: { kind: "agenda"; name: string; prepared?: { date: string; kind: PreparedSuggestion["kind"] } } | { kind: "new" } | null;
   /** Offer the "Transkript" tab checkbox (the förening shares transcripts). */
   offerTranscript: boolean;
   transcriptInDoc: boolean;
@@ -86,6 +90,8 @@ export interface AgendaStepViewProps {
   message?: string | null;
   disabled?: boolean;
   onUseSuggestion: () => void;
+  /** The prepared agenda: use it (its starter's grant can edit it) or open it once in the Picker. */
+  onUsePrepared?: () => void;
   onPickDoc: () => void;
   onUseFolder: () => void;
   onNewDoc: () => void;
@@ -103,6 +109,8 @@ function announcement(p: AgendaStepViewProps, formatName: string): string {
   switch (p.view.state) {
     case "suggestion":
       return `Förslag: ${p.view.suggestion.name}.`;
+    case "prepared":
+      return `Förberedd dagordning för ${preparedDay(p.view.prepared.date)}.`;
     case "none":
       return "Ingen dagordning hittades.";
     case "folder-unreachable":
@@ -113,6 +121,9 @@ function announcement(p: AgendaStepViewProps, formatName: string): string {
       return "";
   }
 }
+
+const preparedDay = (date: string) =>
+  new Intl.DateTimeFormat("sv-SE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`));
 
 /** Presentational: no fetching (the /design page renders every state with fake data). */
 export function AgendaStepView(p: AgendaStepViewProps) {
@@ -143,10 +154,18 @@ export function AgendaStepView(p: AgendaStepViewProps) {
             Dagordning: <strong className="wrap-anywhere">{p.chosen.name}</strong>
           </span>
         </p>
+        {p.chosen.prepared && (
+          <p className="-mt-2 text-xs text-ink-3">
+            Förberedd för {preparedDay(p.chosen.prepared.date)} · {meetingTypeName(p.chosen.prepared.kind)}. Förra veckans uppgifter står redan under
+            Från förra veckan.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-3">
-          <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
-            Välj annan
-          </Button>
+          {!off && (
+            <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
+              Välj annan
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
             Skapa nytt dokument
           </Button>
@@ -174,6 +193,39 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     );
   } else if (p.view.state === "loading") {
     body = <p className="flex items-baseline gap-2 text-ink-2">Letar efter dagens dagordning…</p>;
+  } else if (p.view.state === "prepared") {
+    const prep = p.view.prepared;
+    body = (
+      <>
+        <p className="flex flex-col gap-1">
+          <span>
+            Starta med dagordningen från <strong className="font-medium">{preparedDay(prep.date)}</strong>
+            {prep.time ? ` kl. ${prep.time.replace(":", ".")}` : ""}
+          </span>
+          <span className="text-xs text-ink-3 wrap-anywhere">
+            {meetingTypeName(prep.kind)} · {prep.name}
+          </span>
+        </p>
+        {!prep.accessible && (
+          <p className="text-xs text-ink-3">
+            Den förbereddes med ett annat Google-konto. Öppna den en gång i Google-väljaren, så kan Simon Says skriva i den.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button size="sm" variant="secondary" onClick={prep.accessible ? p.onUsePrepared : p.onPickDoc} disabled={lock}>
+            {prep.accessible ? "Använd" : "Öppna i Google-väljaren"}
+          </Button>
+          {prep.accessible && (
+            <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock || off}>
+              Välj annan
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
+            Skapa nytt dokument
+          </Button>
+        </div>
+      </>
+    );
   } else if (p.view.state === "suggestion") {
     body = (
       <>
@@ -264,7 +316,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
         />
       )}
 
-      {p.formats.length > 1 && (
+      {p.formats.length > 1 && !(p.chosen?.kind === "agenda" && p.chosen.prepared) && !(p.chosen === null && p.view.state === "prepared") && (
         <div className="flex max-w-[22rem] flex-col gap-1">
           <Label htmlFor={`${id}-format`}>Format</Label>
           <NativeSelect
@@ -305,25 +357,54 @@ export function AgendaStep(props: AgendaStepProps) {
   return props.pickerEnabled ? <AgendaStepOn {...props} /> : <AgendaStepOff {...props} />;
 }
 
-/** No Picker configured: the fallback, as before A11 (a new Doc), confirmed from the start. Loads nothing from Google. */
-function AgendaStepOff({ formats, onChange, disabled, initialFormat = null }: AgendaStepProps) {
+/**
+ * No Picker configured: the fallback, as before A11 (a new Doc), confirmed from the start. Only
+ * an agenda Simon Says prepared (Förbered möte) and this starter can edit is offered first: it
+ * needs no Picker.
+ */
+function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = null, startWithNewDoc = false }: AgendaStepProps) {
   const [formatValue, setFormatValue] = useState(() => initialValue(formats, initialFormat));
+  const [prepared, setPrepared] = useState<PreparedSuggestion | null>(null);
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>({ kind: "new" });
   useEffect(() => {
-    onChange({ agendaDocId: null, agendaName: null, ...formatFields(formats, formatValue), transcriptInDoc: false, confirmed: true });
-  }, [formats, formatValue, onChange]);
+    if (startWithNewDoc) return;
+    let live = true;
+    fetch(`/api/orgs/${orgId}/agenda-candidates`, { cache: "no-store", signal: AbortSignal.timeout(CANDIDATES_TIMEOUT_MS) })
+      .then((res) => (res.ok ? (res.json() as Promise<Candidates>) : null))
+      .then((json) => {
+        if (!live || !json?.prepared?.accessible) return;
+        setPrepared(json.prepared);
+        setChosen(null);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [orgId, startWithNewDoc]);
+  useEffect(() => {
+    const usePrep = chosen?.kind === "agenda" && prepared;
+    onChange({
+      agendaDocId: usePrep ? prepared.docId : null,
+      agendaName: usePrep ? chosen.name : null,
+      ...(usePrep ? { formatProfileId: null, formatKind: null } : formatFields(formats, formatValue)),
+      transcriptInDoc: false,
+      confirmed: chosen !== null,
+    });
+  }, [formats, formatValue, onChange, chosen, prepared]);
   return (
     <AgendaStepView
-      view={{ state: "picker-off" }}
+      view={prepared && chosen === null ? { state: "prepared", prepared } : { state: "picker-off" }}
       formats={formats}
       formatValue={formatValue}
-      chosen={{ kind: "new" }}
+      chosen={chosen}
       offerTranscript={false}
       transcriptInDoc={false}
       disabled={disabled}
       onUseSuggestion={() => {}}
+      onUsePrepared={() => prepared && setChosen({ kind: "agenda", name: prepared.name, prepared: { date: prepared.date, kind: prepared.kind } })}
       onPickDoc={() => {}}
       onUseFolder={() => {}}
-      onNewDoc={() => {}}
+      onNewDoc={() => setChosen({ kind: "new" })}
       onFormatChange={setFormatValue}
       onTranscriptChange={() => {}}
     />
@@ -339,6 +420,7 @@ interface Candidates {
   accessible: boolean;
   candidates: { id: string; name: string }[];
   suggestedId: string | null;
+  prepared?: PreparedSuggestion | null;
 }
 
 function AgendaStepOn({
@@ -356,6 +438,7 @@ function AgendaStepOn({
   const [folderName, setFolderName] = useState<string | null>(null);
   const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(startWithNewDoc ? { kind: "new" } : null);
   const [agendaDocId, setAgendaDocId] = useState<string | null>(null);
+  const [prepared, setPrepared] = useState<PreparedSuggestion | null>(null);
   const [formatValue, setFormatValue] = useState(() => initialValue(formats, initialFormat));
   const [transcriptInDoc, setTranscriptInDoc] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -378,7 +461,9 @@ function AgendaStepOn({
       setFolderId(json.folderId);
       setFolderName(json.folderName ?? null);
       const suggestion = json.candidates.find((c) => c.id === json.suggestedId);
-      if (json.folderId && !json.accessible) setView({ state: "folder-unreachable", folderName: json.folderName ?? null });
+      setPrepared(json.prepared ?? null);
+      if (json.prepared) setView({ state: "prepared", prepared: json.prepared });
+      else if (json.folderId && !json.accessible) setView({ state: "folder-unreachable", folderName: json.folderName ?? null });
       else if (suggestion) setView({ state: "suggestion", suggestion: { id: suggestion.id, name: suggestion.name } });
       else setView({ state: "none" });
     } catch {
@@ -396,7 +481,8 @@ function AgendaStepOn({
     onChange({
       agendaDocId: chosen?.kind === "agenda" ? agendaDocId : null,
       agendaName: chosen?.kind === "agenda" ? chosen.name : null,
-      ...formatFields(formats, formatValue),
+      // A prepared agenda runs in the format it was prepared in (the server reads it).
+      ...(chosen?.kind === "agenda" && chosen.prepared ? { formatProfileId: null, formatKind: null } : formatFields(formats, formatValue)),
       transcriptInDoc: chosen?.kind === "agenda" && shareTranscript ? transcriptInDoc : false,
       confirmed: chosen !== null,
     });
@@ -404,7 +490,8 @@ function AgendaStepOn({
 
   const chooseDoc = (doc: { id: string; name: string }) => {
     setAgendaDocId(doc.id);
-    setChosen({ kind: "agenda", name: doc.name || "Valt dokument" });
+    const prep = prepared && prepared.docId === doc.id ? { date: prepared.date, kind: prepared.kind } : undefined;
+    setChosen({ kind: "agenda", name: doc.name || prepared?.name || "Valt dokument", ...(prep ? { prepared: prep } : {}) });
     setMessage(null);
   };
 
@@ -461,6 +548,7 @@ function AgendaStepOn({
       message={message}
       disabled={disabled}
       onUseSuggestion={() => view.state === "suggestion" && chooseDoc(view.suggestion)}
+      onUsePrepared={() => view.state === "prepared" && chooseDoc({ id: view.prepared.docId, name: view.prepared.name })}
       onPickDoc={() => void onPickDoc()}
       onUseFolder={() => void onUseFolder()}
       onNewDoc={() => {

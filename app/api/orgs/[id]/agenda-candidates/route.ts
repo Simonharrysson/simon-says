@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { checkAgendaDoc } from "@/lib/agenda/access";
 import { listCandidates, type DriveDoc } from "@/lib/agenda/candidates";
+import { localDate } from "@/lib/docs/create";
+import type { PreparedSuggestion } from "@/lib/prepare/types";
+export type { PreparedSuggestion };
+import { nextPrepared } from "@/lib/prepare/store";
+import { preparedDocState } from "@/lib/prepare/stale";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
@@ -21,6 +27,43 @@ export interface AgendaCandidates {
   /** Ranked best first; names are the förening's text (UI only, never logged). */
   candidates: DriveDoc[];
   suggestedId: string | null;
+  /**
+   * Förbered möte: today's (or the nearest upcoming) agenda Simon Says prepared and no meeting
+   * has been held in yet, suggested first. `accessible`: this starter's own grant can edit it
+   * (drive.file: the preparer's can; another member may need to pick it once in the Picker).
+   */
+  prepared?: PreparedSuggestion | null;
+}
+
+type Auth = Awaited<ReturnType<typeof getGoogleAuth>>;
+
+/** Today's (or the nearest upcoming) prepared agenda no meeting was held in (best effort: a failure is none). */
+async function preparedRow(orgId: string) {
+  try {
+    const p = await nextPrepared(orgId, localDate(new Date()));
+    if (!p) return null;
+    const { data, error } = await supabaseAdmin().from("meetings").select("id").eq("org_id", orgId).eq("doc_id", p.doc_id).eq("status", "done").limit(1);
+    if (error) throw new Error(error.message);
+    return (data ?? []).length > 0 ? null : p;
+  } catch (err) {
+    console.error(`agenda-candidates: prepared: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+/** The suggestion for `p`, with whether this starter's grant can edit it. */
+async function preparedSuggestion(p: NonNullable<Awaited<ReturnType<typeof preparedRow>>>, auth: Auth, userId: string): Promise<PreparedSuggestion | null> {
+  try {
+    const access = await checkAgendaDoc(auth, p.doc_id);
+    // Never suggest a Doc that is gone (trashed, or deleted: the preparer no longer sees it).
+    const state = preparedDocState(access, p.prepared_by === userId);
+    if (state === "gone" || (!access.ok && access.error !== "not_found")) return null;
+    return { docId: p.doc_id, name: access.ok ? access.name || p.doc_name : p.doc_name, date: p.meeting_date, time: p.meeting_time, kind: p.kind, accessible: access.ok };
+  } catch (err) {
+    if (err instanceof GoogleAuthLostError) throw err;
+    console.error(`agenda-candidates: prepared: ${(err as Error).message}`);
+    return null;
+  }
 }
 
 /**
@@ -40,18 +83,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const folderId = org.meeting_folder_id ?? null;
   const folderName = org.meeting_folder_name ?? null;
-  const none: AgendaCandidates = { folderId, folderName, accessible: false, candidates: [], suggestedId: null };
-  if (!folderId) return NextResponse.json(none, { headers: noStore });
-
-  // Service role: every Doc the förening's meetings have used (other members' meetings too).
-  const { data: used, error } = await supabaseAdmin().from("meetings").select("doc_id").eq("org_id", id);
-  if (error) throw new Error(`agenda-candidates: used docs: ${error.message}`);
-  const usedIds = new Set((used ?? []).map((r) => r.doc_id as string).filter(Boolean));
-
+  const row = await preparedRow(id);
+  if (!folderId && !row) {
+    const none: AgendaCandidates = { folderId, folderName, accessible: false, candidates: [], suggestedId: null, prepared: null };
+    return NextResponse.json(none, { headers: noStore });
+  }
   try {
     const auth = await getGoogleAuth(user.id);
+    const prepared = row ? await preparedSuggestion(row, auth, user.id) : null;
+    const none: AgendaCandidates = { folderId, folderName, accessible: false, candidates: [], suggestedId: null, prepared };
+    if (!folderId) return NextResponse.json(none, { headers: noStore });
+
+    // Service role: every Doc the förening's meetings have used (other members' meetings too).
+    const { data: used, error } = await supabaseAdmin().from("meetings").select("doc_id").eq("org_id", id);
+    if (error) throw new Error(`agenda-candidates: used docs: ${error.message}`);
+    const usedIds = new Set((used ?? []).map((r) => r.doc_id as string).filter(Boolean));
+
     const { accessible, candidates } = await listCandidates(auth, folderId, usedIds, new Date());
-    const body: AgendaCandidates = { folderId, folderName, accessible, candidates, suggestedId: candidates[0]?.id ?? null };
+    const body: AgendaCandidates = { folderId, folderName, accessible, candidates, suggestedId: candidates[0]?.id ?? null, prepared };
     return NextResponse.json(body, { headers: noStore });
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {
