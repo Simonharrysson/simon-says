@@ -257,6 +257,11 @@ const prepareDraft: DraftItem[] = [
   { id: "topic:hemsidan", label: "Hemsidan", role: "topic", source: "suggested", on: false, meetings: 2 },
   { id: "std:other", label: "Övrigt", role: "other", source: "standing", on: true, last: true },
 ];
+// "Mål att ta upp" (todo #12): two approved goals with why Simon Says brings them up.
+const goalMedlemmar: DraftItem = { id: "goal:fler medlemmar till vårens event", label: "Mål: Fler medlemmar till vårens event", role: "topic", source: "suggested", on: false, reason: "Inget nytt sedan 12 okt" };
+const goalLokal: DraftItem = { id: "goal:ny lokal för styrelsen", label: "Mål: Ny lokal för styrelsen", role: "topic", source: "suggested", on: false, reason: "Följ upp beslutet från förra veckan" };
+const prepareGoals: DraftItem[] = [...prepareDraft.slice(0, -1), goalLokal, goalMedlemmar, prepareDraft[prepareDraft.length - 1]];
+const prepareGoalTicked: DraftItem[] = [...prepareDraft.slice(0, 3), { ...goalLokal, on: true }, ...prepareDraft.slice(3, -1), goalMedlemmar, prepareDraft[prepareDraft.length - 1]];
 const prepareEdited: DraftItem[] = [
   prepareDraft[0],
   prepareDraft[1],
@@ -692,6 +697,8 @@ const render: Record<string, () => ReactNode> = {
     />
   ),
   "prepare-draft-edited": () => <PrepareDemo phase={{ step: "draft" }} items={prepareEdited} />,
+  "prepare-draft-goals": () => <PrepareDemo phase={{ step: "draft" }} items={prepareGoals} />,
+  "prepare-draft-goal-added": () => <PrepareDemo phase={{ step: "draft" }} items={prepareGoalTicked} />,
   "prepare-draft-empty": () => <PrepareDemo phase={{ step: "draft" }} type="arsmote" items={[...arsmoteDraft, ...arsmoteLast]} />,
   "prepare-saving": () => <PrepareDemo phase={{ step: "draft", saving: true }} items={prepareEdited} />,
   "prepare-save-error": () => (

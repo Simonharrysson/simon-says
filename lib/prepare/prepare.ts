@@ -4,8 +4,8 @@ import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { carriedItems, openTasks, previousMeetingOfKinds } from "@/lib/agenda/followup";
-import { recurringTopics } from "@/lib/dashboard/overview";
-import { loadOverviewInput } from "@/lib/dashboard/load";
+import { recurringTopics, type DashInput } from "@/lib/dashboard/overview";
+import { listGoals, loadOverviewInput } from "@/lib/dashboard/load";
 import { orgMemberList } from "@/lib/db/members";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { NoteItemRow } from "@/lib/db/types";
@@ -21,6 +21,7 @@ import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { followupSource, importedCarried, type ImportedItem } from "./carry-source";
+import { goalMeetings, suggestGoals, type GoalSuggestion } from "./goals";
 import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine, type Journal } from "./doc";
 import { runReprepare } from "./reprepare";
 import { preparedDocState } from "./stale";
@@ -150,15 +151,26 @@ async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType,
     if (error) console.error(`prepare: protocol items unavailable: ${error.message}`);
     else carried = importedCarried(protocol.id, (data ?? []) as ImportedItem[], "followup", people, groupBy);
   }
-  // Recurring topics (Översikt), read with the caller's client (RLS); never fails the draft.
+  // Recurring topics (Översikt) and "Mål att ta upp" (the approved goals, todo #12), read with
+  // the caller's client (RLS); neither ever fails the draft.
   let topics: { label: string; meetings: number }[] = [];
+  let goals: GoalSuggestion[] = [];
+  let overview: DashInput | null = null;
   try {
-    topics = recurringTopics(orgId, await loadOverviewInput(userDb, orgId));
+    overview = await loadOverviewInput(userDb, orgId);
+    topics = recurringTopics(orgId, overview);
   } catch (err) {
     console.error(`prepare: topics unavailable: ${(err as Error).message}`);
   }
+  if (overview) {
+    try {
+      goals = suggestGoals(await listGoals(userDb, orgId), goalMeetings(orgId, overview), now);
+    } catch (err) {
+      console.error(`prepare: goals unavailable: ${(err as Error).message}`);
+    }
+  }
   const label = (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy);
-  const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics, ...(hasFollowup ? { origin: pick.origin } : {}) });
+  const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics, goals, ...(hasFollowup ? { origin: pick.origin } : {}) });
   return { profile, formatId, prevId: pick.use === "meeting" ? (prev?.id ?? null) : null, carried, people, ownerLabel: label, fresh };
 }
 

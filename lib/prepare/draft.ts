@@ -4,6 +4,7 @@ import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { formatLine, type LineCtx } from "@/lib/docs/format-render";
 import type { FormatKind, FormatProfile } from "@/lib/formats/schema";
 import { mergeRequiredItems } from "@/lib/formats/skeleton";
+import { goalItemId, goalLabel, type GoalSuggestion } from "./goals";
 
 // "Förbered möte" (todo #6): the draft agenda Simon Says proposes before a meeting, from data
 // only (no Claude call): the format's standing items, "Från förra veckan" filled with the
@@ -33,7 +34,9 @@ export const sourceKey = (meetingId: string, itemId: string) => `${meetingId}:${
  * - standing items: the format's fixed items (stadgar items merged in), "last" ones at the end;
  * - the follow-up item lists `carried` (rows as `carriedItems` makes them) as lines;
  * - `topics` (Översikt's recurring topics) that no standing item names: suggestions, unticked,
- *   before the "last" items.
+ *   before the "last" items;
+ * - `goals` ("Mål att ta upp", lib/prepare/goals.ts): at most two goals as unticked "Mål: <titel>"
+ *   suggestions with their reason, after the topics.
  */
 export function buildDraft(input: {
   profile: FormatProfile;
@@ -42,6 +45,7 @@ export function buildDraft(input: {
   topics: { label: string; meetings: number }[];
   /** Where the carried tasks come from (shown under "Från förra veckan"). */
   origin?: FollowupOrigin;
+  goals?: GoalSuggestion[];
 }): DraftItem[] {
   const fixed = mergeRequiredItems(input.profile);
   const tasks = input.carried.map((r) => ({
@@ -69,7 +73,13 @@ export function buildDraft(input: {
     seen.add(n);
     suggestions.push({ id: `topic:${n}`, label: t.label.trim(), role: "topic", source: "suggested", on: false, meetings: t.meetings });
   }
-  return [...standing(false), ...suggestions, ...standing(true)];
+  const goals: DraftItem[] = [];
+  for (const g of input.goals ?? []) {
+    const id = goalItemId(g.title);
+    if (id === "goal:" || goals.some((x) => x.id === id)) continue;
+    goals.push({ id, label: goalLabel(g.title), role: "topic", source: "suggested", on: false, reason: g.reason });
+  }
+  return [...standing(false), ...suggestions, ...goals, ...standing(true)];
 }
 
 /**
@@ -80,7 +90,14 @@ export function buildDraft(input: {
 export function refreshDraft(stored: DraftItem[], fresh: DraftItem[], dropped: Set<string>): DraftItem[] {
   const f = fresh.find((i) => i.tasks);
   const tasks = f?.tasks ?? [];
+  // A goal's reason is always today's (never stored): from the fresh draft, or none.
+  const reasons = new Map(fresh.filter((i) => i.reason).map((i) => [i.id, i.reason!]));
   return stored.map((i) => {
+    if (i.id.startsWith("goal:")) {
+      const { reason: _old, ...rest } = i;
+      const reason = reasons.get(i.id);
+      return reason ? { ...rest, reason } : rest;
+    }
     if (i.role !== "followup") return i;
     const { origin: _old, ...rest } = i;
     return { ...rest, tasks: tasks.map((t) => ({ ...t, on: !dropped.has(t.source) })), ...(f?.origin ? { origin: f.origin } : {}) };

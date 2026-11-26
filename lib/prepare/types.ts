@@ -19,6 +19,9 @@ export const MEETING_TYPES: { type: MeetingType; name: string; hint: string }[] 
 const NAMES: Record<MeetingType, string> = { veckomote: "Veckomöte", styrelsemote: "Styrelsemöte", arsmote: "Årsmöte" };
 
 /** Any stored type (an agenda prepared as a Styrelsemöte before todo #15 included). */
+/** A draft item that is one of the förening's goals ("Mål: …"). */
+export const isGoalItem = (i: Pick<DraftItem, "id">) => i.id.startsWith("goal:");
+
 export const isMeetingType = (v: unknown): v is MeetingType => typeof v === "string" && Object.hasOwn(NAMES, v);
 /** A type that can be chosen for a new agenda. */
 export const isOfferedType = (v: unknown): v is MeetingType => MEETING_TYPES.some((t) => t.type === v);
@@ -46,6 +49,11 @@ export interface DraftItem {
   last?: boolean;
   /** Suggestions: how many earlier meetings had the topic. */
   meetings?: number;
+  /**
+   * A goal suggestion ("Mål att ta upp", todo #12; id `goal:…`): why Simon Says brings it up
+   * ("Inget nytt sedan 12 okt"). Shown in the UI only, never in the Doc; always the server's.
+   */
+  reason?: string;
   /** The follow-up item: the open tasks it will list. */
   tasks?: DraftTask[];
   /** The follow-up item: where its tasks come from (shown under it). */

@@ -46,6 +46,35 @@ describe("buildDraft", () => {
   });
 });
 
+describe("Mål att ta upp (todo #12)", () => {
+  const goals = [
+    { goalId: "g1", title: "Fler medlemmar till vårens event", kind: "quiet" as const, reason: "Inget nytt sedan 12 okt" },
+    { goalId: "g2", title: "Ny lokal", kind: "decision" as const, reason: "Följ upp beslutet från förra veckan" },
+  ];
+
+  it("goals come unticked as 'Mål: <titel>' topics with their reason, after the topics and before Övrigt", () => {
+    const items = buildDraft({ profile: VECKOMOTE, carried: [], ctx, topics: [{ label: "Sponsring", meetings: 3 }], goals });
+    expect(items.map((i) => [i.id, i.label, i.role, i.on, i.reason ?? null]).slice(-4)).toEqual([
+      ["topic:sponsring", "Sponsring", "topic", false, null],
+      ["goal:fler medlemmar till vårens event", "Mål: Fler medlemmar till vårens event", "topic", false, "Inget nytt sedan 12 okt"],
+      ["goal:ny lokal", "Mål: Ny lokal", "topic", false, "Följ upp beslutet från förra veckan"],
+      ["std:other", "Övrigt", "other", true, null],
+    ]);
+  });
+
+  it("ticked: on the agenda as a topic, label only (the reason never reaches the stored draft or the Doc)", () => {
+    const fresh = buildDraft({ profile: VECKOMOTE, carried: [], ctx, topics: [], goals });
+    const body = fresh.map((i) => ({ id: i.id, label: i.label, source: i.source, on: i.id === "goal:ny lokal" ? true : i.on }));
+    const saved = normaliseItems(body, fresh)!;
+    const goal = saved.find((i) => i.id === "goal:ny lokal")!;
+    expect(goal).toEqual({ id: "goal:ny lokal", label: "Mål: Ny lokal", role: "topic", source: "suggested", on: true });
+    // Preparing again: today's reason comes from the fresh draft; a goal no longer suggested has none.
+    const again = refreshDraft(saved, buildDraft({ profile: VECKOMOTE, carried: [], ctx, topics: [], goals: [goals[0]] }), new Set());
+    expect(again.find((i) => i.id === "goal:ny lokal")!.reason).toBeUndefined();
+    expect(again.find((i) => i.id === "goal:fler medlemmar till vårens event")!.reason).toBe("Inget nytt sedan 12 okt");
+  });
+});
+
 describe("meeting types (todo #15)", () => {
   it("Veckomöte and Årsmöte are offered; a stored Styrelsemöte still has its name", () => {
     expect(MEETING_TYPES.map((t) => t.type)).toEqual(["veckomote", "arsmote"]);

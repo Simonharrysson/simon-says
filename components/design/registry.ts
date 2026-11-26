@@ -39,6 +39,8 @@ export const designViews: DesignView[] = [
   { id: "prepare-draft-no-meeting", title: "Förbered möte · 2. inget tidigare möte", group: "Sidor" },
   { id: "prepare-draft-too-old", title: "Förbered möte · 2. protokollet för gammalt", group: "Sidor" },
   { id: "prepare-draft-edited", title: "Förbered möte · 2. egen punkt tillagd, uppgift bortbockad", group: "Sidor" },
+  { id: "prepare-draft-goals", title: "Förbered möte · 2. mål att ta upp", group: "Sidor" },
+  { id: "prepare-draft-goal-added", title: "Förbered möte · 2. ett mål på dagordningen", group: "Sidor" },
   { id: "prepare-draft-empty", title: "Förbered möte · 2. årsmöte, inga förslag", group: "Sidor" },
   { id: "prepare-saving", title: "Förbered möte · skapar dokumentet", group: "Sidor" },
   { id: "prepare-save-error", title: "Förbered möte · kunde inte sparas", group: "Sidor" },
