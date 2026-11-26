@@ -129,16 +129,18 @@ describe.skipIf(!hasLocalSupabase)("invites route", () => {
   it("the förening's daily limit holds (counted in the database)", async () => {
     const r = await createOrg(admin.db, "Gränsföreningen");
     if (!r.ok) throw new Error("org");
+    const db = adminClient();
+    // 49 earlier sends today, written directly (keeps the local stack's load down); the 50th
+    // goes through, the 51st is refused.
+    const { data: inv, error: invError } = await db.from("org_invites").insert({ org_id: r.id, email: "earlier@example.com", invited_by: admin.id, status: "sent" }).select("id").single();
+    expect(invError).toBeNull();
+    const rows = Array.from({ length: 49 }, (_, i) => ({ invite_id: inv!.id, org_id: r.id, sent_by: admin.id, outcome: "failed", idem_key: `seed-${i}` }));
+    expect((await db.from("org_invite_sends").insert(rows)).error).toBeNull();
     const mailer = { send: vi.fn(async () => true) };
     const input = { orgId: r.id, userId: admin.id, inviterName: "A", inviterEmail: null, orgName: "G", inviteUrl: "https://app.test/join/x", resend: false };
-    for (let turn = 0; turn < 5; turn++) {
-      const emails = Array.from({ length: 10 }, (_, i) => `limit${turn * 10 + i}@example.com`);
-      const got = await sendInvites({ ...input, emails }, { db: adminClient(), mailer, gapMs: 0 });
-      expect(got.every((x) => x.result === "sent")).toBe(true);
-    }
-    const over = await sendInvites({ ...input, emails: ["one-more@example.com"] }, { db: adminClient(), mailer, gapMs: 0 });
-    expect(over).toEqual([{ email: "one-more@example.com", result: "org_limit" }]);
-    expect(mailer.send).toHaveBeenCalledTimes(50);
+    expect(await sendInvites({ ...input, emails: ["fiftieth@example.com"] }, { db, mailer, gapMs: 0 })).toEqual([{ email: "fiftieth@example.com", result: "sent" }]);
+    expect(await sendInvites({ ...input, emails: ["one-more@example.com"] }, { db, mailer, gapMs: 0 })).toEqual([{ email: "one-more@example.com", result: "org_limit" }]);
+    expect(mailer.send).toHaveBeenCalledTimes(1);
   });
 
   it("a förening named like a link is refused with a sentence; nothing is sent", async () => {
