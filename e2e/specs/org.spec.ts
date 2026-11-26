@@ -127,10 +127,11 @@ test.describe("signed out", () => {
   test("a förening page sends to the login first, and back after signing in", async ({ page, seedOrg, nextLogin }) => {
     const org = await seedOrg();
     await page.goto(`${org.url}?flik=oversikt`);
-    await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(org.url)}$`));
+    // The way back keeps the tab (safeNextPath keeps a same-site query string).
+    await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(`${org.url}?flik=oversikt`)}$`));
     nextLogin.email = "admin@e2e.test";
     await page.getByRole("button", { name: "Logga in med Google" }).click();
-    await expect(page).toHaveURL(new RegExp(`${org.url}$`));
+    await expect(page).toHaveURL(new RegExp(`${org.url}\\?flik=oversikt$`));
     await expect(page.getByText("Du är admin")).toBeVisible();
   });
 });
