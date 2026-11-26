@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasGoogleToken, storeGoogleToken } from "@/lib/google/client";
 import { fetchGrantedScope, hasDriveFile } from "@/lib/google/scopes";
-import { safeNextPath } from "@/lib/next-path";
+import { loginErrorPath, safeNextPath } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -15,16 +15,18 @@ export async function GET(request: NextRequest) {
   const origin = appOrigin();
   const to = (path: string) => NextResponse.redirect(`${origin}${path}`);
   const code = request.nextUrl.searchParams.get("code");
+  const next = request.nextUrl.searchParams.get("next");
+  const fail = (fel: string) => to(loginErrorPath(fel, next));
   if (!code) {
     const cancelled = request.nextUrl.searchParams.get("error") === "access_denied";
-    return to(cancelled ? "/login?fel=avbrutet" : "/login?fel=kod");
+    return fail(cancelled ? "avbrutet" : "kod");
   }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.session) {
     console.error("auth callback: code exchange failed", error?.message);
-    return to("/login?fel=kod");
+    return fail("kod");
   }
 
   const { session } = data;
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   if (!driveFile) {
     await supabase.auth.signOut();
-    return to("/login?fel=drive");
+    return fail("drive");
   }
 
   try {
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
     } else if (!(await hasGoogleToken(session.user.id))) {
       // Never overwrite a stored token with nothing; without any token we can't write Docs.
       await supabase.auth.signOut();
-      return to("/login?fel=refresh");
+      return fail("refresh");
     }
     // The exchanged session carries provider_token/provider_refresh_token and would be saved
     // as-is in the session cookie. Re-save it without them: Google tokens live only in
@@ -66,8 +68,8 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("auth callback: storing Google token failed", (err as Error)?.message);
     await supabase.auth.signOut();
-    return to("/login?fel=kod");
+    return fail("kod");
   }
 
-  return to(safeNextPath(request.nextUrl.searchParams.get("next")));
+  return to(safeNextPath(next));
 }

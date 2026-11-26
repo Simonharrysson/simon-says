@@ -132,4 +132,38 @@ describe("auth callback", () => {
     expect(google.storeGoogleToken).not.toHaveBeenCalled();
     expect(sessionCookies()).toEqual([]);
   });
+
+  describe("keeps the invite through failures", () => {
+    const INVITE = "&next=%2Fjoin%2FAbc-1_x";
+    const LOGIN = (fel: string) => `https://example.com/login?fel=${fel}&next=%2Fjoin%2FAbc-1_x`;
+
+    it("missing drive.file", async () => {
+      grantedScope = "openid email";
+      expect((await call(INVITE)).headers.get("location")).toBe(LOGIN("drive"));
+    });
+
+    it("failed token storage", async () => {
+      google.storeGoogleToken.mockRejectedValue(new Error("db down"));
+      expect((await call(INVITE)).headers.get("location")).toBe(LOGIN("kod"));
+    });
+
+    it("no refresh token", async () => {
+      providerRefresh = undefined;
+      expect((await call(INVITE)).headers.get("location")).toBe(LOGIN("refresh"));
+    });
+
+    it("cancelled or missing code", async () => {
+      const get = (q: string) => GET(new NextRequest(`https://simonsays.example/auth/callback?${q}`));
+      expect((await get("error=access_denied&next=%2Fjoin%2FAbc-1_x")).headers.get("location")).toBe(LOGIN("avbrutet"));
+      expect((await get("next=%2Fjoin%2FAbc-1_x")).headers.get("location")).toBe(LOGIN("kod"));
+    });
+
+    it.each(["%2F%2Fevil.com", "https%3A%2F%2Fevil.com", "%2F%5Cevil.com", "%2Fa%3Fb%3D1"])(
+      "drops an unsafe next (%s) from the error redirect",
+      async (bad) => {
+        grantedScope = "openid email";
+        expect((await call(`&next=${bad}`)).headers.get("location")).toBe("https://example.com/login?fel=drive");
+      },
+    );
+  });
 });

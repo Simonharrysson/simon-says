@@ -7,7 +7,7 @@ export type Notice = { tone: "danger" | "success"; title?: string; text: string 
 export const loginErrors: Record<string, { title: string; text: string }> = {
   drive: {
     title: "Kryssa i rutan för Google Drive",
-    text: "Rutan för Google Drive var inte ikryssad. Utan den kan vi inte skapa mötesdokumentet åt dig.",
+    text: "Rutan för Google Drive var inte ikryssad. Utan den kan vi inte skapa mötesdokumentet i din Drive. Vi ser bara de filer Simon Says själv skapar. Din inbjudan ligger kvar.",
   },
   refresh: {
     title: "Google skickade ingen nyckel",
