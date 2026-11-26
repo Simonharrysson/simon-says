@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { IconPencil, IconTrash } from "@/components/ui/icons";
 import { SubmitButton } from "@/components/ui/SubmitButton";

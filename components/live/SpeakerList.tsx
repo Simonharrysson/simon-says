@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { IconCheck, IconPencil, IconPlus } from "@/components/ui/icons";
 import { speakerKeyString, type PersonOption, type Speaker, type SpeakerChoice, type SpeakerKey } from "./types";
 

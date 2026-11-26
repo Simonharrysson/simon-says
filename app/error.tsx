@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { IconRefresh } from "@/components/ui/icons";
 
 /** Catches errors thrown while rendering a page (e.g. a database read failing). */

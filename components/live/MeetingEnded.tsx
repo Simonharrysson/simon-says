@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Banner } from "@/components/ui/Banner";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { IconExternal, IconRefresh } from "@/components/ui/icons";
 import { formatDuration } from "@/lib/format";
 import { autoStopText } from "@/lib/ui/limit-copy";

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { IconMic, IconMicOff } from "@/components/ui/icons";
 
 export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | null;

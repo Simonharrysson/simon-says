@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { IconPlay, IconStop } from "@/components/ui/icons";
 import { formatClock } from "@/lib/format";
 import { StartErrorBanner, type StartError } from "./ConsentStep";

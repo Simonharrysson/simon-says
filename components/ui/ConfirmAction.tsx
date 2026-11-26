@@ -1,15 +1,18 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
-import { Button, type ButtonSize, type ButtonVariant } from "./Button";
+import { useId, useState, type ReactNode } from "react";
+import { Button, type ButtonSize, type ButtonVariant } from "./button";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./dialog";
+import { Input } from "./input";
+import { Label } from "./label";
 import { SubmitButton } from "./SubmitButton";
 
 export type FormAction = (form: FormData) => void | Promise<void>;
 
 /**
- * A destructive or irreversible action behind a confirm dialog (native <dialog>: focus is
- * trapped, Esc closes, focus returns to the trigger). The dialog's form posts `hidden` fields
- * to `action` unchanged, so server actions keep their signature. With `requireText`, the
+ * A destructive or irreversible action behind a confirm dialog (shadcn Dialog: focus is trapped,
+ * Esc and a backdrop click close, focus returns to the trigger). The dialog's form posts `hidden`
+ * fields to `action` unchanged, so server actions keep their signature. With `requireText`, the
  * confirm button stays disabled until the typed value matches (and is posted as `name`).
  */
 export function ConfirmAction({
@@ -43,14 +46,14 @@ export function ConfirmAction({
   requireText?: { name: string; value: string; label: ReactNode };
   disabled?: boolean;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
+  const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const matches = !requireText || typed.trim() === requireText.value;
 
-  const close = () => {
-    ref.current?.close();
-    setTyped("");
+  const onOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setTyped("");
   };
 
   return (
@@ -61,63 +64,50 @@ export function ConfirmAction({
         icon={triggerIcon}
         iconOnly={triggerIconOnly}
         disabled={disabled}
-        onClick={() => ref.current?.showModal()}
+        onClick={() => setOpen(true)}
         aria-haspopup="dialog"
       >
         {trigger}
       </Button>
-      <dialog
-        ref={ref}
-        className="dialog"
-        aria-labelledby={`${id}-title`}
-        aria-describedby={description ? `${id}-desc` : undefined}
-        onClose={() => setTyped("")}
-        onClick={(event) => {
-          // Click on the backdrop (the dialog element itself, outside the body) closes.
-          if (event.target === ref.current) close();
-        }}
-      >
-        <form action={action}>
-          {Object.entries(hidden).map(([name, value]) => (
-            <input key={name} type="hidden" name={name} value={value} />
-          ))}
-          <div className="dialog__body">
-            <h2 className="dialog__title" id={`${id}-title`}>
-              {title}
-            </h2>
-            {description && (
-              <div className="dialog__text" id={`${id}-desc`}>
-                {description}
-              </div>
-            )}
-            {requireText && (
-              <div className="field">
-                <label className="label" htmlFor={`${id}-confirm`}>
-                  {requireText.label}
-                </label>
-                <input
-                  id={`${id}-confirm`}
-                  name={requireText.name}
-                  className="input"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={typed}
-                  onChange={(event) => setTyped(event.target.value)}
-                  required
-                />
-              </div>
-            )}
-          </div>
-          <div className="dialog__actions">
-            <Button variant="ghost" onClick={close}>
-              Avbryt
-            </Button>
-            <SubmitButton variant={confirmVariant} disabled={!matches} pendingLabel={pendingLabel}>
-              {confirmLabel}
-            </SubmitButton>
-          </div>
-        </form>
-      </dialog>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent {...(description ? {} : { "aria-describedby": undefined })}>
+          <form action={action}>
+            {Object.entries(hidden).map(([name, value]) => (
+              <input key={name} type="hidden" name={name} value={value} />
+            ))}
+            <DialogBody>
+              <DialogTitle>{title}</DialogTitle>
+              {description && (
+                <DialogDescription asChild>
+                  <div>{description}</div>
+                </DialogDescription>
+              )}
+              {requireText && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor={`${id}-confirm`}>{requireText.label}</Label>
+                  <Input
+                    id={`${id}-confirm`}
+                    name={requireText.name}
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={typed}
+                    onChange={(event) => setTyped(event.target.value)}
+                    required
+                  />
+                </div>
+              )}
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                Avbryt
+              </Button>
+              <SubmitButton variant={confirmVariant} disabled={!matches} pendingLabel={pendingLabel}>
+                {confirmLabel}
+              </SubmitButton>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

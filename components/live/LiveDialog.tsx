@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, type ReactNode } from "react";
-import { Button, type ButtonVariant } from "@/components/ui/Button";
+import { Button, type ButtonVariant } from "@/components/ui/button";
 
 /**
  * A native confirm dialog for the live page (focus trap, Esc, backdrop click). The safe choice

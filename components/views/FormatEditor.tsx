@@ -4,7 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { Check } from "@/components/ui/Field";
 import type { ItemRole } from "@/lib/db/types";
 import { editorToProfile, profileToEditor, ROLE_NAMES, type EditorItem, type EditorState } from "@/lib/formats/editor";
@@ -316,7 +316,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
           </div>
           <fieldset className="format-editor__group">
             <legend className="label">Uppgifter</legend>
-            <Check id="fe-tasks-on" title="Egen rubrik för uppgifter" checked={state.tasks.on} onChange={(e) => set({ tasks: { ...state.tasks, on: e.target.checked } })} />
+            <Check id="fe-tasks-on" title="Egen rubrik för uppgifter" checked={state.tasks.on} onCheckedChange={(on) => set({ tasks: { ...state.tasks, on: on === true } })} />
             {state.tasks.on && (
               <>
                 <input
@@ -340,7 +340,7 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
           </fieldset>
           <fieldset className="format-editor__group">
             <legend className="label">Anteckningar</legend>
-            <Check id="fe-notes-on" title="Egen rubrik för anteckningar" checked={state.notes.on} onChange={(e) => set({ notes: { ...state.notes, on: e.target.checked } })} />
+            <Check id="fe-notes-on" title="Egen rubrik för anteckningar" checked={state.notes.on} onCheckedChange={(on) => set({ notes: { ...state.notes, on: on === true } })} />
             {state.notes.on && (
               <input
                 className="input"

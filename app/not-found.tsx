@@ -1,4 +1,4 @@
-import { ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/button";
 import { IconArrowLeft } from "@/components/ui/icons";
 import { PublicShell } from "@/components/views/PublicShell";
 

@@ -1,5 +1,5 @@
 import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { IconChevronDown, IconClock, IconDoc, IconRefresh, IconWifiOff } from "@/components/ui/icons";
 import { limitWarningText } from "@/lib/ui/limit-copy";
 import type { LiveBannerKind } from "@/lib/ui/live-status";

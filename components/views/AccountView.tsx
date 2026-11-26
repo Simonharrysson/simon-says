@@ -1,4 +1,4 @@
-import { ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";

@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";

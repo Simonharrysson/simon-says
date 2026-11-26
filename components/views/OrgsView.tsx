@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";

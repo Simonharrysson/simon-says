@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 
 /** Admins: pick the förening's meeting folder in the Google Picker (POST /api/orgs/<id>/meeting-folder). */
 export function MeetingFolderButton({ orgId, hasFolder }: { orgId: string; hasFolder: boolean }) {

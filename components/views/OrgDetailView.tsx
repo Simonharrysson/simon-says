@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
-import { ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/button";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";

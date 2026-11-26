@@ -2,7 +2,7 @@
 
 import { useRef, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import { IconArrowLeft, IconPause } from "@/components/ui/icons";
 import { liveStatus, type LiveStatus } from "@/lib/ui/live-status";
 import { ConsentStep, type StartError } from "./ConsentStep";

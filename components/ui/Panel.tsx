@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
-import { cx } from "./cx";
+import { cn } from "@/lib/utils";
+import { cardClass, CardHeader, CardTitle } from "./card";
 
-/** A sheet on the board. `flush` for lists that run edge to edge. */
+/** Panel padding helpers for `flush` panels: intro text, padded content, a footer note. */
+export const panelIntroClass = "-mt-2 px-6 pb-4";
+export const panelPadClass = "px-6 pb-6";
+export const panelFootClass = "border-t border-line px-6 pt-3 pb-4";
+
+/** A sheet on the board (a shadcn Card). `flush` for lists that run edge to edge. */
 export function Panel({
   title,
   titleId,
@@ -26,18 +32,15 @@ export function Panel({
   return (
     <Tag
       id={id}
-      className={cx("panel", flush && "panel--flush", sunk && "panel--sunk", className)}
+      data-slot="card"
+      className={cn(cardClass, !flush && "p-6", sunk && "bg-board", className)}
       aria-labelledby={title && titleId ? titleId : undefined}
     >
       {(title || actions) && (
-        <div className="panel__header">
-          {title && (
-            <h2 className="panel__title" id={titleId}>
-              {title}
-            </h2>
-          )}
+        <CardHeader className={cn("mb-4", flush && "px-6 pt-6")}>
+          {title && <CardTitle id={titleId}>{title}</CardTitle>}
           {actions}
-        </div>
+        </CardHeader>
       )}
       {children}
     </Tag>

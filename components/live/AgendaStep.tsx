@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { PickerError, usePicker } from "@/components/google/Picker";
-import { Button } from "@/components/ui/Button";
+import { Button } from "@/components/ui/button";
 import type { FormatKind } from "@/lib/formats/schema";
 
 // The start screen's agenda step (A11): which Doc the meeting runs in. Doc names are the

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { IconMic } from "@/components/ui/icons";
 
 /**

@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ListRow } from "@/components/ui/ListRow";
 import { Panel } from "@/components/ui/Panel";
