@@ -14,6 +14,9 @@ function items(n: number, state: (k: number) => Partial<ItemView>): ItemView[] {
   return Array.from({ length: n }, (_, k) => ({
     id: k + 1,
     label: label(k),
+    docId: `1DemoImportDoc${String(k).padStart(4, "0")}`,
+    section: 0,
+    sections: 1,
     state: "waiting" as const,
     reason: null,
     protocolId: null,

@@ -27,10 +27,10 @@ export type JobStatus = "running" | "canceling" | "digesting" | "done" | "cancel
 
 /** Why a meeting was skipped or failed, in the admin's words. Unknown codes get a general line. */
 export const REASON_MESSAGES: Record<string, string> = {
-  own_doc: "Simon Says eget mötesdokument; mötet finns redan med.",
+  own_doc: "Det här är ett av Simon Says egna mötesdokument; det mötet finns redan med.",
   empty: "Dokumentet är tomt.",
-  too_long: "För långt för att vara ett protokoll.",
-  "many-meetings": "Dokumentet verkar innehålla flera möten som inte gick att skilja åt.",
+  too_long: "Ett av mötena i dokumentet är för långt för att vara ett protokoll.",
+  "many-meetings": "Dokumentet verkar innehålla flera möten — välj ett protokoll per dokument eller dela upp det.",
   "too-many": "Dokumentet innehåller fler än 60 möten.",
   doc_changed: "Dokumentet har ändrats sedan du valde det.",
   doc_unreadable: "Simon Says kan inte läsa dokumentet längre.",
@@ -47,6 +47,7 @@ export const REASON_MESSAGES: Record<string, string> = {
   save_failed: "Kunde inte sparas.",
   unreachable: "Vi nådde inte servern.",
   stale: "Sidan stängdes medan det lästes.",
+  not_creator: "Bara den admin som startade inläsningen kan läsa de här dokumenten (det är hens läsåtkomst).",
 };
 
 export const reasonMessage = (code: string | null | undefined): string | null =>
@@ -58,7 +59,11 @@ export const retryable = (state: ItemState, reason: string | null): boolean =>
 
 export interface ItemView {
   id: number;
+  /** Neutral, stored ("Dokument 3, möte 2 av 4"); the page shows the file's name when it has it. */
   label: string;
+  docId: string;
+  section: number;
+  sections: number;
   state: ItemState;
   reason: string | null;
   protocolId: string | null;
@@ -172,3 +177,18 @@ export function formatMinutesLeft(minutes: number): string {
 }
 
 export const isOpen = (status: JobStatus) => status === "running" || status === "canceling" || status === "digesting";
+
+/**
+ * The row's name: the Drive file name the admin picked, when this browser still has it (file
+ * names are never stored on the server: /integritet), else the neutral stored label, with the
+ * meeting's date once it is known.
+ */
+export function itemLabel(i: Pick<ItemView, "label" | "docId" | "section" | "sections" | "date">, names: Record<string, string>): string {
+  const name = names[i.docId];
+  if (name) return i.sections > 1 ? `${name}, möte ${i.section + 1} av ${i.sections}` : name;
+  return i.date ? `${i.label} · ${i.date}` : i.label;
+}
+
+/** Neutral label stored for a meeting: the Doc's place in the pick, never its name. */
+export const neutralLabel = (docIndex: number, section: number, sections: number) =>
+  sections > 1 ? `Dokument ${docIndex + 1}, möte ${section + 1} av ${sections}` : `Dokument ${docIndex + 1}`;

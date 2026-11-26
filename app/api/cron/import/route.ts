@@ -1,5 +1,5 @@
 import { verifyCron } from "@/lib/cron";
-import { advanceJob, openBatchJobIds } from "@/lib/history/jobs";
+import { advanceJob, failStaleSubmits, openBatchJobIds } from "@/lib/history/jobs";
 import { batchClient } from "@/lib/history/route-kit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -7,13 +7,16 @@ export const dynamic = "force-dynamic";
 // The goals digest of a finished batch import can take ~4 minutes.
 export const maxDuration = 300;
 
-/** Stop starting new steps after this long, so a digest started here still fits maxDuration. */
+/** Stop starting new steps after this long. */
 const BUDGET_MS = 60_000;
+/** A digest (up to ~280 s) is only started this early in a run, so it fits maxDuration. */
+const DIGEST_START_MS = 10_000;
 
 /**
  * Vercel Cron, every 5 min (`Authorization: Bearer $CRON_SECRET`): moves each open batch import
- * one step (poll Anthropic, save the results of an ended batch, or run its goals digest once),
- * and removes finished imports older than 7 days (0036). Logs only counts and step names.
+ * one step (poll Anthropic, save the results of an ended batch, or run its goals digest once:
+ * only at the start of a run, so it fits the time limit), fails batch jobs whose submit never
+ * finished, and removes finished imports older than 7 days (0036). Logs only counts and step names.
  */
 export async function GET(request: Request) {
   if (!verifyCron(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -21,9 +24,12 @@ export async function GET(request: Request) {
   const started = Date.now();
   const steps: string[] = [];
   try {
+    const stale = await failStaleSubmits(db);
+    if (stale) steps.push(`stale:${stale}`);
     for (const jobId of await openBatchJobIds(db)) {
       if (Date.now() - started > BUDGET_MS) break;
-      steps.push(await advanceJob(db, jobId, { client: batchClient(), digest: true, force: true }).catch((err: Error) => {
+      const digest = Date.now() - started < DIGEST_START_MS;
+      steps.push(await advanceJob(db, jobId, { client: batchClient(), digest, force: true }).catch((err: Error) => {
         console.error(`cron import: ${err.message}`.slice(0, 200));
         return "error";
       }));

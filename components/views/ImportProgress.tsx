@@ -10,6 +10,7 @@ import {
   DIRECT_CONCURRENCY,
   formatMinutesLeft,
   isOpen,
+  itemLabel,
   jobProgress,
   reasonMessage,
   retryable,
@@ -56,6 +57,7 @@ export function ImportProgress({
   orgId,
   initial,
   autoRun = false,
+  names: pickedNames,
   now: fixedNow,
   onFinished,
   onProposal,
@@ -65,6 +67,8 @@ export function ImportProgress({
   initial: JobView;
   /** Direct: start reading at once (the admin just confirmed). On a revisit they press "Fortsätt". */
   autoRun?: boolean;
+  /** Drive file names of the pick (docId → name), kept in this browser only. */
+  names?: Record<string, string>;
   /** /design only: a fixed clock, and no requests. */
   now?: number;
   /** Direct import finished (or a batch without a stored proposal): continue to the goals as before. */
@@ -81,6 +85,21 @@ export function ImportProgress({
   const [busy, setBusy] = useState<"cancel" | "close" | number | null>(null);
   const [tick, setTick] = useState(() => fixedNow ?? Date.now());
   const pool = useRef(false);
+  const [names, setNames] = useState<Record<string, string>>(pickedNames ?? {});
+
+  // File names live in this browser only (never stored on the server): remember them per import.
+  useEffect(() => {
+    const key = `simonsays:import-names:${initial.id}`;
+    try {
+      if (pickedNames && Object.keys(pickedNames).length) window.localStorage.setItem(key, JSON.stringify(pickedNames));
+      else {
+        const saved = JSON.parse(window.localStorage.getItem(key) ?? "null") as Record<string, string> | null;
+        if (saved && typeof saved === "object") setNames(saved);
+      }
+    } catch {
+      // private mode or blocked storage: the neutral labels are shown
+    }
+  }, [initial.id, pickedNames]);
 
   // The clock for "ca X min kvar" (every 10 s is plenty).
   useEffect(() => {
@@ -188,6 +207,9 @@ export function ImportProgress({
     }
   };
 
+  /** Continuing to the goals closes the import on the Översikt (no second proposal on revisit). */
+  const markSeen = () => void fetch(`/api/orgs/${orgId}/history/jobs/${job.id}/seen`, { method: "POST" }).catch(() => null);
+
   const close = async () => {
     setBusy("close");
     await fetch(`/api/orgs/${orgId}/history/jobs/${job.id}/seen`, { method: "POST" }).catch(() => null);
@@ -213,7 +235,9 @@ export function ImportProgress({
     imported: t.done,
     failed: t.failed,
     stopped,
-    fileDated: job.items.flatMap((i) => (i.state === "done" && i.dateFrom === "file" && i.protocolId && i.date ? [{ protocolId: i.protocolId, label: i.label, date: i.date }] : [])),
+    fileDated: job.items.flatMap((i) =>
+      i.state === "done" && i.dateFrom === "file" && i.protocolId && i.date ? [{ protocolId: i.protocolId, label: itemLabel({ ...i, date: null }, names), date: i.date }] : [],
+    ),
   };
 
   // ------------------------------------------------------------------ the headline
@@ -301,12 +325,21 @@ export function ImportProgress({
           </Button>
         )}
         {!open && job.status !== "failed" && job.proposal && (
-          <Button variant="primary" onClick={() => onProposal(job.proposal!, result)}>
+          <Button variant="primary" onClick={() => {
+              markSeen();
+              onProposal(job.proposal!, result);
+            }}>
             Se förslaget på mål
           </Button>
         )}
         {!open && job.status === "done" && !job.proposal && t.done > 0 && (
-          <Button variant="primary" onClick={() => onFinished(result)}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              markSeen();
+              onFinished(result);
+            }}
+          >
             {job.mode === "batch" ? "Föreslå mål" : "Fortsätt till målen"}
           </Button>
         )}
@@ -338,6 +371,7 @@ export function ImportProgress({
           <Row
             key={i.id}
             item={i}
+            label={itemLabel(i, names)}
             batchRunning={job.mode === "batch" && open}
             canRetry={retryable(i.state, i.reason) && !(job.mode === "batch" && open) && !isRunning}
             retrying={busy === i.id}
@@ -351,12 +385,14 @@ export function ImportProgress({
 
 function Row({
   item: i,
+  label,
   batchRunning,
   canRetry,
   retrying,
   onRetry,
 }: {
   item: ItemView;
+  label: string;
   batchRunning: boolean;
   canRetry: boolean;
   retrying: boolean;
@@ -376,7 +412,7 @@ function Row({
         ) : null}
       </span>
       <span className="flex min-w-[min(12rem,100%)] flex-1 flex-col">
-        <span className={cn("text-sm wrap-anywhere", (i.state === "waiting" || i.state === "skipped") && "text-ink-3")}>{i.label}</span>
+        <span className={cn("text-sm wrap-anywhere", (i.state === "waiting" || i.state === "skipped") && "text-ink-3")}>{label}</span>
         {why && <span className="text-xs text-ink-3">{why}</span>}
         {i.state === "done" && i.dateFrom === "file" && <span className="text-xs text-ink-3">Datum från filen — kontrollera det efteråt.</span>}
       </span>

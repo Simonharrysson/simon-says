@@ -64,7 +64,7 @@ export type ImportPhase =
   | { phase: "estimating"; files: ImportDoc[]; back: Back }
   | { phase: "confirm"; files: ImportDoc[]; estimate: ImportEstimate; back: Back }
   /** An import job (0036): its progress, from the database. `autoRun`: just confirmed (direct reads now). */
-  | { phase: "job"; job: JobView; autoRun?: boolean }
+  | { phase: "job"; job: JobView; autoRun?: boolean; names?: Record<string, string> }
   | { phase: "starting"; protocols: number; mode: ImportMode }
   | { phase: "dates"; fileDated: FileDated[]; then: () => void }
   | { phase: "error"; message: string; back: Back };
@@ -180,8 +180,9 @@ export function HistoryImport({
     const docs = e.docs.flatMap((d) => {
       if (!("sections" in d)) return [];
       const file = files.find((f) => f.id === d.docId);
-      return [{ docId: d.docId, name: file?.name ?? "Dokument", sections: d.sections }];
+      return [{ docId: d.docId, sections: d.sections, name: file?.name ?? "Dokument" }];
     });
+    const names = Object.fromEntries(docs.map((d) => [d.docId, d.name]));
     const picked = files.filter((f) => docs.some((d) => d.docId === f.id));
     setView({ phase: "starting", protocols: e.protocols, mode: e.mode });
     try {
@@ -189,7 +190,7 @@ export function HistoryImport({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          docs,
+          docs: docs.map(({ docId, sections }) => ({ docId, sections })),
           ...(picked.length && picked.every((f) => f.ticket) ? { tickets: Object.fromEntries(picked.map((f) => [f.id, f.ticket])) } : {}),
         }),
       });
@@ -198,7 +199,7 @@ export function HistoryImport({
         setView({ phase: "error", message: json?.message ?? "Inläsningen kunde inte startas. Försök igen.", back });
         return;
       }
-      setView({ phase: "job", job: json.job, autoRun: true });
+      setView({ phase: "job", job: json.job, autoRun: true, names });
     } catch {
       setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen.", back });
     }
@@ -222,6 +223,7 @@ export function HistoryImport({
         orgId={orgId}
         initial={view.job}
         autoRun={view.autoRun}
+        names={view.names}
         now={demoNow}
         onFinished={(r) => afterImport(r, () => onDone({ imported: r.imported, failed: r.failed, stopped: r.stopped }))}
         onProposal={(proposal, r) => afterImport(r, () => onProposal(proposal, summary(r)))}

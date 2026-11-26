@@ -31,6 +31,8 @@ export async function requireAdmin(id: string): Promise<{ ok: true; db: ServerDb
 let client: BatchClient | undefined;
 /** The SDK client for the Message Batches API (create, poll, results, cancel). */
 export function batchClient(): BatchClient {
-  client ??= new Anthropic({ apiKey: getEnv().ANTHROPIC_API_KEY, timeout: 120_000, maxRetries: 2 }) as unknown as BatchClient;
+  // No SDK retries: a create that timed out after Anthropic accepted it must not become a second
+  // batch. Polls are repeated by the cron and the status request anyway.
+  client ??= new Anthropic({ apiKey: getEnv().ANTHROPIC_API_KEY, timeout: 120_000, maxRetries: 0 }) as unknown as BatchClient;
   return client;
 }

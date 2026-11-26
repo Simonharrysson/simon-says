@@ -105,6 +105,9 @@ export function toView(job: JobRow, items: ItemRow[]): JobView {
       (i): ItemView => ({
         id: i.id,
         label: i.label,
+        docId: i.drive_file_id,
+        section: i.section,
+        sections: i.sections,
         state: i.state,
         reason: i.reason,
         protocolId: i.protocol_id,
@@ -209,9 +212,11 @@ export async function createBatchJob(
     const part = r.state === "waiting" ? input.items[r.position]?.part : undefined;
     return part ? [buildBatchRequest(r.id, part)] : [];
   });
+  let batchId: string | null = null;
   try {
     if (!requests.length) throw new Error("nothing to send");
     const batch = await client.messages.batches.create({ requests });
+    batchId = batch.id;
     const now = new Date().toISOString();
     await must(db.from("history_import_jobs").update({ batch_id: batch.id, counts: countsOf(batch), polled_at: now }).eq("id", jobId));
     await must(db.from("history_import_items").update({ state: "reading", started_at: now }).eq("job_id", jobId).eq("state", "waiting"));
@@ -219,6 +224,8 @@ export async function createBatchJob(
     return { ok: true, jobId };
   } catch (err) {
     console.error(`import job: submit: ${(err as Error).message}`.slice(0, 200));
+    // The batch exists but the job could not record it: stop it, so nothing runs unseen.
+    if (batchId) await Promise.resolve(client.messages.batches.cancel(batchId)).catch((e: Error) => console.error(`import job: cancel orphan: ${e.message}`.slice(0, 200)));
     const now = new Date().toISOString();
     await db.from("history_import_items").update({ state: "failed", reason: "error", finished_at: now }).eq("job_id", jobId).eq("state", "waiting");
     await db.from("history_import_jobs").update({ status: "failed", failure: "submit", finished_at: now }).eq("id", jobId);
@@ -411,6 +418,20 @@ async function runDigest(db: SupabaseClient, job: JobRow, notesClient: NotesClie
     await finishWith({ proposal_error: "too_few" });
     return "digest:too_few";
   }
+  // At most once: mark the job before the paid call. A run that dies mid-digest (the function's
+  // time limit) leaves the mark, and the next run closes the job instead of paying again; the
+  // admin can still ask for a proposal by hand.
+  const { data: marked, error: markError } = await db
+    .from("history_import_jobs")
+    .update({ proposal_error: "interrupted" })
+    .eq("id", job.id)
+    .is("proposal_error", null)
+    .select("id");
+  if (markError) throw new Error(`import job: mark: ${markError.message}`);
+  if (!marked?.length) {
+    await finishWith({});
+    return "digest:interrupted";
+  }
   const res = await digestGoals({ orgId: job.org_id, history, names }, { client: notesClient });
   if (!res.ok) {
     await finishWith({ proposal_error: res.error, cost_usd: Number(job.cost_usd) + (res.usage?.usd ?? 0) });
@@ -453,6 +474,29 @@ export async function closeDirectJobIfFinished(db: SupabaseClient, jobId: string
   if (!count) {
     await db.from("history_import_jobs").update({ status: "done", finished_at: new Date().toISOString() }).eq("id", jobId).eq("status", "running");
   }
+}
+
+/**
+ * A batch job that never got its batch id (the request died between writing the job and
+ * Anthropic's answer): after 10 minutes it is failed, so the förening is not "busy" forever and
+ * its estimate stops counting against the day's room. Returns how many.
+ */
+export async function failStaleSubmits(db: SupabaseClient, now = new Date()): Promise<number> {
+  const before = new Date(now.getTime() - 10 * 60_000).toISOString();
+  const { data, error } = await db
+    .from("history_import_jobs")
+    .update({ status: "failed", failure: "submit", finished_at: now.toISOString() })
+    .eq("mode", "batch")
+    .eq("status", "running")
+    .is("batch_id", null)
+    .lt("created_at", before)
+    .select("id");
+  if (error) throw new Error(`import jobs: stale: ${error.message}`);
+  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  if (ids.length) {
+    await db.from("history_import_items").update({ state: "failed", reason: "error", finished_at: now.toISOString() }).in("job_id", ids).in("state", ["waiting", "reading"]);
+  }
+  return ids.length;
 }
 
 /** Every open batch job, oldest first (the cron). */

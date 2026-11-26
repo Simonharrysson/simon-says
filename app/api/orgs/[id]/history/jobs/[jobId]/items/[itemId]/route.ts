@@ -44,6 +44,11 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   const retry = item.state === "failed" || (stale && job.mode === "direct");
   if (!nextOfDirect && !retry) return fail("not_runnable", 409, "Protokollet läses redan eller är klart.");
   if (job.status === "canceling" || (job.mode === "batch" && job.status === "running")) return fail("not_runnable", 409, "Vänta tills omgången är klar.");
+  // The folder browser's read access is the admin's own: only the admin who picked these Docs
+  // (the job stands in for their listing's tickets) may open them with it.
+  if (job.via_listing && job.created_by !== guard.userId) {
+    return fail("not_creator", 403, "Bara den admin som startade inläsningen kan läsa de här dokumenten (det är hens läsåtkomst).");
+  }
 
   // Take the row (from the state just read, so two tabs cannot both run it).
   const { data: taken } = await admin

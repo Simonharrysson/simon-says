@@ -13,6 +13,7 @@ const { buildBatchRequest, customId, itemIdOf, readBatchResult, batchUsage } = a
 const { estimateImport, extractionUsd, BATCH_DISCOUNT } = await import("./cost");
 const { protocolDate, EXTRACT_SYSTEM_PROMPT, EXTRACT_JSON_SCHEMA } = await import("./extract-prompt");
 const { isBusyDetail, extractProtocol } = await import("./extract");
+const progressMod = await import("./progress");
 const { jobProgress, minutesLeft, formatMinutesLeft, importMode, retryable, reasonMessage, tally, DIRECT_MAX } = await import("./progress");
 const { fitHistory } = await import("./jobs");
 const { messageUsage } = await import("@/lib/notes/engine");
@@ -142,7 +143,10 @@ describe("progress", () => {
   const iso = (ms: number) => new Date(ms).toISOString();
   const item = (id: number, state: "waiting" | "reading" | "done" | "skipped" | "failed", startedAt: number | null = null) => ({
     id,
-    label: `Möte ${id}`,
+    label: `Dokument ${id}`,
+    docId: `doc-${id}-aaaaaaaa`,
+    section: 0,
+    sections: 1,
     state,
     reason: null,
     protocolId: null,
@@ -192,9 +196,21 @@ describe("progress", () => {
     expect(retryable("failed", "error")).toBe(true);
     expect(retryable("failed", "too_long")).toBe(false);
     expect(retryable("skipped", "canceled")).toBe(false);
-    expect(reasonMessage("own_doc")).toMatch(/eget mötesdokument/);
+    expect(reasonMessage("own_doc")).toMatch(/egna mötesdokument/);
     expect(reasonMessage("something-new")).toBe(reasonMessage("error"));
     expect(reasonMessage(null)).toBeNull();
+  });
+});
+
+describe("labels", () => {
+  const { itemLabel, neutralLabel } = progressMod;
+  it("the stored label is neutral; this browser's file name wins; the date is added once known", () => {
+    expect(neutralLabel(2, 1, 4)).toBe("Dokument 3, möte 2 av 4");
+    expect(neutralLabel(0, 0, 1)).toBe("Dokument 1");
+    const i = { label: "Dokument 3, möte 2 av 4", docId: "doc-x", section: 1, sections: 4, date: null };
+    expect(itemLabel(i, {})).toBe("Dokument 3, möte 2 av 4");
+    expect(itemLabel({ ...i, date: "2025-09-02" }, {})).toBe("Dokument 3, möte 2 av 4 · 2025-09-02");
+    expect(itemLabel(i, { "doc-x": "Styrelsen 2025" })).toBe("Styrelsen 2025, möte 2 av 4");
   });
 });
 

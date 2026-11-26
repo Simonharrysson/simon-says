@@ -13,7 +13,7 @@ vi.mock("@/lib/db/usage", () => ({ dayUsd: async () => 0 }));
 vi.mock("@/lib/db/claude-usage", () => ({ recordClaudeUsage: async (orgId: string, u: { usd: number }) => void usage.push({ orgId, usd: u.usd }) }));
 vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 
-const { advanceJob, cancelJob, createBatchJob, createDirectJob, currentJobId, jobView, loadJob } = await import("@/lib/history/jobs");
+const { advanceJob, cancelJob, createBatchJob, createDirectJob, currentJobId, failStaleSubmits, jobView, loadJob } = await import("@/lib/history/jobs");
 const { scriptedClient } = await import("@/scripts/lib/goals-scripted");
 
 type Result = MessageBatchIndividualResponse["result"];
@@ -284,5 +284,42 @@ describe.skipIf(!hasLocalSupabase)("protocol import jobs (0036)", () => {
       ["skipped", "canceled"],
       ["skipped", "canceled"],
     ]);
+  });
+
+  it("the digest runs at most once: a run that died mid-digest is closed, not paid again; a submit that never finished is failed", async () => {
+    const db = adminClient();
+    await db.from("history_import_jobs").update({ status: "done", finished_at: new Date().toISOString() }).eq("org_id", orgId).in("status", ["running", "canceling", "digesting"]);
+    const fake = fakeBatches();
+    const created = await createBatchJob(db, fake.client, {
+      orgId,
+      userId: admin.id,
+      viaListing: false,
+      estimateUsd: 0.2,
+      spendRoom: 10,
+      items: [{ docId: "doc-rutan-jjjj", section: 0, sections: 1, label: "Dokument 1", part: part("§1 x", "2025-02-02") }],
+    });
+    if (!created.ok) throw new Error(created.error);
+    await db.from("history_import_jobs").update({ status: "digesting", proposal_error: "interrupted" }).eq("id", created.jobId);
+    const digest = scriptedClient([{ goals: [], explanation: "" }]);
+    expect(await advanceJob(db, created.jobId, { client: fake.client, digest: true, notesClient: digest })).toBe("digest:interrupted");
+    expect(digest.calls).toBe(0);
+    expect((await loadJob(db, created.jobId))!.status).toBe("done");
+
+    // A job written but never submitted (the request died before Anthropic answered).
+    const { data: orphan, error } = await db.rpc("create_history_import_job", {
+      p_org_id: orgId,
+      p_created_by: admin.id,
+      p_mode: "batch",
+      p_via_listing: false,
+      p_estimate_usd: 0.2,
+      p_spend_room: 10,
+      p_items: [{ drive_file_id: "doc-rutan-kkkk", label: "Dokument 1" }],
+    });
+    if (error) throw new Error(error.message);
+    expect(await failStaleSubmits(db)).toBe(0);
+    expect(await failStaleSubmits(db, new Date(Date.now() + 11 * 60_000))).toBe(1);
+    const view = (await jobView(db, orphan as string))!;
+    expect(view).toMatchObject({ status: "failed", failure: "submit" });
+    expect(view.items[0]).toMatchObject({ state: "failed", reason: "error" });
   });
 });

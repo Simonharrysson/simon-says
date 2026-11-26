@@ -6,7 +6,7 @@ import { DriveAccessMissingError, getGoogleAuth, getImportGoogleAuth, GoogleAuth
 import { estimateImport } from "@/lib/history/cost";
 import { createBatchJob, createDirectJob, currentJobId, jobView, type NewItem } from "@/lib/history/jobs";
 import { BATCH_RATE_LIMITED, MAX_IMPORT_DOCS } from "@/lib/history/limits";
-import { BATCH_SPEND_SHARE, importMode, MAX_BATCH_PROTOCOLS } from "@/lib/history/progress";
+import { BATCH_SPEND_SHARE, importMode, MAX_BATCH_PROTOCOLS, neutralLabel } from "@/lib/history/progress";
 import { googleStatus } from "@/lib/history/read-doc";
 import { readPickedDocs } from "@/lib/history/read-picked";
 import { batchClient, fail, noStore, requireAdmin } from "@/lib/history/route-kit";
@@ -39,8 +39,8 @@ interface PickedBody {
 }
 
 /**
- * Starts an import of the confirmed pick: `{ docs: [{ docId, name, sections }], tickets? }` (the
- * estimate's answer). Up to DIRECT_MAX meetings: a direct job, the browser then reads each
+ * Starts an import of the confirmed pick: `{ docs: [{ docId, sections }], tickets? }` (the
+ * estimate's answer; no file names: the browser keeps those, they are never stored). Up to DIRECT_MAX meetings: a direct job, the browser then reads each
  * meeting through /jobs/[jobId]/items/[itemId]. More: every Doc is read now and ALL meetings go
  * in one Anthropic batch (half price); the import cron saves the results and proposes goals.
  * Admins only; one open import per förening; batch: at most 500 meetings per 24 h and only when
@@ -53,10 +53,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { db, userId } = guard;
 
   const body = (await request.json().catch(() => null)) as PickedBody | null;
-  const raw = Array.isArray(body?.docs) ? (body.docs as { docId?: unknown; name?: unknown; sections?: unknown }[]) : [];
+  const raw = Array.isArray(body?.docs) ? (body.docs as { docId?: unknown; sections?: unknown }[]) : [];
   const docs = raw.flatMap((d) =>
     typeof d?.docId === "string" && DRIVE_ID.test(d.docId) && Number.isInteger(d.sections) && (d.sections as number) >= 1 && (d.sections as number) <= 60
-      ? [{ docId: d.docId, name: typeof d.name === "string" && d.name.trim() ? d.name.trim().slice(0, 200) : "Dokument", sections: d.sections as number }]
+      ? [{ docId: d.docId, sections: d.sections as number }]
       : [],
   );
   if (!docs.length || docs.length !== raw.length || docs.length > MAX_IMPORT_DOCS || new Set(docs.map((d) => d.docId)).size !== docs.length) {
@@ -69,7 +69,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const viaListing = Boolean(tickets);
   const meetings = docs.reduce((n, d) => n + d.sections, 0);
   if (meetings > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, `Dokumenten innehåller ${meetings} möten. Välj högst ${MAX_BATCH_PROTOCOLS} åt gången.`);
-  const label = (d: { name: string; sections: number }, k: number) => (d.sections > 1 ? `${d.name}, möte ${k + 1} av ${d.sections}` : d.name);
+  // Stored labels are neutral: file names are never stored (/integritet); the browser keeps them.
+  const docIndex = new Map(docs.map((d, k) => [d.docId, k]));
+  const label = (d: { docId: string }, section: number, sections: number) => neutralLabel(docIndex.get(d.docId) ?? 0, section, sections);
 
   let own: Set<string>;
   let skipTabIds: Set<string>;
@@ -84,7 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let created;
   if (importMode(meetings) === "direct") {
     const items: NewItem[] = docs.flatMap((d) =>
-      Array.from({ length: d.sections }, (_, k) => ({ docId: d.docId, section: k, sections: d.sections, label: label(d, k), ...(own.has(d.docId) ? { skip: "own_doc" } : {}) })),
+      Array.from({ length: d.sections }, (_, k) => ({ docId: d.docId, section: k, sections: d.sections, label: label(d, k, d.sections), ...(own.has(d.docId) ? { skip: "own_doc" } : {}) })),
     );
     created = await createDirectJob(admin, { orgId: id, userId, viaListing, estimateUsd: 0, items });
   } else {
@@ -97,12 +99,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       for (const [k, r] of read.entries()) {
         const d = docs[k];
         if (!r.ok) {
-          items.push({ docId: d.docId, section: 0, sections: 1, label: d.name, skip: r.reason });
+          items.push({ docId: d.docId, section: 0, sections: 1, label: label(d, 0, 1), skip: r.reason });
           continue;
         }
         const n = r.sections.length;
         for (const [s, part] of r.sections.entries()) {
-          items.push({ docId: d.docId, section: s, sections: n, label: label({ name: d.name, sections: n }, s), part, fileDate: r.fileDate });
+          items.push({ docId: d.docId, section: s, sections: n, label: label(d, s, n), part, fileDate: r.fileDate });
           chars.push(part.text.length);
         }
       }

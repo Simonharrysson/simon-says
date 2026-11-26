@@ -14,10 +14,12 @@
 --            proposal on the job (`proposal`): the only place a proposal is stored. It is made of
 --            already-cleaned, name-free lines and goes away with the job.
 --
--- What is stored: no protocol text, no Doc title. Each item keeps `label`, the Drive FILE name
--- the admin ticked ("Styrelsemöte 3 mars, möte 2 av 4"), so the list reads the same when they
--- come back. It is deleted with the job: 7 days after the job ended (cleanup in the cron and
--- in delete_old_history_import_jobs), or at once when the admin removes the imported protocols.
+-- What is stored: no protocol text, no Doc title, no file name (/integritet promises that names
+-- of folders and Docs are not stored). Each item's `label` is NEUTRAL ("Dokument 3, möte 2 av
+-- 4"); the admin's browser keeps the file names it showed and puts them back on its own. The
+-- Drive file id is stored (as in history_protocols). Finished jobs are deleted after 7 days
+-- (the cron calls delete_old_history_import_jobs) or when the admin removes the imported
+-- protocols.
 
 create table public.history_import_jobs (
   id uuid primary key default gen_random_uuid(),
