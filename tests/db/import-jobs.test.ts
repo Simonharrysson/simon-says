@@ -289,6 +289,8 @@ describe.skipIf(!hasLocalSupabase)("protocol import jobs (0036)", () => {
   it("the digest runs at most once: a run that died mid-digest is closed, not paid again; a submit that never finished is failed", async () => {
     const db = adminClient();
     await db.from("history_import_jobs").update({ status: "done", finished_at: new Date().toISOString() }).eq("org_id", orgId).in("status", ["running", "canceling", "digesting"]);
+    // The limits test used the förening's 500 for today: move those imports to yesterday.
+    await db.from("history_import_jobs").update({ created_at: new Date(Date.now() - 25 * 3_600_000).toISOString() }).eq("org_id", orgId);
     const fake = fakeBatches();
     const created = await createBatchJob(db, fake.client, {
       orgId,
