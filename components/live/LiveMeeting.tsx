@@ -86,6 +86,8 @@ export interface LiveMeetingProps {
   onPause: () => void;
   onResume: () => void;
   onStop: (answers?: TaskAnswer[]) => void;
+  /** The Avsluta answers arrived after the meeting had already ended elsewhere: not saved. */
+  answersLost?: boolean;
   /** This meeting's tasks ("Uppgifter"); undefined: not loaded yet (no panel). */
   tasks?: TaskView[];
   /** Avsluta asks about these first (the förening requires Vem, När, Klart när). */
@@ -172,6 +174,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
     return (
       <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
         <MeetingEnded
+          answersLost={p.answersLost}
           docUrl={p.docUrl}
           durationSeconds={p.elapsedMs / 1000}
           orgHref={p.orgHref}
@@ -248,6 +251,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
       {ending ? (
         <MeetingEnded
+          answersLost={p.answersLost}
           docUrl={p.docUrl}
           durationSeconds={p.elapsedMs / 1000}
           orgHref={p.orgHref}

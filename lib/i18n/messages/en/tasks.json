@@ -29,7 +29,9 @@
     "whoHint": "Name or role",
     "whenHint": "For example Friday 5 Dec",
     "doneWhenHint": "For example the contract is signed",
-    "fillAll": "Fill in what is missing, or choose Leave as it is."
+    "fillAll": "Fill in what is missing, or choose Leave as it is.",
+    "answersLostTitle": "The meeting had already ended — your answers were not saved",
+    "answersLostText": "Someone else ended the meeting before your answers arrived. Write who, when and done when straight into the document."
   },
   "summary": {
     "doneWhen": "done when: {text}",

@@ -1,6 +1,6 @@
 import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { isCopy, isDecision, isTask } from "@/lib/meetings/summary";
-import { PLACEHOLDER, TASK_FIELDS, isOverdue, missingFields, type TaskField } from "@/lib/notes/tasks";
+import { PLACEHOLDER, TASK_FIELDS, isOverdue, missingFields, stripPlaceholders, type TaskField } from "@/lib/notes/tasks";
 import { resolveOwner } from "@/lib/people/roles";
 
 // What a summary e-mail says, built from the meeting's stored note rows (no Claude call). Pure.
@@ -99,7 +99,8 @@ export function summaryContent(
   const allTasks = rows
     .filter((r) => isTask(asChain(r)) && !r.done && !doneCopies.has(r.id))
     .map((r) => ({
-      text: clean(r.text),
+      // A person's line may still carry our placeholders: never in the e-mail ("saknar …" says it).
+      text: clean(r.locked ? stripPlaceholders(r.text) : r.text),
       owner: r.owner?.trim() || null,
       due: r.due?.trim() || null,
       doneWhen: r.done_when?.trim() || null,

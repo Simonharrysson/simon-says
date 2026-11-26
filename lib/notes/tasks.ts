@@ -49,6 +49,21 @@ export function markPlaceholders<T extends NotesItem>(items: T[], mode: TaskMode
   return items.map((i) => (asksForFields(i) && !i.placeholders ? { ...i, placeholders: true } : i));
 }
 
+/**
+ * A person's line (a locked row's text) without our placeholders, for e-mails and Från förra
+ * veckan: "(vem?): Boka lokal (deadline?) – (klart när?)." → "Boka lokal." What is missing is
+ * said from the structured fields instead ("saknar …").
+ */
+export function stripPlaceholders(text: string): string {
+  return text
+    .replace(/\(vem\?\):\s*/g, "")
+    .replace(/\s*[–-]\s*\(klart när\?\)/g, "")
+    .replace(/\s*\((?:vem|deadline|klart när)\?\)/g, "")
+    .replace(/\s+([.,!?])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** A Doc line that still shows one of our placeholders. */
 export function hasPlaceholder(text: string): boolean {
   return Object.values(PLACEHOLDER).some((p) => text.includes(p));

@@ -29,7 +29,9 @@
     "whoHint": "Namn eller roll",
     "whenHint": "Till exempel fredag 5 dec",
     "doneWhenHint": "Till exempel kontraktet är påskrivet",
-    "fillAll": "Fyll i det som saknas, eller välj Lämna som det är."
+    "fillAll": "Fyll i det som saknas, eller välj Lämna som det är.",
+    "answersLostTitle": "Mötet avslutades redan — svaren sparades inte",
+    "answersLostText": "Någon annan avslutade mötet innan dina svar kom fram. Skriv in vem, när och klart när direkt i dokumentet."
   },
   "summary": {
     "doneWhen": "klart när: {text}",

@@ -107,5 +107,7 @@ describe("concrete tasks in the summary (0047)", () => {
     // A carried task (Från förra veckan) is never nagged about: nothing in this meeting completes it.
     expect(summaryContent(rows, { requireFields: true }).tasks.map((t) => t.missing)).toEqual([[], ["due", "doneWhen"], ["doneWhen"], []]);
     expect(summaryContent(rows).tasks.map((t) => t.missing)).toEqual([[], [], [], []]);
+    // The locked line's text has no placeholders in the e-mail.
+    expect(summaryContent(rows).tasks[2].text).toBe("☐ Anna: Ringa (måndag)");
   });
 });

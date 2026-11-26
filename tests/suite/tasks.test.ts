@@ -216,4 +216,23 @@ describe.skipIf(!hasLocalSupabase)("feature: concrete tasks (runTick on the loca
     expect(rows.find((r) => r.id === "n1")).toMatchObject({ due: "fredag", done_when: "kontraktet är påskrivet" });
     expect(rows.find((r) => r.id === "n1")?.due_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+
+  it("Avsluta answers: stored atomically with the claim; late answers only while no final pass has started", async () => {
+    const { id } = await db.insertFormatMeeting({ orgId, starterId: starter.id, profileId });
+    const answers = [{ id: "n1", due: "fredag" }];
+    expect(await tick.claimEnd(id, { taskAnswers: answers })).toBe("claimed");
+    const read = async () => (await adminClient().from("meetings").select("status, task_answers").eq("id", id).single()).data;
+    expect(await read()).toEqual({ status: "ending", task_answers: answers });
+
+    // Another tab ends it too: the claim is a noop, the answers still count (no final pass yet).
+    expect(await tick.claimEnd(id, { taskAnswers: [{ id: "n2", owner: "Erik" }] })).toBe("noop");
+    expect(await tick.saveLateTaskAnswers(id, [{ id: "n2", owner: "Erik" }])).toBe(true);
+    // A final pass holds the end lease: not saved (the page says so).
+    await adminClient().from("meetings").update({ end_lease_until: new Date(Date.now() + 60_000).toISOString() }).eq("id", id);
+    expect(await tick.saveLateTaskAnswers(id, [{ id: "n3", owner: "Maja" }])).toBe(false);
+    // Done: not saved either.
+    await adminClient().from("meetings").update({ status: "done", end_lease_until: null }).eq("id", id);
+    expect(await tick.saveLateTaskAnswers(id, [{ id: "n3", owner: "Maja" }])).toBe(false);
+    expect((await read())?.task_answers).toEqual([{ id: "n2", owner: "Erik" }]);
+  });
 });

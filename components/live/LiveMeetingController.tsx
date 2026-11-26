@@ -69,6 +69,8 @@ export interface LiveMeetingControllerProps {
   autoStopped?: boolean;
   /** Which limit (from `?stoppat=`), for the copy. */
   stopReason?: string | null;
+  /** `?svar=ej-sparade`: the Avsluta answers came after the meeting had already ended. */
+  answersLost?: boolean;
   /** Members the Doc could not be shared with at start (from the `started` event); null: unknown. */
   shareFailed?: number | null;
   /** The new Doc missed the förening's meeting folder (the starter's Google account hasn't opened it). */
@@ -260,21 +262,27 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       setStoppedAt((t) => t ?? Date.now());
       setEndFailed(false);
       setSignedOutUnsent(null);
+      /** The meeting had already ended elsewhere and its final pass had started: the answers were not saved. */
+      let answersLost = false;
       const outcome = await runEndFlow({
         stream: stream.current,
         drainRoundMs: STOP_FLUSH_MAX_MS,
         onPending: setPendingRuns,
         endWithoutUnsent,
         // /end claims `ending` and answers at once; the final pass runs on the server (R1).
-        postEnd: async () =>
-          (
-            await fetch(`/api/meetings/${id}/end`, {
-              method: "POST",
-              signal: AbortSignal.timeout(END_TIMEOUT_MS),
-              // The Avsluta dialog's Vem / När / Klart när: the final pass writes them to the Doc.
-              ...(answers.length ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) } : {}),
-            })
-          ).status,
+        postEnd: async () => {
+          const res = await fetch(`/api/meetings/${id}/end`, {
+            method: "POST",
+            signal: AbortSignal.timeout(END_TIMEOUT_MS),
+            // The Avsluta dialog's Vem / När / Klart när: the final pass writes them to the Doc.
+            ...(answers.length ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) } : {}),
+          });
+          if (res.ok && answers.length) {
+            const body = (await res.json().catch(() => null)) as { answers?: string } | null;
+            answersLost = body?.answers === "not_saved";
+          }
+          return res.status;
+        },
       });
       if (outcome.kind === "end_failed") {
         setEndFailed(true);
@@ -287,7 +295,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         return;
       }
       leaving.current = true;
-      window.location.replace(`/meetings/${id}${auto ? `?stoppat=${stopParam(reason)}` : ""}`);
+      const query = [auto ? `stoppat=${stopParam(reason)}` : null, answersLost ? "svar=ej-sparade" : null].filter(Boolean).join("&");
+      window.location.replace(`/meetings/${id}${query ? `?${query}` : ""}`);
     },
     [],
   );
@@ -892,6 +901,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       onPause={() => stream.current?.pause()}
       onResume={() => stream.current?.resume()}
       onStop={onStop}
+      answersLost={props.answersLost}
       tasks={tasks}
       askTasks={askTasks}
       onReLogin={reLogin}

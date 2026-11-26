@@ -7,6 +7,7 @@ import {
   endAnswers,
   endReady,
   incompleteTasks,
+  stripPlaceholders,
   isOverdue,
   markPlaceholders,
   meetingTasks,
@@ -235,5 +236,17 @@ describe("Avsluta dialog: complete or dismiss each incomplete task", () => {
         n2: { kind: "dismissed" },
       }),
     ).toEqual([{ id: "n1", due: "fredag", doneWhen: "bokat" }]);
+  });
+});
+
+describe("stripPlaceholders (a person's line in e-mails and Från förra veckan)", () => {
+  it.each([
+    ["Kassör: Boka lokal (deadline?) – (klart när?).", "Kassör: Boka lokal."],
+    ["(vem?): Köpa fika (deadline?) – (klart när?).", "Köpa fika."],
+    ["☐ Anna: Ringa (måndag) – (klart när?)", "☐ Anna: Ringa (måndag)"],
+    ["Kassör: Boka lokal (fredag) – klart när: avtalet är påskrivet.", "Kassör: Boka lokal (fredag) – klart när: avtalet är påskrivet."],
+    ["Erik: Mejla sponsorerna måndag – (klart när?).", "Erik: Mejla sponsorerna måndag."],
+  ])("%s → %s", (line, out) => {
+    expect(stripPlaceholders(line)).toBe(out);
   });
 });

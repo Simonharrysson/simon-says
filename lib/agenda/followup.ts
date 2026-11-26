@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NoteItemRow } from "@/lib/db/types";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
+import { stripPlaceholders } from "@/lib/notes/tasks";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // "Från förra veckan": the previous meeting's open tasks are carried into this meeting's follow-up
@@ -28,7 +29,8 @@ export function openTasks(rows: NoteItemRow[]): NoteItemRow[] {
         !r.deleted_by_human &&
         !r.id.endsWith("-t"),
     )
-    .map((r) => (r.locked ? { ...r, owner: null, due: null, done_when: null, due_date: null } : r))
+    // A person's line: kept as written, minus our placeholders ("(deadline?)" is not theirs).
+    .map((r) => (r.locked ? { ...r, text: stripPlaceholders(r.text), owner: null, due: null, done_when: null, due_date: null } : r))
     .sort(
       (a, b) => cmp(a.owner ?? "", b.owner ?? "") || a.position - b.position,
     );

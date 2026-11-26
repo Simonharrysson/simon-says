@@ -41,7 +41,7 @@ import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/m
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPendingSummaries, trySendMeetingSummaries } from "@/lib/summaries/send";
-import { applyTaskAnswers, markPlaceholders, parseTaskAnswers, taskMode, withDueDates } from "@/lib/notes/tasks";
+import { applyTaskAnswers, markPlaceholders, parseTaskAnswers, taskMode, withDueDates, type TaskAnswer } from "@/lib/notes/tasks";
 
 // Server-driven notes ticks (Task 10). One tick, under a per-meeting lease:
 //   assign tick_no to new segments → read notes tab → diff human edits → Claude (updateNotes)
@@ -1338,7 +1338,14 @@ export async function endMeeting(
  */
 export async function claimEnd(
   meetingId: string,
-  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: StaleBefore; deps?: Partial<TickDeps> } = {},
+  opts: {
+    abandon?: boolean;
+    endedAt?: Date;
+    staleBefore?: StaleBefore;
+    deps?: Partial<TickDeps>;
+    /** The Avsluta dialog's answers (concrete tasks), stored in the claim's own update (atomic). */
+    taskAnswers?: TaskAnswer[];
+  } = {},
 ): Promise<"claimed" | "noop" | "not_found"> {
   // `endedAt`: the presence end stamps when the last tab was heard from, not when the cron ran.
   const now = opts.endedAt ?? (opts.deps?.now ?? (() => new Date()))();
@@ -1350,6 +1357,7 @@ export async function claimEnd(
         end_status: opts.abandon ? "abandoned" : "done",
         end_attempts: 0,
         end_lease_until: null,
+        ...(opts.taskAnswers?.length ? { task_answers: opts.taskAnswers } : {}),
       })
       .eq("id", meetingId)
       .eq("status", "live");
@@ -1368,6 +1376,27 @@ export async function claimEnd(
     return exists ? "noop" : "not_found";
   }
   return "claimed";
+}
+
+/**
+ * Avsluta answers for a meeting that was already ending when they arrived (another tab, the org
+ * page or an automatic end claimed it first). Stored only while no final pass has started: status
+ * `ending` and no end attempt holding its lease; the pending (or cron-retried) final pass then
+ * writes them. False: the final pass is running or done, so they were not saved (say so).
+ */
+export async function saveLateTaskAnswers(meetingId: string, answers: TaskAnswer[], now: Date = new Date()): Promise<boolean> {
+  if (!answers.length) return true;
+  const saved = must(
+    "end: late answers",
+    await db()
+      .from("meetings")
+      .update({ task_answers: answers })
+      .eq("id", meetingId)
+      .eq("status", "ending")
+      .or(`end_lease_until.is.null,end_lease_until.lt.${now.toISOString()}`)
+      .select("id"),
+  ) as { id: string }[];
+  return saved.length > 0;
 }
 
 // ---------------------------------------------------------------------------------------------
