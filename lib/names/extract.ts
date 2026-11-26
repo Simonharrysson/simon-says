@@ -97,7 +97,8 @@ const close = (a: string, b: string) => Math.min(a.length, b.length) >= MIN_FUZZ
  * Snap a heard name to the org's known spelling: an exact match (any case), else a first name
  * that is the first name of exactly one known person, else exactly one known name (or first
  * name) at most one letter off. Otherwise the heard name stays. `exact`: the result is what was
- * heard (an exact match, or no snap); a first-name or one-letter snap is a guess (needs confirming).
+ * heard (an exact match, or no snap); a first-name or one-letter snap is a guess (needs confirming),
+ * and so is a heard first name that several known people share (kept as heard).
  */
 export function matchKnown(heard: string, known: string[]): { name: string; exact: boolean } {
   const h = norm(heard);
@@ -114,7 +115,8 @@ export function matchKnown(heard: string, known: string[]): { name: string; exac
   if (single) {
     const byFirst = unique(people.filter((p) => p.first === h));
     if (byFirst) return { name: byFirst, exact: false };
-    if (people.some((p) => p.first === h)) return kept; // ambiguous first name
+    // A first name more than one person has: kept as heard, but a guess (needs confirming).
+    if (people.some((p) => p.first === h)) return { name: heard, exact: false };
   }
   const fuzzy = unique(people.filter((p) => close(p.full, h) || (single && close(p.first, h))));
   return fuzzy ? { name: fuzzy, exact: false } : kept;

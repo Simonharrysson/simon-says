@@ -52,7 +52,8 @@ describe("matchKnown", () => {
   it("keeps the heard name when nothing or more than one candidate matches", () => {
     expect(matchKnown("Per", ["Eric"])).toEqual({ name: "Per", exact: true });
     expect(matchKnown("Anne", ["Anna", "Anni"])).toEqual({ name: "Anne", exact: true });
-    expect(matchKnown("Karin", ["Karin Ek", "Karin Berg"])).toEqual({ name: "Karin", exact: true });
+    // A first name two people share: kept as heard, but a guess (the live page shows "Karin?").
+    expect(matchKnown("Karin", ["Karin Ek", "Karin Berg"])).toEqual({ name: "Karin", exact: false });
     expect(matchKnown("Bo", ["Bob"])).toEqual({ name: "Bo", exact: true }); // too short for a fuzzy match
   });
 });

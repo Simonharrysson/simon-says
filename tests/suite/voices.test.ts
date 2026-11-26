@@ -62,11 +62,10 @@ describe("feature: voices (speaker naming per förening)", () => {
     expect(b.calls[0].text).not.toContain("Anna Berg");
   });
 
-  // Observation (pinned): an ambiguous first name is kept as heard and not flagged needsConfirm.
-  it("two people with the same first name in one förening: 'Anna' is not guessed", async () => {
+  it("two people with the same first name in one förening: 'Anna' is not guessed, and needs confirming", async () => {
     const { client } = scriptedClient({ names: heard([{ speaker: "S1-speaker_0", name: "Anna" }]) });
     const out = await extractNames([nameSeg("speaker_0", "Anna här.", 1000)], ["Anna Berg", "Anna Lund"], { client });
-    expect(out).toEqual([{ elSessionId: "sess-a", speakerLabel: "speaker_0", name: "Anna", needsConfirm: false }]);
+    expect(out).toEqual([{ elSessionId: "sess-a", speakerLabel: "speaker_0", name: "Anna", needsConfirm: true }]);
   });
 
   it("an unnamed voice stays unnamed (displayName null: 'Vem är detta?'); merged labels share one name", () => {
