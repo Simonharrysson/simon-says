@@ -37,6 +37,8 @@ export interface OneShotInput<T> {
   timeoutMs?: number;
   /** Default true: skip the call under KILL_SWITCH or once the daily dollar cap is reached. */
   checkSpend?: boolean;
+  /** output_config.effort; default "medium". */
+  effort?: "low" | "medium" | "high";
 }
 
 /** False under KILL_SWITCH or when today's Claude spend has reached GLOBAL_DAILY_USD. */
@@ -47,7 +49,7 @@ export async function claudeAllowed(): Promise<boolean> {
 }
 
 export function buildOneShotRequest(
-  input: Pick<OneShotInput<unknown>, "system" | "user" | "jsonSchema" | "maxTokens" | "pdfs">,
+  input: Pick<OneShotInput<unknown>, "system" | "user" | "jsonSchema" | "maxTokens" | "pdfs" | "effort">,
 ): BetaMessageStreamParams {
   const documents = (input.pdfs ?? []).map((data) => ({
     type: "document",
@@ -58,7 +60,7 @@ export function buildOneShotRequest(
     max_tokens: input.maxTokens ?? 4000,
     betas: [FALLBACK_BETA],
     fallbacks: "default",
-    output_config: { effort: "medium", format: { type: "json_schema", schema: input.jsonSchema } },
+    output_config: { effort: input.effort ?? "medium", format: { type: "json_schema", schema: input.jsonSchema } },
     system: input.system,
     messages: [{ role: "user", content: [...documents, { type: "text", text: input.user }] }],
   } as BetaMessageStreamParams;

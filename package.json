@@ -23,7 +23,8 @@
     "fake-el": "tsx scripts/fake-elevenlabs.ts",
     "check-names": "tsx --conditions=react-server scripts/check-names.ts",
     "check-picker-folder": "tsx --conditions=react-server scripts/check-picker-folder.ts",
-    "suite": "tsx --conditions=react-server scripts/suite.ts"
+    "suite": "tsx --conditions=react-server scripts/suite.ts",
+    "eval:goals": "tsx --conditions=react-server scripts/goals-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.13.0",

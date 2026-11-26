@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Panel, panelFootClass, panelIntroClass, panelPadClass } from "@/components/ui/Panel";
 import { formatDay, formatMonth, formatWeeks, matchesQuery } from "@/lib/dashboard/format";
 import type { Overview } from "@/lib/dashboard/overview";
+import type { GoalSuggestion } from "@/lib/history/digest-input";
+import { HistoryImport, type ImportPhase, type ImportResult } from "./HistoryImport";
 import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +24,8 @@ import { cn } from "@/lib/utils";
 export interface OverviewGoal {
   title: string;
   why: string | null;
+  /** Whole-history proposals only: the dated lines the goal rests on (never stored). */
+  evidence?: { date: string; text: string }[];
 }
 
 export type GoalsPhase =
@@ -29,13 +33,17 @@ export type GoalsPhase =
   | { phase: "proposing" }
   /** `warning`: the daily limit (429), which resets by itself. */
   | { phase: "error"; message: string; tone?: "warning" }
-  | { phase: "editor"; goals: OverviewGoal[]; explanation?: string };
+  | { phase: "editor"; goals: OverviewGoal[]; explanation?: string; suggestions?: GoalSuggestion[]; notice?: string }
+  /** "Läs in gamla protokoll" (todo #7). */
+  | { phase: "import"; initial?: ImportPhase };
 
 export interface OverviewViewProps {
   orgId: string;
   isAdmin: boolean;
   overview: Overview;
   goals: OverviewGoal[];
+  /** Imported old protocols (0032), shown under the goals. */
+  historyCount?: number;
   /** The overview could not be read: a banner instead of the panels. */
   loadError?: boolean;
   /** /design only: the goals panel's starting phase. */
@@ -52,7 +60,7 @@ const MAX_GOALS = 5;
 const rowClass = "border-t border-line px-6 py-3";
 const metaClass = "mt-0.5 text-sm text-ink-3";
 
-export function OverviewView({ orgId, isAdmin, overview, goals, loadError, initialGoalsPhase, now = new Date() }: OverviewViewProps) {
+export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0, loadError, initialGoalsPhase, now = new Date() }: OverviewViewProps) {
   if (loadError) {
     return (
       <Banner tone="danger" title="Översikten kunde inte laddas" live={false}>
@@ -68,7 +76,7 @@ export function OverviewView({ orgId, isAdmin, overview, goals, loadError, initi
           ? "Översikten fylls på när föreningen har haft sitt första möte med Simon Says."
           : `Bygger på ${plural(o.meetingCount, "avslutat möte", "avslutade möten")}${o.firstMeeting ? ` sedan ${formatDay(o.firstMeeting, now)}` : ""}. Testmöten räknas inte.`}
       </p>
-      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} initial={initialGoalsPhase} />
+      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} historyCount={historyCount} initial={initialGoalsPhase} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <OpenTasksPanel overview={o} now={now} />
@@ -91,14 +99,18 @@ function GoalsPanel({
   isAdmin,
   goals,
   meetingCount,
+  historyCount,
   initial,
 }: {
   orgId: string;
   isAdmin: boolean;
   goals: OverviewGoal[];
   meetingCount: number;
+  historyCount: number;
   initial?: GoalsPhase;
 }) {
+  const router = useRouter();
+  const [clearing, setClearing] = useState<"idle" | "confirm" | "busy">("idle");
   const [view, setView] = useState<GoalsPhase>(initial ?? { phase: "idle" });
   const proposeRef = useRef<HTMLButtonElement>(null);
   const wasEditor = useRef(false);
@@ -111,26 +123,58 @@ function GoalsPanel({
     }
   }, [view.phase]);
 
-  const propose = async () => {
+  const propose = async (notice?: string) => {
     setView({ phase: "proposing" });
     try {
       const res = await fetch(`/api/orgs/${orgId}/goals/propose`, { method: "POST" });
-      const json = (await res.json().catch(() => null)) as { goals?: OverviewGoal[]; explanation?: string; message?: string } | null;
+      const json = (await res.json().catch(() => null)) as
+        | { goals?: OverviewGoal[]; explanation?: string; message?: string; others?: GoalSuggestion[] }
+        | null;
       if (!res.ok || !json?.goals) {
         setView({
           phase: "error",
-          message: json?.message ?? "Simon Says kunde inte föreslå mål. Försök igen.",
+          message: `${notice ? `${notice} ` : ""}${json?.message ?? "Simon Says kunde inte föreslå mål. Försök igen."}`,
           ...(res.status === 429 ? { tone: "warning" as const } : {}),
         });
         return;
       }
-      setView({ phase: "editor", goals: json.goals, explanation: json.explanation });
+      setView({ phase: "editor", goals: json.goals, explanation: json.explanation, suggestions: json.others, notice });
     } catch {
       setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
     }
   };
 
-  const editing = view.phase === "editor";
+  const imported = (r: ImportResult) => {
+    router.refresh();
+    const parts = [
+      r.imported ? `${plural(r.imported, "protokoll", "protokoll")} inlästa.` : "",
+      r.failed ? `${plural(r.failed, "protokoll", "protokoll")} gick inte att läsa.` : "",
+      r.stopped ?? "",
+    ].filter(Boolean);
+    if (!r.imported) {
+      setView({ phase: "error", message: parts.join(" ") || "Inga protokoll lästes in." });
+      return;
+    }
+    void propose(parts.join(" "));
+  };
+
+  const clearHistory = async () => {
+    setClearing("busy");
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/history`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => null)) as { message?: string } | null;
+        setView({ phase: "error", message: json?.message ?? "De inlästa protokollen kunde inte tas bort. Försök igen." });
+      }
+      router.refresh();
+    } catch {
+      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
+    } finally {
+      setClearing("idle");
+    }
+  };
+
+  const editing = view.phase === "editor" || view.phase === "import";
   return (
     <Panel
       title="Mål"
@@ -143,18 +187,26 @@ function GoalsPanel({
                 Ändra
               </Button>
             )}
-            <Button ref={proposeRef} variant="secondary" size="sm" onClick={propose}>
+            {isAdmin && (
+              <Button variant="ghost" size="sm" onClick={() => setView({ phase: "import" })}>
+                Läs in gamla protokoll
+              </Button>
+            )}
+            <Button ref={proposeRef} variant="secondary" size="sm" onClick={() => propose()}>
               Föreslå mål
             </Button>
           </div>
         ) : undefined
       }
     >
-      {view.phase === "editor" ? (
+      {view.phase === "import" ? (
+        <HistoryImport orgId={orgId} initial={view.initial} onDone={imported} onCancel={() => setView({ phase: "idle" })} />
+      ) : view.phase === "editor" ? (
         <GoalsEditor
           orgId={orgId}
           initial={view.goals}
-          explanation={view.explanation}
+          explanation={[view.notice, view.explanation].filter(Boolean).join(" ")}
+          suggestions={view.suggestions}
           onCancel={() => setView({ phase: "idle" })}
           onSaved={() => setView({ phase: "idle" })}
         />
@@ -162,7 +214,10 @@ function GoalsPanel({
         <div className="flex flex-col gap-4">
           {view.phase === "proposing" && (
             <p className="text-sm text-ink-3" role="status" aria-live="polite">
-              <Spinner className="align-[-0.125em]" /> Simon Says läser besluten och punkterna från era möten …
+              <Spinner className="align-[-0.125em]" />{" "}
+              {historyCount > 0
+                ? "Simon Says läser hela historiken, gamla protokoll och era möten, i tidsordning … Det kan ta någon minut."
+                : "Simon Says läser besluten och punkterna från era möten …"}
             </p>
           )}
           {view.phase === "error" && <Banner tone={view.tone ?? "danger"}>{view.message}</Banner>}
@@ -191,6 +246,27 @@ function GoalsPanel({
               </EmptyState>
             )
           )}
+          {historyCount > 0 && view.phase !== "proposing" && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-ink-3">
+              <span>Förslagen bygger också på {plural(historyCount, "inläst gammalt protokoll", "inlästa gamla protokoll")}.</span>
+              {isAdmin &&
+                (clearing === "idle" ? (
+                  <Button variant="ghost" size="sm" onClick={() => setClearing("confirm")}>
+                    Ta bort dem
+                  </Button>
+                ) : (
+                  <>
+                    <span>Ta bort alla inlästa protokoll? Godkända mål ligger kvar.</span>
+                    <Button variant="danger-ghost" size="sm" loading={clearing === "busy"} onClick={clearHistory}>
+                      Ta bort
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={clearing === "busy"} onClick={() => setClearing("idle")}>
+                      Avbryt
+                    </Button>
+                  </>
+                ))}
+            </div>
+          )}
           {isAdmin && goals.length === 0 && view.phase !== "proposing" && (
             <div>
               <Button variant="ghost" size="sm" icon={<IconPlus size={16} />} onClick={() => setView({ phase: "editor", goals: [{ title: "", why: null }] })}>
@@ -208,18 +284,21 @@ function GoalsEditor({
   orgId,
   initial,
   explanation,
+  suggestions = [],
   onCancel,
   onSaved,
 }: {
   orgId: string;
   initial: OverviewGoal[];
   explanation?: string;
+  /** From the whole-history digest: goals with their status, the admin may add them. */
+  suggestions?: GoalSuggestion[];
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const router = useRouter();
   const uid = useId();
-  const [goals, setGoals] = useState(() => initial.map((g) => ({ title: g.title, why: g.why ?? "" })));
+  const [goals, setGoals] = useState(() => initial.map((g) => ({ title: g.title, why: g.why ?? "", evidence: g.evidence ?? [] })));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const titleId = (i: number) => `${uid}-goal-${i}`;
@@ -230,10 +309,16 @@ function GoalsEditor({
     focusSoon(goals.length > 1 ? titleId(Math.max(0, Math.min(i, goals.length - 2))) : `${uid}-add`);
   };
   const add = () => {
-    setGoals((gs) => [...gs, { title: "", why: "" }]);
+    setGoals((gs) => [...gs, { title: "", why: "", evidence: [] }]);
     focusSoon(titleId(goals.length));
   };
   const empty = goals.some((g) => !g.title.trim());
+  const [added, setAdded] = useState<Set<number>>(() => new Set());
+  const addSuggestion = (k: number) => {
+    const sg = suggestions[k];
+    setGoals((gs) => [...gs, { title: sg.title, why: sg.why ?? "", evidence: sg.evidence }]);
+    setAdded((a) => new Set(a).add(k));
+  };
 
   const save = async () => {
     if (empty) {
@@ -288,6 +373,7 @@ function GoalsEditor({
                 className="text-sm"
                 onChange={(e) => set(i, { why: e.target.value })}
               />
+              <Evidence lines={g.evidence} />
             </div>
             <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={18} />} onClick={() => remove(i)}>
               {`Ta bort mål ${i + 1}`}
@@ -302,6 +388,7 @@ function GoalsEditor({
           </Button>
         </div>
       )}
+      {suggestions.length > 0 && <SuggestionList suggestions={suggestions} added={added} full={goals.length >= MAX_GOALS} onAdd={addSuggestion} />}
       {message && <Banner tone="danger">{message}</Banner>}
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" onClick={save} loading={busy}>
@@ -311,6 +398,69 @@ function GoalsEditor({
           Avbryt
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** The dated protocol lines a proposed goal rests on (shown, never stored). */
+function Evidence({ lines }: { lines: { date: string; text: string }[] }) {
+  if (!lines.length) return null;
+  return (
+    <details className="text-sm text-ink-3">
+      <summary className="cursor-pointer select-none">Underlag ({lines.length})</summary>
+      <ul className="mt-1 flex flex-col gap-1 pl-4">
+        {lines.map((l, k) => (
+          <li key={k}>
+            <span className="tabular-nums">{l.date}</span> · {l.text}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+const STATUS_LABEL: Record<GoalSuggestion["status"], string> = {
+  current: "Pågår",
+  achieved: "Uppnått",
+  dropped: "Avbrutet",
+  stale: "Tystnat",
+};
+
+/** The digest's other goals (achieved, dropped, gone quiet, current beyond 5): context, addable. */
+function SuggestionList({
+  suggestions,
+  added,
+  full,
+  onAdd,
+}: {
+  suggestions: GoalSuggestion[];
+  added: Set<number>;
+  full: boolean;
+  onAdd: (k: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-4">
+      <h3 className="text-sm font-semibold">Övriga mål i historiken</h3>
+      <p className="text-sm text-ink-3">Nådda, avbrutna och sådana som inte nämnts på länge. De syns inte för andra om du inte lägger till dem.</p>
+      <ul className="flex flex-col">
+        {suggestions.map((sg, k) => (
+          <li key={`${k}-${sg.title}`} className="flex items-start gap-3 border-t border-line py-3 first:border-t-0">
+            <Badge tone={sg.status === "achieved" ? "success" : sg.status === "current" ? "info" : "neutral"}>{STATUS_LABEL[sg.status]}</Badge>
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="font-medium wrap-anywhere">{sg.title}</span>
+              <span className="text-sm text-ink-3">
+                {sg.why ? `${sg.why} ` : ""}Senast nämnt {sg.lastMentioned}.
+              </span>
+              <Evidence lines={sg.evidence} />
+            </span>
+            {!added.has(k) && !full && (
+              <Button variant="ghost" size="sm" icon={<IconPlus size={16} />} onClick={() => onAdd(k)}>
+                Lägg till
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

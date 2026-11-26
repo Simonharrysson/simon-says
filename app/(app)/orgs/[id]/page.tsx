@@ -5,6 +5,7 @@ import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import { OrgDetailView, type OrgTab } from "@/components/views/OrgDetailView";
 import { OverviewView } from "@/components/views/OverviewView";
 import { listGoals, loadOverview, type OrgGoal } from "@/lib/dashboard/load";
+import { historySummary } from "@/lib/history/store";
 import type { Overview } from "@/lib/dashboard/overview";
 import { isUuid } from "@/lib/db/ids";
 import { appCreatedFlags, sharedMeetingIds } from "@/lib/docs/access";
@@ -50,10 +51,24 @@ const EMPTY_OVERVIEW: Overview = {
 export const metadata: Metadata = { title: "Förening" };
 
 /** The Översikt tab's data, read with the user's client (RLS: members of this org only). */
-async function safeOverview(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<{ overview: Overview; goals: OrgGoal[] } | null> {
+async function safeOverview(
+  db: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  orgId: string,
+): Promise<{ overview: Overview; goals: OrgGoal[]; historyCount: number } | null> {
   try {
-    const [overview, goals] = await Promise.all([loadOverview(db, orgId), listGoals(db, orgId)]);
-    return { overview, goals };
+    const [overview, goals, historyCount] = await Promise.all([
+      loadOverview(db, orgId),
+      listGoals(db, orgId),
+      // Imported protocols (0032); a read failure only hides the line, never the overview.
+      historySummary(db, orgId).then(
+        (h) => h.count,
+        (err) => {
+          console.error("org page: history summary unavailable", (err as Error)?.message);
+          return 0;
+        },
+      ),
+    ]);
+    return { overview, goals, historyCount };
   } catch (err) {
     console.error("org page: overview unavailable", (err as Error)?.message);
     return null;
@@ -126,6 +141,7 @@ export default async function OrgPage({
               isAdmin={role === "admin"}
               overview={dashboard?.overview ?? EMPTY_OVERVIEW}
               goals={(dashboard?.goals ?? []).map((g) => ({ title: g.title, why: g.why }))}
+              historyCount={dashboard?.historyCount ?? 0}
               loadError={!dashboard}
             />
           ) : undefined,
