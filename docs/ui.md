@@ -140,7 +140,7 @@ stays in Drive when deleting.
 Two kinds of files live here:
 
 - **shadcn primitives**, lowercase (`button.tsx`, `badge.tsx`, `input.tsx`, `label.tsx`,
-  `native-select.tsx`, `checkbox.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`).
+  `native-select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`).
   They came from `npx shadcn add` (style `radix-nova`, Radix underneath) and were then restyled
   to the tokens. They are our code now: edit them, don't re-add them over the top.
 - **App components**, PascalCase, built on the primitives and keeping their old APIs.
@@ -150,6 +150,7 @@ Two kinds of files live here:
 | `Button`, `ButtonLink` (`button.tsx`) | shadcn Button | `variant`: primary · secondary · ghost · danger · danger-quiet · danger-ghost (list trash icons); shadcn's `default`/`outline`/`destructive`/`link` are aliases. `size` sm/md/lg; `loading` (spinner, aria-busy, disabled); `icon`; `iconOnly` (label visually hidden + title); `block`; `asChild`. `buttonVariants()` styles a plain `<a>`. |
 | `SubmitButton` | Button | `useFormStatus` → loading while its form's server action runs; `pendingLabel`. |
 | `Field`, `Check` (`Field.tsx`) | Label, Input, Checkbox | label/hint/error wired with `aria-describedby` / `aria-invalid`; `Check` = Radix checkbox with title + explanation (`checked` + `onCheckedChange`, or `name` + `defaultChecked` in a form: it posts `on` like a native checkbox). |
+| `Switch` (`switch.tsx`) | Radix Switch | On/off that takes effect at once (no Save button), 40×24, ink when on. Put it in a row whose label is the target (≥ 44px). For choices saved with a form, use `Check`. |
 | `NativeSelect` | shadcn NativeSelect | a real `<select>` drawn like an Input with a chevron (forms, `defaultValue`, keyboard and phone pickers unchanged). |
 | `Banner` | shadcn Alert | `tone` info/success/warning/danger/neutral, `title`, `action`, `loud` (the stopped live meeting); role alert for warning/danger, status otherwise (`live={false}` for static). |
 | `Badge` (`badge.tsx`) | shadcn Badge | label (pill), tinted by `tone`: neutral/live (red)/alert (static red, "needs you")/success/info. |
@@ -195,6 +196,13 @@ Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) rende
 presentational view in `components/views/` (`LandingView`, `LoginView`, `OrgsView`,
 `OrgDetailView`, `JoinView`, `AccountView`, `StatusView`). All `?fel=`/`?klart=` codes map in
 `lib/ui/messages.ts`.
+
+Mejlval (`EmailPrefsForm`, categories in `lib/email/categories.ts`): one `Switch` per kind of mail
+plus "Inga mejl alls", each saved on change with "Sparat" (`role="status"`); a failed save puts
+the switch back and says so. "Inga mejl alls" greys the categories out but keeps their values.
+Shown under Konto (`AccountView`) and on `/mejl` (`MailPrefsView`, the signed link in every mail,
+no login; opening it changes nothing). Gallery: `account`, `account-mail-off`,
+`account-mail-error`, `account-mail-save-fails`, `mail-link`, `mail-link-invalid`.
 
 Touch targets: every control is ≥ 44px on screens under 48rem (`max-md:min-h-11`; Button does it).
 Term: always **förening/föreningar** in copy (routes and codes keep `org`).
