@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
-import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { DriveAccessMissingError, getGoogleAuth, getImportGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { MANY_MEETINGS_MESSAGE } from "@/lib/history/doc-text";
 import { extractProtocol } from "@/lib/history/extract";
 import { MAX_DOC_CHARS, validDate } from "@/lib/history/extract-prompt";
@@ -10,6 +10,7 @@ import { IMPORT_RATE_LIMITED, OWN_DOC_MESSAGE } from "@/lib/history/limits";
 import { fileCreatedDate, googleStatus, readProtocolDoc } from "@/lib/history/read-doc";
 import { ownDocIds, saveImportedProtocol, transcriptTabIds } from "@/lib/history/store";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { checkTicket } from "@/lib/history/ticket";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!role) return fail("not_found", 404, "Föreningen finns inte.");
   if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
 
-  const body = (await request.json().catch(() => null)) as { docId?: unknown; section?: unknown; sections?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { docId?: unknown; section?: unknown; sections?: unknown; ticket?: unknown } | null;
   const docId = body?.docId;
   const section = body?.section ?? 0;
   const sections = body?.sections ?? 1;
@@ -54,6 +55,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     (sections as number) > 60
   ) {
     return fail("bad_request", 400, "Välj ett protokoll.");
+  }
+  // A ticket (from the folder browser's listing) means: read with the import's read access. It
+  // must be valid for exactly this file; without one, the sign-in grant (drive.file, the Picker).
+  const viaListing = body?.ticket !== undefined;
+  if (viaListing && !checkTicket(body?.ticket, user.id, id, docId)) {
+    return fail("stale_list", 400, "Listan är för gammal. Gå tillbaka och visa mötena i mapparna igen.");
   }
   const sec = section as number;
   const secs = sections as number;
@@ -74,9 +81,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let auth;
   let doc: Awaited<ReturnType<typeof readProtocolDoc>>;
   try {
-    auth = await getGoogleAuth(user.id, { driveReadonly: true });
+    auth = viaListing ? await getImportGoogleAuth(user.id) : await getGoogleAuth(user.id);
     doc = await readProtocolDoc(auth, docId, { skipTabIds });
   } catch (err) {
+    if (err instanceof DriveAccessMissingError) return fail("google_auth_lost", 401, "Simon Says läsrättighet till din Drive har gått ut. Ge åtkomst igen.");
     if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
     const status = googleStatus(err);
     if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa dokumentet. Kontrollera att du fortfarande har åtkomst till det i Google Drive och välj det igen.");

@@ -17,8 +17,10 @@ const m = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
 vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => adminClient() }));
 vi.mock("@/lib/google/client", () => ({
-  getGoogleAuth: async () => ({}),
+  getGoogleAuth: async () => ({ grant: "sign-in" }),
+  getImportGoogleAuth: async () => ({ grant: "import" }),
   GoogleAuthLostError: class extends Error {},
+  DriveAccessMissingError: class extends Error {},
 }));
 vi.mock("@/lib/history/read-doc", () => ({
   readProtocolDoc: m.readProtocolDoc,
@@ -107,6 +109,23 @@ describe.skipIf(!hasLocalSupabase)("history routes", () => {
     expect(json.totalUsd).toBeGreaterThan(0);
     expect(m.extractProtocol).not.toHaveBeenCalled();
     expect((await estimate(req("https://x.test/e", { docIds: ["../x"] }), ctx(orgId))).status).toBe(400);
+  });
+
+  it("the read access is used only for files with a valid ticket from the admin's listing", async () => {
+    m.db = admin.db;
+    const { fileTicket } = await import("@/lib/history/ticket");
+    const t = fileTicket(admin.id, orgId, DOC);
+    expect((await estimate(req("https://x.test/e", { docIds: [DOC], tickets: { [DOC]: t } }), ctx(orgId))).status).toBe(200);
+    expect(m.readProtocolDoc.mock.calls.at(-1)![0]).toEqual({ grant: "import" });
+    // Without tickets (the Picker): the sign-in grant.
+    await estimate(req("https://x.test/e", { docIds: [DOC] }), ctx(orgId));
+    expect(m.readProtocolDoc.mock.calls.at(-1)![0]).toEqual({ grant: "sign-in" });
+    // Another file's ticket, another user's, or a forged one: refused before any read.
+    const calls = m.readProtocolDoc.mock.calls.length;
+    expect((await estimate(req("https://x.test/e", { docIds: [`${DOC}x`], tickets: { [`${DOC}x`]: t } }), ctx(orgId))).status).toBe(400);
+    expect((await estimate(req("https://x.test/e", { docIds: [DOC], tickets: { [DOC]: fileTicket(member.id, orgId, DOC) } }), ctx(orgId))).status).toBe(400);
+    expect((await importOne(req("https://x.test/i", { docId: DOC, ticket: "1.forged" }), ctx(orgId))).status).toBe(400);
+    expect(m.readProtocolDoc.mock.calls.length).toBe(calls);
   });
 
   it("import: stores only the cleaned items (never the text), falls back to the file date", async () => {

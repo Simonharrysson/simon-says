@@ -2,13 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
-import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { DriveAccessMissingError, getGoogleAuth, getImportGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { estimateImport } from "@/lib/history/cost";
 import { MANY_MEETINGS_MESSAGE } from "@/lib/history/doc-text";
 import { MAX_DOC_CHARS } from "@/lib/history/extract-prompt";
 import { MAX_IMPORT_DOCS, OWN_DOC_MESSAGE } from "@/lib/history/limits";
 import { googleStatus, readProtocolDoc } from "@/lib/history/read-doc";
 import { historySummary, ownDocIds, transcriptTabIds } from "@/lib/history/store";
+import { checkTicket } from "@/lib/history/ticket";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -40,11 +41,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!role) return fail("not_found", 404, "Föreningen finns inte.");
   if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
 
-  const body = (await request.json().catch(() => null)) as { docIds?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { docIds?: unknown; tickets?: unknown } | null;
   const raw = body?.docIds;
   const docIds = Array.isArray(raw) ? [...new Set(raw)] : [];
   if (!docIds.length || docIds.length > MAX_IMPORT_DOCS || !docIds.every((d): d is string => typeof d === "string" && DRIVE_ID.test(d))) {
     return fail("bad_request", 400, `Välj mellan 1 och ${MAX_IMPORT_DOCS} protokoll.`);
+  }
+  // From the folder browser: every file needs the ticket its listing signed, and is read with the
+  // import's read access. Without tickets (the Picker): the sign-in grant (drive.file).
+  const tickets = body?.tickets && typeof body.tickets === "object" ? (body.tickets as Record<string, unknown>) : null;
+  if (tickets && !docIds.every((d) => checkTicket(tickets[d], user.id, id, d))) {
+    return fail("stale_list", 400, "Listan är för gammal. Gå tillbaka och visa mötena i mapparna igen.");
   }
 
   let own: Set<string>;
@@ -70,7 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const docs: EstimateDoc[] = [];
   const chars: number[] = [];
   try {
-    const auth = await getGoogleAuth(user.id, { driveReadonly: true });
+    const auth = tickets ? await getImportGoogleAuth(user.id) : await getGoogleAuth(user.id);
     for (let i = 0; i < docIds.length; i += PARALLEL) {
       const part = await Promise.all(
         docIds.slice(i, i + PARALLEL).map(async (docId): Promise<{ doc: EstimateDoc; chars: number[] }> => {
@@ -92,6 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     }
   } catch (err) {
+    if (err instanceof DriveAccessMissingError) return fail("needs_drive_access", 403, "Simon Says läsrättighet till din Drive har gått ut. Ge åtkomst igen.");
     if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
     const status = googleStatus(err);
     if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa ett av dokumenten. Kontrollera att du fortfarande har åtkomst till det i Google Drive och välj det igen.");
