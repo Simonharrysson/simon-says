@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useState, type ReactNode } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 
@@ -31,10 +31,28 @@ export const LiveDialog = forwardRef<
   }
 >(function LiveDialog({ id, title, children, stayLabel, confirmLabel, confirmVariant = "danger", stayVariant = "ghost", confirmIcon, onConfirm }, ref) {
   const [open, setOpen] = useState(false);
-  useImperativeHandle(ref, () => ({ showModal: () => setOpen(true), close: () => setOpen(false) }), []);
+  // The button that opened it lives outside the dialog (no DialogTrigger): focus goes back there.
+  const opener = useRef<HTMLElement | null>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      showModal: () => {
+        opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setOpen(true);
+      },
+      close: () => setOpen(false),
+    }),
+    [],
+  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent id={id}>
+      <DialogContent
+        id={id}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          opener.current?.focus();
+        }}
+      >
         <DialogBody>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{children}</DialogDescription>

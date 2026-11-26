@@ -18,7 +18,7 @@ export const alertVariants = cva(
         neutral: "bg-surface shadow-[inset_0_0_0_1px_var(--line)] [--tone:var(--ink-2)]",
       },
       // The stopped live meeting: the loudest thing on the page.
-      loud: { true: "px-5 py-4 text-base shadow-[inset_0_0_0_2px_var(--red)]", false: "" },
+      loud: { true: "px-6 py-4 text-base shadow-[inset_0_0_0_2px_var(--red)]", false: "" },
     },
     defaultVariants: { tone: "info", loud: false },
   },

@@ -56,7 +56,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
       )}
 
       <Panel title="Skapa en förening" titleId="create-title">
-        <form action={createOrg} className="flex flex-col gap-4">
+        <form action={createOrg} className="flex flex-col gap-8">
           <div className="flex items-end gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch">
             <Field
               id="org-name"

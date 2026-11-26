@@ -2,7 +2,7 @@
 
 import { useId, useState, type ReactNode } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "./button";
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "./dialog";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from "./dialog";
 import { Input } from "./input";
 import { Label } from "./label";
 import { SubmitButton } from "./SubmitButton";
@@ -57,57 +57,49 @@ export function ConfirmAction({
   };
 
   return (
-    <>
-      <Button
-        variant={triggerVariant}
-        size={triggerSize}
-        icon={triggerIcon}
-        iconOnly={triggerIconOnly}
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-      >
-        {trigger}
-      </Button>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent {...(description ? {} : { "aria-describedby": undefined })}>
-          <form action={action}>
-            {Object.entries(hidden).map(([name, value]) => (
-              <input key={name} type="hidden" name={name} value={value} />
-            ))}
-            <DialogBody>
-              <DialogTitle>{title}</DialogTitle>
-              {description && (
-                <DialogDescription asChild>
-                  <div>{description}</div>
-                </DialogDescription>
-              )}
-              {requireText && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor={`${id}-confirm`}>{requireText.label}</Label>
-                  <Input
-                    id={`${id}-confirm`}
-                    name={requireText.name}
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={typed}
-                    onChange={(event) => setTyped(event.target.value)}
-                    required
-                  />
-                </div>
-              )}
-            </DialogBody>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                Avbryt
-              </Button>
-              <SubmitButton variant={confirmVariant} disabled={!matches} pendingLabel={pendingLabel}>
-                {confirmLabel}
-              </SubmitButton>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant={triggerVariant} size={triggerSize} icon={triggerIcon} iconOnly={triggerIconOnly} disabled={disabled}>
+          {trigger}
+        </Button>
+      </DialogTrigger>
+      <DialogContent {...(description ? {} : { "aria-describedby": undefined })}>
+        <form action={action}>
+          {Object.entries(hidden).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))}
+          <DialogBody>
+            <DialogTitle>{title}</DialogTitle>
+            {description && (
+              <DialogDescription asChild>
+                <div>{description}</div>
+              </DialogDescription>
+            )}
+            {requireText && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`${id}-confirm`}>{requireText.label}</Label>
+                <Input
+                  id={`${id}-confirm`}
+                  name={requireText.name}
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={typed}
+                  onChange={(event) => setTyped(event.target.value)}
+                  required
+                />
+              </div>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Avbryt
+            </Button>
+            <SubmitButton variant={confirmVariant} disabled={!matches} pendingLabel={pendingLabel}>
+              {confirmLabel}
+            </SubmitButton>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * red on hover/focus). The shadcn names (`default`, `outline`, `destructive`, `link`) are aliases.
  * Phones (< 48rem): every button is a 44px target.
  */
-export const buttonVariants = cva(
+const buttonCva = cva(
   [
     "relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 min-h-10 max-md:min-h-11",
     "text-sm leading-none font-medium whitespace-nowrap no-underline select-none hover:no-underline",
@@ -49,7 +49,10 @@ export const buttonVariants = cva(
   },
 );
 
-type Variants = VariantProps<typeof buttonVariants>;
+type Variants = VariantProps<typeof buttonCva>;
+
+/** The button classes, merged (so a size's padding replaces the base padding), for links styled as buttons. */
+export const buttonVariants = (props?: Variants) => cn(buttonCva(props));
 export type ButtonVariant = NonNullable<Variants["variant"]>;
 export type ButtonSize = NonNullable<Variants["size"]>;
 

@@ -116,7 +116,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
             <p className="flex flex-wrap items-baseline gap-[0.55em]">
               <span className={docBoxClass} /> Erik: skicka budgeten till kassören (ons)
             </p>
-            <p className="-mx-2 flex flex-wrap items-baseline gap-[0.55em] rounded-[3px] bg-[#e8f0fe] px-2 py-[0.2rem] [&_ins]:text-[#1a56c4] [&_ins]:no-underline">
+            <p className="flex flex-wrap items-baseline gap-[0.55em] rounded-[3px] bg-[#e8f0fe] px-2 py-[0.2rem] [&_ins]:text-[#1a56c4] [&_ins]:no-underline">
               <span className={docBoxClass} /> Anna: boka Kårallen <ins>— helst lilla salen</ins>
               <span className="inline-block h-[1.1em] w-[2px] translate-y-[0.18em] animate-caret bg-[#1a56c4]" />
             </p>

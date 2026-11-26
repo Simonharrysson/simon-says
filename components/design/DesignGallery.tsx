@@ -580,7 +580,7 @@ function Primitives() {
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-8">
           <Field id="d-name" label="Namn" placeholder="t.ex. LiU AI Society" hint="Högst 100 tecken." />
           <Field id="d-err" label="Namn" defaultValue="" error="Ange ett namn (högst 100 tecken)." />
           <Field id="d-dis" label="Inaktivt fält" defaultValue="Går inte att ändra" disabled />
@@ -596,7 +596,7 @@ function Primitives() {
           </Check>
           <CopyField id="d-copy" value="https://simonsays.harrysson.co/join/Xk3fQ9pLm2" label="Inbjudningslänk" />
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-8">
           <div className="flex flex-wrap items-center gap-3">
             <Badge tone="live">Pågår</Badge>
             <Badge tone="success">Klart</Badge>
