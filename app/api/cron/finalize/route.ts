@@ -1,4 +1,5 @@
 import { verifyCron } from "@/lib/cron";
+import { deleteExpiredImportTokens } from "@/lib/google/client";
 import { finalizeSweep } from "@/lib/meetings/tick";
 
 export const dynamic = "force-dynamic";
@@ -7,11 +8,16 @@ export const maxDuration = 300;
 
 /**
  * Vercel Cron, every 5 min (`Authorization: Bearer $CRON_SECRET`): close expired ElevenLabs
- * sessions, end meetings no tab is connected to (presence) and stuck ones, resume paused Docs, tick leftover segments.
+ * sessions, end meetings no tab is connected to (presence) and stuck ones, resume paused Docs, tick leftover segments; delete import read grants older than 24 h.
  */
 export async function GET(request: Request) {
   if (!verifyCron(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
   const summary = await finalizeSweep();
   console.log(`cron finalize: ${JSON.stringify(summary)}`);
+  // The protocol import's read access lives 24 h (0034); never let this break the sweep.
+  await deleteExpiredImportTokens().then(
+    (n) => n && console.log(`cron finalize: ${n} expired import grants deleted`),
+    (err) => console.error(`cron finalize: import grants: ${(err as Error).message}`.slice(0, 200)),
+  );
   return Response.json(summary);
 }

@@ -3,7 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { getEnv } from "@/lib/env";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { GOOGLE_SCOPES, hasDriveReadonly } from "./scopes";
+import { hasDriveReadonly } from "./scopes";
 
 /** The user's Google grant is gone (never stored, revoked, or expired): they must sign in again. */
 export class GoogleAuthLostError extends Error {
@@ -40,21 +40,6 @@ export async function hasGoogleToken(userId: string): Promise<boolean> {
   return data !== null;
 }
 
-/**
- * The scopes of the user's stored grant (as Google reported them when it was stored), or null
- * when no token is stored. drive.readonly is in it only after the admin's incremental consent
- * for the protocol import; a later plain sign-in replaces the token with a drive.file-only one.
- */
-export async function storedGoogleScope(userId: string): Promise<string | null> {
-  const { data, error } = await supabaseAdmin()
-    .from("google_tokens")
-    .select("scope")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) throw new Error(`storedGoogleScope: ${error.message}`);
-  return (data?.scope as string | undefined) ?? null;
-}
-
 function isInvalidGrant(err: unknown): boolean {
   const e = err as { message?: unknown; response?: { data?: { error?: unknown } } };
   return (
@@ -63,47 +48,15 @@ function isInvalidGrant(err: unknown): boolean {
   );
 }
 
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
-
-/**
- * An access token for only the sign-in scopes (drive.file), from a refresh token that also holds
- * drive.readonly: Google lets a refresh ask for a subset of the granted scopes. Null when Google
- * refuses the narrowing (the caller then falls back to the full token); invalid_grant throws.
- */
-async function narrowAccessToken(userId: string, refreshToken: string): Promise<{ access_token: string; expiry_date: number } | null> {
-  const env = getEnv();
-  const res = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      scope: GOOGLE_SCOPES.join(" "),
-    }),
-  });
-  const body = (await res.json().catch(() => null)) as { access_token?: unknown; expires_in?: unknown; error?: unknown } | null;
-  if (body?.error === "invalid_grant") throw new GoogleAuthLostError(userId, "invalid_grant");
-  if (!res.ok || typeof body?.access_token !== "string") {
-    console.warn(`google: narrowing the token failed (${res.status} ${String(body?.error ?? "")})`.slice(0, 200));
-    return null;
-  }
-  const seconds = typeof body.expires_in === "number" ? body.expires_in : 3600;
-  return { access_token: body.access_token, expiry_date: Date.now() + seconds * 1000 };
-}
-
 /**
  * An OAuth2Client for the user, with a fresh access token already fetched (so a dead
  * refresh token surfaces here, not halfway through a Docs write).
  * Throws GoogleAuthLostError on a missing token or `invalid_grant`.
  *
- * An admin who gave drive.readonly for the protocol import has one refresh token for both
- * scopes. Everything except that import (`driveReadonly: true`) gets access tokens narrowed to
- * the sign-in scopes, so the rest of the app (agenda candidates, folder checks, the Picker's
- * token) sees exactly what a drive.file grant sees and never offers a file it cannot write.
+ * This is the sign-in token (drive.file). Fail closed: a stored token whose scope includes
+ * drive.readonly is never used here (only the import's separate token may carry it).
  */
-export async function getGoogleAuth(userId: string, opts: { driveReadonly?: boolean } = {}): Promise<OAuth2Client> {
+export async function getGoogleAuth(userId: string): Promise<OAuth2Client> {
   const { data, error } = await supabaseAdmin()
     .from("google_tokens")
     .select("refresh_token_enc, scope")
@@ -111,23 +64,13 @@ export async function getGoogleAuth(userId: string, opts: { driveReadonly?: bool
     .maybeSingle();
   if (error) throw new Error(`getGoogleAuth: ${error.message}`);
   if (!data) throw new GoogleAuthLostError(userId, "no stored refresh token");
+  if (hasDriveReadonly(data.scope as string | undefined)) throw new GoogleAuthLostError(userId, "stored token is wider than drive.file");
+  return clientFor(userId, decrypt(data.refresh_token_enc as string));
+}
 
+async function clientFor(userId: string, refreshToken: string): Promise<OAuth2Client> {
   const env = getEnv();
   const client = new OAuth2Client({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET });
-  const refreshToken = decrypt(data.refresh_token_enc as string);
-  if (hasDriveReadonly(data.scope as string | undefined) && !opts.driveReadonly) {
-    const narrow = await narrowAccessToken(userId, refreshToken);
-    if (narrow) {
-      // No refresh token on this client: when the access token expires, it narrows again.
-      client.refreshHandler = async () => {
-        const next = await narrowAccessToken(userId, refreshToken);
-        if (!next) throw new Error("google: narrowing the token failed");
-        return next;
-      };
-      client.setCredentials(narrow);
-      return client;
-    }
-  }
   client.setCredentials({ refresh_token: refreshToken });
   try {
     await client.getAccessToken();
@@ -136,4 +79,81 @@ export async function getGoogleAuth(userId: string, opts: { driveReadonly?: bool
     throw err;
   }
   return client;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The protocol import's read access (drive.readonly, incremental consent). Its refresh token is
+// kept apart from the sign-in token in google_import_tokens (0034), used only by the import's
+// routes, and for 24 hours at most. The sign-in token keeps its own scopes (Google never widens
+// an issued refresh token), so nothing else ever runs with drive.readonly.
+
+/** How long the import's read access is kept. */
+export const IMPORT_TOKEN_HOURS = 24;
+
+/** The admin has no (live) read access for the import: ask for it again. */
+export class DriveAccessMissingError extends Error {
+  constructor(readonly userId: string) {
+    super(`no drive.readonly import grant for user ${userId}`);
+    this.name = "DriveAccessMissingError";
+  }
+}
+
+const importCutoff = () => new Date(Date.now() - IMPORT_TOKEN_HOURS * 3600_000).toISOString();
+
+export async function storeImportToken(userId: string, refreshToken: string, scope: string): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("google_import_tokens")
+    .upsert({ user_id: userId, refresh_token_enc: encrypt(refreshToken), scope, created_at: new Date().toISOString() });
+  if (error) throw new Error(`storeImportToken: ${error.message}`);
+}
+
+/**
+ * "Ta bort läsåtkomst": deletes OUR copy only. Not revoked at Google: revoking any token of a
+ * grant revokes the user's whole grant to the app, sign-in token (drive.file) included.
+ */
+export async function deleteImportToken(userId: string): Promise<void> {
+  const { error } = await supabaseAdmin().from("google_import_tokens").delete().eq("user_id", userId);
+  if (error) throw new Error(`deleteImportToken: ${error.message}`);
+}
+
+/** Cron: removes import tokens older than 24 h. Returns how many. */
+export async function deleteExpiredImportTokens(): Promise<number> {
+  const { data, error } = await supabaseAdmin().from("google_import_tokens").delete().lt("created_at", importCutoff()).select("user_id");
+  if (error) throw new Error(`deleteExpiredImportTokens: ${error.message}`);
+  return (data ?? []).length;
+}
+
+async function importRow(userId: string): Promise<{ refresh_token_enc: string; scope: string } | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("google_import_tokens")
+    .select("refresh_token_enc, scope")
+    .eq("user_id", userId)
+    .gt("created_at", importCutoff())
+    .maybeSingle();
+  if (error) throw new Error(`importRow: ${error.message}`);
+  const row = data as { refresh_token_enc: string; scope: string } | null;
+  return row && hasDriveReadonly(row.scope) ? row : null;
+}
+
+/** True when the user has live read access for the import (stored, under 24 h, drive.readonly). */
+export async function hasImportAccess(userId: string): Promise<boolean> {
+  return (await importRow(userId)) !== null;
+}
+
+/**
+ * The import's client (drive.readonly). Only for the import's routes. A missing, expired or
+ * revoked grant is DriveAccessMissingError (a revoked one is deleted too).
+ */
+export async function getImportGoogleAuth(userId: string): Promise<OAuth2Client> {
+  const row = await importRow(userId);
+  if (!row) throw new DriveAccessMissingError(userId);
+  try {
+    return await clientFor(userId, decrypt(row.refresh_token_enc));
+  } catch (err) {
+    if (err instanceof GoogleAuthLostError) {
+      await deleteImportToken(userId).catch(() => undefined);
+      throw new DriveAccessMissingError(userId);
+    }
+    throw err;
+  }
 }

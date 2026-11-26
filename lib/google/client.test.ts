@@ -3,17 +3,35 @@ import { useTestEnv } from "@/test/env";
 
 const row = vi.hoisted(() => ({ current: null as null | { refresh_token_enc: string; scope?: string } }));
 const upserts = vi.hoisted(() => [] as unknown[]);
+const calls = vi.hoisted(() => ({ tables: [] as string[], gt: [] as [string, string][], deletes: [] as string[] }));
 const getAccessToken = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: row.current, error: null }) }) }),
-      upsert: async (value: unknown) => {
-        upserts.push(value);
-        return { error: null };
-      },
-    }),
+    from: (table: string) => {
+      calls.tables.push(table);
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: row.current, error: null }),
+            gt: (col: string, v: string) => {
+              calls.gt.push([col, v]);
+              return { maybeSingle: async () => ({ data: row.current, error: null }) };
+            },
+          }),
+        }),
+        upsert: async (value: unknown) => {
+          upserts.push(value);
+          return { error: null };
+        },
+        delete: () => ({
+          eq: async () => {
+            calls.deletes.push(table);
+            return { error: null };
+          },
+        }),
+      };
+    },
   }),
 }));
 
@@ -31,10 +49,13 @@ beforeAll(useTestEnv);
 beforeEach(() => {
   row.current = null;
   upserts.length = 0;
+  calls.tables.length = 0;
+  calls.gt.length = 0;
+  calls.deletes.length = 0;
   getAccessToken.mockReset();
 });
 
-const { getGoogleAuth, GoogleAuthLostError, storeGoogleToken } = await import("./client");
+const { getGoogleAuth, GoogleAuthLostError, storeGoogleToken, hasImportAccess, getImportGoogleAuth, DriveAccessMissingError, storeImportToken } = await import("./client");
 const { encrypt } = await import("@/lib/crypto");
 
 describe("storeGoogleToken", () => {
@@ -74,53 +95,58 @@ describe("getGoogleAuth", () => {
   });
 });
 
-describe("getGoogleAuth with a drive.readonly grant (the protocol import's consent)", () => {
+describe("the import's separate drive.readonly grant", () => {
   const READONLY = "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly";
-  const calls: URLSearchParams[] = [];
-  let reply: () => Response;
-  beforeEach(() => {
-    calls.length = 0;
-    reply = () => Response.json({ access_token: "ya29.narrow", expires_in: 3599 });
-    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
-      calls.push(new URLSearchParams(String(init.body)));
-      return reply();
-    });
-  });
 
-  it("everywhere but the import: an access token narrowed to the sign-in scopes, no refresh token on the client", async () => {
+  it("fails closed: a sign-in token whose scope includes drive.readonly is never used", async () => {
     row.current = { refresh_token_enc: encrypt("1//both"), scope: READONLY };
-    const client = (await getGoogleAuth("u1")) as unknown as { credentials: { access_token?: string; refresh_token?: string }; refreshHandler?: unknown };
-    expect(calls[0].get("scope")).toBe("openid email profile https://www.googleapis.com/auth/drive.file");
-    expect(calls[0].get("refresh_token")).toBe("1//both");
-    expect(client.credentials.access_token).toBe("ya29.narrow");
-    expect(client.credentials.refresh_token).toBeUndefined();
-    expect(typeof client.refreshHandler).toBe("function");
+    await expect(getGoogleAuth("u1")).rejects.toBeInstanceOf(GoogleAuthLostError);
     expect(getAccessToken).not.toHaveBeenCalled();
   });
 
-  it("the import asks for the full grant", async () => {
-    row.current = { refresh_token_enc: encrypt("1//both"), scope: READONLY };
-    getAccessToken.mockResolvedValue({ token: "ya29.full" });
-    const client = (await getGoogleAuth("u1", { driveReadonly: true })) as unknown as { credentials: unknown };
-    expect(calls).toHaveLength(0);
-    expect(client.credentials).toEqual({ refresh_token: "1//both" });
-  });
-
-  it("a revoked grant is GoogleAuthLostError; a refused narrowing falls back to the full token", async () => {
-    row.current = { refresh_token_enc: encrypt("1//both"), scope: READONLY };
-    reply = () => Response.json({ error: "invalid_grant" }, { status: 400 });
-    await expect(getGoogleAuth("u1")).rejects.toBeInstanceOf(GoogleAuthLostError);
-    reply = () => Response.json({ error: "invalid_scope" }, { status: 400 });
-    getAccessToken.mockResolvedValue({ token: "ya29.full" });
-    const client = (await getGoogleAuth("u1")) as unknown as { credentials: unknown };
-    expect(client.credentials).toEqual({ refresh_token: "1//both" });
-  });
-
-  it("a drive.file-only grant is unchanged (no narrowing call)", async () => {
+  it("the sign-in token (drive.file) works as before", async () => {
     row.current = { refresh_token_enc: encrypt("1//ok"), scope: "openid https://www.googleapis.com/auth/drive.file" };
     getAccessToken.mockResolvedValue({ token: "ya29" });
-    await getGoogleAuth("u1");
-    expect(calls).toHaveLength(0);
+    const client = (await getGoogleAuth("u1")) as unknown as { credentials: unknown };
+    expect(client.credentials).toEqual({ refresh_token: "1//ok" });
+  });
+});
+
+describe("getImportGoogleAuth / hasImportAccess (google_import_tokens)", () => {
+  const READONLY = "openid https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly";
+
+  it("stores the import token encrypted in its own table", async () => {
+    await storeImportToken("u1", "1//import", READONLY);
+    expect(calls.tables).toEqual(["google_import_tokens"]);
+    const v = upserts[0] as { refresh_token_enc: string; scope: string };
+    expect(v.refresh_token_enc).not.toContain("1//import");
+    expect(v.scope).toBe(READONLY);
+  });
+
+  it("reads only the import table, only rows younger than 24 h, only with drive.readonly", async () => {
+    row.current = { refresh_token_enc: encrypt("1//import"), scope: READONLY };
+    expect(await hasImportAccess("u1")).toBe(true);
+    expect(calls.tables).toEqual(["google_import_tokens"]);
+    const [col, cutoff] = calls.gt[0];
+    expect(col).toBe("created_at");
+    expect(Math.abs(Date.parse(cutoff) - (Date.now() - 24 * 3600_000))).toBeLessThan(5000);
+    row.current = { refresh_token_enc: encrypt("1//import"), scope: "openid https://www.googleapis.com/auth/drive.file" };
+    expect(await hasImportAccess("u1")).toBe(false);
+  });
+
+  it("none or expired: DriveAccessMissingError; revoked: deleted, DriveAccessMissingError", async () => {
+    await expect(getImportGoogleAuth("u1")).rejects.toBeInstanceOf(DriveAccessMissingError);
+    row.current = { refresh_token_enc: encrypt("1//import"), scope: READONLY };
+    getAccessToken.mockRejectedValue({ response: { data: { error: "invalid_grant" } } });
+    await expect(getImportGoogleAuth("u1")).rejects.toBeInstanceOf(DriveAccessMissingError);
+    expect(calls.deletes).toEqual(["google_import_tokens"]);
+  });
+
+  it("live: a client with the import token", async () => {
+    row.current = { refresh_token_enc: encrypt("1//import"), scope: READONLY };
+    getAccessToken.mockResolvedValue({ token: "ya29" });
+    const client = (await getImportGoogleAuth("u1")) as unknown as { credentials: unknown };
+    expect(client.credentials).toEqual({ refresh_token: "1//import" });
   });
 });
 
