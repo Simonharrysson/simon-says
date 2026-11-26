@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { joinOrgAction } from "@/app/(app)/orgs/actions";
-import { signInWithGoogle } from "@/app/login/actions";
+import { signInWithGoogle, switchAccount } from "@/app/login/actions";
 import { JoinView } from "@/components/views/JoinView";
 import { PublicShell } from "@/components/views/PublicShell";
 import { inviteOrgName } from "@/lib/db/orgs";
@@ -30,7 +30,7 @@ export default async function JoinPage({ params }: { params: Promise<{ code: str
   const name = CODE.test(code) ? await inviteOrgName(db, code) : null;
   return (
     <PublicShell signedIn>
-      {name ? <JoinView state="ready" code={code} orgName={name} join={joinOrgAction} /> : <JoinView state="invalid" />}
+      {name ? <JoinView state="ready" code={code} orgName={name} join={joinOrgAction} email={user.email} switchAccount={switchAccount} /> : <JoinView state="invalid" />}
     </PublicShell>
   );
 }
