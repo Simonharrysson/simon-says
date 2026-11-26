@@ -257,11 +257,15 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
     const firstNumbered = Math.min(...numbered.map(([, l]) => l.first));
     // Parked N6: except a mixed agenda (items 1–3 numbered, 4–6 bulleted): a bulleted list at the
     // numbered items' level that starts right after the numbered list ends (it never resumes),
-    // nothing but empty paragraphs between, holds items. Deeper, or under an item's own text → sub-points.
+    // nothing but empty paragraphs between, and no numbered list at that level after it (a new
+    // "4." list after the bullets: they are item 3's sub-points), holds items. Deeper, or under an
+    // item's own text → sub-points.
     const nothingBetween = (from: number, to: number) =>
       !region.some((p) => p.start >= from && p.start < to && !isEmpty(p)) && !(tab.tables ?? []).some((t) => t.start >= from && t.start < to);
+    const numberedAfter = (l: { first: number; minLevel: number }) =>
+      [...lists].some(([id, a]) => a.first > l.first && a.minLevel === l.minLevel && isNumberedGlyph(listGlyph(tab, id, a.minLevel)));
     const continuesNumbered = (l: { first: number; minLevel: number }) =>
-      numbered.some(([, a]) => a.minLevel === l.minLevel && a.last <= l.first && nothingBetween(a.last, l.first));
+      !numberedAfter(l) && numbered.some(([, a]) => a.minLevel === l.minLevel && a.last <= l.first && nothingBetween(a.last, l.first));
     const subLists = new Set(
       [...lists]
         .filter(([id, l]) => l.first < boundary && l.first > firstNumbered && listGlyph(tab, id, l.minLevel) === "BULLET" && !continuesNumbered(l))

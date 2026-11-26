@@ -384,6 +384,17 @@ describe("feature: formats (parked fixes N2, N4, N5, N6)", () => {
 
   it("N6: a bulleted list nested deeper, or under an item's own text, stays that item's sub-points", () => {
     const deeper = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Fakturan från hallen", 1), bul("Medlemsavgifter", 1)]);
+    // Items 1–3 numbered, level-0 bullets, then "4." onward in a NEW numbered list (another list id).
+    const NUM2 = "list-n2";
+    const between = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), bul("Fakturan från hallen"), bul("Medlemsavgifter"), paraEl("Övrigt", { level: 0, listId: NUM2 })]);
+    between.tabs![0].documentTab!.lists![NUM2] = { listProperties: { nestingLevels: [{ glyphType: "DECIMAL" }] } };
+    const betweenScan = scanAgenda(parseNotesTab(between, TAB), VECKOMOTE);
+    expect(betweenScan.items.map((i) => [i.label, i.humanText])).toEqual([
+      ["Godkänn dagordning", ""],
+      ["Må-runda", ""],
+      ["Ekonomi", "Fakturan från hallen\nMedlemsavgifter"],
+      ["Övrigt", ""],
+    ]);
     const underText = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), paraEl("Vi går igenom:"), bul("Fakturan från hallen"), bul("Medlemsavgifter")]);
     for (const [id, doc, text] of [
       ["m-n6a", deeper, "Fakturan från hallen\nMedlemsavgifter"],
