@@ -12,9 +12,13 @@ async function startMeeting(page: Page, org: SeededOrg): Promise<{ meetingId: st
   await page.goto(org.url);
   await page.getByRole("link", { name: "Starta möte", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
-  // No agenda in the folder: a new Doc in the förening's format.
-  await page.getByRole("button", { name: "Skapa nytt dokument" }).click();
-  await page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" }).check();
+  // No agenda in the folder: a new Doc in the förening's format, chosen without a click.
+  await expect(page.locator("p").filter({ hasText: /^Nytt dokument i / })).toBeVisible();
+  // The tick, retried until it sticks: a click before hydration does nothing.
+  const consent = page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" });
+  await expect(async () => {
+    await consent.check({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await expectAccessible(page);
   await page.getByRole("button", { name: "Starta mötet" }).click();
 
@@ -77,7 +81,11 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings.getByRole("listitem")).toHaveCount(1);
-  await expect(meetings).toContainText("Klart");
+  // The final pass named the meeting (0048): the title is the row's main line, with the counts.
+  await expect.poll(async () => (await db.from("meetings").select("title").eq("id", meetingId).single()).data?.title).toBe(SCRIPTED.title);
+  await page.reload();
+  await expect(meetings.getByRole("listitem").first()).toContainText(SCRIPTED.title);
+  await expect(meetings.getByRole("listitem").first()).toContainText("1 beslut · 1 uppgift");
 });
 
 test("auto-end like Meet: no tab heard from, the cron ends the meeting", async ({ seedOrg, signedIn, newEmail, db, request }) => {

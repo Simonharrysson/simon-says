@@ -59,7 +59,7 @@ export function OrgCalendarForm({
         <div className="flex flex-col gap-3">
           <p className="text-sm text-ink-3">{t("orgConnectFirst")}</p>
           <div>
-            <ConnectCalendarButton action={connect} back={`/orgs/${orgId}`} />
+            <ConnectCalendarButton action={connect} back={`/orgs/${orgId}/installningar`} />
           </div>
         </div>
       ) : calendars === null ? (

@@ -64,7 +64,7 @@ describe("proxy", () => {
     expect(response.status).toBe(307);
     const to = new URL(response.headers.get("location")!);
     expect(to.pathname).toBe("/login");
-    expect(to.searchParams.get("next")).toBe("/orgs/2b6c1c7e-9a4f-4f63-9d59-0c1b2a3d4e5f");
+    expect(to.searchParams.get("next")).toBe("/orgs/2b6c1c7e-9a4f-4f63-9d59-0c1b2a3d4e5f?flik=oversikt");
     const settings = await proxy(new NextRequest("https://simonsays.example/installningar"));
     expect(new URL(settings.headers.get("location")!).searchParams.get("next")).toBe("/installningar");
   });

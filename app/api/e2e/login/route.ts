@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { e2eMode } from "@/lib/e2e/guard";
 import { storeCalendarToken, storeGoogleToken, storeImportToken } from "@/lib/google/client";
 import { CALENDAR_SCOPES, GOOGLE_SCOPES, IMPORT_SCOPES } from "@/lib/google/scopes";
-import { safeNextPath } from "@/lib/next-path";
+import { safeNextPath, withParam } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -58,11 +58,11 @@ export async function GET(request: NextRequest) {
   await storeGoogleToken(userId, `e2e-refresh:${email}`, GOOGLE_SCOPES.join(" "));
   if (request.nextUrl.searchParams.get("drive") === "1") {
     await storeImportToken(userId, `e2e-refresh:${email}`, IMPORT_SCOPES.join(" "));
-    return NextResponse.redirect(`${appOrigin()}${next}?drive=ok`);
+    return NextResponse.redirect(`${appOrigin()}${withParam(next, "drive", "ok")}`);
   }
   if (request.nextUrl.searchParams.get("kalender") === "1") {
     await storeCalendarToken(userId, `e2e-refresh:${email}`, CALENDAR_SCOPES.join(" "));
-    return NextResponse.redirect(`${appOrigin()}${next}?kalender=ok`);
+    return NextResponse.redirect(`${appOrigin()}${withParam(next, "kalender", "ok")}`);
   }
   return NextResponse.redirect(`${appOrigin()}${next}`);
 }

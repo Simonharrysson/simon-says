@@ -44,6 +44,11 @@ import type { Notice } from "@/lib/ui/messages";
 import type { Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
 import { OrgProfileForm } from "@/components/views/OrgProfileForm";
+import { OrgBoard } from "@/components/views/OrgBoard";
+import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
+import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
+import { orgTab, orgTabHref } from "@/lib/orgs/tabs";
+import { boardRows } from "@/lib/people/board";
 import {
   addPersonAction,
   changeFormatAction,
@@ -159,15 +164,16 @@ export default async function OrgPage({
   const locale = await getLocale();
   const t = await getTranslations("org");
   const { fel, klart, flik, import: openImport, drive, kalender } = await searchParams;
-  const tab: OrgTab = flik === "oversikt" ? "oversikt" : "moten";
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
   // The Privat space (0045) is not a förening: it has its own page.
   if (org.kind === "privat") redirect("/privat");
-  const [role, people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([
-    myRole(db, id),
+  const role = await myRole(db, id);
+  const notice = orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale);
+  const tab: OrgTab = orgTab({ flik, isAdmin: role === "admin", noticeCode: notice?.code });
+  const [people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([
     listPeople(db, id),
     listMeetings(db, id),
     safeMembers(id),
@@ -178,6 +184,8 @@ export default async function OrgPage({
     upcomingPrepared(db, id, localDate(new Date())),
     loadOnboarding(db, id),
   ]);
+  // The meeting list's titles, Testmöten and counts (0048): only where the list shows.
+  const meetingInfo: Record<string, MeetingListInfo> = tab === "moten" ? await loadMeetingList(db, id, t("titleAnd")) : {};
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
   const isAdmin = role === "admin";
   // The protocol import (admins, Översikt): has this admin's grant drive.readonly (the
@@ -187,7 +195,7 @@ export default async function OrgPage({
   const importJob = isAdmin && tab === "oversikt" ? await safeImportJob(id) : null;
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
-  const invites = isAdmin ? await safeInvites(id) : [];
+  const invites = isAdmin && tab === "installningar" ? await safeInvites(id) : [];
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
   const docAccess = docAccessFor(
@@ -205,18 +213,22 @@ export default async function OrgPage({
       members={members}
       people={people}
       meetings={meetings}
+      meetingInfo={meetingInfo}
       logoUrl={logoUrl(org.id, org.logo_updated_at)}
       komIgang={
-        role === "admin" && showCard(onboarding) ? (
-          <KomIgangCard orgId={org.id} state={onboarding} onDismiss={dismissAction.bind(null, org.id, true)} />
-        ) : undefined
+        <>
+          {role === "admin" && showCard(onboarding) && tab !== "installningar" && (
+            <KomIgangCard orgId={org.id} state={onboarding} onDismiss={dismissAction.bind(null, org.id, true)} />
+          )}
+          {isAdmin && tab === "moten" && <SettingsHashRedirect href={orgTabHref(org.id, "installningar")} />}
+        </>
       }
       docAccess={docAccess}
       viewerEmail={userResult.data.user?.email ?? null}
-      notice={orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale)}
+      notice={notice}
       tabs={{
         active: tab,
-        href: (t) => (t === "oversikt" ? `/orgs/${org.id}?flik=oversikt` : `/orgs/${org.id}`),
+        href: (t) => orgTabHref(org.id, t),
         overview:
           tab === "oversikt" ? (
             <OverviewView
@@ -236,9 +248,24 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
+      boardList={
+        isAdmin && tab === "installningar"
+          ? (memberControls) => (
+              <OrgBoard
+                orgId={org.id}
+                orgName={org.name}
+                rows={boardRows(people, members ?? [])}
+                inviteUrl={inviteUrl}
+                myEmail={userResult.data.user?.email?.toLowerCase() ?? null}
+                invites={invites}
+                memberControls={memberControls}
+              />
+            )
+          : undefined
+      }
       profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
       calendarSettings={
-        isAdmin && tab === "moten" && me ? (
+        isAdmin && tab === "installningar" && me ? (
           // Google's answer streams in; the rest of the page never waits for it (todo #14).
           <Suspense fallback={null}>
             <OrgCalendarSlot orgId={org.id} userId={me} org={org} />

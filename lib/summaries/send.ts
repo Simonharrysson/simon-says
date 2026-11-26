@@ -258,7 +258,7 @@ export async function sendMeetingSummaries(
       }),
       buttonHref: access.href,
       accessNote: access.note,
-      settingsHref: r.isAdmin ? `${origin}/orgs/${m.org_id}#installningar` : null,
+      settingsHref: r.isAdmin ? `${origin}/orgs/${m.org_id}/installningar#sammanfattning` : null,
       unsubscribeHref: emailPrefsUrl(r.email, "meeting_summary", origin),
     });
     // Through the e-mail gate (0039): an address or account that said no to meeting summaries

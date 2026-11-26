@@ -3,7 +3,7 @@
   "title": "Sign in",
   "titleRetry": "Try once more",
   "introJoining": "Sign in to join the association. You'll come straight back to the invitation afterwards.",
-  "intro": "You sign in with your Google account. The meeting notes are saved in your own Google Drive.",
+  "intro": "You sign in with your Google account. The meeting notes are saved in the association's meeting folder or in your own Google Drive.",
   "google": "Sign in with Google",
   "googleRetry": "Try again with Google",
   "onlyOwnDocs": "We may only create and edit <strong>the documents Simon Says creates itself</strong>. We don't see the rest of your Drive.",

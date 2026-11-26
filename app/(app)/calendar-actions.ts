@@ -13,11 +13,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getOrg } from "@/lib/db/orgs";
 
-/** Where "Koppla kalender" may return: Inställningar, or a förening page (never a query string). */
+/** Where "Koppla kalender" may return: Inställningar, a förening page or its Inställningar tab (never a query string). */
 function backPath(raw: unknown): string {
   const v = typeof raw === "string" ? raw : "";
   if (v === "/installningar") return v;
-  const m = v.match(/^\/orgs\/([0-9a-f-]{36})$/);
+  const m = v.match(/^\/orgs\/([0-9a-f-]{36})(\/installningar)?$/);
   return m && isUuid(m[1]) ? v : "/installningar";
 }
 

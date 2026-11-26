@@ -32,6 +32,8 @@ export interface EditorState {
   requiredItems: string[];
   /** Hide the Må-runda from the notes (opt-in, experimental; default off). */
   hideCheckin: boolean;
+  /** Optional name of the format ("" = default name). */
+  name: string;
 }
 
 // Role names shown in the editor are UI copy: formatEditor.roles.* in lib/i18n/messages.
@@ -58,6 +60,7 @@ export function profileToEditor(p: FormatProfile): EditorState {
     signatures: [...(p.signatures ?? [])],
     requiredItems: [...p.requiredItems],
     hideCheckin: p.hideCheckin === true,
+    name: p.name ?? "",
   };
 }
 
@@ -88,6 +91,9 @@ export function editorToProfile(s: EditorState, locale: Locale = defaultLocale):
   const title = clean(s.title);
   if (!title) errors.push(e("formatEditor.errors.titleEmpty"));
   else if (title.length > MAX) errors.push(e("formatEditor.errors.titleLong", { max: MAX }));
+
+  const name = clean(s.name ?? "");
+  if (name.length > 60) errors.push(e("formatEditor.errors.nameLong", { max: 60 }));
 
   const infoTable = list(s.infoTable);
   if (infoTable.length > MAX_FIELDS) errors.push(e("formatEditor.errors.tableFields", { max: MAX_FIELDS }));
@@ -139,6 +145,7 @@ export function editorToProfile(s: EditorState, locale: Locale = defaultLocale):
     tone: VECKOMOTE.tone,
     signatures: signatures.length ? signatures : null,
     requiredItems,
+    ...(name ? { name } : {}),
     // Only stored when on, and only with a Må-runda item to hide.
     ...(s.hideCheckin && s.items.some((i) => i.role === "checkin") ? { hideCheckin: true } : {}),
   });

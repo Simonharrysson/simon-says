@@ -116,5 +116,17 @@
   "sharedTo": "Delat till {email}",
   "askStarter": "Be {starter} dela dokumentet med dig.",
   "getAccess": "Få åtkomst",
-  "meetingFolderFallback": "Föreningens mötesmapp"
+  "meetingFolderFallback": "Föreningens mötesmapp",
+  "tabSettings": "Inställningar",
+  "boardTitle": "Styrelsen och medlemmar",
+  "boardText": "Alla som brukar vara med på mötena, med roll och e-post. Namnen används för att känna igen vem som talar. Med e-post kan de bjudas in och få ett konto; den som har konto kan logga in, starta möten och får nya mötesdokument.",
+  "generalTitle": "Allmänt",
+  "leaveHint": "Vill du inte längre vara med i föreningen?",
+  "showMore": "Visa fler ({count})",
+  "olderMeetings": "Äldre möten",
+  "showTests": "Visa testmöten ({count})",
+  "testMeetings": "Testmöten",
+  "testMeeting": "Testmöte",
+  "itemCounts": "{decisions, plural, one {# beslut} other {# beslut}} · {tasks, plural, one {# uppgift} other {# uppgifter}}",
+  "titleAnd": "och"
 }

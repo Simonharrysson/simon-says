@@ -155,7 +155,7 @@
     "agendaDoc": "Anteckningarna skrivs i den valda dagordningen",
     "agendaWithTranscript": ", med hela transkriptet i en egen flik.",
     "agendaNoTranscript": ". Transkriptet läggs inte i dokumentet.",
-    "newDoc": "Anteckningarna skrivs i ett nytt Google-dokument i din Drive och delas med föreningens medlemmar",
+    "newDoc": "Anteckningarna skrivs i ett nytt Google-dokument i föreningens mötesmapp (annars i din Drive) och delas med medlemmarna",
     "newWithTranscript": ", med hela transkriptionen i en egen flik.",
     "newNoTranscript": ". Transkriptionen delas inte.",
     "pause": "Paus stoppar ljudet direkt.",
@@ -172,7 +172,10 @@
     "starting": "Startar…",
     "start": "Starta mötet",
     "tickFirst": "Kryssa i rutan ovan först.",
-    "agendaFirst": "Välj dagordning eller skapa ett nytt dokument först."
+    "agendaFirst": "Välj dagordning eller skapa ett nytt dokument först.",
+    "silent": "Mikrofonen hör inget än. Säg något, eller testa den under Inställningar för mötet.",
+    "settings": "Inställningar för mötet",
+    "howItWorks": "Så fungerar det"
   },
   "meeting": {
     "backTo": "Tillbaka till ",
@@ -221,7 +224,13 @@
     "pickFolderNamed": "Välj mötesmappen ”{folder}”",
     "pickFolder": "Välj mötesmappen",
     "folderSaveFailed": "Mötesmappen kunde inte sparas. Försök igen.",
-    "goalsTitle": "Mål att ta upp"
+    "goalsTitle": "Mål att ta upp",
+    "lineTitle": "Mötet",
+    "newInFolder": "Nytt dokument i mötesmappen, format <strong>{format}</strong>",
+    "looking": "Letar efter dagordning…",
+    "change": "Byt",
+    "changeLabel": "Byt dokument eller format",
+    "formatHint": "Formatet bestämmer dokumentets rubriker och hur anteckningarna skrivs."
   },
   "controller": {
     "tabStopped": "⚠ Stannat – Simon Says",

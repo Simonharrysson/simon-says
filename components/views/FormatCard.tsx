@@ -31,7 +31,7 @@ export interface FormatCardProps {
   /** The förening's meeting folder; `name` as picked (null for one picked before 0030). */
   meetingFolder: { id: string | null; name?: string | null };
   /** Versions saved for this org; custom ones (learned, or with the stadgar's items) can be re-adopted. */
-  formats: { id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom?: boolean; requiredCount?: number }[];
+  formats: { id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom?: boolean; requiredCount?: number; name?: string }[];
   /** Admins: hidden `orgId`, `choice` = a standard kind or `id:<profile id>`. */
   changeFormat?: FormAction;
   /** The Google Picker is configured: admins can pick the meeting folder. */
@@ -64,7 +64,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const selected = currentRow ? `id:${currentRow.id}` : current.kind === "learned" ? "" : current.kind;
 
   // A standard format is named in the UI language; a custom one keeps the name it was saved with.
-  const name = current.kind === "learned" ? t("card.ownFormat") : currentRow ? current.name : formatName(current.kind, locale);
+  const name = currentRow?.name ?? (current.kind === "learned" ? t("card.ownFormat") : currentRow ? current.name : formatName(current.kind, locale));
   const version = currentRow
     ? t(currentRow.kind === "learned" ? "card.versionLearned" : "card.versionCustom", { date: currentRow.createdAt.slice(0, 10) })
     : null;

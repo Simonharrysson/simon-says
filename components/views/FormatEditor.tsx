@@ -17,7 +17,7 @@ import type { ItemRole } from "@/lib/db/types";
 import { editorToProfile, profileToEditor, type EditorItem, type EditorState } from "@/lib/formats/editor";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
-import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
+import { formatName, STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 
 // Learning a förening's format (Task B2): pick a template or 1–5 old minutes in the Google
 // Picker, let Simon Says read their structure (POST …/formats/propose), then edit and approve
@@ -214,6 +214,18 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
       )}
       <div className="grid grid-cols-1 items-start gap-6 min-[60rem]:grid-cols-2">
         <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="fe-name">{t("formatName")}</Label>
+            <Input
+              id="fe-name"
+              value={state.name}
+              maxLength={60}
+              placeholder={formatName(approveKind, locale)}
+              aria-describedby="fe-name-hint"
+              onChange={(e) => set({ name: e.target.value })}
+            />
+            <p id="fe-name-hint" className="text-xs text-ink-3">{t("formatNameHint")}</p>
+          </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="fe-title">{t("title")}</Label>
             <Input id="fe-title" value={state.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} />

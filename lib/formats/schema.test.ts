@@ -15,7 +15,7 @@ describe("standard formats", () => {
 
   it("STANDARD maps kinds to the constants, with names", () => {
     expect(STANDARD).toEqual({ veckomote: VECKOMOTE, styrelseprotokoll: STYRELSEPROTOKOLL, enkel: ENKEL, arsmote: ARSMOTE });
-    expect(FORMAT_NAMES.learned).toBe("Eget");
+    expect(FORMAT_NAMES.learned).toBe("Ert format");
     expect(FORMAT_NAMES.arsmote).toBe("Årsmöte");
   });
 
@@ -105,7 +105,8 @@ describe("formatLabel (final review R3-I2)", () => {
     expect(formatLabel({ kind: "styrelseprotokoll", createdAt: at, custom: false, requiredCount: 0 })).toBe("Styrelseprotokoll");
     expect(formatLabel({ kind: "styrelseprotokoll", createdAt: at, custom: true, requiredCount: 3 })).toBe("Styrelseprotokoll med stadgarnas punkter (2026-11-25)");
     expect(formatLabel({ kind: "veckomote", createdAt: at, custom: true, requiredCount: 0 })).toBe("Veckomöte, anpassat (2026-11-25)");
-    expect(formatLabel({ kind: "learned", createdAt: at, custom: true, requiredCount: 0 })).toBe("Eget (2026-11-25)");
+    expect(formatLabel({ kind: "learned", createdAt: at, custom: true, requiredCount: 0 })).toBe("Ert format (inlärt 25 nov)");
+    expect(formatLabel({ kind: "learned", createdAt: at, custom: true, requiredCount: 0, name: "Styrelsen 2026" })).toBe("Styrelsen 2026");
   });
 });
 
@@ -119,5 +120,17 @@ describe("Må-runda hiding (opt-in)", () => {
     expect(meetingRoles(roles, VECKOMOTE)).toEqual({ ...roles, "ag-2": "procedural" });
     expect(meetingRoles(roles, { hideCheckin: false })).toEqual({ ...roles, "ag-2": "procedural" });
     expect(meetingRoles(roles, { ...VECKOMOTE, hideCheckin: true })).toEqual(roles);
+  });
+});
+
+describe("format name (optional)", () => {
+  it("round-trips through the editor and is left out when empty", async () => {
+    const { profileToEditor, editorToProfile } = await import("./editor");
+    const { VECKOMOTE } = await import("./standard");
+    const s = profileToEditor({ ...VECKOMOTE, name: "Styrelsen 2026" });
+    const r = editorToProfile(s);
+    expect(r.ok && r.profile.name).toBe("Styrelsen 2026");
+    const r2 = editorToProfile({ ...s, name: "  " });
+    expect(r2.ok && "name" in r2.profile).toBe(false);
   });
 });

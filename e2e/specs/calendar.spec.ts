@@ -28,11 +28,14 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
     { id: `ev${randomUUID().slice(0, 8)}`, summary: "Lunch", start: hourFromNow(72), end: hourFromNow(73) },
   ]);
 
-  const { page: adminPage } = await signedIn(admin, org.url);
-  const settings = adminPage.locator("section", { has: adminPage.getByRole("heading", { name: "Inställningar" }) });
+  // Inställningar tab; "Koppla kalender" comes back to it through /orgs/<id>/installningar.
+  const { page: adminPage } = await signedIn(admin, `${org.url}/installningar`);
+  await expect(adminPage).toHaveURL(/flik=installningar/);
+  const settings = adminPage.locator("section", { has: adminPage.getByRole("heading", { name: "Allmänt" }) });
   await expect(settings.getByText("Koppla din kalender först")).toBeVisible();
   await settings.getByRole("button", { name: "Koppla kalender" }).click();
   await expect(adminPage.getByText("Kalendern är kopplad.")).toBeVisible();
+  await expect(adminPage).toHaveURL(/flik=installningar/);
   const adminId = (await db.from("org_members").select("user_id").eq("org_id", org.id).eq("role", "admin").single()).data!.user_id as string;
   const { data: token } = await db.from("google_calendar_tokens").select("scope").eq("user_id", adminId).single();
   expect(token?.scope).toContain("https://www.googleapis.com/auth/calendar.readonly");

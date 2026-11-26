@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import type { Locale } from "@/lib/i18n/config";
 import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState, type GoalOption } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
@@ -28,7 +28,9 @@ import { JoinView } from "@/components/views/JoinView";
 import { LoginView } from "@/components/views/LoginView";
 import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
-import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
+import { OrgDetailView, type OrgDetailViewProps, type OrgTab } from "@/components/views/OrgDetailView";
+import { BoardStep } from "@/components/onboarding/steps";
+import type { BoardRow } from "@/lib/people/board";
 import { OrgProfileForm } from "@/components/views/OrgProfileForm";
 import { parseProfile } from "@/lib/orgs/profile";
 import { OrgsView } from "@/components/views/OrgsView";
@@ -176,7 +178,7 @@ function OverviewDemo({ goalsPhase, overview = demoOverview, goals = demoGoals, 
         startMeetingHref="#"
         tabs={{
           active: "oversikt",
-          href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin"),
+          href: orgTabsHref,
           overview: <OverviewView orgId={ORG_ID} isAdmin overview={overview} goals={goals} historyCount={historyCount} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, email: "kassor@rutan.example", meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
         }}
         actions={actions}
@@ -237,17 +239,20 @@ function PrivatConsentDemo({ contexts }: { contexts: { id: string; name: string 
   );
 }
 
-/** Consent step with a mic check that "hears" something a moment after it is started. */
-function MicCheckDemo() {
+/** Consent step: the tick starts the mic check, which "hears" something a moment later (open the settings to see it). */
+function MicCheckDemo({ settingsOpen = false, silent = false }: { settingsOpen?: boolean; silent?: boolean }) {
   const [level, setLevel] = useState<number | null>(null);
   return (
     <LiveDemo
       phase="consent"
+      settingsOpen={settingsOpen}
       micLevel={level}
       onMicCheck={() => {
         setLevel(0);
-        setTimeout(() => setLevel(0.62), 900);
+        if (!silent) setTimeout(() => setLevel(0.62), 900);
       }}
+      onMicCheckStop={() => setLevel(null)}
+      agenda={<AgendaDemoStep view={{ state: "none" }} />}
     />
   );
 }
@@ -262,39 +267,64 @@ const agendaGoals: GoalOption[] = [
   { id: "g1", label: "Mål: Fler medlemmar till vårens event", reason: "Inget nytt sedan 12 okt" },
 ];
 
-/** Consent step with the agenda step in one state; Använd / Skapa nytt dokument work locally (no Picker). */
-function AgendaDemo({ view, goals }: { view: AgendaViewState; goals?: GoalOption[] }) {
-  const off = view.state === "picker-off";
-  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off || goals ? { kind: "new" } : null);
+/** The agenda step in one state, with local state; Använd / Välj / Skapa nytt dokument work locally (no Picker). */
+function AgendaDemoStep({
+  view,
+  goals,
+  initial = { kind: "new" },
+  panelOpen,
+  inFolder = true,
+  eventTitle,
+  onChosen,
+}: {
+  view: AgendaViewState;
+  goals?: GoalOption[];
+  initial?: AgendaStepViewProps["chosen"];
+  panelOpen?: boolean;
+  inFolder?: boolean;
+  eventTitle?: string;
+  onChosen?: (chosen: AgendaStepViewProps["chosen"], transcript: boolean) => void;
+}) {
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(initial);
   const [formatValue, setFormatValue] = useState("id:f1");
   const [transcript, setTranscript] = useState(false);
   const [goalIds, setGoalIds] = useState<string[]>(goals ? [goals[0].id] : []);
+  useEffect(() => onChosen?.(chosen, transcript), [chosen, transcript, onChosen]);
   return (
-    <LiveDemo
-      phase="consent"
-      agenda={
-        <AgendaStepView
-          view={view}
-          formats={agendaFormats}
-          formatValue={formatValue}
-          chosen={chosen}
-          offerTranscript
-          transcriptInDoc={transcript}
-          onUseSuggestion={() => view.state === "suggestion" && setChosen({ kind: "agenda", name: view.suggestion.name })}
-          onPickDoc={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
-          onUseFolder={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
-          onNewDoc={() => setChosen({ kind: "new" })}
-          onFormatChange={setFormatValue}
-          onTranscriptChange={setTranscript}
-          goals={goals}
-          goalIds={goalIds}
-          onGoalChange={(id, on) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)))}
-        />
+    <AgendaStepView
+      view={view}
+      formats={agendaFormats}
+      formatValue={formatValue}
+      chosen={chosen}
+      offerTranscript
+      transcriptInDoc={transcript}
+      panelOpen={panelOpen}
+      inFolder={inFolder && view.state !== "folder-unreachable"}
+      eventTitle={eventTitle}
+      onUseSuggestion={() => view.state === "suggestion" && setChosen({ kind: "agenda", name: view.suggestion.name })}
+      onUsePrepared={() =>
+        view.state === "prepared" && setChosen({ kind: "agenda", name: view.prepared.name, prepared: { date: view.prepared.date, kind: view.prepared.kind } })
       }
-      agendaConfirmed={chosen !== null}
-      agendaDoc={chosen?.kind === "agenda" ? { transcriptInDoc: transcript } : null}
+      onPickDoc={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
+      onUseFolder={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
+      onNewDoc={() => setChosen({ kind: "new" })}
+      onFormatChange={setFormatValue}
+      onTranscriptChange={setTranscript}
+      goals={goals}
+      goalIds={goalIds}
+      onGoalChange={(id, on) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)))}
     />
   );
+}
+
+/** The consent step with the agenda step in one state. */
+function AgendaDemo(props: Parameters<typeof AgendaDemoStep>[0]) {
+  const [agendaDoc, setAgendaDoc] = useState<{ transcriptInDoc: boolean } | null>(null);
+  const onChosen = useCallback(
+    (chosen: AgendaStepViewProps["chosen"], transcript: boolean) => setAgendaDoc(chosen?.kind === "agenda" ? { transcriptInDoc: transcript } : null),
+    [],
+  );
+  return <LiveDemo phase="consent" agenda={<AgendaDemoStep {...props} onChosen={onChosen} />} agendaDoc={agendaDoc} />;
 }
 
 /** A fictional Veckomöte draft: standing items, last week's open tasks, two recurring topics. */
@@ -488,6 +518,41 @@ const meetings: OrgDetailViewProps["meetings"] = [
   { id: "m2", status: "done", started_at: ago(7 * 24 * 60), ended_at: ago(7 * 24 * 60 - 84), doc_id: "exempel2", started_by: ME },
   { id: "m3", status: "abandoned", started_at: ago(14 * 24 * 60), ended_at: null, doc_id: "exempel3", started_by: "other" },
   { id: "m4", status: "done", started_at: ago(21 * 24 * 60), ended_at: ago(21 * 24 * 60 - 47), doc_id: "exempel4", started_by: "other" },
+  { id: "m5", status: "done", started_at: ago(28 * 24 * 60), ended_at: ago(28 * 24 * 60 - 63), doc_id: "exempel5", started_by: ME },
+  { id: "m6", status: "done", started_at: ago(35 * 24 * 60), ended_at: ago(35 * 24 * 60 - 55), doc_id: "exempel6", started_by: "other" },
+  { id: "m7", status: "done", started_at: ago(42 * 24 * 60), ended_at: ago(42 * 24 * 60 - 71), doc_id: "exempel7", started_by: "other" },
+  { id: "t1", status: "done", started_at: ago(3 * 24 * 60), ended_at: ago(3 * 24 * 60 - 4), doc_id: "exempel8", started_by: ME },
+  { id: "t2", status: "done", started_at: ago(30 * 24 * 60), ended_at: ago(30 * 24 * 60 - 2), doc_id: "exempel9", started_by: ME },
+];
+
+/** Titles (calendar, final pass, agenda), Testmöten and counts; m7 is an old meeting: the date only. */
+const meetingInfo: OrgDetailViewProps["meetingInfo"] = {
+  m1: { title: "Styrelsemöte november", isTest: false, decisions: 0, tasks: 0 },
+  m2: { title: "Budget och prova-på-kväll", isTest: false, decisions: 3, tasks: 5 },
+  m3: { title: null, isTest: false, decisions: 0, tasks: 1 },
+  m4: { title: "Lokalen och höstfesten", isTest: false, decisions: 1, tasks: 2 },
+  m5: { title: "Ekonomi och spelkväll", isTest: false, decisions: 2, tasks: 0 },
+  m6: { title: "Medlemsvärvning inför våren", isTest: false, decisions: 0, tasks: 3 },
+  m7: { title: null, isTest: false, decisions: 1, tasks: 1 },
+  t1: { title: "Testar mikrofonen", isTest: true, decisions: 0, tasks: 0 },
+  t2: { title: null, isTest: true, decisions: 0, tasks: 0 },
+};
+
+const orgTabsHref = (t: OrgTab) => (t === "oversikt" ? "/design?vy=org-overview" : t === "installningar" ? "/design?vy=org-settings" : "/design?vy=org-admin");
+
+const adminMembers: NonNullable<OrgDetailViewProps["members"]> = [
+  { userId: ME, email: "anna.berg@example.com", role: "admin" },
+  { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "member" },
+  { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
+];
+
+/** Inställningar's one board list: Kom igång's Styrelsen list with the members' account controls. */
+const demoBoard: BoardRow[] = [
+  { personId: "p1", name: "Anna Berg", role: "Ordförande", email: "anna.berg@example.com", status: "account", member: adminMembers[0], voiceConsent: false },
+  { personId: "p2", name: "Erik Lund", role: "Kassör", email: "erik.lund@example.com", status: "account", member: adminMembers[1], voiceConsent: false },
+  { personId: "p3", name: "Sara Nyström", role: "Sekreterare", email: "sara.n@example.com", status: "invited", member: null, voiceConsent: false },
+  { personId: "p5", name: "Johan Ek", role: null, email: null, status: "name", member: null, voiceConsent: false },
+  { personId: null, name: null, role: null, email: "sara@example.com", status: "account", member: adminMembers[2], voiceConsent: false },
 ];
 
 const render: Record<string, () => ReactNode> = {
@@ -563,10 +628,70 @@ const render: Record<string, () => ReactNode> = {
               />
             }
             liveMeetingHref={() => "/design?vy=live"}
-            tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin") }}
+            meetingInfo={meetingInfo}
+            tabs={{ active: "moten", href: orgTabsHref }}
             actions={actions}
           />
         )}
+      />
+    </AppChrome>
+  ),
+  "org-settings": () => (
+    <AppChrome>
+      <WithLocale
+        render={(locale) => (
+          <OrgDetailView
+            org={org}
+            isAdmin
+            userId={ME}
+            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+            members={adminMembers}
+            people={people}
+            meetings={meetings}
+            notice={orgNotice(undefined, "admin-ny", locale)}
+            boardList={(memberControls) => (
+              <BoardStep
+                orgName={org.name}
+                rows={demoBoard}
+                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                myEmail="anna.berg@example.com"
+                showInvite={false}
+                memberControls={memberControls}
+                onAdd={async () => null}
+                onUpdate={async () => null}
+                onRemove={async () => null}
+              />
+            )}
+            profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async () => ({ ok: true, profile: orgProfile })} />}
+            summarySettings={<SummarySettingsDemo />}
+            formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: null }} formats={[]} changeFormat={noopAction} />}
+            startMeetingHref="#"
+            tabs={{ active: "installningar", href: orgTabsHref }}
+            actions={actions}
+          />
+        )}
+      />
+    </AppChrome>
+  ),
+  "org-member": () => (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin={false}
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={[
+          { userId: "00000000-0000-4000-8000-0000000000dd", email: "ordforande@example.com", role: "admin" },
+          { userId: ME, email: "anna.berg@example.com", role: "member" },
+        ]}
+        people={people}
+        meetings={meetings}
+        meetingInfo={meetingInfo}
+        notice={null}
+        startMeetingHref="#"
+        liveMeetingHref={() => "/design?vy=live"}
+        tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-member") }}
+        actions={actions}
       />
     </AppChrome>
   ),
@@ -607,6 +732,24 @@ const render: Record<string, () => ReactNode> = {
             meetings={[]}
             notice={orgNotice(undefined, "admin-ny", locale)}
             startMeetingHref="#"
+            boardList={(memberControls) => (
+              <BoardStep
+                orgName={org.name}
+                rows={[
+                  { ...demoBoard[0], member: { ...adminMembers[0] } },
+                  { ...demoBoard[1], member: { ...adminMembers[1], role: "admin" } },
+                  demoBoard[4],
+                ]}
+                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                myEmail="anna.berg@example.com"
+                showInvite={false}
+                memberControls={memberControls}
+                onAdd={async () => null}
+                onUpdate={async () => null}
+                onRemove={async () => null}
+              />
+            )}
+            tabs={{ active: "installningar", href: orgTabsHref }}
             actions={actions}
           />
         )}
@@ -942,22 +1085,24 @@ const render: Record<string, () => ReactNode> = {
     </PublicChrome>
   ),
   "live-consent": () => <MicCheckDemo />,
-  "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" />,
-  "live-agenda-prepared": () => (
+  "live-consent-settings": () => <MicCheckDemo settingsOpen />,
+  "live-consent-silent": () => <MicCheckDemo silent settingsOpen />,
+  "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" agenda={<AgendaDemoStep view={{ state: "none" }} />} />,
+  "live-agenda-loading": () => <AgendaDemo view={{ state: "loading" }} inFolder={false} />,
+  "live-agenda-today": () => (
     <AgendaDemo
-      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote", accessible: true } }}
+      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-11-26", time: "18:00", kind: "veckomote" as const, accessible: true } }}
+      initial={{ kind: "agenda", name: "2026-11-26 18.00 Dagordning – Exempelföreningen", prepared: { date: "2026-11-26", kind: "veckomote" }, auto: true }}
     />
   ),
-  "live-agenda-prepared-picker": () => (
-    <AgendaDemo
-      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote", accessible: false } }}
-    />
-  ),
+  "live-agenda-calendar": () => <AgendaDemo view={{ state: "none" }} eventTitle="Styrelsemöte vecka 48" />,
+  "live-agenda-prepared": () => <AgendaDemo view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote" as const, accessible: true } }} />,
+  "live-agenda-prepared-picker": () => <AgendaDemo view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote" as const, accessible: false } }} />,
   "live-agenda-suggestion": () => <AgendaDemo view={{ state: "suggestion", suggestion: { id: "d1", name: "Möte 25/11" } }} />,
-  "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
+  "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} panelOpen />,
   "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable", folderName: "Verksamhetsår 2026-2027" }} />,
-  "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} />,
-  "live-agenda-new-goals": () => <AgendaDemo view={{ state: "none" }} goals={agendaGoals} />,
+  "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} inFolder={false} panelOpen />,
+  "live-agenda-new-goals": () => <AgendaDemo view={{ state: "none" }} goals={agendaGoals} panelOpen />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (
     <LiveDemo

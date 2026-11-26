@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { IconArrowRight, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconStop, IconTrash } from "@/components/ui/icons";
+import { IconArrowRight, IconChevronDown, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconStop, IconTrash } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
@@ -26,6 +26,7 @@ import { PersonRow } from "./PersonRow";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
 import type { OrgProfile } from "@/lib/orgs/profile";
 import { OrgAbout } from "./OrgAbout";
+import type { MeetingListInfo } from "@/lib/meetings/list";
 
 export interface OrgDetailMeeting {
   id: string;
@@ -46,6 +47,13 @@ export interface OrgDetailViewProps {
   members?: { userId: string; email: string; role: "admin" | "member" }[];
   people: { id: string; name: string; role?: string | null; email?: string | null; member_user_id?: string | null }[];
   meetings: OrgDetailMeeting[];
+  /** Per meeting id: title, Testmöte, decision and task counts (`loadMeetingList`). Missing: the date only. */
+  meetingInfo?: Record<string, MeetingListInfo>;
+  /**
+   * Admins, Inställningar: the one board list (`OrgBoard`, Kom igång's Styrelsen list), given each
+   * member's account controls by user id. Omitted: the plain people list.
+   */
+  boardList?: (memberControls: Record<string, ReactNode>) => ReactNode;
   /** The förening's logo (0035), shown next to its name; null: the first letter. */
   logoUrl?: string | null;
   /** The "Kom igång" card (admins, onboarding not done), above everything else. */
@@ -75,8 +83,9 @@ export interface OrgDetailViewProps {
    */
   liveMeetingHref?: (meetingId: string) => string;
   /**
-   * The "Översikt" tab (org dashboard): when given, a tab bar shows under the header and
-   * `active === "oversikt"` renders `overview` instead of the meetings page; `href` builds the links.
+   * The tabs: when given, a tab bar shows under the header. "moten": start and the meeting list;
+   * "oversikt": `overview`; "installningar" (admins only): the board, invites, format, settings and
+   * deleting the förening. `href` builds the links. Without tabs everything shows on one page.
    */
   tabs?: { active: OrgTab; href: (tab: OrgTab) => string; overview?: ReactNode };
   actions: {
@@ -101,11 +110,12 @@ export interface OrgDetailViewProps {
 }
 
 /**
- * One row of the members panel. Admins can make others admin or take it away, and remove
- * members; everyone can leave. The last admin is offered neither stepping down nor leaving
- * (the DB refuses both too, migration 0031): the row says what to do instead.
+ * A member's account controls, shown on their row of the board list (Inställningar). Admins can
+ * make others admin or take it away, and remove members; everyone can leave. The last admin is
+ * offered neither stepping down nor leaving (the DB refuses both too, migration 0031): the row
+ * says what to do instead.
  */
-function MemberRow({
+function MemberControls({
   member: m,
   me,
   org,
@@ -205,38 +215,30 @@ function MemberRow({
     );
   }
 
-  return (
-    <li>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-6 [li:first-child>&]:border-t-0 min-h-11 py-2">
-        <span className="flex min-w-0 flex-1 basis-48 flex-col gap-[0.1rem]">
-          <span className="text-sm font-medium wrap-anywhere">{label}</span>
-          {(m.role === "admin" || me) && (
-            <span className="text-sm text-ink-3">{[m.role === "admin" ? t("roleAdmin") : null, me ? t("roleYou") : null].filter(Boolean).join(" · ")}</span>
-          )}
-        </span>
-        {controls && <div className="ml-auto flex flex-wrap items-center justify-end gap-1">{controls}</div>}
-      </div>
-    </li>
-  );
+  return controls;
 }
 
-export type OrgTab = "moten" | "oversikt";
-const TABS: { id: OrgTab; label: "tabMeetings" | "tabOverview" }[] = [
+export type OrgTab = "moten" | "oversikt" | "installningar";
+const TABS: { id: OrgTab; label: "tabMeetings" | "tabOverview" | "tabSettings"; adminOnly?: boolean }[] = [
   { id: "moten", label: "tabMeetings" },
   { id: "oversikt", label: "tabOverview" },
+  { id: "installningar", label: "tabSettings", adminOnly: true },
 ];
 
-/** Server-rendered tabs: links with aria-current, so the URL can be shared and reloaded. */
-function OrgTabs({ active, href }: { active: OrgTab; href: (tab: OrgTab) => string }) {
+/**
+ * Server-rendered tabs: links with aria-current, so the URL can be shared and reloaded (each tab
+ * is its own page view; no client tab panels). Inställningar only for admins.
+ */
+function OrgTabs({ active, href, isAdmin }: { active: OrgTab; href: (tab: OrgTab) => string; isAdmin: boolean }) {
   const t = useTranslations("org");
   return (
     <nav aria-label={t("tabsLabel")} className="-mt-2 flex gap-1 border-b border-line">
-      {TABS.map((tab) => (
+      {TABS.filter((tab) => isAdmin || !tab.adminOnly).map((tab) => (
         <Link
           key={tab.id}
           href={href(tab.id)}
           aria-current={tab.id === active ? "page" : undefined}
-          className="-mb-px inline-flex min-h-10 items-center border-b-2 border-transparent px-3 text-sm font-medium text-ink-3 no-underline transition-colors duration-120 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:text-ink max-md:min-h-11"
+          className="-mb-px inline-flex min-h-10 flex-none items-center border-b-2 border-transparent px-3 text-sm font-medium text-ink-3 no-underline transition-colors duration-120 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:text-ink max-md:min-h-11"
         >
           {t(tab.label)}
         </Link>
@@ -253,7 +255,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, profileSettings, calendarSettings, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, meetingInfo, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, profileSettings, calendarSettings, boardList, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
@@ -261,6 +263,62 @@ export function OrgDetailView(props: OrgDetailViewProps) {
   // Any member may continue the running meeting from their own device (Meet-like presence).
   const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
   const nameError = notice?.code === "namn" ? notice.text : undefined;
+  // Without tabs (older callers) everything an admin has shows on the one page, as before.
+  const tab: OrgTab = tabs?.active ?? "moten";
+  const settingsHere = isAdmin && (!tabs || tab === "installningar");
+  const meetingsHere = !tabs || tab === "moten";
+
+  const invitePanel = (
+    <Panel title={t("inviteTitle")} titleId="invite-title" id="bjud-in" className="scroll-mt-6">
+      <div className="flex flex-col gap-3">
+        {inviteByEmail && (
+          <section aria-labelledby="invite-email-title" className="flex flex-col gap-3 border-b border-line pb-5">
+            <h3 id="invite-email-title" className="text-sm font-semibold">
+              {t("inviteByEmail")}
+            </h3>
+            {inviteByEmail}
+          </section>
+        )}
+        <p className="text-sm text-ink-3">
+          {inviteByEmail ? t("orShareLink") : ""}
+          {t("inviteLinkText")}
+        </p>
+        <CopyField id="invite-url" value={inviteUrl} label={t("inviteLinkLabel")} />
+        {isAdmin && (
+          <div>
+            <ConfirmAction
+              action={actions.rotateInvite}
+              hidden={{ orgId: org.id }}
+              trigger={t("newLink")}
+              triggerVariant="ghost"
+              triggerIcon={<IconRefresh size={18} />}
+              title={t("newLinkTitle")}
+              description={t("newLinkText")}
+              confirmLabel={t("newLink")}
+              confirmVariant="primary"
+              pendingLabel={t("creating")}
+            />
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+
+  // Each member's account controls, for their row of the board list (Inställningar).
+  const memberControls: Record<string, ReactNode> = {};
+  for (const m of members ?? []) {
+    memberControls[m.userId] = (
+      <MemberControls
+        member={m}
+        me={userId !== null && m.userId === userId}
+        org={org}
+        isAdmin={isAdmin}
+        adminCount={(members ?? []).filter((x) => x.role === "admin").length}
+        memberCount={(members ?? []).length}
+        actions={actions}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-page px-gutter flex flex-col gap-6">
@@ -295,128 +353,103 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           )
         }
       />
-      {tabs && <OrgTabs active={tabs.active} href={tabs.href} />}
+      {tabs && <OrgTabs active={tab} href={tabs.href} isAdmin={isAdmin} />}
       <NoticeBanner notice={notice} />
       {komIgang}
 
-      {tabs?.active === "oversikt" ? (
-        tabs.overview
-      ) : (
-      <>
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
-        <div className="flex flex-col gap-6">
-          {active ? (
-            <Banner tone="info" title={t("activeTitle")} live={false}>
-              {access(active) !== "open" && active.started_by !== userId ? (
-                <div className="flex flex-col items-start gap-2">
+      {tab === "oversikt" && tabs ? tabs.overview : null}
+
+      {meetingsHere && (
+        <div className={isAdmin ? "flex flex-col gap-6" : "grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]"}>
+          <div className="flex flex-col gap-6">
+            {active ? (
+              <Banner tone="info" title={t("activeTitle")} live={false}>
+                {access(active) !== "open" && active.started_by !== userId ? (
+                  <div className="flex flex-col items-start gap-2">
+                    <p>
+                      {t("activeText")}
+                      {active.status === "live" && t("activeAutoEnd")}
+                    </p>
+                    <DocAccessButton
+                      meetingId={active.id}
+                      docHref={docUrl(active.doc_id)}
+                      starter={starter(active)}
+                      email={viewerEmail}
+                      askOnly={access(active) === "ask"}
+                    />
+                  </div>
+                ) : (
                   <p>
-                    {t("activeText")}
+                    {t.rich("activeTextLink", {
+                      link: (chunks) => (
+                        <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                          {chunks}
+                        </a>
+                      ),
+                    })}
                     {active.status === "live" && t("activeAutoEnd")}
                   </p>
-                  <DocAccessButton
-                    meetingId={active.id}
-                    docHref={docUrl(active.doc_id)}
-                    starter={starter(active)}
-                    email={viewerEmail}
-                    askOnly={access(active) === "ask"}
-                  />
-                </div>
-              ) : (
-                <p>
-                  {t.rich("activeTextLink", {
-                    link: (chunks) => (
-                      <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
-                        {chunks}
-                      </a>
-                    ),
-                  })}
-                  {active.status === "live" && t("activeAutoEnd")}
-                </p>
-              )}
-            </Banner>
-          ) : (
-            startMeeting && (
-              <Panel title={t("startPanel")} titleId="start-title">
-                {startMeeting}
-              </Panel>
-            )
-          )}
-          <MeetingsPanel
-            meetings={meetings}
-            orgId={org.id}
-            isAdmin={isAdmin}
-            userId={userId}
-            viewerEmail={viewerEmail}
-            access={access}
-            starter={starter}
-            deleteMeeting={actions.deleteMeeting}
-            endMeeting={actions.endMeeting}
-            liveMeetingHref={liveMeetingHref}
-          />
-          {formatCard}
-          <PeoplePanel orgId={org.id} people={people} members={members} isAdmin={isAdmin} actions={actions} />
-        </div>
+                )}
+              </Banner>
+            ) : (
+              startMeeting && (
+                <Panel title={t("startPanel")} titleId="start-title">
+                  {startMeeting}
+                </Panel>
+              )
+            )}
+            <MeetingsPanel
+              meetings={meetings}
+              info={meetingInfo}
+              orgId={org.id}
+              isAdmin={isAdmin}
+              userId={userId}
+              viewerEmail={viewerEmail}
+              access={access}
+              starter={starter}
+              deleteMeeting={actions.deleteMeeting}
+              endMeeting={actions.endMeeting}
+              liveMeetingHref={liveMeetingHref}
+            />
+          </div>
 
-        <div className="flex flex-col gap-6">
-          <Panel title={t("inviteTitle")} titleId="invite-title">
-            <div className="flex flex-col gap-3">
-              {inviteByEmail && (
-                <section aria-labelledby="invite-email-title" className="flex flex-col gap-3 border-b border-line pb-5">
-                  <h3 id="invite-email-title" className="text-sm font-semibold">
-                    {t("inviteByEmail")}
-                  </h3>
-                  {inviteByEmail}
-                </section>
-              )}
-              <p className="text-sm text-ink-3">
-                {inviteByEmail ? t("orShareLink") : ""}
-                {t("inviteLinkText")}
-              </p>
-              <CopyField id="invite-url" value={inviteUrl} label={t("inviteLinkLabel")} />
-              {isAdmin && (
-                <div>
+          {/* Members: who is in the förening and the invite link; admins have all of it under Inställningar. */}
+          {!isAdmin && (
+            <div className="flex flex-col gap-6">
+              <PeoplePanel orgId={org.id} people={people} members={members} isAdmin={false} actions={actions} />
+              {invitePanel}
+              {actions.leaveOrg && (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                  <p className="text-sm text-ink-3">{t("leaveHint")}</p>
                   <ConfirmAction
-                    action={actions.rotateInvite}
+                    action={actions.leaveOrg}
                     hidden={{ orgId: org.id }}
-                    trigger={t("newLink")}
+                    trigger={t("leaveConfirm")}
                     triggerVariant="ghost"
-                    triggerIcon={<IconRefresh size={18} />}
-                    title={t("newLinkTitle")}
-                    description={t("newLinkText")}
-                    confirmLabel={t("newLink")}
-                    confirmVariant="primary"
-                    pendingLabel={t("creating")}
+                    title={t("leaveTitle", { org: org.name })}
+                    description={t("leaveText")}
+                    confirmLabel={t("leaveConfirm")}
+                    pendingLabel={t("leaving")}
                   />
                 </div>
               )}
             </div>
-          </Panel>
-
-          {members && (
-            <Panel flush title={t("membersTitle")} titleId="members-title" actions={<span className="text-sm text-ink-3">{members.length}</span>}>
-              <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">{t("membersText")}</p>
-              <ul aria-labelledby="members-title">
-                {members.map((m) => (
-                  <MemberRow
-                    key={m.userId}
-                    member={m}
-                    me={userId !== null && m.userId === userId}
-                    org={org}
-                    isAdmin={isAdmin}
-                    adminCount={members.filter((x) => x.role === "admin").length}
-                    memberCount={members.length}
-                    actions={actions}
-                  />
-                ))}
-              </ul>
-            </Panel>
           )}
         </div>
-      </div>
+      )}
 
-      {isAdmin && (
-        <>
-          <Panel title={t("settingsTitle")} titleId="settings-title" id="installningar">
+      {settingsHere && (
+        <div className="flex flex-col gap-6">
+          <Panel sunk title={t("boardTitle")} titleId="board-title" id="styrelsen" className="scroll-mt-6" actions={<span className="text-sm text-ink-3">{people.length + (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId)).length}</span>}>
+            <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
+            {boardList ? boardList(memberControls) : <PeoplePanel orgId={org.id} people={people} members={members} isAdmin actions={actions} />}
+          </Panel>
+
+          {invitePanel}
+
+          {formatCard}
+
+          <Panel title={t("generalTitle")} titleId="settings-title" id="installningar" className="scroll-mt-6">
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
             {profileSettings && (
               <div id="om-oss" className="mt-6 scroll-mt-6 border-t border-line pt-6">
@@ -460,40 +493,49 @@ export function OrgDetailView(props: OrgDetailViewProps) {
               />
             </div>
           </Panel>
-        </>
-      )}
-      </>
+        </div>
       )}
     </div>
   );
 }
 
-function MeetingsPanel({
-  meetings,
-  orgId,
-  isAdmin,
-  userId,
-  deleteMeeting,
-  endMeeting,
-  liveMeetingHref,
-  access,
-  starter,
-  viewerEmail,
-}: {
+/** The meeting list shows this many, newest first; the rest open under "Visa fler". */
+export const MEETINGS_SHOWN = 5;
+
+/**
+ * Split for the list: running and resumable meetings always show (a Testmöte too: it has
+ * controls); other Testmöten fold away under "Visa testmöten"; the rest newest first, 5 shown.
+ */
+export function splitMeetings<M extends OrgDetailMeeting>(meetings: M[], info: Record<string, MeetingListInfo> | undefined): { shown: M[]; more: M[]; tests: M[] } {
+  const pinned = (m: M) => m.status === "live" || m.status === "ending" || (m.status === "abandoned" && canResume(m));
+  const sorted = [...meetings].sort((a, b) => b.started_at.localeCompare(a.started_at));
+  const tests = sorted.filter((m) => info?.[m.id]?.isTest && !pinned(m));
+  const main = sorted.filter((m) => !tests.includes(m));
+  return { shown: main.slice(0, MEETINGS_SHOWN), more: main.slice(MEETINGS_SHOWN), tests };
+}
+
+type MeetingsPanelProps = {
   viewerEmail?: string | null;
   access: (m: OrgDetailMeeting) => DocAccess;
   starter: (m: OrgDetailMeeting) => string;
   meetings: OrgDetailMeeting[];
+  info?: Record<string, MeetingListInfo>;
   orgId: string;
   isAdmin: boolean;
   userId: string | null;
   deleteMeeting: FormAction;
   endMeeting?: FormAction;
   liveMeetingHref?: (meetingId: string) => string;
-}) {
+};
+
+function MeetingsPanel(props: MeetingsPanelProps) {
+  const { meetings, info, viewerEmail } = props;
   const t = useTranslations("org");
-  const common = useTranslations("common");
-  const locale = useLocale();
+  const { shown, more, tests } = splitMeetings(meetings, info);
+  const rows = (list: OrgDetailMeeting[]) => list.map((m) => <MeetingRow key={m.id} meeting={m} {...props} />);
+  const fold = "group border-t border-line [&[open]>summary_svg]:rotate-180";
+  const summary =
+    "flex min-h-11 cursor-pointer list-none items-center gap-2 px-6 py-2 text-sm font-medium text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden";
   return (
     <Panel flush title={t("meetingsTitle")} titleId="meetings-title">
       {meetings.length === 0 ? (
@@ -504,88 +546,29 @@ function MeetingsPanel({
         </div>
       ) : (
         <>
-          <ul  aria-labelledby="meetings-title">
-            {meetings.map((meeting) => {
-              const state = meetingDeleteState(meeting, { isAdmin, userId });
-              const mine = userId !== null && meeting.started_by === userId;
-              const duration =
-                meeting.ended_at &&
-                formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000, locale);
-              return (
-                <li key={meeting.id} id={`mote-${meeting.id}`} className="scroll-mt-6">
-                  <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
-                    <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
-                      <span className="font-medium wrap-anywhere">{formatMeetingDate(meeting.started_at, undefined, locale)}</span>
-                      <span className="mt-[0.15rem] flex flex-wrap items-center gap-2 text-xs text-ink-3">
-                        <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>
-                        {duration && <span>{duration}</span>}
-                        {state === "active" && <span>{t("endBeforeDelete")}</span>}
-                      </span>
-                    </span>
-                    <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
-                      {meeting.status === "live" && userId !== null && liveMeetingHref && (
-                        <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
-                          {t("toMeeting")}
-                        </ButtonLink>
-                      )}
-                      {meeting.status === "live" && endMeeting && canEndFromOrgPage(isAdmin ? "admin" : "member", mine) && (
-                        <ConfirmAction
-                          action={endMeeting}
-                          hidden={{ orgId, meetingId: meeting.id }}
-                          trigger={t("endMeeting")}
-                          triggerIcon={<IconStop size={16} />}
-                          triggerVariant="ghost"
-                          title={t("endMeetingTitle")}
-                          description={t("endMeetingText")}
-                          confirmLabel={t("endMeeting")}
-                          pendingLabel={t("ending")}
-                        />
-                      )}
-                      {meeting.status === "abandoned" && userId !== null && liveMeetingHref && canResume(meeting) && (
-                        <ButtonLink href={liveMeetingHref(meeting.id)} size="sm" icon={<IconPlay size={16} />}>
-                          {t("resume")}
-                        </ButtonLink>
-                      )}
-                      {access(meeting) !== "open" && !mine ? (
-                        <DocAccessButton
-                          meetingId={meeting.id}
-                          docHref={docUrl(meeting.doc_id)}
-                          starter={starter(meeting)}
-                          email={viewerEmail}
-                          askOnly={access(meeting) === "ask"}
-                        />
-                      ) : (
-                        <a
-                          className={buttonVariants({ size: "sm" })}
-                          href={docUrl(meeting.doc_id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {t("document")}
-                          <IconExternal size={16} />
-                          <span className="sr-only">{common("opensInNewTab")}</span>
-                        </a>
-                      )}
-                      {state === "allowed" && (
-                        <ConfirmAction
-                          action={deleteMeeting}
-                          hidden={{ orgId, meetingId: meeting.id }}
-                          trigger={t("deleteMeeting", { date: formatDateTime(meeting.started_at, locale) })}
-                          triggerIcon={<IconTrash size={18} />}
-                          triggerIconOnly
-                          triggerVariant="danger-ghost"
-                          title={t("deleteMeetingTitle")}
-                          description={t("deleteMeetingText")}
-                          confirmLabel={t("deleteMeetingConfirm")}
-                          pendingLabel={t("deleting")}
-                        />
-                      )}
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {shown.length > 0 && <ul aria-labelledby="meetings-title">{rows(shown)}</ul>}
+          {more.length > 0 && (
+            <details className={fold}>
+              <summary className={summary}>
+                <IconChevronDown size={16} className="transition-transform duration-120" />
+                {t("showMore", { count: more.length })}
+              </summary>
+              <ul aria-label={t("olderMeetings")} className="border-t border-line">
+                {rows(more)}
+              </ul>
+            </details>
+          )}
+          {tests.length > 0 && (
+            <details className={fold}>
+              <summary className={summary}>
+                <IconChevronDown size={16} className="transition-transform duration-120" />
+                {t("showTests", { count: tests.length })}
+              </summary>
+              <ul aria-label={t("testMeetings")} className="border-t border-line">
+                {rows(tests)}
+              </ul>
+            </details>
+          )}
           <p className="text-sm text-ink-3 border-t border-line px-6 pt-3 pb-4">
             {t("meetingsFoot")}
             {viewerEmail && t("meetingsFootEmail", { email: viewerEmail })}
@@ -593,6 +576,101 @@ function MeetingsPanel({
         </>
       )}
     </Panel>
+  );
+}
+
+function MeetingRow({
+  meeting,
+  info,
+  orgId,
+  isAdmin,
+  userId,
+  deleteMeeting,
+  endMeeting,
+  liveMeetingHref,
+  access,
+  starter,
+  viewerEmail,
+}: MeetingsPanelProps & { meeting: OrgDetailMeeting }) {
+  const t = useTranslations("org");
+  const common = useTranslations("common");
+  const locale = useLocale();
+  const state = meetingDeleteState(meeting, { isAdmin, userId });
+  const mine = userId !== null && meeting.started_by === userId;
+  const about = info?.[meeting.id];
+  const date = formatMeetingDate(meeting.started_at, undefined, locale);
+  const duration =
+    meeting.ended_at && formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000, locale);
+  const counts =
+    about && (about.decisions > 0 || about.tasks > 0) ? t("itemCounts", { decisions: about.decisions, tasks: about.tasks }) : null;
+  return (
+    <li id={`mote-${meeting.id}`} className="scroll-mt-6">
+      <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
+        <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+          <span className="font-medium wrap-anywhere">{about?.title ?? date}</span>
+          <span className="mt-[0.15rem] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
+            {about?.isTest && <Badge tone="neutral">{t("testMeeting")}</Badge>}
+            {meeting.status !== "done" && <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>}
+            <span>{[about?.title ? date : null, duration, counts].filter(Boolean).join(" · ")}</span>
+            {state === "active" && <span>{t("endBeforeDelete")}</span>}
+          </span>
+        </span>
+        <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
+          {meeting.status === "live" && userId !== null && liveMeetingHref && (
+            <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
+              {t("toMeeting")}
+            </ButtonLink>
+          )}
+          {meeting.status === "live" && endMeeting && canEndFromOrgPage(isAdmin ? "admin" : "member", mine) && (
+            <ConfirmAction
+              action={endMeeting}
+              hidden={{ orgId, meetingId: meeting.id }}
+              trigger={t("endMeeting")}
+              triggerIcon={<IconStop size={16} />}
+              triggerVariant="ghost"
+              title={t("endMeetingTitle")}
+              description={t("endMeetingText")}
+              confirmLabel={t("endMeeting")}
+              pendingLabel={t("ending")}
+            />
+          )}
+          {meeting.status === "abandoned" && userId !== null && liveMeetingHref && canResume(meeting) && (
+            <ButtonLink href={liveMeetingHref(meeting.id)} size="sm" icon={<IconPlay size={16} />}>
+              {t("resume")}
+            </ButtonLink>
+          )}
+          {access(meeting) !== "open" && !mine ? (
+            <DocAccessButton
+              meetingId={meeting.id}
+              docHref={docUrl(meeting.doc_id)}
+              starter={starter(meeting)}
+              email={viewerEmail}
+              askOnly={access(meeting) === "ask"}
+            />
+          ) : (
+            <a className={buttonVariants({ size: "sm" })} href={docUrl(meeting.doc_id)} target="_blank" rel="noopener noreferrer">
+              {t("document")}
+              <IconExternal size={16} />
+              <span className="sr-only">{common("opensInNewTab")}</span>
+            </a>
+          )}
+          {state === "allowed" && (
+            <ConfirmAction
+              action={deleteMeeting}
+              hidden={{ orgId, meetingId: meeting.id }}
+              trigger={t("deleteMeeting", { date: formatDateTime(meeting.started_at, locale) })}
+              triggerIcon={<IconTrash size={18} />}
+              triggerIconOnly
+              triggerVariant="danger-ghost"
+              title={t("deleteMeetingTitle")}
+              description={t("deleteMeetingText")}
+              confirmLabel={t("deleteMeetingConfirm")}
+              pendingLabel={t("deleting")}
+            />
+          )}
+        </span>
+      </div>
+    </li>
   );
 }
 

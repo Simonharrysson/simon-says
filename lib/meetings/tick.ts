@@ -580,6 +580,19 @@ async function updateMeeting(id: string, values: Record<string, unknown>): Promi
   must("tick: update meeting", await db().from("meetings").update(values).eq("id", id));
 }
 
+/**
+ * The meeting's title (0048). Never fails the final pass: a failed write (e.g. the column not
+ * migrated yet) only leaves the list showing the date. The title itself is never logged.
+ */
+async function saveTitle(id: string, title: string): Promise<void> {
+  try {
+    const { error } = await db().from("meetings").update({ title }).eq("id", id);
+    if (error) console.error(`tick ${id}: saving the title failed: ${error.code ?? "error"}`);
+  } catch (err) {
+    console.error(`tick ${id}: saving the title failed: ${(err as Error)?.name ?? "error"}`);
+  }
+}
+
 /** updateMeeting only while `leaseId` still holds the tick lease (like saveRows). False: it moved on, nothing written. */
 async function updateMeetingLeased(id: string, leaseId: string, values: Record<string, unknown>): Promise<boolean> {
   const rows = must(
@@ -984,6 +997,8 @@ export async function runTick(
         notes_next_id: out.nextId,
         ...(answered ? { notes_sent_tick: Math.max(sentTick, send.length) } : {}),
       });
+      // The final pass names the meeting (0048); a retry without a title keeps the stored one.
+      if (final && out.title) await saveTitle(meetingId, out.title);
       if (answered) items = out.items;
     }
     // The Avsluta dialog's Vem / När / Klart när, after Claude's tidy-up: a person's answer wins.
