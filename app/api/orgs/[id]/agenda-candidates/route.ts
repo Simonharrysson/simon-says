@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { listCandidates, type DriveDoc } from "@/lib/agenda/candidates";
 import { localDate } from "@/lib/docs/create";
-import type { MeetingType } from "@/lib/prepare/draft";
+import type { PreparedSuggestion } from "@/lib/prepare/types";
+export type { PreparedSuggestion };
 import { nextPrepared } from "@/lib/prepare/store";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
@@ -31,16 +32,6 @@ export interface AgendaCandidates {
    * (drive.file: the preparer's can; another member may need to pick it once in the Picker).
    */
   prepared?: PreparedSuggestion | null;
-}
-
-export interface PreparedSuggestion {
-  docId: string;
-  /** The Doc's file name (the förening's text). */
-  name: string;
-  date: string;
-  time: string | null;
-  kind: MeetingType;
-  accessible: boolean;
 }
 
 type Auth = Awaited<ReturnType<typeof getGoogleAuth>>;

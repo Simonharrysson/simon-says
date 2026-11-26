@@ -26,6 +26,9 @@ import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
+import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
+import { StartMeetingForm } from "@/components/views/StartMeetingForm";
+import type { DraftItem, MeetingType } from "@/lib/prepare/types";
 import { OverviewView, type GoalsPhase } from "@/components/views/OverviewView";
 import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
@@ -206,6 +209,94 @@ function AgendaDemo({ view }: { view: AgendaViewState }) {
       agendaConfirmed={chosen !== null}
       agendaDoc={chosen?.kind === "agenda" ? { transcriptInDoc: transcript } : null}
     />
+  );
+}
+
+/** A fictional Veckomöte draft: standing items, last week's open tasks, two recurring topics. */
+const prepareDraft: DraftItem[] = [
+  { id: "std:approve", label: "Godkänn dagordning", role: "procedural", source: "standing", on: true },
+  { id: "std:checkin", label: "Må-runda", role: "checkin", source: "standing", on: true },
+  {
+    id: "std:followup",
+    label: "Från förra veckan",
+    role: "followup",
+    source: "standing",
+    on: true,
+    tasks: [
+      { source: "m1:n2", line: "Erik Lund: Skicka kallelsen till medlemsmötet.", on: true },
+      { source: "m1:n1", line: "Kassör: Boka Kårallen (fredag).", on: true },
+      { source: "m1:n4", line: "Ordförande: Svara kåren om sponsringen.", on: true },
+    ],
+  },
+  { id: "topic:sponsring", label: "Sponsring", role: "topic", source: "suggested", on: false, meetings: 4 },
+  { id: "topic:hemsidan", label: "Hemsidan", role: "topic", source: "suggested", on: false, meetings: 2 },
+  { id: "std:other", label: "Övrigt", role: "other", source: "standing", on: true, last: true },
+];
+const prepareEdited: DraftItem[] = [
+  prepareDraft[0],
+  prepareDraft[1],
+  { ...prepareDraft[2], tasks: prepareDraft[2].tasks!.map((t, i) => (i === 2 ? { ...t, on: false } : t)) },
+  { ...prepareDraft[3], on: true },
+  { id: "add:fest", label: "Fest på universitetet", role: "topic", source: "added", on: true },
+  prepareDraft[4],
+  prepareDraft[5],
+];
+const arsmoteDraft: DraftItem[] = [
+  "Mötets öppnande",
+  "Val av mötesordförande",
+  "Val av mötessekreterare",
+  "Val av justerare",
+  "Fråga om mötet är stadgeenligt utlyst",
+  "Verksamhetsberättelse",
+  "Ekonomisk berättelse",
+  "Revisionsberättelse",
+  "Fråga om ansvarsfrihet för styrelsen",
+  "Val av styrelse",
+  "Motioner och propositioner",
+].map((label, i) => ({ id: `std:${i}`, label, role: i < 5 ? ("procedural" as const) : ("other" as const), source: "standing" as const, on: true }));
+const arsmoteLast: DraftItem[] = [
+  { id: "std:other", label: "Övriga frågor", role: "other", source: "standing", on: true, last: true },
+  { id: "std:close", label: "Mötets avslutande", role: "procedural", source: "standing", on: true, last: true },
+];
+
+function PrepareDemo({
+  phase,
+  items = prepareDraft,
+  type = "veckomote",
+  existing = null,
+}: {
+  phase: PreparePhase;
+  items?: DraftItem[];
+  type?: MeetingType;
+  existing?: PrepareMeetingViewProps["existing"];
+}) {
+  const [state, setState] = useState(items);
+  const [t, setT] = useState<MeetingType>(type);
+  const [date, setDate] = useState("2026-12-01");
+  const [time, setTime] = useState("18:00");
+  let n = 0;
+  return (
+    <AppChrome>
+      <PrepareMeetingView
+        orgName="Exempelföreningen"
+        orgHref="#"
+        phase={phase}
+        type={t}
+        date={date}
+        time={time}
+        today="2026-11-26"
+        items={state}
+        existing={existing}
+        onType={setT}
+        onDate={setDate}
+        onTime={setTime}
+        onContinue={noop}
+        onBack={noop}
+        onItems={setState}
+        onSave={noop}
+        newId={() => `add:demo-${++n}-${state.length}`}
+      />
+    </AppChrome>
   );
 }
 
@@ -470,6 +561,63 @@ const render: Record<string, () => ReactNode> = {
       }}
     />
   ),
+  "org-prepared": () => (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
+        people={people}
+        meetings={meetings}
+        notice={null}
+        startMeeting={
+          <StartMeetingForm
+            orgId={ORG_ID}
+            shareTranscript
+            prepared={[{ date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }]}
+          />
+        }
+        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
+        actions={actions}
+      />
+    </AppChrome>
+  ),
+  "prepare-type": () => <PrepareDemo phase={{ step: "type" }} />,
+  "prepare-loading": () => <PrepareDemo phase={{ step: "loading" }} />,
+  "prepare-draft": () => <PrepareDemo phase={{ step: "draft" }} />,
+  "prepare-draft-edited": () => <PrepareDemo phase={{ step: "draft" }} items={prepareEdited} />,
+  "prepare-draft-empty": () => <PrepareDemo phase={{ step: "draft" }} type="arsmote" items={[...arsmoteDraft, ...arsmoteLast]} />,
+  "prepare-saving": () => <PrepareDemo phase={{ step: "draft", saving: true }} items={prepareEdited} />,
+  "prepare-save-error": () => (
+    <PrepareDemo phase={{ step: "draft", error: "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen." }} items={prepareEdited} />
+  ),
+  "prepare-again": () => (
+    <PrepareDemo
+      phase={{ step: "draft" }}
+      items={prepareEdited}
+      existing={{ docUrl: "https://docs.google.com/document/d/exempel/edit", docName: "2026-12-01 18.00 Dagordning – Exempelföreningen", updatedAt: "2026-11-26T10:00:00Z", held: false }}
+    />
+  ),
+  "prepare-held": () => (
+    <PrepareDemo
+      phase={{ step: "draft" }}
+      items={prepareEdited}
+      existing={{ docUrl: "https://docs.google.com/document/d/exempel/edit", docName: "2026-12-01 18.00 Dagordning – Exempelföreningen", updatedAt: "2026-11-26T10:00:00Z", held: true }}
+    />
+  ),
+  "prepare-done": () => (
+    <PrepareDemo
+      phase={{ step: "done", docUrl: "https://docs.google.com/document/d/exempel/edit", docName: "2026-12-01 18.00 Dagordning – Exempelföreningen", created: true, reordered: true }}
+    />
+  ),
+  "prepare-done-merged": () => (
+    <PrepareDemo
+      phase={{ step: "done", docUrl: "https://docs.google.com/document/d/exempel/edit", docName: "2026-12-01 18.00 Dagordning – Exempelföreningen", created: false, reordered: false }}
+    />
+  ),
+  "prepare-failed": () => <PrepareDemo phase={{ step: "failed", message: "Vi nådde inte Google just nu. Försök igen om en liten stund." }} />,
   "org-member-empty": () => (
     <AppChrome>
       <OrgDetailView
@@ -536,6 +684,16 @@ const render: Record<string, () => ReactNode> = {
   ),
   "live-consent": () => <MicCheckDemo />,
   "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" />,
+  "live-agenda-prepared": () => (
+    <AgendaDemo
+      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote", accessible: true } }}
+    />
+  ),
+  "live-agenda-prepared-picker": () => (
+    <AgendaDemo
+      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote", accessible: false } }}
+    />
+  ),
   "live-agenda-suggestion": () => <AgendaDemo view={{ state: "suggestion", suggestion: { id: "d1", name: "Möte 25/11" } }} />,
   "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
   "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable", folderName: "Verksamhetsår 2026-2027" }} />,

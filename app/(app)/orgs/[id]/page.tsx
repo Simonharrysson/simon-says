@@ -18,6 +18,9 @@ import { appOrigin } from "@/lib/origin";
 import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgNotice } from "@/lib/ui/messages";
+import { docUrl } from "@/lib/ui/meetings";
+import { localDate } from "@/lib/docs/create";
+import { upcomingPrepared } from "@/lib/prepare/store";
 import {
   addPersonAction,
   changeFormatAction,
@@ -84,7 +87,7 @@ export default async function OrgPage({
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
-  const [role, people, meetings, members, userResult, format, formats, dashboard] = await Promise.all([
+  const [role, people, meetings, members, userResult, format, formats, dashboard, prepared] = await Promise.all([
     myRole(db, id),
     listPeople(db, id),
     listMeetings(db, id),
@@ -93,6 +96,7 @@ export default async function OrgPage({
     orgDefaultFormat(db, id),
     listOrgFormats(db, id),
     tab === "oversikt" ? safeOverview(db, id) : Promise.resolve(null),
+    upcomingPrepared(db, id, localDate(new Date())),
   ]);
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
   const me = userResult.data.user?.id ?? null;
@@ -146,6 +150,7 @@ export default async function OrgPage({
           orgId={org.id}
           shareTranscript={org.share_transcript}
           showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
+          prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
         />}
       actions={{
         rotateInvite: rotateInviteAction,
