@@ -48,9 +48,10 @@ test("admin handover: make a member admin, then step down", async ({ page, seedO
   const member = newEmail("blivande");
   const org = await seedOrg({ members: [member], people: ["Anna Berg"] });
 
-  await page.goto(org.url);
+  // The one board list on Inställningar: names, roles, accounts and the admin handover.
+  await page.goto(`${org.url}?flik=installningar`);
   await expect(page.getByText("Du är admin")).toBeVisible();
-  const members = page.getByRole("list", { name: "Medlemmar" });
+  const members = page.getByRole("list", { name: "Styrelsen" });
   const memberRow = members.getByRole("listitem").filter({ hasText: member });
   const meRow = members.getByRole("listitem").filter({ hasText: ADMIN_EMAIL });
 
@@ -72,20 +73,18 @@ test("admin handover: make a member admin, then step down", async ({ page, seedO
   // A member sees no admin panels.
   await expect(page.getByRole("heading", { name: "Radera föreningen" })).toHaveCount(0);
 
-  // The new admin sees it from their own account.
-  const other = await signedIn(member, org.url);
+  // The new admin sees it from their own account (Inställningar, a plain path for the sign-in).
+  const other = await signedIn(member, `${org.url}/installningar`);
   await expect(other.page.getByText("Du är admin")).toBeVisible();
   await expect(other.page.getByRole("heading", { name: "Radera föreningen" })).toBeVisible();
 });
 
-test("person roles: the admin sets a role on a person", async ({ page, seedOrg }) => {
+test("person roles: the admin sets a role on a person in the board list", async ({ page, seedOrg }) => {
   const org = await seedOrg({ people: ["Erik Lund"] });
-  await page.goto(org.url);
-  const people = page.getByRole("list", { name: "Personer" });
-  const row = people.getByRole("listitem").filter({ hasText: "Erik Lund" });
-  await row.getByRole("button", { name: "Lägg till roll" }).click();
-  await page.getByLabel("Roll för Erik Lund").fill("Kassör");
-  await row.getByRole("button", { name: "Spara", exact: true }).click();
-  await expect(people.getByRole("listitem").filter({ hasText: "Erik Lund" })).toContainText("Kassör");
-  await expect(people.getByRole("button", { name: "Ändra roll" })).toBeVisible();
+  await page.goto(`${org.url}?flik=installningar`);
+  const board = page.getByRole("list", { name: "Styrelsen" });
+  await board.getByRole("listitem").filter({ hasText: "Erik Lund" }).getByRole("button", { name: "Ändra Erik Lund" }).click();
+  await board.getByLabel("Roll").fill("Kassör");
+  await board.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(board.getByRole("listitem").filter({ hasText: "Erik Lund" })).toContainText("Kassör");
 });

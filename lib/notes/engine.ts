@@ -4,6 +4,7 @@ import type { BetaMessage, BetaMessageStreamParams, BetaUsage } from "@anthropic
 import type { ItemRole } from "@/lib/db/types";
 import { formatItem } from "@/lib/docs/notes";
 import { getEnv } from "@/lib/env";
+import { cleanMeetingTitle } from "@/lib/meetings/title";
 import { AGENDA_SYSTEM_PROMPT, agendaTailText, type AgendaContext } from "@/lib/notes/agenda-prompt";
 import { SYSTEM_PROMPT, tailText, transcriptBlockText } from "@/lib/notes/prompt";
 import {
@@ -112,6 +113,8 @@ export interface UpdateNotesResult {
   failure: string | null;
   /** The id counter after this tick: store it and pass it back as `nextId`. */
   nextId: string;
+  /** Final pass only: the meeting's short title (0048), cleaned; absent when Claude gave none. Never logged. */
+  title?: string;
 }
 
 /** The slice of the SDK client the engine uses (so tests can pass a fake). */
@@ -425,7 +428,7 @@ export function churnStrict(prev: NotesItem[], next: NotesItem[], locked: string
   );
 }
 
-type ParsedOutput = { ok: true; ops: NotesOp[]; invalid: number; count: number } | { ok: false; why: string };
+type ParsedOutput = { ok: true; ops: NotesOp[]; invalid: number; count: number; title?: string } | { ok: false; why: string };
 
 /**
  * Parse the structured output: all text blocks joined in order; if that fails, the last one alone.
@@ -439,16 +442,17 @@ function parseOutput(message: BetaMessage, agenda: boolean): ParsedOutput {
     try {
       const json: unknown = JSON.parse(candidate);
       let converted: (NotesOp | null)[] | null = null;
+      let title: string | undefined;
       if (agenda) {
         const parsed = AgendaOpsOutputSchema.safeParse(json);
-        if (parsed.success) converted = parsed.data.ops.map(toAgendaOp);
+        if (parsed.success) [converted, title] = [parsed.data.ops.map(toAgendaOp), parsed.data.title];
       } else {
         const parsed = OpsOutputSchema.safeParse(json);
-        if (parsed.success) converted = parsed.data.ops.map(toNotesOp);
+        if (parsed.success) [converted, title] = [parsed.data.ops.map(toNotesOp), parsed.data.title];
       }
       if (!converted) continue;
       const ops = converted.filter((op): op is NotesOp => op !== null);
-      return { ok: true, ops, invalid: converted.length - ops.length, count: converted.length };
+      return { ok: true, ops, invalid: converted.length - ops.length, count: converted.length, ...(title !== undefined ? { title } : {}) };
     } catch {
       // not JSON: try the next candidate
     }
@@ -527,5 +531,7 @@ export async function updateNotes(
   // tick too, not a failure.
   const onlyRuled = parsed.invalid === 0 && applied.dropped > 0 && applied.dropped === (applied.ruled ?? 0);
   const failure = parsed.count > 0 && applied.ops.length === 0 && !onlyRuled ? "all_dropped" : null;
-  return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId, failure };
+  // The title is only asked for in the final pass; a stray one on a live tick is ignored.
+  const title = input.final ? cleanMeetingTitle(parsed.title) : null;
+  return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId, failure, ...(title ? { title } : {}) };
 }

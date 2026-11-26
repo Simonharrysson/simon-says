@@ -6,6 +6,8 @@ export const SCRIPTED = {
   decision: "Hackathonet blir den 14 februari",
   action: "Maila Kårallen om lokalen",
   now: "Budget för hackathonet",
+  /** The meeting's title from the final pass (0048), shown in the förening's meeting list. */
+  title: "Hackathon och lokal",
   goals: [
     { title: "Fler medlemmar till våren", why: "Styrelsen vill växa inför vårens evenemang." },
     { title: "Ett hackathon i februari", why: "Det har tagits upp på flera möten." },

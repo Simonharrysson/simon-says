@@ -3,7 +3,7 @@ import { hasGoogleToken, storeCalendarToken, storeGoogleToken, storeImportToken 
 import { fetchGrantedScope, hasCalendarReadonly, hasDriveFile, hasDriveReadonly } from "@/lib/google/scopes";
 import { defaultLocale, isLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from "@/lib/i18n/config";
 import { loadMyLocale, saveMyLocale } from "@/lib/i18n/user-locale";
-import { loginErrorPath, safeNextPath } from "@/lib/next-path";
+import { loginErrorPath, safeNextPath, withParam } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   // An extra-access consent of a signed-in user: drive.readonly (the import) or calendar.readonly.
   const access = (atkomst === "drive" || atkomst === "kalender") && safeNextPath(next) !== "/" ? atkomst : null;
   const driveRequest = access !== null;
-  const backToImport = (result: "ok" | "nej" | "fel" | "konto") => to(`${safeNextPath(next)}?${access}=${result}`);
+  const backToImport = (result: "ok" | "nej" | "fel" | "konto") => to(withParam(safeNextPath(next), access!, result));
   const supabase = await createSupabaseServerClient();
   if (!code) {
     const cancelled = request.nextUrl.searchParams.get("error") === "access_denied";

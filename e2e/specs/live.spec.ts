@@ -81,7 +81,11 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings.getByRole("listitem")).toHaveCount(1);
-  await expect(meetings).toContainText("Klart");
+  // The final pass named the meeting (0048): the title is the row's main line, with the counts.
+  await expect.poll(async () => (await db.from("meetings").select("title").eq("id", meetingId).single()).data?.title).toBe(SCRIPTED.title);
+  await page.reload();
+  await expect(meetings.getByRole("listitem").first()).toContainText(SCRIPTED.title);
+  await expect(meetings.getByRole("listitem").first()).toContainText("1 beslut · 1 uppgift");
 });
 
 test("auto-end like Meet: no tab heard from, the cron ends the meeting", async ({ seedOrg, signedIn, newEmail, db, request }) => {

@@ -116,5 +116,17 @@
   "sharedTo": "Shared with {email}",
   "askStarter": "Ask {starter} to share the document with you.",
   "getAccess": "Get access",
-  "meetingFolderFallback": "The association's meeting folder"
+  "meetingFolderFallback": "The association's meeting folder",
+  "tabSettings": "Settings",
+  "boardTitle": "Board and members",
+  "boardText": "Everyone who usually takes part in the meetings, with role and e-mail. The names are used to recognise who is speaking. With an e-mail they can be invited and get an account; anyone with an account can sign in, start meetings and gets new meeting documents.",
+  "generalTitle": "General",
+  "leaveHint": "No longer want to be part of the association?",
+  "showMore": "Show more ({count})",
+  "olderMeetings": "Older meetings",
+  "showTests": "Show test meetings ({count})",
+  "testMeetings": "Test meetings",
+  "testMeeting": "Test meeting",
+  "itemCounts": "{decisions, plural, one {# decision} other {# decisions}} · {tasks, plural, one {# task} other {# tasks}}",
+  "titleAnd": "and"
 }

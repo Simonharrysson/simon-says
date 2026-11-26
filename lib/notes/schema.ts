@@ -55,7 +55,7 @@ export const RawOpSchema = z.object({
 });
 export type RawOp = z.infer<typeof RawOpSchema>;
 
-export const OpsOutputSchema = z.object({ ops: z.array(RawOpSchema) });
+export const OpsOutputSchema = z.object({ ops: z.array(RawOpSchema), title: z.string().optional() });
 
 /** The same shape as JSON schema, for `output_config.format`. Kept byte-stable (it is part of the cached prefix). */
 export const OPS_JSON_SCHEMA = {
@@ -77,6 +77,8 @@ export const OPS_JSON_SCHEMA = {
         additionalProperties: false,
       },
     },
+    // The meeting's short title (0048): asked for in the final pass only (the tail says so).
+    title: { type: "string" },
   },
   required: ["ops"],
   additionalProperties: false,
@@ -129,7 +131,7 @@ export const RawAgendaOpSchema = z.object({
 });
 export type RawAgendaOp = z.infer<typeof RawAgendaOpSchema>;
 
-export const AgendaOpsOutputSchema = z.object({ ops: z.array(RawAgendaOpSchema) });
+export const AgendaOpsOutputSchema = z.object({ ops: z.array(RawAgendaOpSchema), title: z.string().optional() });
 
 /** The same shape as JSON schema, for `output_config.format`. Kept byte-stable (it is part of the cached prefix). */
 export const AGENDA_OPS_JSON_SCHEMA = {
@@ -153,6 +155,8 @@ export const AGENDA_OPS_JSON_SCHEMA = {
         additionalProperties: false,
       },
     },
+    // The meeting's short title (0048): asked for in the final pass only (the tail says so).
+    title: { type: "string" },
   },
   required: ["ops"],
   additionalProperties: false,
