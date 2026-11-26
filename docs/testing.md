@@ -47,6 +47,12 @@ workers and uploads `playwright-report/` and `test-results/` (traces) as an arti
 - **ElevenLabs** (`ELEVENLABS_WS_URL`): `scripts/fake-elevenlabs.ts`, one scripted line per
   second of audio. Chromium's fake microphone (`--use-fake-device-for-media-stream`) plays a
   tone, so the live page really records and streams.
+- **Mail** (`E2E_MAIL_URL`): a Resend-shaped `POST /resend/emails` that records every mail
+  (`fake.mail(to)`); an address with `+fail` is refused (422), `+slow` gets a 500 (uncertain).
+  `defaultMailer()` uses it only in the e2e mode, so no real provider is ever called.
+- Fake ElevenLabs sessions are stored as `kind = 'test'` (the token route's dev path), so their
+  name round never reads the förening's people list; summary specs take attendance from seeded
+  Närvarande lines instead.
 - **Sign-in**: "Logga in med Google" runs the real server action; the browser's request to
   Supabase's `/auth/v1/authorize` is answered by the spec (`e2e/fixtures.ts`) with a redirect
   to `GET /api/e2e/login?email=…@e2e.test&next=…`, which signs the user in with a magic link
@@ -61,7 +67,7 @@ workers and uploads `playwright-report/` and `test-results/` (traces) as an arti
 
 ### The test mode can never run in production
 
-`/api/e2e/login` and `E2E_GOOGLE_ROOT` work only when `lib/e2e/guard.ts` `e2eMode()` holds:
+`/api/e2e/login`, `E2E_GOOGLE_ROOT` and `E2E_MAIL_URL` work only when `lib/e2e/guard.ts` `e2eMode()` holds:
 `E2E_TEST_MODE=1`, `NODE_ENV` not `production` (every `next build`/`next start` and Vercel
 deployment), not on Vercel (`VERCEL`/`VERCEL_ENV` unset), and `SUPABASE_URL` a loopback host
 (the hosted project is refused). Otherwise the route is a 404 and the root is ignored.
