@@ -4,7 +4,7 @@ import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, cleanupLosingAnchor, type AnchorResult } from "@/lib/agenda/anchor";
-import { carriedItems, carryPlan, previousMeeting, previousOnDoc } from "@/lib/agenda/followup";
+import { carriedForMeeting, previousMeeting, previousMeetingOfKinds, previousOnDoc } from "@/lib/agenda/followup";
 import { missingRequired } from "@/lib/agenda/scan";
 import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle, trashDoc, type DocPlace } from "@/lib/docs/create";
 import { planFormatRender } from "@/lib/docs/format-render";
@@ -26,6 +26,8 @@ import { saveAgendaLabels } from "@/lib/dashboard/labels";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { docUrl } from "@/lib/ui/meetings";
+import { kindsOfType } from "@/lib/prepare/draft";
+import { preparedForDoc, type PreparedAgenda } from "@/lib/prepare/store";
 
 export type { StandardKind } from "@/lib/formats/standard";
 import type { StandardKind } from "@/lib/formats/standard";
@@ -173,6 +175,14 @@ export async function startMeeting(
   const limited = await startLimit(user.id);
   if (limited) return limited;
 
+  // Förbered möte (0033): a Doc Simon Says prepared for this förening. Looked up here, never taken
+  // from the request: the Doc is ours (shareable), it runs in the prepared format unless the
+  // starter chose another, and its "Från förra veckan" lines are adopted. Not for Testmöten.
+  const prepared = opts.agendaDocId && eventKind === "started" ? await preparedForDoc(orgId, opts.agendaDocId) : null;
+  if (prepared && !opts.formatProfileId && !opts.formatKind && prepared.format_profile_id) {
+    opts = { ...opts, formatProfileId: prepared.format_profile_id };
+  }
+
   const format = await resolveFormat(orgId, opts);
   if (!format) return failed("bad_format", 400, "Mötesformatet finns inte i föreningen. Ladda om sidan och försök igen.");
 
@@ -243,7 +253,7 @@ export async function startMeeting(
       checkin_window: checkinWindow,
   };
   // 0030: Simon Says only ever shares a Doc it created.
-  const appCreated = !agendaMode || opts.agendaCreatedByApp === true;
+  const appCreated = !agendaMode || opts.agendaCreatedByApp === true || prepared !== null;
   let { error: insertError } = await supabaseAdmin().from("meetings").insert({ ...row, app_created_doc: appCreated });
   // A database without 0030 (deploy order): the row without the column.
   if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703")) {
@@ -321,7 +331,8 @@ export async function startMeeting(
 
   const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
-  await recordDocShares(meetingId, setup.sharedWith);
+  // A prepared agenda was shared with the members when it was made (through the preparer's grant).
+  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])]);
 
   const log = (kind: MeetingEventKind, detail: Record<string, unknown>) =>
     logEvent(meetingId, kind, detail).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
@@ -365,6 +376,7 @@ export async function startMeeting(
         isTest,
         agendaDoc: agendaMode,
         startedAt,
+        prepared,
         log,
       });
     } catch (err) {
@@ -654,6 +666,8 @@ async function prefill(input: {
   isTest: boolean;
   agendaDoc: boolean;
   startedAt: Date;
+  /** The prepared agenda this Doc holds (Förbered möte): its carried lines are adopted. */
+  prepared?: PreparedAgenda | null;
   log: (kind: MeetingEventKind, detail: Record<string, unknown>) => Promise<unknown>;
 }): Promise<number> {
   const { auth, meeting, profile } = input;
@@ -668,13 +682,19 @@ async function prefill(input: {
   const fictional = usesTestPeople({ is_test: input.isTest, agenda_doc: input.agendaDoc });
   if (followup) {
     // Testmöten pull only from Testmöten, real meetings only from real ones (answer 7); an agenda
-    // Testmöte only from agenda Testmöten.
-    const prev = await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc);
+    // Testmöte only from agenda Testmöten. A prepared agenda: the previous meeting of its kind,
+    // as the prepare drew from.
+    const prepared = input.prepared ?? null;
+    const prev = prepared
+      ? await previousMeetingOfKinds(meeting.org_id, input.startedAt, kindsOfType(prepared.kind), db)
+      : await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc);
     // A false start on this same Doc (done or abandoned, after `prev`): its carried lines are
     // already in the Doc, so they are taken over, never written twice (final review R1/R2).
     const onDoc = await previousOnDoc(meeting.org_id, input.isTest, meeting.doc_id, input.startedAt, db);
     const sameDoc = onDoc && (!prev || onDoc.id === prev.id || !prev.startedAt || onDoc.startedAt >= prev.startedAt) ? onDoc : null;
-    if (prev || sameDoc) {
+    // No meeting on the Doc yet: the prepared lines are the ones in it.
+    const fromPrepared = !onDoc && prepared && prepared.carried.length > 0 ? prepared : null;
+    if (prev || sameDoc || fromPrepared) {
       const rowsOf = async (id: string) => {
         const { data, error } = await db.from("note_items").select("*").eq("meeting_id", id);
         if (error) throw new Error(`prefill: previous rows: ${error.message}`);
@@ -689,27 +709,23 @@ async function prefill(input: {
       ]);
       if (ppl.error) throw new Error(`prefill: people: ${ppl.error.message}`);
       people = (ppl.data ?? []) as RolePerson[];
-      const docRows = sameDoc ? (sameRows ?? prevRows) : [];
+      const docRows = sameDoc ? (sameRows ?? prevRows) : (fromPrepared?.carried ?? []);
       // Only lines still in the Doc are taken over (one read; none when nothing could be).
       const tab = docRows.some((r) => r.carried_from_id != null && r.range_name)
         ? await readNotesTab(auth, meeting.doc_id, meeting.notes_tab_id)
         : null;
-      const plan = carryPlan({
+      const intact = (name: string) => Boolean(tab && itemSpan(tab, name));
+      carried = carriedForMeeting({
+        meetingId: meeting.id,
         prev: prev ? { id: prev.id, rows: prevRows } : null,
-        sameDoc: sameDoc ? { id: sameDoc.id, rows: docRows } : null,
-        intact: (name) => Boolean(tab && itemSpan(tab, name)),
+        sameDoc: sameDoc ? { id: sameDoc.id, rows: docRows } : fromPrepared ? { id: `prep-${fromPrepared.id}`, rows: docRows } : null,
+        intact,
+        excluded: fromPrepared || (prepared && !onDoc) ? preparedExclusions(prepared!, intact) : undefined,
+        followup,
+        people,
+        groupBy,
+        fictional,
       });
-      const adopted = plan.adopted.map((r, position) => ({ ...r, meeting_id: meeting.id, anchor: followup, position }));
-      const taken = new Set(adopted.map((r) => r.id));
-      let next = Math.max(0, ...adopted.map((r) => Number(r.id.slice(1)) || 0));
-      const fresh = prev
-        ? carriedItems(prev.id, plan.open, followup, people, groupBy).map((r) => {
-            let id = `c${++next}`;
-            while (taken.has(id)) id = `c${++next}`;
-            return { ...r, id, position: adopted.length + r.position, meeting_id: meeting.id, ...(fictional ? { owner_person_id: null } : {}) };
-          })
-        : [];
-      carried = [...adopted, ...fresh];
     }
   }
 
@@ -734,6 +750,23 @@ async function prefill(input: {
   }
   await input.log("followup_prefilled", { count: carried.length, adopted: carried.length - toRender.length, rendered });
   return carried.length;
+}
+
+/**
+ * Sources a prepared agenda keeps out of "Från förra veckan": tasks the ordförande took off the
+ * agenda, and carried lines a human deleted from the Doc (human edits win).
+ */
+function preparedExclusions(prepared: PreparedAgenda, intact: (name: string) => boolean): Set<string> {
+  const out = new Set<string>();
+  for (const s of prepared.dropped ?? []) {
+    const i = s.lastIndexOf(":");
+    if (i > 0) out.add(`${s.slice(0, i)}\u0000${s.slice(i + 1)}`);
+  }
+  for (const r of prepared.carried ?? []) {
+    if (!r.carried_from_meeting || r.carried_from_id == null) continue;
+    if (r.deleted_by_human || !r.range_name || !intact(r.range_name)) out.add(`${r.carried_from_meeting}\u0000${r.carried_from_id}`);
+  }
+  return out;
 }
 
 async function renderCarried(

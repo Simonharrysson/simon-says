@@ -46,6 +46,8 @@ const m = vi.hoisted(() => ({
   noteUpdate: vi.fn(),
   profileInsert: vi.fn(),
   queries: [] as Query[],
+  /** prepared_agendas rows (0033), as the admin client sees them. */
+  prepared: [] as Record<string, unknown>[],
 }));
 
 const has = (q: Query, op: string, col: string) => q.filters.some((f) => f[0] === op && f[1] === col);
@@ -83,6 +85,7 @@ async function adminAnswer(q: Query): Promise<{ data: unknown; error: null }> {
     );
   }
   if (q.table === "people") return ok(m.people.filter((p) => p.org_id === val(q, "org_id")));
+  if (q.table === "prepared_agendas") return ok(m.prepared.filter((p) => p.org_id === val(q, "org_id") && p.doc_id === val(q, "doc_id")));
   if (q.table === "note_items") {
     if (q.op === "insert") return (m.noteInsert(q.payload), ok(null));
     if (q.op === "update") return (m.noteUpdate(q.payload, val(q, "id")), ok(null));
@@ -214,7 +217,7 @@ beforeEach(() => {
   m.meetingUpdate.mockReset();
   m.noteUpdate.mockReset();
   m.profileInsert.mockReset().mockReturnValue("std1");
-  Object.assign(m, { docMeetings: [], prevMeetings: [], profiles: [], people: [], noteRows: [], queries: [] });
+  Object.assign(m, { docMeetings: [], prevMeetings: [], profiles: [], people: [], noteRows: [], queries: [], prepared: [] });
 });
 
 /** What anchorAgenda returns for a fictional six-item Veckomöte agenda Doc. */
@@ -835,6 +838,60 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(desired.map((d: { id: string }) => d.id).sort()).toEqual(["c1", "c2", "info-tid"]);
     expect(m.noteUpdate.mock.calls.map((c) => c[1])).toEqual(["c2"]);
     expect(eventsOf("followup_prefilled")[0][2]).toEqual({ count: 2, adopted: 1, rendered: true });
+  });
+
+  it("a prepared agenda (Förbered möte): its format, ours to share, its carried lines adopted; dropped and deleted tasks stay off", async () => {
+    m.profiles = [{ id: "pv", org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: false }];
+    // The previous Veckomöte; a later Styrelsemöte is not "the same kind".
+    m.prevMeetings = [
+      { id: "prev1", org_id: ORG, is_test: false, status: "done", started_at: ago(7 * 86400), format_profile_id: "pv" } as never,
+      { id: "styr", org_id: ORG, is_test: false, status: "done", started_at: ago(3 * 86400), format_profile_id: "ps" } as never,
+    ];
+    m.profiles.push({ id: "ps", org_id: ORG, kind: "styrelseprotokoll", profile: STYRELSEPROTOKOLL, is_default: false });
+    const base = { section: "action", kind: "task", owner: null, due: null, locked: false, deleted_by_human: false, done: false, copy_of: null, position: 0 };
+    m.noteRows = [
+      { ...base, meeting_id: "prev1", id: "n1", text: "Boka hall" },
+      { ...base, meeting_id: "prev1", id: "n2", text: "Köp bollar" },
+      { ...base, meeting_id: "prev1", id: "n3", text: "Ring kommunen" },
+      { ...base, meeting_id: "styr", id: "n1", text: "Styrelsens uppgift" },
+    ];
+    const line = (id: string, from: string) => ({ ...base, meeting_id: "prep-p1", id, anchor: "ag-3", text: from, carried_from_meeting: "prev1", carried_from_id: from === "Boka hall" ? "n1" : "n2", range_name: `ss-prep-p1-${id}`, last_rendered_text: `– ${from}.` });
+    m.prepared = [
+      {
+        id: "p1",
+        org_id: ORG,
+        doc_id: AGENDA_DOC,
+        kind: "veckomote",
+        format_profile_id: "pv",
+        carried: [line("c1", "Boka hall"), line("c2", "Köp bollar")],
+        dropped: ["prev1:n3"],
+        shared_with: ["u2"],
+      },
+    ];
+    // The Köp bollar line was deleted in the Doc by a human.
+    m.readNotesTab.mockResolvedValue({
+      revisionId: "r3",
+      tabId: "t.0",
+      paragraphs: [{ start: 1, end: 14, text: "– Boka hall.\n", suggested: false }],
+      ranges: new Map([["ss-prep-p1-c1", [[{ start: 1, end: 13 }]]]]),
+    });
+    const res = await agendaCall();
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(insertedRow()).toMatchObject({ format_profile_id: "pv", app_created_doc: true, agenda_doc: true });
+    expect(m.recordDocShares).toHaveBeenCalledWith(json.meetingId, ["u2"]);
+    const inserted = m.noteInsert.mock.calls[0][0] as Record<string, unknown>[];
+    expect(inserted.filter((r) => String(r.id).startsWith("c")).map((r) => [r.id, r.range_name, r.carried_from_meeting, r.carried_from_id, r.meeting_id === json.meetingId])).toEqual([
+      ["c1", "ss-prep-p1-c1", "prev1", "n1", true],
+    ]);
+    expect(json.carried).toBe(1);
+    expect(m.renderItems).not.toHaveBeenCalled();
+  });
+
+  it("a prepared Doc without carried lines is still ours to share", async () => {
+    m.prepared = [{ id: "p1", org_id: ORG, doc_id: AGENDA_DOC, kind: "veckomote", format_profile_id: null, carried: [], dropped: [], shared_with: [] }];
+    expect((await agendaCall()).status).toBe(200);
+    expect(insertedRow()).toMatchObject({ app_created_doc: true });
   });
 
   it("a start the guard refuses writes no note rows", async () => {
