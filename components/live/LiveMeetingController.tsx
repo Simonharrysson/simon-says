@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { buttonVariants } from "@/components/ui/button";
 import { MicCapture } from "@/lib/audio/capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import { runEndFlow } from "@/lib/live/end-flow";
@@ -663,18 +664,18 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
 
   if (superseded) {
     return (
-      <div className="live live--centered">
-        <section className="resume" aria-labelledby="superseded-title">
-          <div className="stack stack--2">
-            <h1 id="superseded-title" className="consent__title">
+      <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
+        <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="superseded-title">
+          <div className="flex flex-col gap-2">
+            <h1 id="superseded-title" className="text-2xl">
               Mötet körs i en annan flik
             </h1>
-            <p className="muted">
+            <p className="text-ink-2">
               Mötet fortsatte i en annan flik eller på en annan dator, så den här fliken slutade lyssna. Du kan stänga den.
             </p>
           </div>
-          <div className="cluster">
-            <a className="btn btn--lg" href={props.orgHref}>
+          <div className="flex flex-wrap items-center gap-3">
+            <a className={buttonVariants({ size: "lg" })} href={props.orgHref}>
               Tillbaka till föreningen
             </a>
           </div>

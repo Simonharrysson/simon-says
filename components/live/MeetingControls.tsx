@@ -3,7 +3,8 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { IconPause, IconPlay, IconStop } from "@/components/ui/icons";
-import { LiveDialog, stopCopy } from "./LiveDialog";
+import { cn } from "@/lib/utils";
+import { LiveDialog, stopCopy, type LiveDialogHandle } from "./LiveDialog";
 
 /**
  * Paus / Fortsätt and Avsluta. Paus is the big, always-reachable button (people ask for it
@@ -17,6 +18,7 @@ export function MeetingControls({
   onStop,
   busy,
   canPause = true,
+  className,
 }: {
   status: "live" | "paused" | "ending";
   onPause: () => void;
@@ -25,14 +27,15 @@ export function MeetingControls({
   /** A pause/resume/stop request is in flight. */
   busy?: boolean;
   canPause?: boolean;
+  className?: string;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useRef<LiveDialogHandle>(null);
   const ending = status === "ending";
   return (
-    <div className="controls">
+    <div className={cn("flex gap-2 max-[52rem]:[&>button]:flex-1", className)}>
       {canPause &&
         (status === "paused" ? (
-          <Button variant="primary" size="lg" icon={<IconPlay size={18} />} onClick={onResume} loading={busy} className="controls__main">
+          <Button variant="primary" size="lg" icon={<IconPlay size={18} />} onClick={onResume} loading={busy} className="min-w-36">
             Fortsätt
           </Button>
         ) : (
@@ -42,7 +45,7 @@ export function MeetingControls({
             onClick={onPause}
             loading={busy && !ending}
             disabled={ending}
-            className="controls__main controls__pause"
+            className="min-w-36 border-[1.5px] border-ink"
           >
             Paus
           </Button>

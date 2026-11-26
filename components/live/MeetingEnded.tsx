@@ -58,8 +58,8 @@ export function MeetingEnded({
         ? " och delade med föreningens medlemmar"
         : "";
   return (
-    <section className="ended" aria-labelledby="ended-title" aria-live="polite">
-      <h1 id="ended-title" className="consent__title" ref={heading} tabIndex={-1}>
+    <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="ended-title" aria-live="polite">
+      <h1 id="ended-title" className="text-2xl" ref={heading} tabIndex={-1}>
         {finalizing ? "Gör anteckningarna klara…" : "Mötet är avslutat"}
       </h1>
       {waiting && (
@@ -76,7 +76,7 @@ export function MeetingEnded({
               : "Du är utloggad – mötet kunde inte avslutas"
           }
           action={
-            <span className="cluster">
+            <span className="flex flex-wrap items-center gap-3">
               {onReLogin && (
                 <Button variant="primary" onClick={onReLogin}>
                   Logga in igen
@@ -114,7 +114,7 @@ export function MeetingEnded({
           Vi nådde inte servern. Kontrollera nätet och försök igen. Stänger du fliken avslutas mötet ändå inom en kvart.
         </Banner>
       )}
-      <p className="muted">
+      <p className="text-ink-2">
         {autoStopped && `${autoStopText(stopReason)} `}
         {finalizing
           ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna får en sista genomgång, det tar ungefär en minut.${
@@ -124,7 +124,7 @@ export function MeetingEnded({
             ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna är färdiga.${shared}`
             : `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna är färdiga${shared}.`}
       </p>
-      <div className="cluster">
+      <div className="flex flex-wrap items-center gap-3">
         {docUrl && (
           <ButtonLink href={docUrl} target="_blank" rel="noopener noreferrer" variant="primary" size="lg" icon={<IconExternal size={18} />}>
             Öppna dokumentet

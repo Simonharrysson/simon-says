@@ -58,7 +58,7 @@ export function LiveBanners({
           <Banner
             key="error"
             tone="danger"
-            className="banner--loud"
+            loud
             title={final ? "Starta ett nytt möte" : "Transkriberingen har stannat"}
             action={
               onRetry &&
@@ -121,15 +121,15 @@ export function LiveBanners({
   const shown = red.length > 0 ? red : banners.slice(0, 1);
   const rest = banners.filter((b) => !shown.includes(b));
   return (
-    <div className="live-banners">
+    <div className="flex flex-col gap-2">
       {shown.map(render)}
       {rest.length > 0 && (
-        <details className="live-banners__more">
-          <summary>
+        <details className="group/more">
+          <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-3 text-sm font-semibold text-ink transition-colors duration-120 hover:bg-sunk [&::-webkit-details-marker]:hidden">
             Visa {rest.length === 1 ? "1 varning" : `${rest.length} varningar`} till
-            <IconChevronDown size={16} className="live-banners__chevron" />
+            <IconChevronDown size={16} className="transition-transform duration-120 ease-out group-open/more:rotate-180" />
           </summary>
-          <div className="live-banners__rest">{rest.map(render)}</div>
+          <div className="flex flex-col gap-2">{rest.map(render)}</div>
         </details>
       )}
     </div>

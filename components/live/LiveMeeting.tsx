@@ -5,10 +5,11 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
 import { IconArrowLeft, IconPause } from "@/components/ui/icons";
 import { liveStatus, type LiveStatus } from "@/lib/ui/live-status";
+import { cn } from "@/lib/utils";
 import { ConsentStep, type StartError } from "./ConsentStep";
 import { DocLink } from "./DocLink";
 import { LiveBanners } from "./LiveBanners";
-import { LiveDialog } from "./LiveDialog";
+import { LiveDialog, type LiveDialogHandle } from "./LiveDialog";
 import { MeetingControls } from "./MeetingControls";
 import { MeetingEnded } from "./MeetingEnded";
 import { MeetingTimer } from "./MeetingTimer";
@@ -111,7 +112,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
   if (p.phase === "consent" || p.phase === "starting") {
     return (
-      <div className="live live--centered">
+      <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
         <BackLink href={p.orgHref} label={p.orgName} />
         <ConsentStep
           orgName={p.orgName}
@@ -134,7 +135,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
   if (p.phase === "resume") {
     return (
-      <div className="live live--centered">
+      <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
         <BackLink href={p.orgHref} label={p.orgName} />
         <ResumeMeeting
           startedAt={p.startedAt ?? new Date().toISOString()}
@@ -151,7 +152,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
   if (p.phase === "ended") {
     return (
-      <div className="live live--centered">
+      <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
         <MeetingEnded
           docUrl={p.docUrl}
           durationSeconds={p.elapsedMs / 1000}
@@ -169,14 +170,21 @@ export function LiveMeeting(p: LiveMeetingProps) {
   const nameRound = p.phase === "name-round";
 
   return (
-    <div className={`live live--${status.kind}`}>
+    <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-gutter pt-6 pb-12" data-status={status.kind}>
       <BackLink href={p.orgHref} label={p.orgName} confirm={!ending} onLeave={leave} listening={status.kind === "live" || status.kind === "reconnecting"} />
-      <header className={`livebar livebar--${status.kind}`}>
-        <div className="livebar__who">
+      <header
+        className={cn(
+          "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-6 rounded-lg bg-surface px-6 py-4 shadow-panel transition-colors duration-200 ease-out max-[52rem]:grid-cols-[minmax(0,1fr)_auto] max-[52rem]:gap-4",
+          // Paused (and stopped): the whole bar goes flat grey, visible even in peripheral vision.
+          status.kind === "paused" && "bg-sunk shadow-[inset_0_0_0_1px_var(--rail)]",
+          status.kind === "error" && "bg-sunk shadow-[inset_0_0_0_1px_var(--red)]",
+        )}
+      >
+        <div className="flex min-w-0 flex-col items-start gap-2">
           <StatusHeadline status={status} />
-          <div className="livebar__titles">
-            <h1 className="livebar__title">{p.title}</h1>
-            <span className="subtle">{p.orgName}</span>
+          <div className="flex max-w-full min-w-0 flex-col">
+            <h1 className="truncate text-base">{p.title}</h1>
+            <span className="text-sm text-ink-3">{p.orgName}</span>
           </div>
         </div>
         <MeetingTimer elapsedMs={p.elapsedMs} paused={status.kind !== "live"} size="md" />
@@ -187,6 +195,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           onResume={p.onResume}
           onStop={p.onStop}
           busy={p.busy}
+          className="max-[52rem]:col-span-full"
         />
       </header>
 
@@ -235,8 +244,13 @@ export function LiveMeeting(p: LiveMeetingProps) {
           focusOnMount
         />
       ) : (
-        <div className={`live__grid${nameRound ? " live__grid--single" : ""}`}>
-          <div className="live__main">
+        <div
+          className={cn(
+            "grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[52rem]:grid-cols-[minmax(0,1fr)]",
+            nameRound && "grid-cols-[minmax(0,1fr)]",
+          )}
+        >
+          <div className="flex min-w-0 flex-col gap-4">
             {nameRound && <NameRound entries={p.nameRound} onDone={p.onNameRoundDone} onSkip={p.onNameRoundSkip} busy={p.nameRoundBusy} />}
             <DocLink
               url={p.docUrl}
@@ -248,7 +262,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
             <PartialStrip text={p.partialText} speaker={p.partialSpeaker} mode={status.partial} level={p.micLevel} />
           </div>
           {!nameRound && (
-            <aside className="live__aside">
+            <aside>
               <SpeakerList speakers={p.speakers} people={p.people} onAssign={p.onAssignSpeaker} />
             </aside>
           )}
@@ -262,12 +276,21 @@ export function LiveMeeting(p: LiveMeetingProps) {
 /** The header's headline: is it recording? Readable from across the table. */
 function StatusHeadline({ status }: { status: LiveStatus }) {
   return (
-    <p className={`status-line status-line--${status.tone}`} role="status">
-      <span className="status-line__main">
-        {status.tone === "paused" && <IconPause size={20} className="status-line__icon" aria-hidden="true" />}
-        <span className="status-line__label">{status.label}</span>
+    <p
+      className={cn(
+        "flex flex-wrap items-center gap-x-3 text-xl leading-[1.15] font-semibold tracking-[-0.03em] max-[30rem]:text-lg",
+        status.tone === "live" && "text-red",
+        status.tone === "paused" && "text-ink",
+        status.tone === "waiting" && "text-ink-2",
+        status.tone === "alert" && "text-red",
+      )}
+      role="status"
+    >
+      <span className="inline-flex items-center gap-3 whitespace-nowrap">
+        {status.tone === "paused" && <IconPause size={20} aria-hidden="true" />}
+        <span>{status.label}</span>
       </span>
-      {status.detail && <span className="status-line__detail">— {status.detail}</span>}
+      {status.detail && <span className="text-base font-medium tracking-normal text-ink-2 max-[30rem]:basis-full max-[30rem]:text-sm">— {status.detail}</span>}
     </p>
   );
 }
@@ -287,11 +310,11 @@ function BackLink({
   /** Sound is (meant to be) going out right now: leaving stops it. */
   listening?: boolean;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useRef<LiveDialogHandle>(null);
   return (
     <>
       <a
-        className="live__back"
+        className="-mt-3 -mb-2 -ml-2 inline-flex min-h-11 items-center gap-2 self-start rounded-md px-2 text-sm font-semibold text-ink-2 no-underline hover:bg-sunk hover:text-ink hover:no-underline"
         href={href}
         onClick={(event) => {
           if (!confirm) return;
@@ -300,7 +323,7 @@ function BackLink({
         }}
       >
         <IconArrowLeft size={18} aria-hidden="true" />
-        <span className="visually-hidden">Tillbaka till </span>
+        <span className="sr-only">Tillbaka till </span>
         {label}
       </a>
       {confirm && (
@@ -325,7 +348,7 @@ function BackLink({
 
 function PrivacyNote() {
   return (
-    <p className="subtle live__privacy">
+    <p className="mt-4 text-center text-sm text-ink-3">
       Ingen ljudinspelning sparas. Läs mer i <a href="/integritet">integritetsinformationen</a>.
     </p>
   );

@@ -3,7 +3,9 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { IconMic, IconMicOff } from "@/components/ui/icons";
+import { cn } from "@/lib/utils";
 
 export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | null;
 
@@ -96,15 +98,15 @@ export function ConsentStep({
     if (heard) setEverHeard(true);
   }, [heard]);
   return (
-    <section className="consent" aria-labelledby={`${id}-title`}>
-      <div className="consent__head">
-        <p className="muted">{orgName}</p>
-        <h1 id={`${id}-title`} className="consent__title">
+    <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby={`${id}-title`}>
+      <div className="flex flex-col gap-1">
+        <p className="text-ink-2">{orgName}</p>
+        <h1 id={`${id}-title`} className="text-2xl">
           Innan ni börjar
         </h1>
       </div>
 
-      <ul className="consent__facts">
+      <ul className="flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">
         <li>Laptopen lyssnar med sin egen mikrofon. Ställ den mitt på bordet.</li>
         {agendaDoc ? (
           <li>
@@ -122,19 +124,19 @@ export function ConsentStep({
       </ul>
 
       {(onMicCheck || testing) && (
-        <div className="miccheck">
-          <span className="miccheck__label">Mikrofon</span>
+        <div className="flex min-h-11 flex-wrap items-center gap-3 text-sm">
+          <span className="font-semibold">Mikrofon</span>
           {testing ? (
             <>
-              <span className="miccheck__meter" role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={bars} aria-label="Ljudnivå">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <span key={n} className={`miccheck__bar${n <= bars ? " is-on" : ""}`} />
+              <span className="inline-flex h-5 items-end gap-[3px]" role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={bars} aria-label="Ljudnivå">
+                {["h-[30%]", "h-[45%]", "h-[60%]", "h-[80%]", "h-full"].map((height, i) => (
+                  <span key={height} className={cn("w-[6px] rounded-[2px]", height, i < bars ? "bg-green" : "bg-line")} />
                 ))}
               </span>
-              <span className={`miccheck__state${heard ? " is-heard" : ""}`} aria-hidden="true">
+              <span className={heard ? "font-semibold text-green" : "text-ink-2"} aria-hidden="true">
                 {heard ? "Hör dig" : "Hör inget än. Säg något."}
               </span>
-              <span className="visually-hidden" aria-live="polite">
+              <span className="sr-only" aria-live="polite">
                 {everHeard ? "Mikrofonen fungerar, vi hör dig." : "Testar mikrofonen. Säg något."}
               </span>
             </>
@@ -160,14 +162,14 @@ export function ConsentStep({
         />
       )}
 
-      <label className={`consent__check${confirmed ? " is-checked" : ""}`} htmlFor={`${id}-ok`}>
-        <input
-          id={`${id}-ok`}
-          type="checkbox"
-          checked={confirmed}
-          onChange={(event) => setConfirmed(event.target.checked)}
-          disabled={starting}
-        />
+      <label
+        className={cn(
+          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg border border-control p-4 leading-[1.35] font-medium transition-colors duration-120 hover:border-ink-3",
+          confirmed && "border-green bg-green-wash hover:border-green",
+        )}
+        htmlFor={`${id}-ok`}
+      >
+        <Checkbox id={`${id}-ok`} tone="green" checked={confirmed} onCheckedChange={(on) => setConfirmed(on === true)} disabled={starting} />
         <span>Alla i rummet vet att mötet transkriberas och kan be om paus</span>
       </label>
 
@@ -186,7 +188,7 @@ export function ConsentStep({
         {starting ? "Startar…" : "Starta mötet"}
       </Button>
       {(!confirmed || !agendaConfirmed) && (
-        <p id={`${id}-why`} className="hint consent__why">
+        <p id={`${id}-why`} className="-mt-4 text-center text-xs text-ink-3">
           {!confirmed ? "Kryssa i rutan ovan först." : "Välj dagordning eller skapa ett nytt dokument först."}
         </p>
       )}

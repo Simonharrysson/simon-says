@@ -1,14 +1,22 @@
 "use client";
 
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useImperativeHandle, useState, type ReactNode } from "react";
 import { Button, type ButtonVariant } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+
+/** Opens and closes a LiveDialog from the button that asks for it. */
+export interface LiveDialogHandle {
+  showModal: () => void;
+  close: () => void;
+}
 
 /**
- * A native confirm dialog for the live page (focus trap, Esc, backdrop click). The safe choice
- * is first and gets focus, so a stray Enter never ends or leaves a meeting.
+ * The live page's confirm dialog (shadcn Dialog: focus trap, Esc, backdrop click, focus back to
+ * the trigger). The safe choice is first and gets focus, so a stray Enter never ends or leaves
+ * a meeting.
  */
 export const LiveDialog = forwardRef<
-  HTMLDialogElement,
+  LiveDialogHandle,
   {
     id: string;
     title: string;
@@ -22,31 +30,32 @@ export const LiveDialog = forwardRef<
     onConfirm: () => void;
   }
 >(function LiveDialog({ id, title, children, stayLabel, confirmLabel, confirmVariant = "danger", stayVariant = "ghost", confirmIcon, onConfirm }, ref) {
-  const dialog = () => (typeof ref === "object" ? ref?.current : null);
+  const [open, setOpen] = useState(false);
+  useImperativeHandle(ref, () => ({ showModal: () => setOpen(true), close: () => setOpen(false) }), []);
   return (
-    <dialog ref={ref} className="dialog" aria-labelledby={`${id}-title`} onClick={(e) => e.target === dialog() && dialog()?.close()}>
-      <div className="dialog__body">
-        <h2 id={`${id}-title`} className="dialog__title">
-          {title}
-        </h2>
-        <p className="dialog__text">{children}</p>
-      </div>
-      <div className="dialog__actions">
-        <Button variant={stayVariant} autoFocus onClick={() => dialog()?.close()}>
-          {stayLabel}
-        </Button>
-        <Button
-          variant={confirmVariant}
-          icon={confirmIcon}
-          onClick={() => {
-            dialog()?.close();
-            onConfirm();
-          }}
-        >
-          {confirmLabel}
-        </Button>
-      </div>
-    </dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent id={id}>
+        <DialogBody>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{children}</DialogDescription>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant={stayVariant} autoFocus onClick={() => setOpen(false)}>
+            {stayLabel}
+          </Button>
+          <Button
+            variant={confirmVariant}
+            icon={confirmIcon}
+            onClick={() => {
+              setOpen(false);
+              onConfirm();
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 });
 

@@ -1,6 +1,7 @@
 import { IconDoc, IconExternal } from "@/components/ui/icons";
 import { formatAgo, formatClock } from "@/lib/format";
 import type { DocHealth } from "@/lib/ui/live-status";
+import { cn } from "@/lib/utils";
 
 /**
  * The meeting's Google Doc: the real output. Opens in a new tab. The card also answers
@@ -41,17 +42,17 @@ export function DocLink({
 
   const inner = (
     <>
-      <span className="doclink__icon" aria-hidden="true">
+      <span className="grid size-11 place-items-center rounded-md bg-blue-wash text-blue" aria-hidden="true">
         <IconDoc size={22} />
       </span>
-      <span className="doclink__main">
-        <span className="doclink__title">{title}</span>
-        <span className={`doclink__meta doclink__meta--${tone}`}>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate font-semibold">{title}</span>
+        <span className={cn("inline-flex items-center gap-2 text-sm text-ink-2", tone === "green" && "text-green", tone === "red" && "font-semibold text-red")}>
           {meta}
         </span>
       </span>
       {url && (
-        <span className="doclink__open">
+        <span className="inline-flex items-center gap-1 text-sm font-semibold text-blue">
           Öppna
           <IconExternal size={16} />
         </span>
@@ -59,12 +60,12 @@ export function DocLink({
     </>
   );
   return url && !pending ? (
-    <a className="doclink" href={url} target="_blank" rel="noopener noreferrer">
+    <a className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg bg-surface px-6 py-4 text-ink no-underline shadow-panel transition-[box-shadow,transform] duration-200 ease-out hover:no-underline hover:shadow-[0_0_0_1px_var(--rail)]" href={url} target="_blank" rel="noopener noreferrer">
       {inner}
-      <span className="visually-hidden">(Google-dokument, öppnas i ny flik)</span>
+      <span className="sr-only">(Google-dokument, öppnas i ny flik)</span>
     </a>
   ) : (
-    <div className="doclink doclink--pending" aria-busy={pending || undefined}>
+    <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg bg-surface px-6 py-4 text-ink no-underline shadow-panel transition-[box-shadow,transform] duration-200 ease-out opacity-70" aria-busy={pending || undefined}>
       {inner}
     </div>
   );

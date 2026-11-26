@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { IconCheck } from "@/components/ui/icons";
+import { cn } from "@/lib/utils";
 
 export interface NameRoundEntry {
   key: string;
@@ -30,32 +31,32 @@ export function NameRound({
 }) {
   const heard = entries;
   return (
-    <section className="nameround" aria-labelledby="nameround-title">
-      <div className="nameround__prompt">
-        <h2 id="nameround-title" className="nameround__title">
+    <section className="flex flex-col gap-4 rounded-lg bg-surface p-6 shadow-[inset_0_0_0_1px_var(--blue)]" aria-labelledby="nameround-title">
+      <div className="flex flex-col gap-1">
+        <h2 id="nameround-title" className="text-xl">
           Namnrunda
         </h2>
-        <p className="nameround__say">
+        <p className="text-lg font-semibold [&_q]:[quotes:'”'_'”']">
           Säg <q>Jag heter …</q> en i taget.
         </p>
-        <p className="muted">Då står det era namn i anteckningarna i stället för Talare 1, Talare 2.</p>
+        <p className="text-ink-2">Då står det era namn i anteckningarna i stället för Talare 1, Talare 2.</p>
       </div>
-      <ol className="nameround__list" aria-live="polite" aria-label="Namn vi hört">
-        {heard.length === 0 && <li className="nameround__waiting">Väntar på första rösten…</li>}
+      <ol className="flex flex-wrap gap-2" aria-live="polite" aria-label="Namn vi hört">
+        {heard.length === 0 && <li className="text-sm text-ink-3">Väntar på första rösten…</li>}
         {heard.map((entry) => (
-          <li key={entry.key} className={`nameplate${entry.needsConfirm ? " nameplate--unsure" : ""}`}>
-            <span className="nameplate__name">
+          <li key={entry.key} className="inline-flex animate-plate-in items-center gap-2 rounded-md bg-sunk px-[0.8rem] py-[0.4rem]">
+            <span className={cn("font-semibold", entry.needsConfirm && "text-blue")}>
               {entry.name ?? "…"}
               {entry.name && entry.needsConfirm && "?"}
             </span>
-            <span className="nameplate__label">{entry.label}</span>
+            <span className="text-xs text-ink-3">{entry.label}</span>
           </li>
         ))}
       </ol>
       {heard.some((e) => e.name && e.needsConfirm) && (
-        <p className="subtle">Namn med frågetecken kan du rätta i talarlistan när rundan är klar.</p>
+        <p className="text-sm text-ink-3">Namn med frågetecken kan du rätta i talarlistan när rundan är klar.</p>
       )}
-      <div className="cluster">
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" icon={<IconCheck />} onClick={onDone} disabled={busy}>
           {busy ? "Läser namnen…" : "Klar, alla har sagt sitt namn"}
         </Button>

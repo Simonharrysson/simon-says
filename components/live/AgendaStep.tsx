@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Button } from "@/components/ui/button";
+import { Check } from "@/components/ui/Field";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import type { FormatKind } from "@/lib/formats/schema";
 
 // The start screen's agenda step (A11): which Doc the meeting runs in. Doc names are the
@@ -133,12 +136,12 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   if (p.chosen?.kind === "agenda") {
     body = (
       <>
-        <p className="agenda__line agenda__choice" ref={choiceRef} tabIndex={-1}>
+        <p className="flex items-baseline gap-2" ref={choiceRef} tabIndex={-1}>
           <span>
-            Dagordning: <strong className="agenda__name">{p.chosen.name}</strong>
+            Dagordning: <strong className="wrap-anywhere">{p.chosen.name}</strong>
           </span>
         </p>
-        <div className="cluster">
+        <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
             Välj annan
           </Button>
@@ -151,15 +154,15 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   } else if (p.chosen?.kind === "new") {
     body = (
       <>
-        <p className="agenda__line agenda__choice" ref={choiceRef} tabIndex={-1}>
+        <p className="flex items-baseline gap-2" ref={choiceRef} tabIndex={-1}>
           <span>
             Nytt dokument i formatet <strong>{formatName}</strong>
           </span>
         </p>
         {off ? (
-          <p className="hint">Google-väljaren är inte inställd än.</p>
+          <p className="text-xs text-ink-3">Google-väljaren är inte inställd än.</p>
         ) : (
-          <div className="cluster">
+          <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
               Välj dagordning
             </Button>
@@ -168,16 +171,16 @@ export function AgendaStepView(p: AgendaStepViewProps) {
       </>
     );
   } else if (p.view.state === "loading") {
-    body = <p className="agenda__line muted">Letar efter dagens dagordning…</p>;
+    body = <p className="flex items-baseline gap-2 text-ink-2">Letar efter dagens dagordning…</p>;
   } else if (p.view.state === "suggestion") {
     body = (
       <>
-        <p className="agenda__line">
+        <p className="flex items-baseline gap-2">
           <span>
-            Förslag: <strong className="agenda__name">{p.view.suggestion.name}</strong>
+            Förslag: <strong className="wrap-anywhere">{p.view.suggestion.name}</strong>
           </span>
         </p>
-        <div className="cluster">
+        <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onUseSuggestion} disabled={lock}>
             Använd
           </Button>
@@ -193,11 +196,11 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   } else if (p.view.state === "folder-unreachable") {
     body = (
       <>
-        <p className="agenda__line">
+        <p className="flex items-baseline gap-2">
           Föreningen har en mötesmapp, men ditt Google-konto har inte öppnat den än. Välj den en gång, så hittar vi dagens
           dagordning.
         </p>
-        <div className="cluster">
+        <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onUseFolder} disabled={lock}>
             Använd mötesmappen
           </Button>
@@ -214,8 +217,8 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     // "none" (and picker-off before the fallback is set, which the container never shows)
     body = (
       <>
-        <p className="agenda__line">Ingen dagordning – skapa nytt dokument i formatet {formatName}</p>
-        <div className="cluster">
+        <p className="flex items-baseline gap-2">Ingen dagordning – skapa nytt dokument i formatet {formatName}</p>
+        <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onNewDoc} disabled={lock}>
             Skapa nytt dokument
           </Button>
@@ -230,37 +233,31 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   }
 
   return (
-    <section className="agenda" aria-labelledby={`${id}-title`} aria-busy={p.busy || undefined}>
-      <h2 id={`${id}-title`} className="agenda__title">
+    <section className="flex flex-col gap-3 rounded-lg border border-line p-4" aria-labelledby={`${id}-title`} aria-busy={p.busy || undefined}>
+      <h2 id={`${id}-title`} className="text-lg">
         Dagordning
       </h2>
-      <div className="agenda__body">{body}</div>
-      {p.message && <p className="agenda__message hint">{p.message}</p>}
-      <span className="visually-hidden" aria-live="polite">
+      <div className="flex flex-col gap-3">{body}</div>
+      {p.message && <p className="text-xs text-ink-3">{p.message}</p>}
+      <span className="sr-only" aria-live="polite">
         {announcement(p, formatName)}
       </span>
 
       {p.chosen?.kind === "agenda" && p.offerTranscript && (
-        <label className="check" htmlFor={`${id}-transcript`}>
-          <input
-            id={`${id}-transcript`}
-            type="checkbox"
-            checked={p.transcriptInDoc}
-            onChange={(e) => p.onTranscriptChange(e.target.checked)}
-            disabled={p.disabled}
-          />
-          <span className="check__title">Lägg transkriptet i dokumentet?</span>
-        </label>
+        <Check
+          id={`${id}-transcript`}
+          title="Lägg transkriptet i dokumentet?"
+          checked={p.transcriptInDoc}
+          onCheckedChange={(on) => p.onTranscriptChange(on === true)}
+          disabled={p.disabled}
+        />
       )}
 
       {p.formats.length > 1 && (
-        <div className="agenda__format">
-          <label className="label" htmlFor={`${id}-format`}>
-            Format
-          </label>
-          <select
+        <div className="flex max-w-[22rem] flex-col gap-1">
+          <Label htmlFor={`${id}-format`}>Format</Label>
+          <NativeSelect
             id={`${id}-format`}
-            className="input"
             value={p.formatValue}
             onChange={(e) => p.onFormatChange(e.target.value)}
             disabled={p.disabled}
@@ -271,7 +268,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
                 {f.isDefault ? " (förvalt)" : ""}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       )}
     </section>

@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { IconCheck, IconPencil, IconPlus } from "@/components/ui/icons";
 import { speakerKeyString, type PersonOption, type Speaker, type SpeakerChoice, type SpeakerKey } from "./types";
 
@@ -25,34 +29,29 @@ export function SpeakerList({
   const unknown = speakers.filter((s) => !s.displayName || s.needsConfirm).length;
 
   return (
-    <section className="speakers" aria-labelledby="speakers-title">
-      <div className="speakers__head">
-        <h2 id="speakers-title" className="panel__title">
+    <section className="flex flex-col overflow-hidden rounded-lg bg-surface shadow-panel" aria-labelledby="speakers-title">
+      <div className="flex items-center justify-between gap-3 px-6 py-4">
+        <h2 id="speakers-title" className="text-lg tracking-[-0.02em]">
           Talare
         </h2>
         {unknown > 0 && (
-          <span className="badge badge--info">
-            {unknown} att bekräfta
-          </span>
+          <Badge tone="info">{unknown} att bekräfta</Badge>
         )}
       </div>
       {speakers.length === 0 ? (
-        <p className="subtle speakers__empty">Talarna dyker upp här när de börjar prata.</p>
+        <p className="px-6 pb-6 text-sm text-ink-3">Talarna dyker upp här när de börjar prata.</p>
       ) : (
-        <ul className="speakers__list">
+        <ul>
           {speakers.map((speaker) => {
             const key = speakerKeyString(speaker);
             const open = editing === key;
             const toggle = () => setEditing(open ? null : key);
             return (
-              <li
-                key={key}
-                className={`speaker${!speaker.displayName ? " speaker--unknown" : ""}${speaker.needsConfirm ? " speaker--unsure" : ""}`}
-              >
-                <div className="speaker__row">
-                  <span className="speaker__who">
-                    <span className="speaker__label">{speaker.label}</span>
-                    <span className="speaker__name">
+              <li key={key} className="border-t border-line px-6 py-3">
+                <div className="flex min-h-11 items-center gap-2">
+                  <span className="flex min-w-0 flex-auto flex-col">
+                    <span className="font-mono text-xs whitespace-nowrap text-ink-3">{speaker.label}</span>
+                    <span className={cn("truncate font-semibold", (!speaker.displayName || speaker.needsConfirm) && "text-blue")}>
                       {speaker.displayName ? (
                         <>
                           {speaker.displayName}
@@ -63,11 +62,10 @@ export function SpeakerList({
                       )}
                     </span>
                   </span>
-                  <span className="speaker__actions">
+                  <span className="flex flex-none gap-1">
                     {speaker.displayName && speaker.needsConfirm && (
                       <Button
                         icon={<IconCheck size={16} />}
-                        className="speaker__confirm"
                         onClick={() =>
                           onAssign(speaker, {
                             personId: people.find((p) => p.name === speaker.displayName)?.id ?? null,
@@ -120,13 +118,13 @@ function SpeakerPicker({
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   return (
-    <div className="picker" role="group" aria-label={`Välj namn för ${speaker.label}`}>
-      <div className="picker__chips">
+    <div className="flex flex-col gap-2 pt-2" role="group" aria-label={`Välj namn för ${speaker.label}`}>
+      <div className="flex flex-wrap gap-2">
         {people.map((person) => (
           <button
             key={person.id}
             type="button"
-            className={`chip${person.name === speaker.displayName ? " chip--current" : ""}`}
+            className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink transition-colors duration-120 hover:border-ink-3 hover:bg-sunk", person.name === speaker.displayName && "border-ink bg-ink text-on-ink hover:border-ink hover:bg-ink")}
             aria-pressed={person.name === speaker.displayName}
             onClick={() => onPick({ personId: person.id, displayName: person.name })}
           >
@@ -134,27 +132,26 @@ function SpeakerPicker({
           </button>
         ))}
         {!adding && (
-          <button type="button" className="chip chip--add" onClick={() => setAdding(true)}>
+          <button type="button" className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink transition-colors duration-120 hover:border-ink-3 hover:bg-sunk", "border-dashed text-ink-2")} onClick={() => setAdding(true)}>
             <IconPlus size={14} /> Någon annan
           </button>
         )}
       </div>
       {adding && (
         <form
-          className="inline-form"
+          className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             const clean = name.trim();
             if (clean) onPick({ personId: null, displayName: clean });
           }}
         >
-          <div className="field">
-            <label className="visually-hidden" htmlFor={`new-${speaker.elSessionId}-${speaker.speakerLabel}`}>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <Label className="sr-only" htmlFor={`new-${speaker.elSessionId}-${speaker.speakerLabel}`}>
               Namn
-            </label>
-            <input
+            </Label>
+            <Input
               id={`new-${speaker.elSessionId}-${speaker.speakerLabel}`}
-              className="input"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Namn"
