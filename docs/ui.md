@@ -550,3 +550,34 @@ Inställningar links to the guide.
 
 **Klart**: what was done (✓) and skipped (– · Gör nu), "Förbered första mötet →" (primary).
 `/design`: `onboarding-*`, `org-kom-igang`, `orgs-logos`.
+
+## Sammanfattning efter mötet (Simon's todo, migration 0037)
+
+**Setting** (Inställningar, admins; `SummarySettingsForm`, `updateSummaryAction` → `set_summary_settings`):
+four radio cards, **Till de som missade mötet** (default) · Till alla · Till utvalda personer · Av. "Utvalda"
+opens a checkbox list of the people list (no address: disabled, "Ingen e-postadress"; unsubscribed: "Har
+avslutat prenumerationen"). Other modes show how many people have an address. Ticks are kept when the mode changes.
+
+**When**: `finishMeeting` sets the meeting `done`, then `trySendMeetingSummaries` (best effort, never changes the
+end); the 5-minute cron (`sendPendingSummaries`) sends what that skipped: a Doc paused at the end (after its final
+pass), a failed attempt; only meetings that ended in the last 48 h. Once per meeting (`meetings.summary_state`
+claimed atomically) and per person (`meeting_summary_sends`, inserted before the mailer is called; a failed send
+is not retried). Never for a Testmöte, never when the meeting has no decision, open task or other note.
+
+**Who** (`lib/summaries/recipients.ts`): only the förening's people with an address (the linked account's,
+else `people.email`), deduplicated. Present = a named voice (speaker map, merges), a Närvarande name (full or
+first name; an ambiguous first name counts all of them as present), or the starter's account. "Missed" with
+nobody identified sends nothing. Unsubscribed people never get it.
+
+**The e-mail** (`lib/summaries/email.ts`, design A "Calm Geist" from the invite e-mail): subject
+"Sammanfattning: <förening> <24 november>", "Du missade mötet 24 november" (or "Mötet 24 november"),
+**Dina uppgifter** first in a grey box (owner id, name or role), Beslut, (Övriga) uppgifter with owners, Övrigt
+(max 3); lists capped with "… och N till i protokollet"; no Må-runda items, no info cells, no done tasks.
+**Öppna protokollet**: the Doc for the starter and members it was shared with; other members go to the meeting's
+row on the förening page (`#mote-<id>`, Få åtkomst); people without an account get the Doc with a line on asking
+for access. Footer: "Ändra vilka som får sammanfattningar" (admins) · **Avsluta prenumeration**
+(`/sammanfattning/avsluta?t=…`, a button, since mail scanners open links; one-click `POST
+/api/summaries/unsubscribe` via `List-Unsubscribe` + `List-Unsubscribe-Post`). The token is an HMAC of the
+person id (own label under TOKEN_ENC_KEY), no expiry. Logs and the `summary` event hold counts only.
+`/design`: `org-summary-*`, `summary-email*`, `unsubscribe-*`, and `org-admin`. Screenshots:
+`emails/summary/shoot.sh` (desktop/phone, light/dark, into `.superpowers/meeting-summary/`).
