@@ -138,10 +138,11 @@ describe.skipIf(!hasLocalSupabase)("invites route", () => {
   });
 
   it("a förening named like a link is refused with a sentence; nothing is sent", async () => {
-    const r = await createOrg(admin.db, "Konto låst – verifiera på bank-login.se");
-    if (!r.ok) throw new Error("org");
+    // Two föreningar per creator: rename this one for the test, then back.
+    await adminClient().from("orgs").update({ name: "Konto låst – verifiera på bank-login.se" }).eq("id", orgId);
     m.db = admin.db;
-    const res = await post(r.id, { emails: "offer@example.com" });
+    const res = await post(orgId, { emails: "offer@example.com" });
+    await adminClient().from("orgs").update({ name: "Inbjudningsföreningen" }).eq("id", orgId);
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toBe("name_link_org");
     expect(m.sent).toHaveLength(0);
