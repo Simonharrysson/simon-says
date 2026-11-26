@@ -81,6 +81,13 @@ export async function setProtocolDate(db: SupabaseClient, orgId: string, protoco
   return { ok: data === true, code: null };
 }
 
+/** Tab ids of the transcript tabs Simon Says wrote for the org's meetings: never read by an import. */
+export async function transcriptTabIds(db: SupabaseClient, orgId: string): Promise<Set<string>> {
+  const { data, error } = await db.from("meetings").select("transcript_tab_id").eq("org_id", orgId).not("transcript_tab_id", "is", null);
+  if (error) throw new Error(`history: transcript tabs: ${error.message}`);
+  return new Set(((data ?? []) as { transcript_tab_id: string }[]).map((r) => r.transcript_tab_id));
+}
+
 /** Drive ids of the org's own Simon Says Docs (their meetings are already in the history). */
 export async function ownDocIds(db: SupabaseClient, orgId: string, docIds: string[]): Promise<Set<string>> {
   if (!docIds.length) return new Set();

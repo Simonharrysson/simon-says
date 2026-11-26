@@ -6,11 +6,26 @@ import { docTabs, splitProtocols, type SplitResult } from "./doc-text";
 // Reads one picked protocol with the admin's own Google grant (drive.file: the Picker granted
 // exactly the picked files). The text goes to the extraction call only; never stored or logged.
 
-/** The picked Doc split into one section per meeting (transcript tabs never read; see doc-text.ts). */
-export async function readProtocolDoc(auth: OAuth2Client, documentId: string): Promise<{ title: string; split: SplitResult }> {
-  const doc = (await docsApi(auth).documents.get({ documentId, includeTabsContent: true })).data;
-  const title = (doc.title ?? "").trim();
-  return { title, split: splitProtocols(title, docTabs(doc)) };
+/**
+ * The picked Doc split into one section per meeting (see doc-text.ts). Transcript tabs are never
+ * read: by title, and by id (`skipTabIds`, the org's meetings' transcript tabs). The Doc's last
+ * edit is the reference for meeting headings without a year.
+ */
+export async function readProtocolDoc(
+  auth: OAuth2Client,
+  documentId: string,
+  opts: { skipTabIds?: Set<string> } = {},
+): Promise<{ title: string; split: SplitResult }> {
+  const [doc, file] = await Promise.all([
+    docsApi(auth).documents.get({ documentId, includeTabsContent: true }),
+    driveApi(auth)
+      .files.get({ fileId: documentId, fields: "modifiedTime", supportsAllDrives: true })
+      .catch(() => null),
+  ]);
+  const title = (doc.data.title ?? "").trim();
+  const modified = file?.data.modifiedTime;
+  const referenceDate = modified && /^\d{4}-\d{2}-\d{2}/.test(modified) ? modified.slice(0, 10) : undefined;
+  return { title, split: splitProtocols(title, docTabs(doc.data, opts.skipTabIds), { referenceDate }) };
 }
 
 /** The Drive file's creation date (YYYY-MM-DD), the fallback when the protocol holds no date. */

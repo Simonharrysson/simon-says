@@ -8,7 +8,7 @@ import { MANY_MEETINGS_MESSAGE } from "@/lib/history/doc-text";
 import { MAX_DOC_CHARS } from "@/lib/history/extract-prompt";
 import { MAX_IMPORT_DOCS, OWN_DOC_MESSAGE } from "@/lib/history/limits";
 import { googleStatus, readProtocolDoc } from "@/lib/history/read-doc";
-import { historySummary, ownDocIds } from "@/lib/history/store";
+import { historySummary, ownDocIds, transcriptTabIds } from "@/lib/history/store";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -48,15 +48,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   let own: Set<string>;
+  let skipTabIds: Set<string>;
   let ownMeetings: number;
   let imported: number;
   try {
-    const [o, m, h] = await Promise.all([
+    const [o, t, m, h] = await Promise.all([
       ownDocIds(db, id, docIds),
+      transcriptTabIds(db, id),
       db.from("meetings").select("id", { count: "exact", head: true }).eq("org_id", id).eq("is_test", false).in("status", ["done", "abandoned"]),
       historySummary(db, id).catch(() => ({ count: 0 })),
     ]);
     own = o;
+    skipTabIds = t;
     ownMeetings = m.count ?? 0;
     imported = h.count;
   } catch (err) {
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const part = await Promise.all(
         docIds.slice(i, i + PARALLEL).map(async (docId): Promise<{ doc: EstimateDoc; chars: number[] }> => {
           if (own.has(docId)) return { doc: { docId, error: "own_doc", message: OWN_DOC_MESSAGE }, chars: [] };
-          const { split } = await readProtocolDoc(auth, docId);
+          const { split } = await readProtocolDoc(auth, docId, { skipTabIds });
           if (!split.ok) {
             const message = split.reason === "empty" ? "Dokumentet är tomt." : split.reason === "too-many" ? "Dokumentet innehåller fler än 60 möten." : MANY_MEETINGS_MESSAGE;
             return { doc: { docId, error: split.reason, message }, chars: [] };

@@ -8,7 +8,7 @@ import { extractProtocol } from "@/lib/history/extract";
 import { MAX_DOC_CHARS, validDate } from "@/lib/history/extract-prompt";
 import { IMPORT_RATE_LIMITED, OWN_DOC_MESSAGE } from "@/lib/history/limits";
 import { fileCreatedDate, googleStatus, readProtocolDoc } from "@/lib/history/read-doc";
-import { ownDocIds, saveImportedProtocol } from "@/lib/history/store";
+import { ownDocIds, saveImportedProtocol, transcriptTabIds } from "@/lib/history/store";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -59,7 +59,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const secs = sections as number;
 
   let names: string[];
+  let skipTabIds: Set<string>;
   try {
+    skipTabIds = await transcriptTabIds(db, id);
     if ((await ownDocIds(db, id, [docId])).size) return fail("own_doc", 422, OWN_DOC_MESSAGE);
     const { data: people, error: peopleError } = await db.from("people").select("name").eq("org_id", id);
     if (peopleError) throw new Error(peopleError.message);
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let doc: Awaited<ReturnType<typeof readProtocolDoc>>;
   try {
     auth = await getGoogleAuth(user.id);
-    doc = await readProtocolDoc(auth, docId);
+    doc = await readProtocolDoc(auth, docId, { skipTabIds });
   } catch (err) {
     if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
     const status = googleStatus(err);
@@ -112,8 +114,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   // The date: what Claude read, else the section's dated heading, else the Doc's creation date.
+  // A heading whose year was inferred counts as "file": the admin is asked to check it.
   let date = res.protocol.date ?? validDate(part.date);
-  let dateFrom: "doc" | "file" = "doc";
+  let dateFrom: "doc" | "file" = !res.protocol.date && part.dateInferred ? "file" : "doc";
   if (!date) {
     dateFrom = "file";
     try {
