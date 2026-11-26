@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
-import { Button } from "@/components/ui/button";
 
-/** Admins: pick the förening's meeting folder in the Google Picker (POST /api/orgs/<id>/meeting-folder). */
-export function MeetingFolderButton({ orgId, hasFolder }: { orgId: string; hasFolder: boolean }) {
+/**
+ * Admins: pick the förening's meeting folder in the Google Picker (POST /api/orgs/<id>/meeting-folder).
+ * `pick` opens the Picker right away (user activation); `message` is the polite result line.
+ */
+export function useMeetingFolderPicker(orgId: string) {
   const picker = usePicker();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -37,16 +39,5 @@ export function MeetingFolderButton({ orgId, hasFolder }: { orgId: string; hasFo
     }
   };
 
-  return (
-    <div className="flex flex-col gap-2">
-      <div>
-        <Button variant="secondary" loading={busy} onClick={() => void pick()}>
-          {hasFolder ? "Byt mötesmapp" : "Välj mötesmapp"}
-        </Button>
-      </div>
-      <p className="text-xs text-ink-3" aria-live="polite">
-        {message ?? ""}
-      </p>
-    </div>
-  );
+  return { pick, busy, message };
 }
