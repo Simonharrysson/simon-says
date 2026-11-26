@@ -39,6 +39,7 @@ import { pendingNameRounds, runNameRound, type ExtractFn } from "@/lib/names/rou
 import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/meetings/presence";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { sendPendingSummaries, trySendMeetingSummaries } from "@/lib/summaries/send";
 
 // Server-driven notes ticks (Task 10). One tick, under a per-meeting lease:
 //   assign tick_no to new segments → read notes tab → diff human edits → Claude (updateNotes)
@@ -1272,6 +1273,9 @@ export async function finishMeeting(
       }
       await logEvent(meetingId, "alarm", { reason: "no_final_pass", attempts: attempt, finalTick: result, sent });
     }
+    // The summary e-mails (0037), best effort: never changes how the meeting ended. A Doc paused
+    // at the end is skipped here; the cron sends once its final pass is written.
+    if (finalStatus === "done" && !getEnv().KILL_SWITCH) await trySendMeetingSummaries(meetingId, { mailer: deps.mailer, now: deps.now });
     return "done";
   } catch (e) {
     console.error(`end ${meetingId}: attempt ${attempt}: ${errorText(e)}`);
@@ -1358,6 +1362,8 @@ export interface SweepSummary {
   finished: number;
   resumed: number;
   caughtUp: number;
+  /** Meetings whose summary e-mails the sweep handled (0037). */
+  summaries: number;
 }
 
 /**
@@ -1376,7 +1382,7 @@ export async function finalizeSweep(
   const deadlineAt = new Date(deps.now().getTime() + (opts.budgetMs ?? 250_000));
   const left = () => deadlineAt.getTime() - deps.now().getTime() > SWEEP_MIN_LEFT_MS;
   const env = getEnv();
-  const summary: SweepSummary = { sessionsClosed: 0, autoEnded: 0, abandoned: 0, finished: 0, resumed: 0, caughtUp: 0 };
+  const summary: SweepSummary = { sessionsClosed: 0, autoEnded: 0, abandoned: 0, finished: 0, resumed: 0, caughtUp: 0, summaries: 0 };
   const scoped = <T extends { org_id: string }>(rows: T[]) => (opts.orgId ? rows.filter((r) => r.org_id === opts.orgId) : rows);
 
   try {
@@ -1463,6 +1469,13 @@ export async function finalizeSweep(
     } catch (e) {
       console.error(`sweep: resume ${m.id}: ${errorText(e)}`);
     }
+  }
+
+  // Summaries (0037) the end didn't send: a Doc that was paused at the end, or a failed attempt.
+  try {
+    summary.summaries = await sendPendingSummaries({ mailer: deps.mailer, now: deps.now }, { orgId: opts.orgId, left });
+  } catch (e) {
+    console.error(`sweep: summaries: ${errorText(e)}`);
   }
 
   // Only live, unpaused, fresh meetings (paused ones keep their segments unassigned by design).
