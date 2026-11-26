@@ -35,6 +35,7 @@ let grantedScope = DRIVE;
 // The user the code exchange signs in (another Google account at consent → another user).
 let exchanged = { id: "u1", email: "simon@example.com" };
 let providerRefresh: string | undefined = "1//google-refresh";
+let savedLocale: string | null = null;
 
 beforeAll(() => {
   Object.assign(process.env, testEnv);
@@ -55,6 +56,8 @@ beforeAll(() => {
     if (url.includes("/auth/v1/user")) return Response.json(user);
     if (url.includes("/auth/v1/logout")) return new Response(null, { status: 204 });
     if (url.includes("tokeninfo")) return Response.json({ scope: grantedScope });
+    // The account's saved UI language (0040): none unless a test sets one.
+    if (url.includes("/rest/v1/user_settings")) return Response.json(savedLocale ? { locale: savedLocale } : null, { status: savedLocale ? 200 : 406 });
     throw new Error(`unexpected fetch ${init?.method ?? "GET"} ${url}`);
   });
 });
@@ -105,6 +108,19 @@ describe("auth callback", () => {
       expect(decode(value)).not.toContain("provider_");
       expect(decode(value)).not.toContain("google-refresh");
     }
+  });
+
+  it("copies the account's saved UI language into the lang cookie", async () => {
+    savedLocale = "en";
+    try {
+      const res = await call();
+      expect(res.headers.get("location")).toBe("https://example.com/");
+      expect(res.cookies.get("lang")?.value).toBe("en");
+    } finally {
+      savedLocale = null;
+    }
+    const res = await call();
+    expect(res.cookies.get("lang")).toBeUndefined();
   });
 
   it("returns to a safe next path (invite link) and ignores an unsafe one", async () => {

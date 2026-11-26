@@ -1,11 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { IconCheck } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
 import {
   EMAIL_CATEGORIES,
-  EMAIL_CATEGORY_INFO,
   type EmailCategory,
   type EmailPrefs,
   withCategory,
@@ -31,6 +31,7 @@ export function EmailPrefsForm({
   /** The category the mail's link was about: named first, so it's the obvious one to turn off. */
   highlight?: EmailCategory;
 }) {
+  const t = useTranslations("mailPrefs");
   const [prefs, setPrefs] = useState(initial);
   const [status, setStatus] = useState<"idle" | "saved" | "failed">("idle");
   const [pending, startTransition] = useTransition();
@@ -66,17 +67,16 @@ export function EmailPrefsForm({
       <ul className="flex flex-col divide-y divide-line">
         {order.map((category) => {
           const id = `${idPrefix}-${category}`;
-          const info = EMAIL_CATEGORY_INFO[category];
           return (
             <li key={category} className="py-3 first:pt-0">
               <SwitchRow
                 id={id}
-                title={info.label}
+                title={t(`categories.${category}.label`)}
                 checked={!prefs.off.includes(category)}
                 disabled={prefs.allOff}
                 onChange={(on) => apply(withCategory(prefs, category, on))}
               >
-                {info.description}
+                {t(`categories.${category}.description`)}
               </SwitchRow>
             </li>
           );
@@ -84,23 +84,21 @@ export function EmailPrefsForm({
         <li className="py-3 last:pb-0">
           <SwitchRow
             id={`${idPrefix}-all-off`}
-            title="Inga mejl alls"
+            title={t("allOff")}
             checked={prefs.allOff}
             onChange={(allOff) => apply({ allOff, off: prefs.off })}
           >
-            {prefs.allOff
-              ? "Simon Says skickar inga mejl till dig. Valen ovanför finns kvar när du stänger av det här."
-              : "Stänger av allt ovanför på en gång."}
+            {prefs.allOff ? t("allOffOn") : t("allOffOff")}
           </SwitchRow>
         </li>
       </ul>
       <p className="min-h-6 text-sm" role="status" aria-live="polite">
         {status === "saved" && (
           <span className="inline-flex items-center gap-1 font-semibold text-green">
-            <IconCheck size={18} /> Sparat
+            <IconCheck size={18} /> {t("saved")}
           </span>
         )}
-        {status === "failed" && <span className="font-semibold text-red">Det gick inte att spara. Försök igen.</span>}
+        {status === "failed" && <span className="font-semibold text-red">{t("saveFailed")}</span>}
       </p>
     </div>
   );

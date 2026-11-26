@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasGoogleToken, storeGoogleToken, storeImportToken } from "@/lib/google/client";
 import { fetchGrantedScope, hasDriveFile, hasDriveReadonly } from "@/lib/google/scopes";
+import { defaultLocale, isLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from "@/lib/i18n/config";
+import { loadMyLocale, saveMyLocale } from "@/lib/i18n/user-locale";
 import { loginErrorPath, safeNextPath } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -94,7 +96,23 @@ export async function GET(request: NextRequest) {
     return fail("kod");
   }
 
-  return to(safeNextPath(next));
+  return withSavedLocale(to(safeNextPath(next)));
+
+  /**
+   * The account's saved UI language (0040) follows it to this browser via the `lang` cookie. With
+   * none saved, an English choice made while signed out becomes the account's. Best effort.
+   */
+  async function withSavedLocale(response: NextResponse) {
+    try {
+      const saved = await loadMyLocale(supabase, session.user.id);
+      const current = request.cookies.get(LOCALE_COOKIE)?.value;
+      if (saved) response.cookies.set(LOCALE_COOKIE, saved, { path: "/", maxAge: LOCALE_COOKIE_MAX_AGE, sameSite: "lax" });
+      else if (isLocale(current) && current !== defaultLocale) await saveMyLocale(supabase, current);
+    } catch {
+      // The cookie (or Swedish) stays.
+    }
+    return response;
+  }
 
   async function finishDriveRequest() {
     if (!beforeUser || !before || beforeUser.id !== session.user.id) {

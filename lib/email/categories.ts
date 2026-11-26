@@ -13,21 +13,7 @@ export const EMAIL_CATEGORIES = ["meeting_summary", "invite"] as const;
 
 export type EmailCategory = (typeof EMAIL_CATEGORIES)[number];
 
-export interface EmailCategoryInfo {
-  label: string;
-  description: string;
-}
-
-export const EMAIL_CATEGORY_INFO: Record<EmailCategory, EmailCategoryInfo> = {
-  meeting_summary: {
-    label: "Sammanfattning efter möten",
-    description: "Anteckningarna från ett möte du missade, eller från alla möten om föreningen valt det.",
-  },
-  invite: {
-    label: "Inbjudningar",
-    description: "När en förening bjuder in dig till Simon Says, och påminnelser om inbjudan.",
-  },
-};
+// Labels and descriptions are UI copy: lib/i18n/messages/*/mailPrefs.json (categories.*).
 
 export function isEmailCategory(value: unknown): value is EmailCategory {
   return typeof value === "string" && (EMAIL_CATEGORIES as readonly string[]).includes(value);

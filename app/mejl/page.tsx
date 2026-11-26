@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { MailPrefsView } from "@/components/views/MailPrefsView";
 import { PublicShell } from "@/components/views/PublicShell";
 import { isEmailCategory } from "@/lib/email/categories";
@@ -9,20 +10,22 @@ import { saveLinkEmailPrefsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 // The token is in the URL: keep it out of Referer headers and search engines.
-export const metadata: Metadata = { title: "Mejl", referrer: "no-referrer", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("mailPrefs"))("metaTitle"), referrer: "no-referrer", robots: { index: false, follow: false } };
+}
 
 /** The link at the bottom of every user-facing mail. GET only shows; every change is a POST. */
 export default async function MailPrefsPage({ searchParams }: { searchParams: Promise<{ t?: string; k?: string }> }) {
-  const { t, k } = await searchParams;
+  const { t: token, k } = await searchParams;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  const email = checkEmailPrefsToken(t);
+  const email = checkEmailPrefsToken(token);
   const prefs = email ? await loadEmailPrefs({ email }) : null;
   return (
     <PublicShell signedIn={Boolean(user)}>
-      {!email || !t ? (
+      {!email || !token ? (
         <MailPrefsView state="invalid" />
       ) : !prefs ? (
         <MailPrefsView state="error" />
@@ -31,7 +34,7 @@ export default async function MailPrefsPage({ searchParams }: { searchParams: Pr
           state="ready"
           email={email}
           prefs={prefs}
-          save={saveLinkEmailPrefsAction.bind(null, t)}
+          save={saveLinkEmailPrefsAction.bind(null, token)}
           highlight={isEmailCategory(k) ? k : undefined}
         />
       )}

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { ALL_ON, allows, cleanOff, EMAIL_CATEGORIES, EMAIL_CATEGORY_INFO, isEmailCategory, withCategory } from "./categories";
+import { en, sv } from "@/lib/i18n/messages";
+import { ALL_ON, allows, cleanOff, EMAIL_CATEGORIES, isEmailCategory, withCategory } from "./categories";
 
 describe("e-mail categories", () => {
   it("every category has a Swedish label and a one-line description", () => {
     for (const c of EMAIL_CATEGORIES) {
-      expect(EMAIL_CATEGORY_INFO[c].label.length).toBeGreaterThan(3);
-      expect(EMAIL_CATEGORY_INFO[c].description).not.toContain("\n");
+      for (const m of [sv, en]) {
+        expect(m.mailPrefs.categories[c].label.length).toBeGreaterThan(3);
+        expect(m.mailPrefs.categories[c].description).not.toContain("\n");
+      }
     }
   });
 
