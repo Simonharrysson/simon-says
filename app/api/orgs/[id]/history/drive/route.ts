@@ -2,9 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
-import { getGoogleAuth, GoogleAuthLostError, storedGoogleScope } from "@/lib/google/client";
+import { deleteImportToken, DriveAccessMissingError, getImportGoogleAuth, hasImportAccess } from "@/lib/google/client";
 import { driveApi } from "@/lib/google/docs";
-import { hasDriveReadonly } from "@/lib/google/scopes";
 import {
   isInsufficientScope,
   listFilesInFolders,
@@ -17,6 +16,7 @@ import {
 } from "@/lib/history/drive-list";
 import { googleStatus } from "@/lib/history/read-doc";
 import { ownDocIds } from "@/lib/history/store";
+import { fileTicket } from "@/lib/history/ticket";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -50,9 +50,10 @@ function place(b: Extract<Body, { action: "folders" }>): FolderPlace | null {
 
 /**
  * The import's own Drive browser (no Google Picker). Admins of the förening only, with their OWN
- * Google grant, and only when it includes drive.readonly (the incremental consent); otherwise
- * 403 `needs_drive_access` and the page asks for it. At most 120 listings per user per 10 min
- * (0034 claim_drive_listing). Reads metadata only; nothing is stored; logs counts only.
+ * Google import grant (google_import_tokens: drive.readonly, under 24 h); otherwise
+ * 403 `needs_drive_access` and the page asks for it. At most 120 folders listed per user per
+ * 10 min (0034 claim_drive_listing). Each importable file carries a signed ticket: the only way
+ * the estimate and import routes will read it with the read access. Reads metadata only; nothing is stored; logs counts only.
  *
  * `{ action: "folders", place: "root" | "shared" | "drives" | "folder" | "search", id?, driveId?, query?, pageToken? }`
  *   → `{ folders: [{ id, name, driveId? }], nextPageToken }`
@@ -91,13 +92,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   try {
-    if (!hasDriveReadonly(await storedGoogleScope(user.id))) return fail("needs_drive_access", 403, NEEDS_ACCESS_MESSAGE);
+    if (!(await hasImportAccess(user.id))) return fail("needs_drive_access", 403, NEEDS_ACCESS_MESSAGE);
   } catch (err) {
-    console.error(`history/drive: scope: ${(err as Error).message}`.slice(0, 200));
+    console.error(`history/drive: access: ${(err as Error).message}`.slice(0, 200));
     return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
   }
 
-  const { data: allowed, error: claimError } = await db.rpc("claim_drive_listing", { p_org_id: id });
+  // One claim per folder listed: the browser's one, or each ticked folder now and the
+  // subfolders found below them after the walk.
+  const { data: allowed, error: claimError } = await db.rpc("claim_drive_listing", { p_org_id: id, p_count: at ? 1 : picked.length });
   if (claimError) {
     if (claimError.code === "42501") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
     console.error(`history/drive: claim: ${claimError.message}`.slice(0, 200));
@@ -106,7 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (allowed !== true) return fail("rate_limited", 429, "Du har bläddrat väldigt mycket på kort tid. Vänta några minuter och försök igen.");
 
   try {
-    const auth = await getGoogleAuth(user.id, { driveReadonly: true });
+    const auth = await getImportGoogleAuth(user.id);
     const api = driveApi(auth) as unknown as DriveLike;
     if (at) {
       const r = await listFolders(api, at, body?.action === "folders" && typeof body.pageToken === "string" ? body.pageToken : undefined);
@@ -115,20 +118,48 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     const roots = await resolveFolders(api, picked);
     const r = await listFilesInFolders(api, roots, { subfolders: body?.action === "files" && body.subfolders === true });
+    const extra = Math.min(100, r.folders - picked.length);
+    if (extra > 0) {
+      // Charged after the fact (the walk is already capped at 60 folders); a full budget only
+      // means the next listing waits.
+      const { error } = await db.rpc("claim_drive_listing", { p_org_id: id, p_count: extra });
+      if (error) console.error(`history/drive: claim subfolders: ${error.message}`.slice(0, 200));
+    }
     const ids = r.files.map((f) => f.id);
     const [own, imported] = await Promise.all([inChunks(ids, (part) => ownDocIds(db, id, part)), inChunks(ids, (part) => importedDocIds(db, id, part))]);
-    const files: ImportFile[] = r.files.map((f) => ({ ...f, status: own.has(f.id) ? "own" : imported.has(f.id) ? "imported" : f.status }));
+    const files: ImportFile[] = r.files.map((f) => {
+      const status = own.has(f.id) ? "own" : imported.has(f.id) ? "imported" : f.status;
+      // Only files the import may read get a ticket (never Simon Says' own, never .docx).
+      return status === "own" || status === "docx" ? { ...f, status } : { ...f, status, ticket: fileTicket(user.id, id, f.id) };
+    });
     console.info(`history/drive: files: ${files.length} in ${r.folders} folders${r.truncated ? " (truncated)" : ""}`);
     return NextResponse.json({ files, truncated: r.truncated, folders: r.folders }, { headers: noStore });
   } catch (err) {
-    if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
-    if (isInsufficientScope(err)) return fail("needs_drive_access", 403, NEEDS_ACCESS_MESSAGE);
+    if (err instanceof DriveAccessMissingError || isInsufficientScope(err)) return fail("needs_drive_access", 403, NEEDS_ACCESS_MESSAGE);
     const status = googleStatus(err);
     if (status === 403 || status === 404) return fail("folder_unreadable", 404, "Mappen finns inte längre, eller så har du inte åtkomst till den.");
     if (status === 429) return fail("google_busy", 503, "Google bad oss vänta en stund. Försök igen om en minut.");
     console.error(`history/drive: ${(err as Error).message}`.slice(0, 200));
     return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
   }
+}
+
+/** "Ta bort läsåtkomst": deletes our copy of the admin's import grant (not revoked at Google: that would end the sign-in grant too). */
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const db = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
+  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  try {
+    await deleteImportToken(user.id);
+  } catch (err) {
+    console.error(`history/drive: delete: ${(err as Error).message}`.slice(0, 200));
+    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+  }
+  return NextResponse.json({ ok: true }, { headers: noStore });
 }
 
 /** `fn` over `ids` in slices of 100 (keeps PostgREST's `in.(…)` URL short), results merged. */

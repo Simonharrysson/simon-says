@@ -7,8 +7,6 @@ import { DOC_MIME, FOLDER_MIME } from "@/lib/history/drive-list";
 
 // The import's own Drive browser against the local stack as real signed-in users. Google is a
 // fake Drive; fictional förening and titles.
-const READONLY = "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly";
-const FILE_ONLY = "openid email profile https://www.googleapis.com/auth/drive.file";
 
 const FOLDER = "1FolderProtokollAAA";
 const DOC_NEW = "1DocNyttProtokollAAA";
@@ -17,16 +15,20 @@ const DOC_OWN = "1DocSimonSaysEgetAA";
 
 const m = vi.hoisted(() => ({
   db: null as SupabaseClient | null,
-  scope: "" as string | null,
+  access: true,
+  deleted: 0,
   driveCalls: 0,
   driveError: null as unknown,
 }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
 vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => adminClient() }));
 vi.mock("@/lib/google/client", () => ({
-  getGoogleAuth: async () => ({}),
-  storedGoogleScope: async () => m.scope,
-  GoogleAuthLostError: class extends Error {},
+  getImportGoogleAuth: async () => ({}),
+  hasImportAccess: async () => m.access,
+  deleteImportToken: async () => {
+    m.deleted++;
+  },
+  DriveAccessMissingError: class extends Error {},
 }));
 vi.mock("@/lib/google/docs", () => ({
   driveApi: () => ({
@@ -56,7 +58,8 @@ vi.mock("@/lib/google/docs", () => ({
   }),
 }));
 
-const { POST } = await import("@/app/api/orgs/[id]/history/drive/route");
+const { POST, DELETE } = await import("@/app/api/orgs/[id]/history/drive/route");
+const { checkTicket } = await import("@/lib/history/ticket");
 const req = (body: unknown) => new NextRequest("https://x.test/d", { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
 
@@ -81,7 +84,8 @@ describe.skipIf(!hasLocalSupabase)("history drive browser route", () => {
   });
 
   beforeEach(() => {
-    m.scope = READONLY;
+    m.access = true;
+    m.deleted = 0;
     m.driveCalls = 0;
     m.driveError = null;
   });
@@ -92,9 +96,9 @@ describe.skipIf(!hasLocalSupabase)("history drive browser route", () => {
     expect(m.driveCalls).toBe(0);
   });
 
-  it("an admin without drive.readonly gets needs_drive_access, Drive untouched", async () => {
+  it("an admin without the import's read access gets needs_drive_access, Drive untouched", async () => {
     m.db = admin.db;
-    m.scope = FILE_ONLY;
+    m.access = false;
     const res = await POST(req({ action: "folders", place: "root" }), ctx(orgId));
     expect(res.status).toBe(403);
     expect((await res.json()).error).toBe("needs_drive_access");
@@ -121,6 +125,18 @@ describe.skipIf(!hasLocalSupabase)("history drive browser route", () => {
       [DOC_NEW, "ready", "2025-09-02"],
       [DOC_OWN, "own", "2025-10-01"],
     ]);
+    // Tickets only for files the import may read, each valid for exactly that file.
+    const byId = Object.fromEntries(json.files.map((f: { id: string; ticket?: string }) => [f.id, f.ticket]));
+    expect(byId[DOC_OWN]).toBeUndefined();
+    expect(checkTicket(byId[DOC_NEW], admin.id, orgId, DOC_NEW)).toBe(true);
+    expect(checkTicket(byId[DOC_NEW], admin.id, orgId, DOC_DONE)).toBe(false);
+  });
+
+  it("Ta bort läsåtkomst deletes our copy", async () => {
+    m.db = admin.db;
+    const res = await DELETE(new NextRequest("https://x.test/d", { method: "DELETE" }), ctx(orgId));
+    expect(res.status).toBe(200);
+    expect(m.deleted).toBe(1);
   });
 
   it("Drive saying the scope is insufficient (grant withdrawn) asks for access again", async () => {
@@ -131,11 +147,15 @@ describe.skipIf(!hasLocalSupabase)("history drive browser route", () => {
     expect((await res.json()).error).toBe("needs_drive_access");
   });
 
-  it("caps listings per user: the 121st within 10 minutes is refused", async () => {
+  it("caps folders listed per user: one claim per folder, the 121st within 10 minutes is refused", async () => {
     m.db = admin.db;
+    await adminClient().from("drive_listing_claims").delete().eq("user_id", admin.id);
+    expect((await POST(req({ action: "files", folders: [{ id: FOLDER }, { id: "1FolderProtokollBBB" }] }), ctx(orgId))).status).toBe(200);
+    const { count } = await adminClient().from("drive_listing_claims").select("id", { count: "exact", head: true }).eq("user_id", admin.id);
+    expect(count).toBe(2);
     const { error } = await adminClient()
       .from("drive_listing_claims")
-      .insert(Array.from({ length: 120 }, () => ({ org_id: orgId, user_id: admin.id })));
+      .insert(Array.from({ length: 118 }, () => ({ org_id: orgId, user_id: admin.id })));
     if (error) throw new Error(error.message);
     const res = await POST(req({ action: "folders", place: "root" }), ctx(orgId));
     expect(res.status).toBe(429);

@@ -13,8 +13,10 @@ export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordproc
 
 /** Folders visited per file listing (the ticked ones plus subfolders). */
 export const MAX_FOLDERS = 60;
-/** Files returned per file listing. */
+/** Files returned per file listing (the oldest, after sorting). */
 export const MAX_FILES = 500;
+/** Files collected before sorting and cutting to MAX_FILES. */
+const MAX_COLLECTED = 5000;
 /** Folders ticked per file listing. */
 export const MAX_PICKED_FOLDERS = 20;
 const PAGE_SIZE = 200;
@@ -116,7 +118,11 @@ export interface ListedFile {
 }
 
 /** A row of the import's file list as the browser gets it: also already imported, or Simon Says' own Doc. */
-export type ImportFile = Omit<ListedFile, "status"> & { status: FileStatus | "imported" | "own" };
+export type ImportFile = Omit<ListedFile, "status"> & {
+  status: FileStatus | "imported" | "own";
+  /** Signed by the server (lib/history/ticket.ts): lets the import read this file with drive.readonly. */
+  ticket?: string;
+};
 
 const NOT_PROTOCOL = /(?<![\p{L}])(mall|template|kallelse|dagordning|agenda|exempel|example|instruktion(er)?|instructions?)(?![\p{L}])/iu;
 const IS_PROTOCOL = /protokoll|minutes|protocol/i;
@@ -222,7 +228,7 @@ export async function listFilesInFolders(
             continue;
           }
           if (seenFiles.has(f.id)) continue;
-          if (files.length >= MAX_FILES) {
+          if (files.length >= MAX_COLLECTED) {
             truncated = true;
             continue;
           }
@@ -245,8 +251,10 @@ export async function listFilesInFolders(
     });
     queue = next;
   }
+  // Sorted first, cut after: the cap keeps the oldest meetings, never a random first batch.
   files.sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999") || a.name.localeCompare(b.name, "sv"));
-  return { files, truncated, folders: seenFolders.size };
+  if (files.length > MAX_FILES) truncated = true;
+  return { files: files.slice(0, MAX_FILES), truncated, folders: seenFolders.size };
 }
 
 /** A Drive error that means the grant lacks the scope (drive.readonly was withdrawn). */
