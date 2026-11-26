@@ -12,6 +12,7 @@ import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { goalLabel } from "@/lib/prepare/goals";
 import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { orgEvent } from "@/lib/calendar/load";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -48,8 +49,9 @@ function startFormats(
   return out;
 }
 
-export default async function NewMeetingPage({ params }: { params: Promise<{ orgId: string }> }) {
+export default async function NewMeetingPage({ params, searchParams }: { params: Promise<{ orgId: string }>; searchParams: Promise<{ event?: string }> }) {
   const { orgId } = await params;
+  const { event } = await searchParams;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -69,7 +71,14 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
   const running = active?.[0];
   if (running) redirect(running.started_by === user.id ? `/meetings/${running.id}` : `/orgs/${orgId}`);
 
-  const [def, rows, goals] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId), goalSuggestionsFor(db, orgId)]);
+  // "Starta" on a calendar event (todo #14): its title for the consent step, read with the
+  // starter's own grant (the start reads it again; nothing is taken from the URL but the id).
+  const [def, rows, goals, picked] = await Promise.all([
+    orgDefaultFormat(db, orgId),
+    listOrgFormats(db, orgId),
+    goalSuggestionsFor(db, orgId),
+    event ? orgEvent(user.id, org, event) : Promise.resolve(null),
+  ]);
 
   return (
     <main id="innehall">
@@ -82,6 +91,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
         formats={startFormats(def, rows, await getLocale())}
         pickerEnabled={pickerEnabled(getEnv())}
         goals={goals.map((g) => ({ id: g.goalId, label: goalLabel(g.title), reason: g.reason }))}
+        calendarEvent={picked ? { id: picked.id, title: picked.title } : null}
       />
     </main>
   );

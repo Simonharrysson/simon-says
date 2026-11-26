@@ -131,16 +131,24 @@ function sessionPrefixes(segments: NameSegment[]): Map<string, string> {
   return out;
 }
 
-export function buildNamesRequest(segments: NameSegment[], knownPeople: string[]): BetaMessageStreamParams {
+/**
+ * `expected`: people on the meeting's calendar invitation (todo #14), a hint only; listed after the
+ * known people when there are any, so a request without an event is exactly as before.
+ */
+export function buildNamesRequest(segments: NameSegment[], knownPeople: string[], expected: string[] = []): BetaMessageStreamParams {
   const prefix = sessionPrefixes(segments);
   const lines = [...segments]
     .sort((a, b) => a.start_ms - b.start_ms)
     .map((s) => `[${formatTimestamp(s.start_ms)}] ${prefix.get(s.el_session_id)}-${s.speaker}: ${s.text.replace(/\s*\n\s*/g, " ").trim()}`);
   const known = [...new Set(knownPeople.map(clean).filter(Boolean))];
+  const invited = [...new Set(expected.map(clean).filter(Boolean))].filter((n) => known.includes(n));
   const text = [
     `Known people in the association (${known.length}):`,
     known.length ? known.map((n) => `- ${n}`).join("\n") : "(none yet)",
     "",
+    ...(invited.length
+      ? [`Invited to this meeting in the calendar (a hint, not proof they spoke or attended): ${invited.join(", ")}`, ""]
+      : []),
     "<transcript>",
     lines.join("\n"),
     "</transcript>",
@@ -178,7 +186,7 @@ function parse(message: BetaMessage): z.infer<typeof OutputSchema> | null {
 export async function extractNames(
   segments: NameSegment[],
   knownPeople: string[],
-  opts: { client?: NotesClient; timeoutMs?: number; onUsage?: (u: NotesUsage) => unknown } = {},
+  opts: { client?: NotesClient; timeoutMs?: number; onUsage?: (u: NotesUsage) => unknown; expected?: string[] } = {},
 ): Promise<ExtractedName[]> {
   if (segments.length === 0) return [];
   const prefix = sessionPrefixes(segments);
@@ -195,7 +203,7 @@ export async function extractNames(
 
   let message: BetaMessage;
   try {
-    message = await client.beta.messages.stream(buildNamesRequest(segments, knownPeople)).finalMessage();
+    message = await client.beta.messages.stream(buildNamesRequest(segments, knownPeople, opts.expected)).finalMessage();
   } catch (err) {
     const e = err as Error | undefined;
     throw new NameRoundError(`request failed: ${e?.constructor?.name ?? "Error"}: ${String(e?.message ?? err).slice(0, 200)}`);

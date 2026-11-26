@@ -1,4 +1,5 @@
 import "server-only";
+import { parseMeetingEvent } from "@/lib/calendar/events";
 import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
 import { propagateDone } from "@/lib/agenda/followup";
@@ -136,6 +137,15 @@ export const liveHeader = (now: Date, layout: "v1" | "format" = "v1") =>
   layout === "format" ? `Simon Says antecknar live · uppdaterad ${stockholmTime(now)}` : `LIVE · uppdaterad ${stockholmTime(now)}`;
 export const endedHeader = (endedAt: Date, layout: "v1" | "format" = "v1") =>
   layout === "format" ? `Simon Says · avslutat ${stockholmTime(endedAt)}` : `Avslutat ${stockholmTime(endedAt)}`;
+
+/**
+ * The header line with the matched calendar event's title in front (todo #14, meetings.calendar_event):
+ * "Styrelsemöte · Simon Says antecknar live · uppdaterad 18:05". Unchanged without an event.
+ */
+export function headerWithEvent(header: string, calendarEvent: unknown): string {
+  const title = parseMeetingEvent(calendarEvent)?.title;
+  return title ? `${title} · ${header}` : header;
+}
 
 /** A normal tick is due once the last one started at least TICK_TARGET_SEC ago. */
 export function tickDue(lastTickAt: string | null, now: Date, minSec = TICK_TARGET_SEC): boolean {
@@ -904,9 +914,10 @@ export async function runTick(
       : buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
     const timeLeft = left();
     const claudeAllowed = timeLeft >= MIN_CLAUDE_MS && spendOk && !fmt?.hold;
-    const header = final
-      ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now(), layout)
-      : liveHeader(deps.now(), layout);
+    const header = headerWithEvent(
+      final ? endedHeader(meeting.ended_at ? new Date(meeting.ended_at) : deps.now(), layout) : liveHeader(deps.now(), layout),
+      meeting.calendar_event,
+    );
 
     // read → diff → Claude
     const first = fmt

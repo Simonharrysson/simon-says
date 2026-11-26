@@ -1,5 +1,7 @@
 import "server-only";
+import { orgMemberList } from "@/lib/db/members";
 import { e2eGoogleRoot } from "@/lib/e2e/guard";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { CalendarAccessMissingError, getCalendarGoogleAuth, hasCalendarAccess } from "@/lib/google/client";
 import { calendarApi, type CalendarApi } from "./api";
 import {
@@ -136,3 +138,33 @@ export async function orgEvent(userId: string, org: OrgCalendar, eventId: string
 
 /** Google event ids (base32hex, plus "_" and a recurrence suffix): a sanity bound for URLs. */
 export const EVENT_ID = /^[A-Za-z0-9_-]{1,1024}$/;
+
+/**
+ * The start's calendar snapshot (todo #14): the förening's people and members (service role, the
+ * caller has checked membership) and the event read with the starter's grant. Best effort: null on
+ * any failure, and never longer than ~3 s.
+ */
+export async function calendarSnapshotForStart(input: {
+  userId: string;
+  org: OrgCalendar & { id: string };
+  eventId?: string | null;
+}): Promise<MeetingCalendarEvent | null> {
+  if (!input.org.calendar_id) return null;
+  try {
+    const [people, members] = await Promise.all([
+      supabaseAdmin().from("people").select("id, name, email, member_user_id").eq("org_id", input.org.id),
+      orgMemberList(input.org.id),
+    ]);
+    if (people.error) throw new Error(people.error.message);
+    return await meetingEventForStart({
+      userId: input.userId,
+      org: input.org,
+      eventId: input.eventId && EVENT_ID.test(input.eventId) ? input.eventId : null,
+      people: (people.data ?? []) as MatchPerson[],
+      memberEmails: new Map(members.filter((m) => m.email).map((m) => [m.userId, m.email])),
+    });
+  } catch (err) {
+    console.warn("calendar: start snapshot failed", (err as Error)?.message);
+    return null;
+  }
+}

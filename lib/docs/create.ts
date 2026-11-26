@@ -75,10 +75,12 @@ function localTime(at: Date): string {
  * start time first, so the meeting folder sorts chronologically by name and two meetings the same
  * day never share a name; always "Mötesprotokoll" (every format); the förening's name, so the Doc
  * is recognisable under "Delas med mig". A Testmöte ends with TEST_DOC_SUFFIX (listCandidates
- * never offers it as an agenda).
+ * never offers it as an agenda). A meeting that matched a calendar event (todo #14) carries the
+ * event's title before the förening's name (cleaned by the caller: one line).
  */
-export function meetingTitle(orgName: string, startedAt: Date, opts: { test?: boolean } = {}): string {
-  return `${localDate(startedAt)} ${localTime(startedAt)} Mötesprotokoll – ${orgName.trim()}${opts.test ? ` ${TEST_DOC_SUFFIX}` : ""}`;
+export function meetingTitle(orgName: string, startedAt: Date, opts: { test?: boolean; eventTitle?: string | null } = {}): string {
+  const event = opts.eventTitle?.trim() ? `${opts.eventTitle.trim()} – ` : "";
+  return `${localDate(startedAt)} ${localTime(startedAt)} Mötesprotokoll – ${event}${orgName.trim()}${opts.test ? ` ${TEST_DOC_SUFFIX}` : ""}`;
 }
 
 /** The starter's own folder for the org's Docs. */

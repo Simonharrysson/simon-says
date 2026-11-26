@@ -13,6 +13,7 @@ import { defaultLocale, type Locale } from "@/lib/i18n/config";
 import { translator } from "@/lib/i18n/translator";
 import { localeForEmail, localesForUsers } from "@/lib/i18n/user-locale";
 import { renderSummaryEmail } from "./email";
+import { parseMeetingEvent } from "@/lib/calendar/events";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 
 // Sends a finished meeting's summary e-mails (migration 0037). Called after the end sets the
@@ -139,14 +140,17 @@ export async function sendMeetingSummaries(
     if (mode === "off") state = "off";
     else if (!hasOwnNotes(items, m.agenda_roles)) state = "no_notes";
     else {
-      const [peopleRows, speakers, members] = await Promise.all([
+      const [peopleRows, speakers, members, calendarRow] = await Promise.all([
         db
           .from("people")
           .select("id, name, role, email, member_user_id, summary_selected, summary_removed_at")
           .eq("org_id", m.org_id),
         db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label, needs_confirm").eq("meeting_id", m.id),
         orgMemberList(m.org_id),
+        // 0046, read on its own: a database without the column only loses the calendar's help.
+        db.from("meetings").select("calendar_event").eq("id", m.id).maybeSingle(),
       ]);
+      const calendar = calendarRow.error ? null : parseMeetingEvent((calendarRow.data as { calendar_event?: unknown } | null)?.calendar_event);
       people = must("summary: people", peopleRows) as SummaryPerson[];
       const attendance = presentPeople({
         people,
@@ -156,7 +160,7 @@ export async function sendMeetingSummaries(
       });
       unnamedVoices = attendance.unnamedVoices;
       unmatchedNames = attendance.unmatchedNames;
-      recipients = summaryRecipients({ mode, people, members, attendance });
+      recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
       state = recipients.length ? "sending" : mode === "missed" && !attendance.certain ? "uncertain" : "none";
     }
   }

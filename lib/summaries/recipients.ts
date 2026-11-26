@@ -13,6 +13,10 @@ import { resolveSpeaker } from "@/lib/segments/resolve";
 //   Only when attendance is certain (someone identified by voice or Närvarande, no unnamed voice
 //   like "Talare 2" on a shared mic, and no Närvarande text that names nobody in the list, like
 //   "hela styrelsen"); otherwise nobody is mailed in this mode;
+// - the calendar (todo #14, meetings.calendar_event): people on the matched event's guest list who
+//   did not decline are EXPECTED. Expected is never "identified" (an invitation never makes
+//   attendance certain) and an expected person never gets "Du missade mötet", heard or not: we
+//   can't tell a quiet attendee from an absent one. Who declined is not expected (clearly absent);
 // - a person whose member link was removed (0018) gets nothing by their old address;
 // - all: everyone; selected: the ticked people; off: nobody.
 
@@ -156,9 +160,12 @@ export function summaryRecipients(input: {
   people: SummaryPerson[];
   members: SummaryMember[];
   attendance: Pick<Attendance, "present" | "certain">;
+  /** People ids the matched calendar event expected (invited, not declined): never "missed". */
+  expected?: ReadonlySet<string>;
 }): Recipient[] {
   if (input.mode === "off") return [];
   const { present, certain } = input.attendance;
+  const expected = input.expected ?? new Set<string>();
   // "missed" when we don't know who was there: nobody (the sender logs it as `uncertain`).
   if (input.mode === "missed" && !certain) return [];
   const members = new Map(input.members.map((m) => [m.userId, m]));
@@ -172,7 +179,7 @@ export function summaryRecipients(input: {
     const email = (member?.email || person.email || "").trim();
     if (!email || !email.includes("@")) continue;
     // Uncertain attendance ("all" / "selected"): neutral wording, never "Du missade mötet".
-    const missed = certain && !present.has(person.id);
+    const missed = certain && !present.has(person.id) && !expected.has(person.id);
     if (input.mode === "missed" && !missed) continue;
     if (input.mode === "selected" && !person.summary_selected) continue;
     const key = email.toLowerCase();

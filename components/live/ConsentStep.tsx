@@ -53,8 +53,11 @@ export function ConsentStep({
   agendaConfirmed = true,
   agendaDoc = null,
   onNewDocInstead,
+  eventTitle,
 }: {
   orgName: string;
+  /** Started from a calendar event (todo #14): its title, as read on the server. */
+  eventTitle?: string | null;
   /** Whether the transcript gets its own tab in the Doc (org setting). */
   shareTranscript: boolean;
   onStart: () => void;
@@ -76,6 +79,7 @@ export function ConsentStep({
   onNewDocInstead?: () => void;
 }) {
   const t = useTranslations("live.consent");
+  const tCal = useTranslations("calendar");
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
   const testing = micLevel != null;
@@ -93,6 +97,7 @@ export function ConsentStep({
         <h1 id={`${id}-title`} className="text-2xl">
           {t("title")}
         </h1>
+        {eventTitle && <p className="text-sm text-ink-2">{tCal("fromCalendar", { title: eventTitle })}</p>}
       </div>
 
       <ul className="flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">

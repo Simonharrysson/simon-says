@@ -106,6 +106,20 @@ describe("summaryRecipients", () => {
     expect(r.map((x) => [x.person.id, x.email, x.missed])).toEqual([["p-sara", "p-sara@example.com", true]]);
   });
 
+  it("calendar: an invited person who wasn't heard never gets 'Du missade mötet'; one who declined can", () => {
+    const expected = new Set(["p-sara"]);
+    expect(summaryRecipients({ mode: "missed", people, members, attendance: present, expected })).toEqual([]);
+    const all = summaryRecipients({ mode: "all", people, members, attendance: present, expected });
+    expect(all.find((x) => x.person.id === "p-sara")?.missed).toBe(false);
+    // Declined is simply not expected: the existing rule applies.
+    expect(summaryRecipients({ mode: "missed", people, members, attendance: present, expected: new Set() }).map((x) => x.person.id)).toEqual(["p-sara"]);
+  });
+
+  it("calendar: an invitation never makes uncertain attendance certain", () => {
+    const uncertain = { present: new Set(["p-anna"]), certain: false };
+    expect(summaryRecipients({ mode: "missed", people, members, attendance: uncertain, expected: new Set(["p-erik"]) })).toEqual([]);
+  });
+
   it("all: everyone with an address; the linked account's address and admin flag", () => {
     const r = summaryRecipients({ mode: "all", people, members, attendance: present });
     expect(r.map((x) => [x.person.id, x.email, x.missed, x.isAdmin])).toEqual([
