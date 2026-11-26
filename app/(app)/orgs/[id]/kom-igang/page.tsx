@@ -69,7 +69,7 @@ export default async function OnboardingPage({ params, searchParams }: { params:
       inviterName={inviterNameFor(people.find((x) => x.member_user_id === user.data.user?.id)?.name, user.data.user?.user_metadata)}
       pickerEnabled={pickerEnabled(getEnv())}
       format={{ kind: format.id ? format.profile.kind : null, name: format.profile.kind === "learned" ? "ert eget format" : FORMAT_NAMES[format.profile.kind], profile: format.id ? format.profile : null }}
-      stadgarSaved={{ styrelse: Boolean(org.styrelse_format_id), arsmote: Boolean(org.arsmote_format_id) }}
+      stadgarSaved={Boolean(org.arsmote_format_id)}
       historyCount={history.count}
     />
   );

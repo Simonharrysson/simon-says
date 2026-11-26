@@ -34,6 +34,7 @@ import { OverviewView, type GoalsPhase, type OverviewGoal } from "@/components/v
 import type { Overview } from "@/lib/dashboard/overview";
 import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
+import { STADGAR_COPY, StadgarArsmote } from "@/components/views/StadgarArsmote";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { demoGoals, demoOverview, demoOverviewHistoryOnly, demoOverviewWithHistory, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
@@ -361,7 +362,7 @@ const learnedProposal = {
   folderId: null,
 };
 
-function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "stadgar" }) {
+function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "customize" }) {
   return (
     <AppChrome>
       <div className="mx-auto w-full max-w-page px-gutter">
@@ -371,6 +372,12 @@ function LearnDemo({ view, variant }: { view: LearnPhase; variant?: "learn" | "s
       </div>
     </AppChrome>
   );
+}
+
+/** Mötesformat → "Lägg in årsmötet från stadgarna": the stadgar's årsmöte agenda to check (todo #15). */
+function StadgarArsmoteDemo() {
+  const [items, setItems] = useState(["Mötets öppnande", "Fråga om mötets behöriga utlysande", "Val av mötesordförande", "Verksamhetsberättelse", "Fråga om ansvarsfrihet för styrelsen", "Val av styrelse", "Val av revisorer"]);
+  return <StadgarArsmote uid="demo-stadgar" stadgar={{ phase: "review", arsmote: items }} pickerEnabled onPick={noop} onChange={setItems} onSave={noop} onCancel={noop} />;
 }
 
 /** The format card alone, as wide as the förening page's main column. */
@@ -598,20 +605,17 @@ const render: Record<string, () => ReactNode> = {
   "format-learn-error": () => (
     <LearnDemo view={{ phase: "error", message: "Simon Says kan inte läsa ett av dokumenten. Välj dem igen i Google-väljaren." }} />
   ),
-  "format-stadgar-editor": () => (
-    <LearnDemo
-      variant="stadgar"
-      view={{
-        phase: "editor",
-        proposal: {
-          profile: {
-            ...STYRELSEPROTOKOLL,
-            requiredItems: ["Fråga om mötets behöriga utlysande", "Fråga om beslutsmässighet", "Ekonomisk rapport"],
-          },
-          explanation: "Stadgarna kräver 3 punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.",
-        },
-      }}
-    />
+  "format-stadgar-arsmote": () => (
+    <AppChrome>
+      <div className="mx-auto w-full max-w-page px-gutter">
+        <Panel title="Mötesformat" titleId="format-title-demo">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-ink-2">{STADGAR_COPY.lead}</p>
+            <StadgarArsmoteDemo />
+          </div>
+        </Panel>
+      </div>
+    </AppChrome>
   ),
   "org-prepared": () => (
     <AppChrome>

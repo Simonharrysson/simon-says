@@ -409,16 +409,11 @@ export const COPY = {
     busy: "",
     hint: "Ta bort eller lägg till punkter, t.ex. Må-runda.",
   },
-  stadgar: {
-    start: "Lägg in punkter från stadgarna",
-    busy: "Simon Says läser stadgarna …",
-    hint: "Google-dokument eller PDF, högst 10 MB. Stadgarna sparas inte.",
-  },
 } as const;
 
 export type FlowVariant = keyof typeof COPY;
 
-/** Presentational: the learn-a-format (or stadgar, C1) part of FormatCard in each phase (used by /design). */
+/** Presentational: the learn-a-format part of FormatCard in each phase (used by /design). */
 export function LearnFormatView({
   orgId,
   view,
@@ -450,8 +445,9 @@ export function LearnFormatView({
       <FormatEditor
         orgId={orgId}
         proposal={view.proposal}
-        approveKind={variant === "stadgar" || (variant === "customize" && view.proposal.profile.kind === "styrelseprotokoll") ? "styrelseprotokoll" : "learned"}
-        showRequired={variant === "stadgar" || view.proposal.profile.requiredItems.length> 0}
+        approveKind={variant === "customize" && view.proposal.profile.kind === "styrelseprotokoll" ? "styrelseprotokoll" : "learned"}
+        // Items a Styrelseprotokoll got from the stadgar before todo #15 stay editable; none are added now.
+        showRequired={view.proposal.profile.requiredItems.length> 0}
         onCancel={onCancel}
         onApproved={onApproved}
       />
@@ -488,8 +484,7 @@ export function LearnFormatView({
  * - learn (B2): Picker (1–5 Docs) → propose → editor → approve as a learned format;
  * - customize (R3-I3): the editor on the current default (Enkel has no agenda: on the Veckomöte),
  *   approved as a learned format, or as a Styrelseprotokoll when it is one (its stadgar items kept);
- * - stadgar (C1): Picker (Doc or PDF) → read → editor on the current default when it is learned or a
- *   Styrelseprotokoll (its own items kept), else the standard Styrelseprotokoll.
+ * (The stadgar feed only the årsmöte now, todo #15: StadgarArsmote.tsx, not this flow.)
  * `start*` call `picker.open` right away, so the click's user activation reaches the Picker.
  */
 export function useFormatFlow(orgId: string, current?: FormatProfile) {
@@ -537,45 +532,6 @@ export function useFormatFlow(orgId: string, current?: FormatProfile) {
     setView({ phase: "editor", proposal: { profile: current.kind === "enkel" ? VECKOMOTE : current } });
   };
 
-  const startStadgar = async () => {
-    setVariant("stadgar");
-    let picked;
-    try {
-      picked = await picker.open({ mode: "doc-or-pdf", title: "Välj föreningens stadgar" });
-    } catch (err) {
-      fail(err);
-      return;
-    }
-    if (!picked?.[0]) return;
-    setView({ phase: "proposing" });
-    try {
-      const res = await fetch(`/api/orgs/${orgId}/formats/stadgar`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileId: picked[0].id }),
-      });
-      const json = (await res.json().catch(() => null)) as { requiredItems?: string[]; message?: string } | null;
-      if (!res.ok || !Array.isArray(json?.requiredItems)) {
-        setView({ phase: "error", message: json?.message ?? "Simon Says kunde inte läsa stadgarna. Försök igen." });
-        return;
-      }
-      setView({
-        phase: "editor",
-        proposal: {
-          profile: {
-            ...(current && (current.kind === "learned" || current.kind === "styrelseprotokoll") ? current : STYRELSEPROTOKOLL),
-            requiredItems: json.requiredItems,
-          },
-          explanation: json.requiredItems.length
-            ? `Stadgarna kräver ${json.requiredItems.length} punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.`
-            : "Simon Says hittade inga punkter som stadgarna kräver på styrelsemöten. Du kan lägga till dem själv nedan.",
-        },
-      });
-    } catch {
-      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
-    }
-  };
-
-  const start = (v: FlowVariant) => (v === "learn" ? startLearn() : v === "stadgar" ? startStadgar() : startCustomize());
+  const start = (v: FlowVariant) => (v === "learn" ? startLearn() : startCustomize());
   return { variant, view, start, reset: () => setView({ phase: "idle" }) };
 }

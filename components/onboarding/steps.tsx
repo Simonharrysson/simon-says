@@ -16,6 +16,7 @@ import { formatDateTime } from "@/lib/format";
 import { STATUS_LABEL, type InviteRow } from "@/lib/invites/rules";
 import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
+import { STADGAR_COPY, StadgarArsmote, type StadgarPhase } from "@/components/views/StadgarArsmote";
 import { OrgLogo } from "./OrgLogo";
 
 // Kom igång's six steps and the end, presentational (no fetching): the container
@@ -473,13 +474,7 @@ export function FolderStep(p: FolderStepProps) {
 
 export type WeeklyChoice = "veckomote" | "learn" | "current";
 
-export type StadgarPhase =
-  | { phase: "idle" }
-  | { phase: "reading" }
-  | { phase: "review"; board: string[]; arsmote: string[] }
-  | { phase: "saving"; board: string[]; arsmote: string[] }
-  | { phase: "saved"; board: number; arsmote: number }
-  | { phase: "error"; message: string };
+export type { StadgarPhase } from "@/components/views/StadgarArsmote";
 
 export interface FormatStepProps {
   choice: WeeklyChoice;
@@ -490,10 +485,10 @@ export interface FormatStepProps {
   learn?: ReactNode;
   pickerEnabled: boolean;
   stadgar: StadgarPhase;
-  /** Already saved from an earlier visit. */
-  stadgarSaved?: { styrelse: boolean; arsmote: boolean };
+  /** An årsmöte from the stadgar is already saved (an earlier visit). */
+  stadgarSaved?: boolean;
   onStadgarPick: () => void;
-  onStadgarChange: (board: string[], arsmote: string[]) => void;
+  onStadgarChange: (arsmote: string[]) => void;
   onStadgarSave: () => void;
   onStadgarCancel: () => void;
 }
@@ -549,129 +544,20 @@ export function FormatStep(p: FormatStepProps) {
             Stadgar <span className="font-normal text-ink-3">(valfritt)</span>
           </h2>
           <p className="max-w-[34rem] text-sm text-ink-2">
-            Har ni stadgar ser Simon Says till att <strong>styrelsemötena</strong> får punkterna stadgarna kräver och att
-            <strong> årsmötet</strong> får dagordningen de beskriver. Ni ser och kan ändra allt innan det sparas.
+            {STADGAR_COPY.lead} Ni ser och kan ändra punkterna innan de sparas.
           </p>
         </div>
-        <StadgarBlock {...p} uid={id} />
+        <StadgarArsmote
+          uid={`${id}-stadgar`}
+          stadgar={p.stadgar}
+          pickerEnabled={p.pickerEnabled}
+          saved={p.stadgarSaved}
+          onPick={p.onStadgarPick}
+          onChange={p.onStadgarChange}
+          onSave={p.onStadgarSave}
+          onCancel={p.onStadgarCancel}
+        />
       </section>
-    </div>
-  );
-}
-
-function StadgarBlock(p: FormatStepProps & { uid: string }) {
-  const s = p.stadgar;
-  if (s.phase === "reading") {
-    return (
-      <p className="flex items-center gap-2 text-sm text-ink-2" role="status" aria-live="polite">
-        <Spinner /> Simon Says läser stadgarna … det tar ungefär en halv minut.
-      </p>
-    );
-  }
-  if (s.phase === "review" || s.phase === "saving") {
-    return (
-      <div className="mt-2 flex flex-col gap-6 animate-notice-in">
-        <ItemList
-          uid={`${p.uid}-board`}
-          title="Varje styrelsemöte"
-          empty="Stadgarna kräver inget särskilt på styrelsemöten. Styrelsemöten följer standardprotokollet."
-          items={s.board}
-          max={15}
-          onChange={(board) => p.onStadgarChange(board, s.arsmote)}
-        />
-        <ItemList
-          uid={`${p.uid}-ars`}
-          title="Årsmötet"
-          empty="Stadgarna listar ingen dagordning för årsmötet. Årsmötet följer standarddagordningen."
-          items={s.arsmote}
-          max={18}
-          onChange={(arsmote) => p.onStadgarChange(s.board, arsmote)}
-        />
-        <div className="flex flex-wrap gap-2">
-          <Button variant="primary" onClick={p.onStadgarSave} loading={s.phase === "saving"}>
-            Spara för styrelse- och årsmöten
-          </Button>
-          <Button variant="ghost" onClick={p.onStadgarCancel} disabled={s.phase === "saving"}>
-            Avbryt
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  if (s.phase === "saved" || (s.phase === "idle" && p.stadgarSaved && (p.stadgarSaved.styrelse || p.stadgarSaved.arsmote))) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <p className="flex items-start gap-2 text-sm text-green" aria-live="polite">
-          <IconCheck size={18} className="mt-[0.1rem] flex-none" />
-          <span>
-            {s.phase === "saved"
-              ? `Sparat: ${plural(s.board, "punkt", "punkter")} på varje styrelsemöte${s.arsmote ? ` och årsmötets ${plural(s.arsmote, "punkt", "punkter")}` : ", årsmötet följer standarden"}.`
-              : "Styrelse- och årsmöten följer era stadgar."}
-          </span>
-        </p>
-        {p.pickerEnabled && (
-          <Button variant="ghost" size="sm" onClick={p.onStadgarPick}>
-            Läs in stadgarna igen
-          </Button>
-        )}
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-start gap-3">
-      {s.phase === "error" && <Banner tone="danger" live={false}>{s.message}</Banner>}
-      {p.pickerEnabled ? (
-        <Button variant="secondary" onClick={p.onStadgarPick}>
-          {s.phase === "error" ? "Försök igen" : "Välj stadgarna i Google Drive"}
-        </Button>
-      ) : (
-        <p className="text-sm text-ink-3">Google-väljaren är inte inställd än, så stadgarna kan läsas in senare.</p>
-      )}
-      <p className={hintClass}>Ett Google-dokument eller en PDF. Simon Says sparar bara punkterna, aldrig stadgarna.</p>
-    </div>
-  );
-}
-
-function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; title: string; empty: string; items: string[]; max: number; onChange: (items: string[]) => void }) {
-  const [draft, setDraft] = useState("");
-  const add = (e: FormEvent) => {
-    e.preventDefault();
-    const clean = draft.replace(/\s+/g, " ").trim().slice(0, 80);
-    if (!clean || items.length >= max) return;
-    onChange([...items, clean]);
-    setDraft("");
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-base font-semibold">
-        {title} <span className="font-normal text-ink-3">· {plural(items.length, "punkt", "punkter")}</span>
-      </h3>
-      {items.length === 0 ? (
-        <p className="text-sm text-ink-3">{empty}</p>
-      ) : (
-        <ol className="flex flex-col rounded-lg bg-surface shadow-panel">
-          {items.map((item, i) => (
-            <li key={`${i}-${item}`} className="flex min-h-11 items-center gap-3 border-t border-line px-4 py-1 first:border-t-0">
-              <span className="w-6 flex-none font-mono text-xs text-ink-3">{i + 1}.</span>
-              <span className="min-w-0 flex-1 text-sm wrap-anywhere">{item}</span>
-              <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={16} />} onClick={() => onChange(items.filter((_, j) => j !== i))}>
-                {`Ta bort ${item}`}
-              </Button>
-            </li>
-          ))}
-        </ol>
-      )}
-      {items.length < max && (
-        <form onSubmit={add} className="flex gap-2">
-          <Label htmlFor={`${uid}-add`} className="sr-only">
-            Ny punkt under {title}
-          </Label>
-          <Input id={`${uid}-add`} value={draft} maxLength={80} placeholder="Lägg till punkt" onChange={(e) => setDraft(e.target.value)} />
-          <Button type="submit" variant="ghost" icon={<IconPlus size={18} />} disabled={!draft.trim()}>
-            Lägg till
-          </Button>
-        </form>
-      )}
     </div>
   );
 }
