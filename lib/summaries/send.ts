@@ -10,6 +10,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { hasOwnNotes, summaryContent, type SummaryItem } from "./content";
 import { renderSummaryEmail } from "./email";
+import { sendPrivatSummary } from "@/lib/privat/send";
+import type { SummarizeFn } from "@/lib/privat/summary";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 
 // Sends a finished meeting's summary e-mails (migration 0037). Called after the end sets the
@@ -30,6 +32,8 @@ export interface SummaryDeps {
   now(): Date;
   /** Between two e-mails (Resend allows a few requests per second per team). Default: a real wait. */
   sleep?(ms: number): Promise<void>;
+  /** A Privat recording's Claude summary (tests replace it); default: the real call. */
+  summarize?: SummarizeFn;
 }
 
 /** Pause between two e-mails of one meeting: stays under Resend's default rate limit. */
@@ -105,6 +109,9 @@ export async function sendMeetingSummaries(
   ) as MeetingForSummary | null;
   if (!m || m.status !== "done" || m.doc_paused_at) return null;
   if (m.summary_state !== null && m.summary_state !== "sending") return null;
+  // A Privat recording (0045): its own summary (one Claude call) to the recorder only.
+  const space = must("summary: space", await db.from("orgs").select("*").eq("id", m.org_id).maybeSingle()) as { kind?: string } | null;
+  if (space?.kind === "privat") return sendPrivatSummary(m.id, { mailer: deps.mailer, now: deps.now, summarize: deps.summarize }, opts);
 
   let state: SummaryState;
   let recipients: Recipient[] = [];

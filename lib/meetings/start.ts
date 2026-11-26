@@ -31,6 +31,9 @@ import { kindsOfType } from "@/lib/prepare/draft";
 import { withGoalItems } from "@/lib/prepare/goals";
 import { goalTitles } from "@/lib/prepare/goals-load";
 import { preparedForDoc, type PreparedAgenda } from "@/lib/prepare/store";
+import { isUuid } from "@/lib/db/ids";
+import { privatTitle } from "@/lib/privat/format";
+import { isPrivat } from "@/lib/privat/space";
 
 export type { StandardKind } from "@/lib/formats/standard";
 import type { StandardKind } from "@/lib/formats/standard";
@@ -53,6 +56,13 @@ export interface StartOptions {
    * ta upp" (org_goals ids, at most two; todo #12), added as topic items. Titles are re-read here.
    */
   goalIds?: string[];
+  /**
+   * A Privat space only (0045): the context the recording belongs to (required there), and
+   * whether to also write a Google Doc ("Skriv även i ett Google-dokument"). Without a Doc the
+   * notes live in note_items only and no Google call is made.
+   */
+  contextId?: string | null;
+  withDoc?: boolean;
 }
 
 export type StartResult =
@@ -167,6 +177,11 @@ export async function startMeeting(
   if ((await myRole(supabase, orgId)) === null) {
     return failed("not_member", 403, "Du är inte medlem i föreningen.");
   }
+  // Privat (0045): a context of this space is required; a new Doc only when asked for (Enkel), else none.
+  const privat = isPrivat(org) ? await privatContext(orgId, opts.contextId) : null;
+  if (isPrivat(org) && !privat) return failed("bad_context", 400, "Välj vad inspelningen gäller och försök igen.");
+  if (privat) opts = { formatKind: "enkel", isTest: opts.isTest, contextId: privat.id, withDoc: opts.withDoc === true };
+  const docless = privat !== null && !opts.withDoc;
 
   // F14: the org's live meeting and the starter's limits are checked before any Doc is touched.
   const { data: active, error: activeError } = await supabase
@@ -191,12 +206,13 @@ export async function startMeeting(
     opts = { ...opts, formatProfileId: prepared.format_profile_id };
   }
 
-  const format = await resolveFormat(orgId, opts);
+  const format = docless ? { id: null, profile: STANDARD.enkel, ensureKind: null } : await resolveFormat(orgId, opts);
   if (!format) return failed("bad_format", 400, "Mötesformatet finns inte i föreningen. Ladda om sidan och försök igen.");
 
-  let auth: OAuth2Client;
+  let auth: OAuth2Client = null!;
   try {
-    auth = await getGoogleAuth(user.id);
+    // A Doc-less Privat recording never talks to Google.
+    if (!docless) auth = await getGoogleAuth(user.id);
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {
       return failed(
@@ -218,13 +234,16 @@ export async function startMeeting(
     meetingId,
     startedAt,
     orgId,
-    orgName: org.name,
+    // Privat: the Doc and its folder are named after the context ("Simon Says – TDDE15").
+    orgName: privat ? privat.name : org.name,
     meetingFolderId: org.meeting_folder_id ?? null,
     isTest,
     user,
   };
 
-  const setup = agendaMode
+  const setup = docless
+    ? doclessSetup(privat!.name, startedAt)
+    : agendaMode
     ? await agendaSetup(ctx, opts.agendaDocId!, format.profile)
     : format.profile.kind === "enkel"
       ? await v1Setup(ctx, format.profile, org.share_transcript)
@@ -259,6 +278,7 @@ export async function startMeeting(
       is_test: isTest,
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
+      ...(privat ? { context_id: privat.id } : {}),
   };
   // 0030: Simon Says only ever shares a Doc it created.
   const appCreated = !agendaMode || opts.agendaCreatedByApp === true || prepared !== null;
@@ -270,7 +290,7 @@ export async function startMeeting(
   }
   // A refused start never leaves a new, empty Doc in the förening's folder (an agenda Doc is theirs).
   const discardNewDoc = async () => {
-    if (agendaMode) return;
+    if (agendaMode || docless) return;
     await trashDoc(auth, setup.docId).catch((e: Error) => console.error(`meetings ${meetingId}: trash unused Doc: ${e.message}`));
   };
   if (insertError) {
@@ -392,10 +412,17 @@ export async function startMeeting(
     }
   }
 
+  // Privat: the picker suggests this context next time.
+  if (privat) {
+    const { error } = await admin.from("contexts").update({ last_used_at: startedAt.toISOString() }).eq("id", privat.id);
+    if (error) console.error(`meetings ${meetingId}: context last used: ${error.message}`);
+  }
+
   return {
     ok: true,
     meetingId,
-    docUrl: docUrl(setup.docId),
+    // "" = no Doc (a Doc-less Privat recording).
+    docUrl: setup.docId ? docUrl(setup.docId) : "",
     orgName: org.name,
     title: setup.title,
     shareFailed: setup.shareFailed,
@@ -405,6 +432,34 @@ export async function startMeeting(
     appended: anchor?.appended ?? [],
     carried,
     warnings: agendaMode && anchor ? missingRequired(anchor.scan, format.profile) : [],
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Privat (0045)
+
+/** The context a Privat start asked for, only when it is this space's. */
+async function privatContext(orgId: string, contextId: unknown): Promise<{ id: string; name: string } | null> {
+  if (typeof contextId !== "string" || !isUuid(contextId)) return null;
+  const { data, error } = await supabaseAdmin().from("contexts").select("id, name").eq("id", contextId).eq("org_id", orgId).maybeSingle();
+  if (error) throw new Error(`meetings: context: ${error.message}`);
+  return (data as { id: string; name: string } | null) ?? null;
+}
+
+/** A Privat recording without a Doc: nothing in Google; the row's Doc fields stay empty. */
+function doclessSetup(contextName: string, startedAt: Date): DocSetup {
+  return {
+    docId: null!,
+    notesTabId: null!,
+    transcriptTabId: null,
+    headerRange: null!,
+    headerRendered: null!,
+    sectionRanges: {},
+    shareFailed: 0,
+    sharedWith: [],
+    place: "own_folder",
+    title: privatTitle(contextName, startedAt),
+    anchor: null,
   };
 }
 

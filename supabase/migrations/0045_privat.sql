@@ -275,3 +275,66 @@ create or replace function public.email_categories()
 returns text[]
 language sql immutable set search_path = ''
 as $$ select array['meeting_summary', 'invite', 'private_summary']::text[] $$;
+
+-- ---------------------------------------------------------------------------------------------
+-- The Privat summary goes through the same claim as the förening summary (0037: summary_state
+-- null → sending → outcome; the end hook and the 5-minute cron). Its Claude call is retried by
+-- the cron at most 3 times (summary_attempts), then the state is 'failed'.
+
+alter table public.meetings add column summary_attempts int not null default 0;
+
+alter table public.meetings drop constraint if exists meetings_summary_state_check;
+alter table public.meetings add constraint meetings_summary_state_check
+  check (summary_state is null or summary_state in ('sending', 'sent', 'partial', 'none', 'uncertain', 'no_notes', 'off', 'test', 'before', 'failed'));
+
+-- Store one meeting's summary atomically: the summary row (once: a second call returns false and
+-- changes nothing), its new tasks, and the open tasks it found done (only tasks of the same
+-- context that are still open). Service role only.
+create function public.save_private_summary(
+  p_meeting_id uuid,
+  p_summary jsonb,
+  p_tasks jsonb,
+  p_done_task_ids uuid[]
+)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_context uuid;
+  v_inserted int;
+begin
+  select mt.context_id into v_context from public.meetings mt where mt.id = p_meeting_id;
+  if v_context is null then
+    raise exception 'privat summary: the meeting has no context' using errcode = '22023';
+  end if;
+  insert into public.private_summaries (
+    meeting_id, context_id, summary, decisions, facts, questions, people, topics, since_last, previous_meeting_id, locale
+  )
+  values (
+    p_meeting_id, v_context, p_summary->>'summary',
+    coalesce(array(select jsonb_array_elements_text(p_summary->'decisions')), '{}'),
+    coalesce(array(select jsonb_array_elements_text(p_summary->'facts')), '{}'),
+    coalesce(array(select jsonb_array_elements_text(p_summary->'questions')), '{}'),
+    coalesce(array(select jsonb_array_elements_text(p_summary->'people')), '{}'),
+    coalesce(array(select jsonb_array_elements_text(p_summary->'topics')), '{}'),
+    coalesce(p_summary->'since_last', '[]'::jsonb),
+    nullif(p_summary->>'previous_meeting_id', '')::uuid,
+    coalesce(p_summary->>'locale', 'sv')
+  )
+  on conflict (meeting_id) do nothing;
+  get diagnostics v_inserted = row_count;
+  if v_inserted = 0 then
+    return false;
+  end if;
+  insert into public.context_tasks (context_id, meeting_id, text, owner, position)
+  select v_context, p_meeting_id, t.text, nullif(btrim(coalesce(t.owner, '')), ''), t.ord::int - 1
+  from jsonb_to_recordset(coalesce(p_tasks, '[]'::jsonb)) with ordinality as t(text text, owner text, ord bigint)
+  where length(btrim(coalesce(t.text, ''))) between 1 and 500;
+  update public.context_tasks ct
+  set done = true, done_at = now(), done_meeting_id = p_meeting_id
+  where ct.id = any(coalesce(p_done_task_ids, '{}'::uuid[])) and ct.context_id = v_context and not ct.done;
+  return true;
+end;
+$$;
+revoke all on function public.save_private_summary(uuid, jsonb, jsonb, uuid[]) from public, anon, authenticated;
+grant execute on function public.save_private_summary(uuid, jsonb, jsonb, uuid[]) to service_role;

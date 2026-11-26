@@ -5,7 +5,7 @@
 export type OrgRole = "admin" | "member";
 /** 0037: missed = people not at the meeting (default), all, selected = ticked people, off. */
 export type SummaryMode = "missed" | "all" | "selected" | "off";
-export type SummaryState = "sending" | "sent" | "partial" | "none" | "uncertain" | "no_notes" | "off" | "test" | "before";
+export type SummaryState = "sending" | "sent" | "partial" | "none" | "uncertain" | "no_notes" | "off" | "test" | "before" | "failed";
 export type MeetingStatus = "live" | "ending" | "done" | "abandoned";
 export type NoteSection = "decision" | "action" | "now" | "attendees" | "note";
 export type NoteKind = "decision" | "task" | "note" | "attendee" | "now";
