@@ -816,6 +816,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             disabled={phase === "starting"}
             onChange={setAgenda}
             goals={props.goals}
+            eventTitle={props.calendarEvent?.title ?? null}
           />
         ) : undefined
       }
@@ -837,13 +838,22 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       eventTitle={props.calendarEvent?.title ?? null}
       onMicCheck={() => {
         setStartError(null);
-        mic()
+        const cap = mic();
+        cap
           .check(setMicLevel)
+          // Unticked while the mic was still opening: let go of it once it is open.
+          .then(() => capture.current !== cap && cap.stop())
           .catch((e) => {
+            if (capture.current !== cap) return;
             setMicLevel(null);
             setStartError(micProblem(e));
           });
         setMicLevel(0);
+      }}
+      onMicCheckStop={() => {
+        capture.current?.stop();
+        capture.current = null;
+        setMicLevel(null);
       }}
       busy={busy}
       autoStopped={autoStopped}
