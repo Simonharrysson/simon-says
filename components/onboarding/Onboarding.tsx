@@ -47,7 +47,7 @@ const TITLES: Record<ShellStep, { title: string; lead?: string }> = {
   format: { title: "Så brukar ni ha möten", lead: "Simon Says skriver protokollet i er form. Det går att ändra när som helst." },
   protokoll: { title: "Era tidigare möten", lead: "Läs in gamla protokoll, så vet Simon Says vad ni har beslutat och vad som är på gång – redan till första mötet." },
   roster: { title: "Röster (valfritt)", lead: "Simon Says kan lära sig vem som pratar, så att ni slipper namnrundan varje gång." },
-  klart: { title: "Allt är klart", lead: "Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst." },
+  klart: { title: "Nu är ni redo", lead: "Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst." },
 };
 
 const msg = (r: ActionResult) => (r.ok ? null : r.message);

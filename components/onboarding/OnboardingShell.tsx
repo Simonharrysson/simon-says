@@ -62,9 +62,11 @@ export function OnboardingShell(p: OnboardingShellProps) {
 
       <div key={p.step} className={cn("flex flex-col gap-8", p.direction === "back" ? "animate-step-back" : "animate-step-in")}>
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-ink-3" aria-hidden="true">
-            {p.step === "klart" ? "Klart" : `Steg ${index + 1} av ${STEPS.length}`}
-          </p>
+          {p.step !== "klart" && (
+            <p className="text-sm text-ink-3" aria-hidden="true">
+              {`Steg ${index + 1} av ${STEPS.length}`}
+            </p>
+          )}
           <h1 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
             {p.title}
           </h1>

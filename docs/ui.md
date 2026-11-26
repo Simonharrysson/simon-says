@@ -499,3 +499,43 @@ dokument. No format select (the prepared format is used). If the starter's Googl
 yet (prepared by someone else, drive.file): a line saying so and **Öppna i Google-väljaren**. The
 Picker-off fallback shows it too. `/design`: `org-prepared`, `prepare-*`, `live-agenda-prepared`,
 `live-agenda-prepared-picker`.
+
+
+## Kom igång (onboarding, todo #5, migration 0035)
+
+After "Skapa förening" the admin lands on `/orgs/<id>/kom-igang`: one step per screen, a six-part
+progress rail (done = ink, skipped = grey, here = blue; never dots; each part jumps to its step),
+"Steg n av 6", the step's title and lead, and one footer (Tillbaka · Hoppa över · Fortsätt). Steps
+slide in from the right going forward, from the left going back (`animate-step-in` / `-back`, off
+with reduced motion). Progress is saved on every Fortsätt / Hoppa över (`org_onboarding`) and kept
+in `?steg=n`; the förening page shows the admins a "Kom igång n/6" card (`KomIgangCard`, Fortsätt ·
+Dölj) until every step is done or skipped. Föreningar from before 0035 have no row and no card;
+Inställningar links to the guide.
+
+1. **Namn och logga**: the name, and a logo cropped to a centred 256 px square in the browser
+   (`squareLogo`), uploaded to `POST /api/orgs/<id>/logo` (bytes checked: PNG/JPEG/WebP, ≤ 1 MB),
+   stored privately in storage `org-logos/<id>/logo`, served member-checked at
+   `GET /api/orgs/<id>/logo?v=…`. `OrgLogo` shows it on the förening page and in the list only,
+   never in the Docs; without one, the first letter on ink.
+2. **Styrelsen**: ONE list (`boardRows`, `lib/people/board.ts`): people (name, role) plus members
+   nobody has named yet ("Namn saknas" + Lägg till namn). An e-mail invites (`set_person_email`):
+   the person is linked to the member account with that address now or when they join
+   (`org_members` trigger). Simon Says sends no mail: "Skicka inbjudan" opens the admin's own mail
+   (`mailto:`) with the invite link; the link is also shown to copy. Status line: "Har konto" (green)
+   · "Inbjuden · e-post" · "Bara namn". The Personer panel shows the same line.
+3. **Mötesmapp**: the existing folder Picker (`useMeetingFolderPicker`).
+4. **Så brukar ni ha möten**: Veckomöte (förvalt; Fortsätt makes it the default when the förening
+   has none), "Som våra gamla protokoll" (the existing `LearnFormatView`), or "Behåll …" when a
+   format is already chosen. **Stadgar**: one Claude call (`extractStadgarAgendas`, oneShot spend
+   gate) gives the Styrelsemöte's required items and the Årsmöte's agenda; both lists are editable
+   and saved with `POST /api/orgs/<id>/onboarding/formats` as non-default versions the förening
+   points at (`orgs.styrelse_format_id`, `orgs.arsmote_format_id`, `set_type_format`). Förbered
+   möte uses them; no årsmöte list → the standard Årsmöte.
+5. **Era tidigare möten**: explains the import and links to `/orgs/<id>/protokoll` (the import on
+   Översikt); nothing is reimplemented.
+6. **Röster (valfritt)**: says the plan honestly (the name round in the first meeting becomes the
+   voice; the feature is still a spike) and records per person who has said yes
+   (`set_voice_consent`: when + by whom). The feature must ask the person again before storing anything.
+
+**Klart**: what was done (✓) and skipped (– · Gör nu), "Förbered första mötet →" (primary).
+`/design`: `onboarding-*`, `org-kom-igang`, `orgs-logos`.

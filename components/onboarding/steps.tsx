@@ -246,26 +246,33 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
   const display = row.name ?? row.email ?? "Okänd";
   return (
     <div className="flex flex-col gap-1 px-4 py-3">
-      <div className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="grid size-9 flex-none place-items-center rounded-full bg-sunk text-sm font-medium text-ink-2" aria-hidden="true">
+      <div className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
+        <span className="mt-0.5 grid size-9 flex-none place-items-center rounded-full bg-sunk text-sm font-medium text-ink-2" aria-hidden="true">
           {(row.name ?? "?").trim().charAt(0).toUpperCase()}
         </span>
-        <span className="flex min-w-0 flex-1 basis-48 flex-col">
+        <span className="flex min-w-0 flex-col">
           <span className="font-medium wrap-anywhere">
             {row.name ?? <span className="text-ink-3">Namn saknas</span>}
             {row.role && <span className="font-normal text-ink-2"> · {row.role}</span>}
           </span>
           <span className="text-sm text-ink-3">{statusLine(row, me)}</span>
+          {row.status === "invited" && row.email && (
+            <span className="mt-1">
+              <InviteButton email={row.email} name={row.name} orgName={invite.orgName} inviteUrl={invite.inviteUrl} />
+            </span>
+          )}
+          {!row.personId && (
+            <span className="mt-2">
+              <Button variant="secondary" size="sm" icon={<IconPlus size={16} />} onClick={onEdit}>
+                Lägg till namn
+              </Button>
+            </span>
+          )}
         </span>
-        <span className="ml-auto flex items-center gap-1">
-          {row.status === "invited" && row.email && <InviteButton email={row.email} name={row.name} orgName={invite.orgName} inviteUrl={invite.inviteUrl} />}
-          {row.personId ? (
+        <span className="flex items-center gap-1">
+          {row.personId && (
             <Button variant="ghost" size="sm" icon={<IconPencil size={16} />} iconOnly onClick={onEdit}>
               {`Ändra ${display}`}
-            </Button>
-          ) : (
-            <Button variant="secondary" size="sm" icon={<IconPlus size={16} />} onClick={onEdit}>
-              Lägg till namn
             </Button>
           )}
           {onRemove && (
@@ -295,7 +302,7 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
 function InviteButton({ email, name, orgName, inviteUrl }: { email: string; name: string | null; orgName: string; inviteUrl: string }) {
   const ctx = { orgName, inviteUrl };
   return (
-    <a className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-sm font-medium text-blue no-underline hover:bg-blue-wash max-md:min-h-11" href={inviteMailto(email, ctx.orgName, ctx.inviteUrl, name)}>
+    <a className="-ml-2 inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-sm font-medium text-blue no-underline hover:bg-blue-wash max-md:min-h-11" href={inviteMailto(email, ctx.orgName, ctx.inviteUrl, name)}>
       Skicka inbjudan
       <IconExternal size={14} />
     </a>

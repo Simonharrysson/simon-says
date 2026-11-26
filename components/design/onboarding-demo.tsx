@@ -164,7 +164,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
   "onboarding-6": () => <VoicesDemo />,
   "onboarding-6-empty": () => <VoicesDemo empty />,
   "onboarding-klart": () => (
-    <Frame step="klart" done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} logo={DEMO_LOGO} title="Allt är klart" lead="Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst.">
+    <Frame step="klart" done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} logo={DEMO_LOGO} title="Nu är ni redo" lead="Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst.">
       <DoneStep done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} prepareHref="#" orgHref="#" onGo={noop} />
     </Frame>
   ),
