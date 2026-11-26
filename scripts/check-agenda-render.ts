@@ -37,6 +37,10 @@
  *             after it: deleting the line WITH its newline (the newline before the table), then only its
  *             text; and deleting the line after the table with the newline before it (the table's end).
  *             Prints whether each delete was accepted. No Claude call, no DB write.
+ *   parked    (parked N4) fresh fictional Docs: our bulleted line, and our indented "– " line,
+ *             directly before a table: text-only delete + deleteParagraphBullets + zero indent on the
+ *             empty paragraph left, in one batch; prints whether it was accepted and the paragraph's
+ *             bullet/indent after. No Claude call, no DB write.
  *
  * Env as scripts/check-google.ts (never prints secrets). No database writes. Deletes nothing.
  */
@@ -1109,6 +1113,80 @@ async function tableNewline() {
   writeFileSync(join(STATE_DIR, "agenda-tablenl.json"), JSON.stringify(R, null, 2));
 }
 
+async function parked() {
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const create = async (title: string) => {
+    const id = (await docsApi().documents.create({ requestBody: { title: `Simon Says ${title} (fiktivt) ${stamp}` } })).data.documentId!;
+    tabId = (await get(id)).tabs![0].tabProperties!.tabId!;
+    return id;
+  };
+  const range = (startIndex: number, endIndex: number) => ({ tabId, startIndex, endIndex });
+  const before = (doc: Doc) => {
+    const c = tabOf(doc).body!.content!;
+    return c[c.findIndex((el) => el.table) - 1];
+  };
+  // N4: "Rubrik\n\n", a table at the empty paragraph, our line typed into the paragraph before it.
+  const n4 = async (label: string, bulleted: boolean) => {
+    await measure(label, async () => {
+      const id = await create("N4-tabell");
+      await batch(id, [{ insertText: { text: "Rubrik\n\nEfter tabellen", location: { index: 1, tabId } } }]);
+      let doc = await get(id);
+      const empty = paragraphs(doc).find((p) => p.text === "" && !p.cell)!;
+      await batch(id, [{ insertTable: { rows: 2, columns: 2, location: { index: empty.start, tabId } } }]);
+      doc = await get(id);
+      const line = bulleted ? "Vår punkt." : "– Vår rad.";
+      const at = before(doc).startIndex!;
+      await batch(id, [
+        { insertText: { text: line, location: { index: at, tabId } } },
+        bulleted
+          ? { createParagraphBullets: { range: range(at, at + line.length), bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } }
+          : {
+              updateParagraphStyle: {
+                range: range(at, at + line.length),
+                paragraphStyle: { indentStart: { magnitude: 54, unit: "PT" }, indentFirstLine: { magnitude: 36, unit: "PT" } },
+                fields: "indentStart,indentFirstLine",
+              },
+            },
+      ]);
+      doc = await get(id);
+      const p = before(doc);
+      const pp = paragraphs(doc).find((x) => x.start === p.startIndex)!;
+      rec(`${label}.before`, { text: pp.text, listId: pp.listId, indentStart: pp.indentStart, indentFirst: pp.indentFirst });
+      const s = p.startIndex!;
+      try {
+        await batch(
+          id,
+          [
+            { deleteContentRange: { range: range(s, p.endIndex! - 1) } },
+            { deleteParagraphBullets: { range: range(s, s + 1) } },
+            {
+              updateParagraphStyle: {
+                range: range(s, s + 1),
+                paragraphStyle: { indentStart: { magnitude: 0, unit: "PT" }, indentFirstLine: { magnitude: 0, unit: "PT" } },
+                fields: "indentStart,indentFirstLine",
+              },
+            },
+          ],
+          doc.revisionId!,
+        );
+        rec(`${label}.accepted`, true);
+        const after = await get(id);
+        const q = paragraphs(after).find((x) => x.start === s)!;
+        rec(`${label}.after`, { text: q.text, listId: q.listId, indentStart: q.indentStart, indentFirst: q.indentFirst });
+      } catch (err) {
+        rec(`${label}.accepted`, false);
+        rec(`${label}.error`, errInfo(err));
+      }
+      console.log(`  Doc: ${urlOf(id)}`);
+    });
+  };
+  await n4("parked.n4.bulletBeforeTable", true);
+  await n4("parked.n4.dashBeforeTable", false);
+
+  mkdirSync(STATE_DIR, { recursive: true });
+  writeFileSync(join(STATE_DIR, "agenda-parked.json"), JSON.stringify(R, null, 2));
+}
+
 async function main(): Promise<void> {
   const [userArg, stage] = process.argv.slice(2);
   if (!userArg || !stage) {
@@ -1149,6 +1227,8 @@ async function main(): Promise<void> {
       return reanchor(process.argv[4] ?? "");
     case "tablenl":
       return tableNewline();
+    case "parked":
+      return parked();
     default:
       throw new Error(`unknown stage ${stage}`);
   }

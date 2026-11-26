@@ -329,9 +329,26 @@ export function deleteRuns(
     let end = isLast ? lastIndex - 1 : run.end;
     // Format layout: never the newline directly before a table (API 400 "Invalid deletion range",
     // measured: check-agenda-render tablenl): our text goes, an empty paragraph stays.
-    if (opts.keepHumanNewline && !isLast && tables.some((t) => t.start === run.end)) end = run.end - 1;
+    const beforeTable = opts.keepHumanNewline && !isLast && tables.some((t) => t.start === run.end);
+    if (beforeTable) end = run.end - 1;
     const requests: DocsRequest[] = run.names.map((name) => ({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tabId] } } }));
     if (end > start) requests.push({ deleteContentRange: { range: { tabId, startIndex: start, endIndex: end } } });
+    // Parked N4: that empty paragraph would keep our bullet or our (c) indent (a stray "●" above
+    // the table): reset both, in the same batch. Only when it is empty: the run is whole
+    // paragraphs of ours (start = run.start), so all that is left at `start` is the newline.
+    if (beforeTable && start === run.start && end === run.end - 1) {
+      const range = { tabId, startIndex: start, endIndex: start + 1 };
+      requests.push(
+        { deleteParagraphBullets: { range } },
+        {
+          updateParagraphStyle: {
+            range,
+            paragraphStyle: { indentStart: { magnitude: 0, unit: "PT" }, indentFirstLine: { magnitude: 0, unit: "PT" } },
+            fields: "indentStart,indentFirstLine",
+          },
+        },
+      );
+    }
     groups.push({ index: start, kind: DELETE, requests });
   }
   return groups;

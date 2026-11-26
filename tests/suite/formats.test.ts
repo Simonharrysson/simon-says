@@ -40,6 +40,7 @@ const { proposeFormat } = await import("@/lib/formats/learn");
 const { extractRequiredItems } = await import("@/lib/formats/stadgar");
 const { docStructure } = await import("@/lib/formats/structure");
 const { docOf, paraEl, TAB } = await import("@/test/docsim");
+const { INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
 const { anchoredStarts, scanAgenda } = await import("@/lib/agenda/scan");
 const { createOrg } = await import("@/lib/db/orgs");
 const { ensureStandardRow } = await import("@/lib/formats/store");
@@ -456,6 +457,40 @@ describe("feature: formats (parked fixes)", () => {
     expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3"]);
     const lines = linesOf(sim.doc);
     expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Övrigt"))).toEqual(["Ekonomi", "Fakturan från hallen", "Medlemsavgifter", "Fakturan är betald."]);
+  });
+
+  it("N4: our removed line right above a table leaves an empty paragraph without our bullet or indent", async () => {
+    const table: El = {
+      table: { rows: 1, columns: 2, tableRows: [{ tableCells: [{ content: [paraEl("Post")] }, { content: [paraEl("Belopp")] }] }] },
+    };
+    const shapes: [string, El][] = [
+      ["list item ((c) '– ' line, indented)", num("Ekonomi")],
+      ["heading item (a bullet of ours)", paraEl("Ekonomi", { style: "HEADING_3" })],
+    ];
+    for (const [i, [, item]] of shapes.entries()) {
+      const items = item.paragraph!.bullet ? [num("Godkänn dagordning"), item, table, num("Övrigt")] : [paraEl("Godkänn dagordning", { style: "HEADING_3" }), item, table, paraEl("Övrigt", { style: "HEADING_3" })];
+      const sim = FormatSim.start({
+        id: `m-n4-${i}`,
+        doc: agendaDoc(items),
+        profile: VECKOMOTE,
+        people: PEOPLE,
+        script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-2", text: "Fakturan är betald" }], [{ op: "remove", id: "n1" }]]) },
+      });
+      await sim.tick(block([{ at: 1000, speaker: 0, text: "Fakturan är betald." }]));
+      // Ours above the table: a "– " line with the (c) indent, or a bullet of our own.
+      const mine = body(sim.doc).find((el) => el.paragraph?.elements?.[0]?.textRun?.content?.includes("Fakturan är betald."))!.paragraph!;
+      expect(mine.bullet ?? mine.paragraphStyle?.indentStart?.magnitude).toBeTruthy();
+      await sim.tick(block([{ at: 60_000, speaker: 0, text: "Nej, den är inte betald ännu." }]));
+      const lines = linesOf(sim.doc);
+      expect(lines.some((l) => l.includes("Fakturan är betald"))).toBe(false);
+      const tIdx = body(sim.doc).findIndex((el) => el.table);
+      const left = body(sim.doc)[tIdx - 1].paragraph!;
+      expect(left.elements!.map((e) => e.textRun?.content).join("")).toBe("\n");
+      expect(left.bullet).toBeUndefined();
+      expect(left.paragraphStyle?.indentStart?.magnitude ?? 0).toBe(0);
+      expect(left.paragraphStyle?.indentFirstLine?.magnitude ?? 0).toBe(0);
+      expect(lines.slice(lines.indexOf("Ekonomi"))).toEqual(["Ekonomi", "", "Post", "Belopp", "Övrigt", "Anteckningar", INITIAL_LIVE_LINE.replace("–", "18:31"), "Vad ska vi göra till nästa gång?"]);
+    }
   });
 
 });

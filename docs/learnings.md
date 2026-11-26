@@ -454,3 +454,11 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 ## Feature suite — first paid run (2026-11-26, controller)
 
 - `npm run suite -- --paid --budget 1.50`: free tier PASS on all 5 features; paid PASS on all 5 fixtures — veckomote-a, styrelse-ekdala (place 10/11), owner-styles (roles 6/6, every way of naming an owner), veckomote-b (followup 4/4), boardgames. $0.53 this run ($1.14/h); ledger .notes-replay/spend-formats.json total $1.27.
+
+## 2026-11-26 · Parked fix N4 · Measured on fresh fictional Docs
+
+`npm run check-agenda-render -- <user> parked` (state `.check-notes/agenda-parked.json`):
+- N4: our line directly before a table (a bulleted one, indent 36/18; and a "– " line with the (c) indent 54/36). One guarded
+  batch: delete its text only, then `deleteParagraphBullets` + `updateParagraphStyle` indentStart/indentFirstLine 0 on
+  `[start, start+1)`: **accepted**; the empty paragraph left has no bullet and no indent. `deleteRuns` (format layout) now adds
+  both after a text-only delete before a table; v1 requests unchanged.
