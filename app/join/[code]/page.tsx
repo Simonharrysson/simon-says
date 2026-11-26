@@ -7,6 +7,8 @@ import { inviteOrgName } from "@/lib/db/orgs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+// Joining shares the förening's earlier meeting Docs after the redirect (after()).
+export const maxDuration = 60;
 export const metadata: Metadata = { title: "Inbjudan" };
 
 const CODE = /^[A-Za-z0-9_-]{1,64}$/;

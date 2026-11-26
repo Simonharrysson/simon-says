@@ -5,12 +5,14 @@ import { shareWith } from "@/lib/docs/create";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-// Who can open a meeting's Doc (migration 0030, `meeting_doc_shares`). A member's own Google grant
-// can't tell (drive.file: a Doc shared with them is still invisible to our app under their token),
-// so access is what Simon Says recorded: the starter owns the Doc, every other member has a row
-// once we shared it with them (at the start, when they joined, or when they asked on the org page).
-// Shares always go through the STARTER's grant: the Doc's owner, the only one who may share it
-// (writersCanShare=false). Agenda Docs are the förening's own: never shared by us.
+// Who can open a meeting's Doc (migration 0030, `meeting_doc_shares`). We don't ask Google per
+// page view (one Drive call per meeting and member, and under drive.file a member's own token is
+// not expected to see a Doc it neither created nor picked; not measured), so access is what Simon
+// Says recorded: the starter owns or picked the Doc, every other member has a row once we shared
+// it with them (at the start, when they joined, or when they asked on the org page).
+// Shares always go through the STARTER's grant: the Doc's owner, the only one who may share a Doc
+// we created (writersCanShare=false). The starter must still be a member of the förening. An
+// agenda Doc (the förening's own) is shared only when a member asks ("Få åtkomst"), never on join.
 // Logs carry ids only, never emails or Doc names.
 
 /** A table this database doesn't have yet (code deployed before 0030). */
@@ -28,12 +30,12 @@ export async function recordDocShares(meetingId: string, userIds: string[]): Pro
 }
 
 /**
- * The ids of `meetingIds` whose Doc was shared with the signed-in user (RLS: own rows only).
- * A database without 0030 gives an empty set (everyone then sees the "ask" state).
+ * The meetings whose Doc was shared with the signed-in user (RLS: own rows only, so no id filter:
+ * a long `in (…)` list could fail and turn every row into "Få åtkomst"). A database without 0030
+ * gives an empty set (everyone then sees "Få åtkomst").
  */
-export async function sharedMeetingIds(db: SupabaseClient, meetingIds: string[]): Promise<Set<string>> {
-  if (!meetingIds.length) return new Set();
-  const { data, error } = await db.from("meeting_doc_shares").select("meeting_id").in("meeting_id", meetingIds);
+export async function sharedMeetingIds(db: SupabaseClient): Promise<Set<string>> {
+  const { data, error } = await db.from("meeting_doc_shares").select("meeting_id");
   if (error) {
     if (!missingTable(error.code)) console.error(`meeting_doc_shares: read: ${error.message}`);
     return new Set();
@@ -43,6 +45,7 @@ export async function sharedMeetingIds(db: SupabaseClient, meetingIds: string[])
 
 interface ShareableMeeting {
   id: string;
+  org_id: string;
   doc_id: string;
   started_by: string | null;
   agenda_doc: boolean;
@@ -51,9 +54,7 @@ interface ShareableMeeting {
 export type ShareOutcome =
   /** Shared now (or it already was). */
   | "shared"
-  /** The förening's own agenda Doc: we never share it. */
-  | "agenda"
-  /** The starter is gone (account deleted) or never recorded. */
+  /** The starter is gone (left the förening, account deleted) or never recorded. */
   | "no_starter"
   /** The starter's Google connection has lapsed. */
   | "starter_google_lost"
@@ -73,14 +74,24 @@ async function shareOne(auth: OAuth2Client, meeting: ShareableMeeting, user: { i
   return "shared";
 }
 
+/** The ones of `userIds` that are still members of the förening (service role). */
+async function stillMembers(orgId: string, userIds: string[]): Promise<Set<string>> {
+  if (!userIds.length) return new Set();
+  const { data, error } = await supabaseAdmin().from("org_members").select("user_id").eq("org_id", orgId).in("user_id", userIds);
+  if (error) throw new Error(`doc shares: members: ${error.message}`);
+  return new Set(((data ?? []) as { user_id: string }[]).map((r) => r.user_id));
+}
+
 /**
- * Share one meeting's Doc with a member who asked (the org page). The caller has checked, as the
- * user, that they are a member of the meeting's förening. `user.email` is their sign-in address.
+ * Share one meeting's Doc with a member who asked (the org page), agenda Docs included (the
+ * starter picked it; Google refuses if their account may not share it). The caller has checked,
+ * as the user, that they are a member of the meeting's förening. `user.email` is their sign-in
+ * address. A starter who has left the förening is never used.
  */
 export async function shareMeetingDocWith(meeting: ShareableMeeting, user: { id: string; email: string }): Promise<ShareOutcome> {
-  if (meeting.agenda_doc) return "agenda";
   if (!meeting.started_by) return "no_starter";
   if (meeting.started_by === user.id) return "shared";
+  if (!(await stillMembers(meeting.org_id, [meeting.started_by])).has(meeting.started_by)) return "no_starter";
   let auth: OAuth2Client;
   try {
     auth = await getGoogleAuth(meeting.started_by);
@@ -97,14 +108,15 @@ export const JOIN_SHARE_LIMIT = 60;
 
 /**
  * A member just joined: share the förening's earlier meeting Docs with them, through each
- * starter's own grant (agenda Docs excepted; ones already shared skipped). Runs after the join
- * response (`after`), best effort: returns how many were shared.
+ * starter's own grant (starters still in the förening; agenda Docs excepted: those only on request;
+ * ones already shared skipped). Runs after the join response (`after`), best effort: returns how
+ * many were shared.
  */
 export async function shareOrgDocsWithNewMember(orgId: string, user: { id: string; email: string }): Promise<number> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("meetings")
-    .select("id, doc_id, started_by, agenda_doc")
+    .select("id, org_id, doc_id, started_by, agenda_doc")
     .eq("org_id", orgId)
     .eq("agenda_doc", false)
     .not("started_by", "is", null)
@@ -115,7 +127,10 @@ export async function shareOrgDocsWithNewMember(orgId: string, user: { id: strin
     console.error(`join share: meetings: ${error.message}`);
     return 0;
   }
-  const meetings = ((data ?? []) as ShareableMeeting[]).filter((m) => m.doc_id);
+  const all = ((data ?? []) as ShareableMeeting[]).filter((m) => m.doc_id);
+  // Only starters still in the förening: someone who left keeps their Drive, not our use of it.
+  const members = await stillMembers(orgId, [...new Set(all.map((m) => m.started_by!))]);
+  const meetings = all.filter((m) => members.has(m.started_by!));
   const done = await sharedIdsFor(user.id, meetings.map((m) => m.id));
 
   const byStarter = new Map<string, ShareableMeeting[]>();

@@ -18,6 +18,7 @@ import { canResume, docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib
 import type { Notice } from "@/lib/ui/messages";
 import { DocAccessButton } from "./DocAccessButton";
 import { NoticeBanner } from "./NoticeBanner";
+import type { DocAccess } from "@/lib/docs/access-state";
 import { OrgSettingsForm } from "./OrgSettingsForm";
 import { PersonRow } from "./PersonRow";
 
@@ -28,16 +29,7 @@ export interface OrgDetailMeeting {
   ended_at: string | null;
   doc_id: string;
   started_by: string | null;
-  /** Started in the förening's own agenda Doc (never shared by Simon Says). */
-  agenda_doc?: boolean;
 }
-
-/**
- * Can this viewer open a meeting's Doc? `open`: the starter, or Simon Says shared it with them
- * (meeting_doc_shares). `request`: a Doc Simon Says created, not shared with them yet ("Få
- * åtkomst"). `agenda`: the förening's own agenda Doc, whose sharing the förening decides.
- */
-export type DocAccess = "open" | "request" | "agenda";
 
 export interface OrgDetailViewProps {
   org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean };
@@ -371,9 +363,6 @@ function MeetingsPanel({
                         <Badge tone={statusTone[meeting.status]}>{meetingStatusLabel[meeting.status]}</Badge>
                         {duration && <span>{duration}</span>}
                         {state === "active" && <span>Avsluta mötet innan du raderar det.</span>}
-                        {access(meeting) === "agenda" && !mine && (
-                          <span>Föreningens eget dokument – kommer du inte in, be {starter(meeting)} dela det.</span>
-                        )}
                       </span>
                     </span>
                     <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">

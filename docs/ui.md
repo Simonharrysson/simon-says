@@ -421,17 +421,17 @@ pinned to exact versions. One stylesheet: `app/globals.css` (tokens, theme, base
 ## Meeting Docs on the förening page (0030)
 
 Each meeting row shows the Doc only to someone who can open it, never a link to Google's
-access-denied page. Access comes from recorded shares (`meeting_doc_shares`), because a member's
-own drive.file grant cannot see a Doc shared with them:
+access-denied page. Access comes from recorded shares (`meeting_doc_shares`), not a Drive call per
+page view (a member's drive.file grant is not expected to see a Doc it didn't create or pick):
 
 | Viewer | Shows |
 |---|---|
 | the starter, or a member Simon Says shared the Doc with | **Dokument** (opens in a new tab) |
-| any other member, Doc created by Simon Says | **Få åtkomst** (`DocAccessButton` → `POST /api/meetings/<id>/doc-access`, shared through the starter's grant) → **Dokument**; if that fails: "Be <starter> dela dokumentet med dig." |
-| any other member, the förening's own agenda Doc | **Dokument** + grey "Föreningens eget dokument – kommer du inte in, be <starter> dela det." (Simon Says never shares agenda Docs) |
+| any other member | **Få åtkomst** (`DocAccessButton` → `POST /api/meetings/<id>/doc-access`, shared through the starter's grant) → **Dokument**; if that fails: "Be <starter> dela dokumentet med dig." |
 
-The "Ett möte pågår" banner follows the same rule. New members get the earlier Docs shared on
-join (after the redirect), so "Få åtkomst" is mostly for a failed share or a starter whose Google
-connection had lapsed. On the live page, "Dokumentet hamnade i din Drive" (warning, dismissable)
+The "Ett möte pågår" banner follows the same rule. New members get the earlier Docs Simon Says
+created shared on join (after the redirect, so the first view may still show "Få åtkomst"); an
+agenda Doc (the förening's own) is shared only when a member presses "Få åtkomst". Sharing always
+goes through the starter's grant, and only while the starter is still a member. On the live page, "Dokumentet hamnade i din Drive" (warning, dismissable)
 when the förening has a meeting folder but the starter's grant could not add to it.
 

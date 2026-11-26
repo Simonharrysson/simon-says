@@ -6,7 +6,8 @@ import { GoogleAuthLostError } from "@/lib/google/client";
 const g = vi.hoisted(() => ({
   permCreate: vi.fn(),
   getGoogleAuth: vi.fn(),
-  meetings: [] as { id: string; doc_id: string; started_by: string | null; agenda_doc: boolean }[],
+  meetings: [] as { id: string; org_id: string; doc_id: string; started_by: string | null; agenda_doc: boolean }[],
+  members: ["s1", "s2"] as string[],
   shared: [] as { meeting_id: string; user_id: string }[],
   upserts: [] as unknown[],
   filters: [] as [string, string, unknown][],
@@ -32,7 +33,10 @@ vi.mock("@/lib/supabase/admin", () => ({
       }
       b.upsert = async (rows: unknown) => (g.upserts.push(rows), { error: g.upsertError });
       b.then = (resolve: (v: unknown) => unknown) =>
-        resolve({ data: table === "meetings" ? g.meetings : g.shared, error: null });
+        resolve({
+          data: table === "meetings" ? g.meetings : table === "org_members" ? g.members.map((user_id) => ({ user_id })) : g.shared,
+          error: null,
+        });
       return b;
     },
   }),
@@ -46,6 +50,7 @@ beforeEach(() => {
   g.permCreate.mockReset().mockResolvedValue({ data: {} });
   g.getGoogleAuth.mockReset().mockImplementation(async (who: string) => ({ who }));
   g.meetings = [];
+  g.members = ["s1", "s2"];
   g.shared = [];
   g.upserts = [];
   g.filters = [];
@@ -55,9 +60,9 @@ beforeEach(() => {
 describe("shareOrgDocsWithNewMember", () => {
   it("shares earlier Docs through each starter's own grant, skips ones already shared, records each", async () => {
     g.meetings = [
-      { id: "m1", doc_id: "d1", started_by: "s1", agenda_doc: false },
-      { id: "m2", doc_id: "d2", started_by: "s2", agenda_doc: false },
-      { id: "m3", doc_id: "d3", started_by: "s1", agenda_doc: false },
+      { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false },
+      { id: "m2", org_id: "org1", doc_id: "d2", started_by: "s2", agenda_doc: false },
+      { id: "m3", org_id: "org1", doc_id: "d3", started_by: "s1", agenda_doc: false },
     ];
     g.shared = [{ meeting_id: "m3", user_id: NEW.id }];
     expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(2);
@@ -79,8 +84,8 @@ describe("shareOrgDocsWithNewMember", () => {
   it("a starter whose Google connection lapsed is skipped; the others still share", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     g.meetings = [
-      { id: "m1", doc_id: "d1", started_by: "s1", agenda_doc: false },
-      { id: "m2", doc_id: "d2", started_by: "s2", agenda_doc: false },
+      { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false },
+      { id: "m2", org_id: "org1", doc_id: "d2", started_by: "s2", agenda_doc: false },
     ];
     g.getGoogleAuth.mockImplementation(async (who: string) => {
       if (who === "s1") throw new GoogleAuthLostError(who, "invalid_grant");
@@ -90,9 +95,18 @@ describe("shareOrgDocsWithNewMember", () => {
     expect(g.permCreate.mock.calls.map(([who]) => who)).toEqual(["s2"]);
   });
 
+  it("skips the Docs of a starter who has left the förening", async () => {
+    g.meetings = [
+      { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false },
+      { id: "m2", org_id: "org1", doc_id: "d2", started_by: "gone", agenda_doc: false },
+    ];
+    expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(1);
+    expect(g.getGoogleAuth.mock.calls.map((c) => c[0])).toEqual(["s1"]);
+  });
+
   it("a failed share is not recorded (the member can ask on the org page)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    g.meetings = [{ id: "m1", doc_id: "d1", started_by: "s1", agenda_doc: false }];
+    g.meetings = [{ id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false }];
     g.permCreate.mockRejectedValue(new Error("not a Google account"));
     expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(0);
     expect(g.upserts).toEqual([]);
@@ -100,7 +114,7 @@ describe("shareOrgDocsWithNewMember", () => {
 });
 
 describe("shareMeetingDocWith", () => {
-  const meeting = { id: "m1", doc_id: "d1", started_by: "s1", agenda_doc: false };
+  const meeting = { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false };
 
   it("shares through the starter's grant and records it", async () => {
     expect(await shareMeetingDocWith(meeting, NEW)).toBe("shared");
@@ -108,9 +122,16 @@ describe("shareMeetingDocWith", () => {
     expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }]]);
   });
 
-  it("never shares the förening's own agenda Doc, and needs a starter", async () => {
-    expect(await shareMeetingDocWith({ ...meeting, agenda_doc: true }, NEW)).toBe("agenda");
+  it("an agenda Doc is shared on request too (through the starter who picked it)", async () => {
+    expect(await shareMeetingDocWith({ ...meeting, agenda_doc: true }, NEW)).toBe("shared");
+    expect(g.permCreate.mock.calls[0][1]).toMatchObject({ fileId: "d1" });
+  });
+
+  it("needs a starter who is still in the förening: never uses a departed member's Google grant", async () => {
     expect(await shareMeetingDocWith({ ...meeting, started_by: null }, NEW)).toBe("no_starter");
+    g.members = ["s2"];
+    expect(await shareMeetingDocWith(meeting, NEW)).toBe("no_starter");
+    expect(g.getGoogleAuth).not.toHaveBeenCalled();
     expect(g.permCreate).not.toHaveBeenCalled();
   });
 

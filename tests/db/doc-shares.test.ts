@@ -9,6 +9,8 @@ import { createOrg, joinOrg } from "@/lib/db/orgs";
 
 const current = vi.hoisted(() => ({ db: null as SupabaseClient | null, perm: [] as unknown[] }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current.db }));
+// The service role is the local stack's.
+vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 vi.mock("@/lib/google/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/client")>()),
   getGoogleAuth: async () => ({}),
@@ -71,10 +73,15 @@ describe.skipIf(!hasLocalSupabase)("Docs in the förening (0030)", () => {
     expect(current.perm).toHaveLength(1);
   });
 
-  it("an agenda Doc is never shared by us: 409 with a message to ask the starter", async () => {
-    await adminClient().from("meetings").update({ agenda_doc: true }).eq("id", meetingId);
-    const res = await askFor(member, meetingId);
+  it("a starter who left the förening is never used: 409 with a message to ask", async () => {
+    const { meetingId: other } = await seedMeeting(orgId, member.id);
+    await adminClient().from("org_members").delete().eq("org_id", orgId).eq("user_id", member.id);
+    const third = await createTestUser("dsthird");
+    const { data } = await adminClient().from("orgs").select("invite_code").eq("id", orgId).single();
+    await joinOrg(third.db, data!.invite_code as string);
+    const res = await askFor(third, other);
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toBe("agenda");
+    expect((await res.json()).error).toBe("no_starter");
+    expect(current.perm).toHaveLength(1);
   });
 });

@@ -8,7 +8,7 @@ import { listGoals, loadOverview, type OrgGoal } from "@/lib/dashboard/load";
 import type { Overview } from "@/lib/dashboard/overview";
 import { isUuid } from "@/lib/db/ids";
 import { sharedMeetingIds } from "@/lib/docs/access";
-import type { DocAccess } from "@/components/views/OrgDetailView";
+import { docAccessFor } from "@/lib/docs/access-state";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
@@ -92,11 +92,8 @@ export default async function OrgPage({
   ]);
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
   const me = userResult.data.user?.id ?? null;
-  // Who may open each Doc: recorded shares only (a member's own drive.file grant can't tell).
-  const shared = await sharedMeetingIds(db, meetings.filter((m) => m.started_by !== me).map((m) => m.id));
-  const docAccess: Record<string, DocAccess> = Object.fromEntries(
-    meetings.map((m) => [m.id, m.started_by === me || shared.has(m.id) ? "open" : m.agenda_doc ? "agenda" : "request"]),
-  );
+  // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
+  const docAccess = docAccessFor(meetings, me, await sharedMeetingIds(db));
 
   return (
     <OrgDetailView

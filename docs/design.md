@@ -251,8 +251,8 @@ by default; owned named range + keep-human-edits rule; ~45 s tick; usage caps;
 - **Doc ownership:** whoever pressed Start owns the Doc (in the meeting folder
   or their own Drive); the service shares it (writer) with all org members'
   Google accounts, and with members who join later (through the starter's grant,
-  recorded in `meeting_doc_shares`, 0030). Agenda Docs are the förening's own and
-  never shared by the service. The
+  recorded in `meeting_doc_shares`, 0030). Agenda Docs are the förening's own:
+  shared only when a member asks ("Få åtkomst"). The
   server stores that user's Google refresh token encrypted (Supabase Auth does
   not keep it). If it is revoked mid-meeting, transcription continues, the page
   shows "Doc paused — sign in again", and the backlog is written once fixed.

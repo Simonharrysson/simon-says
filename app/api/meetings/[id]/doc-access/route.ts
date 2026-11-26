@@ -14,9 +14,9 @@ const ASK = "Vi kunde inte dela dokumentet med dig. Be den som startade mötet d
 /**
  * "Få åtkomst" on the förening page: a member asks for a meeting Doc they haven't got (they joined
  * later, or the share at the start failed). The Doc is shared with the caller's own sign-in
- * address through the starter's Google grant (the owner) and recorded. Only Docs Simon Says
- * created: an agenda Doc is the förening's own and never shared by us. 204 on success; 409 with a
- * Swedish message when the caller must ask the starter.
+ * address through the starter's Google grant (the owner, or for an agenda Doc the one who picked
+ * it) and recorded. 204 on success; 409 with a Swedish message when the caller must ask the
+ * starter (left the förening, Google connection lapsed, or Google refused).
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -31,7 +31,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   // As the user: RLS shows meetings of the caller's own föreningar only (404 otherwise).
   const { data: meeting, error } = await supabase
     .from("meetings")
-    .select("id, doc_id, started_by, agenda_doc")
+    .select("id, org_id, doc_id, started_by, agenda_doc")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`doc-access: meeting: ${error.message}`);
@@ -39,8 +39,5 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const outcome = await shareMeetingDocWith(meeting, { id: user.id, email: user.email });
   if (outcome === "shared") return new NextResponse(null, { status: 204, headers: noStore });
-  if (outcome === "agenda") {
-    return fail("agenda", 409, "Det här är föreningens eget dokument. Be den som startade mötet dela det med dig.");
-  }
   return fail(outcome, 409, ASK);
 }

@@ -489,8 +489,9 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 ## 2026-11-26 · Docs live in the förening (audit item 2, branch doc-place, migration 0030)
 
 - **Placement.** New meeting Docs (v1 and format fallback) go into `orgs.meeting_folder_id` when the starter's
-  grant has `canAddChildren` there (`writableFolder`, moved from the A13 test agenda code, which measured this on
-  prod for a folder the starter picked). Otherwise, or if that create throws, the starter's own "Simon Says –
+  grant has `canAddChildren` there (`writableFolder`, moved from the A13 test agenda code; the A13 notes say the
+  test Doc landed in the meeting folder, but no step-by-step measurement of create-in-a-picked-folder is
+  recorded). Otherwise, or if that create throws, the starter's own "Simon Says –
   <förening>" folder; placement never fails a start. `docPlace` / `missedMeetingFolder` go in the response and the
   `started` event, and the live page says "Dokumentet hamnade i din Drive". Shared drive: no `writersCanShare`.
 - **Name.** `<YYYY-MM-DD> <format title> – <förening>` (Enkel: "Möte"), Testmöte ends "(Testmöte)". Date first
@@ -498,11 +499,14 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   file-name pattern from old minutes is stored, so none is used (would need a new read/Claude call).
 - **Orphans.** Meeting Docs carry `appProperties.simonSaysMeeting = "1"` and `listCandidates` drops them (a Doc
   of a deleted meeting in the meeting folder is never suggested as an agenda). A refused start trashes its new Doc.
-- **Access.** A member's own drive.file token cannot see a Doc shared with them, so access is what we record:
-  `meeting_doc_shares` (start, join, "Få åtkomst"). Shares always use the **starter's** grant (owner;
-  `writersCanShare=false`). On join, `after()` shares up to 60 earlier Docs. Backfill in 0030: members who joined
-  before a pre-0030 meeting started, unless that start logged `shareFailed > 0`. Agenda Docs are never shared by
-  us; the org page shows their link with "Föreningens eget dokument – be <starter> dela det".
-- **Not measured with real Google yet:** create in a folder another member owns that this starter picked; a
-  shared-drive meeting folder (permissions.create with supportsAllDrives as a non-organizer); permissions.create
-  through the starter's refresh token for a member who joined later.
+- **Access.** Access is what we record, not a Drive call per page view (a member's drive.file token is not
+  expected to see a Doc it didn't create or pick; not measured): `meeting_doc_shares` (start, join, "Få
+  åtkomst"). Shares always use the **starter's** grant (owner; `writersCanShare=false`), and only while the
+  starter is still a member. On join, `after()` shares up to 60 earlier Docs Simon Says created. Agenda Docs
+  (the förening's own) are shared only on "Få åtkomst"; Google refuses if the starter's account may not share
+  them, and the page then says "Be <starter> dela dokumentet med dig". Backfill in 0030: members who joined
+  before a pre-0030 meeting started (not agenda Docs), unless that start logged `shareFailed > 0`.
+- **Not measured with real Google yet (controller):** (1) starter picks the meeting folder, starts, and the Doc
+  appears there; (2) the same with a folder another member owns; (3) a shared-drive meeting folder; (4)
+  permissions.create through the starter's refresh token for a member who joined later, and for an agenda Doc
+  the starter only edits. Folders picked before 0030 show "mötesmapp vald" until an admin picks them once more.
