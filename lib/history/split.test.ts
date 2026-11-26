@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { docs_v1 } from "@googleapis/docs";
 import { allSeries } from "@/scripts/lib/goals-fixtures";
-import { datesIn, docTabs, headingDate, splitProtocols } from "./doc-text";
+import { dateMarks, datesIn, docTabs, headingDate, isTranscriptTitle, splitProtocols } from "./doc-text";
 
 // A picked Doc is not assumed to be one meeting (todo #7 review): running Docs, one tab per
 // meeting, transcript tabs. Fictional protocol series from the goals eval.
@@ -78,5 +78,67 @@ describe("splitProtocols", () => {
     const text = Array.from({ length: 12 }, (_, k) => `Möte ${k + 1}, tisdag\nVi träffades ${k + 1} mars 2026 i lokalen och gick igenom ekonomin, spelkvällarna och värvningen. ${"Diskussion om läget. ".repeat(40)}`).join("\n\n");
     expect(splitProtocols("Möten", [{ title: "", text }])).toEqual({ ok: false, reason: "many-meetings" });
     expect(splitProtocols("Tomt", [{ title: "", text: "  " }])).toEqual({ ok: false, reason: "empty" });
+  });
+});
+
+describe("review: body lines are not headings; yearless dates; transcript tabs", () => {
+  const protocol = (head: string, body: string[]) => [head, "Närvarande: styrelsen", "§1 Mötets öppnande", ...body, "§9 Övrigt", "Inget."].join("\n");
+
+  it("the four body lines that hold a date never split a protocol", () => {
+    for (const line of ["§4 Årsmöte 15 mars 2026 i aulan", "Möte med kommunen 2026-04-15", "Datum för städdag: 2026-04-15", "2026-04-15 deadline ansökan"]) {
+      expect(headingDate(line), line).toBeNull();
+      const text = protocol("Protokoll styrelsemöte 2026-03-03", ["§2 Ekonomi", "Kassan är god.", line, "§3 Lokalen", "Städdag snart."]);
+      const r = splitProtocols("Protokoll", [{ title: "", text }]);
+      expect(r.ok && r.sections.length, line).toBe(1);
+      expect(r.ok && r.sections[0].date).toBe("2026-03-03");
+    }
+  });
+
+  it("true headings still split: plain short lines, Docs heading style, tab titles", () => {
+    for (const h of ["Protokoll styrelsemöte 2026-03-03", "Datum: 2026-03-03", "2026-03-03", "Styrelsemöte 3 mars 2026", "Board meeting 3 Mar 2026", "tis 3/3-26"]) {
+      expect(headingDate(h), h).toBe("2026-03-03");
+    }
+    // A Docs heading may hold a few more words.
+    expect(headingDate("Styrelsemöte i aulan 3 mars 2026", true)).toBe("2026-03-03");
+    expect(headingDate("Styrelsemöte i aulan 3 mars 2026")).toBeNull();
+    const a = protocol("Styrelsemöte i aulan 3 mars 2026", ["§2 Ekonomi", "Ok."]);
+    const b = protocol("Styrelsemöte i aulan 17 mars 2026", ["§2 Ekonomi", "Ok."]);
+    const r = splitProtocols("P", [{ title: "", text: `${a}\n\n${b}`, headings: ["Styrelsemöte i aulan 3 mars 2026", "Styrelsemöte i aulan 17 mars 2026"] }]);
+    expect(r.ok && r.sections.map((s) => s.date)).toEqual(["2026-03-03", "2026-03-17"]);
+  });
+
+  it("a heading that opens something not shaped like a protocol does not cut", () => {
+    const text = [protocol("Protokoll 2026-03-03", ["§2 Ekonomi", "Ok."]), "", "2026-03-10", "Påminnelse om städdagen."].join("\n");
+    const r = splitProtocols("P", [{ title: "", text }]);
+    expect(r.ok && r.sections.length).toBe(1);
+  });
+
+  it("yearless dates are read ('12/3', '12 mars', 'tis 12/3') and years inferred from the Doc's date and the order", () => {
+    const marks = (s: string) => dateMarks(s).map((d) => d.iso ?? d.md);
+    expect(marks("Möte tis 12/3")).toEqual(["03-12"]);
+    expect(marks("Styrelsemöte 12 mars")).toEqual(["03-12"]);
+    expect(marks("3/4 av medlemmarna och 10/9-25")).toEqual(["04-03", "2025-09-10"]);
+    const doc = ["Möte tis 2/12", "Möte tis 13/1", "Möte tis 24/2"]
+      .map((h) => protocol(h, ["§2 Ekonomi", "Ok."]))
+      .join("\n\n");
+    const r = splitProtocols("Möten", [{ title: "", text: doc }], { referenceDate: "2026-03-01" });
+    expect(r.ok && r.sections.map((s) => [s.date, s.dateInferred])).toEqual([
+      ["2025-12-02", true],
+      ["2026-01-13", true],
+      ["2026-02-24", true],
+    ]);
+    // No date to infer from: several yearless meetings are refused, not collapsed.
+    expect(splitProtocols("Möten", [{ title: "", text: doc }])).toEqual({ ok: false, reason: "many-meetings" });
+  });
+
+  it("the many-meetings guard counts yearless dates too", () => {
+    const text = Array.from({ length: 6 }, (_, k) => `Vi sågs ${k + 1}/3 och pratade. ${"Diskussion om läget i föreningen. ".repeat(50)}`).join("\n");
+    expect(splitProtocols("Möten", [{ title: "", text }], { referenceDate: "2026-04-01" })).toEqual({ ok: false, reason: "many-meetings" });
+  });
+
+  it("transcript tabs are skipped by any title holding transkript/transcript", () => {
+    expect(isTranscriptTitle("Möte 3 – transkript")).toBe(true);
+    expect(isTranscriptTitle("Meeting transcript")).toBe(true);
+    expect(isTranscriptTitle("Protokoll")).toBe(false);
   });
 });
