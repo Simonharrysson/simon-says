@@ -44,7 +44,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
           Mötesformat: <strong>{currentRow ? formatLabel(currentRow) : current.name}</strong>
         </p>
         {required.length> 0 && (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-3">
             <p className="text-sm text-ink-3">Punkter som stadgarna kräver ({required.length}), med på varje dagordning:</p>
             <ul className="list-dash pl-5 text-xs text-ink-3 marker:text-ink-3">
               {required.map((r) => (

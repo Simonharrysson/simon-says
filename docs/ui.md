@@ -179,7 +179,7 @@ buttons keep `title` + a visually hidden label instead of a tooltip.
 
 1. `npx shadcn@latest add <name>` (it reads `components.json`; if a lowercase file would collide
    with a PascalCase one on macOS, add it under a temporary name first).
-2. In the new file: import `cn` from `@/lib/utils` (not `cn`), swap lucide icons for `icons.tsx`,
+2. In the new file: import `cn` from `@/lib/utils` (not the `cn` npm package), swap lucide icons for `icons.tsx`,
    drop `dark:` classes (our tokens already switch), replace shadcn's colours/radii/rings with ours
    (`bg-surface`, `border-control`, `rounded-md`, `shadow-lift`…), remove the `size-*` defaults that
    don't match 40/32/48px controls.
