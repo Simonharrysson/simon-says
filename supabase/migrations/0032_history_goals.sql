@@ -3,22 +3,25 @@
 -- reduced to short structured items (agenda topics, decisions, tasks with a role and done flag,
 -- one-line status reports). The Doc text is never stored, nor its title; names are scrubbed
 -- before a row is written. The goals digest reads these rows with the förening's own meetings.
--- Strictly additive: three new tables and four new functions; nothing existing changes.
+-- Strictly additive: three new tables and six new functions; nothing existing changes.
 
 -- ---------------------------------------------------------------------------------------------
--- history_protocols: one row per imported Doc. `drive_file_id` is unique per org, so importing
--- the same Doc again replaces it (never two copies in the chronology). `date_from`: 'doc' when
--- the date was read from the protocol, 'file' when it fell back to the Drive file's date.
+-- history_protocols: one row per imported protocol. A Doc can hold several (a running Doc or
+-- one tab per meeting): `section` is the meeting's place in the Doc (0-based), and
+-- (org, drive_file_id, section) is unique, so importing the same Doc again replaces it (never two
+-- copies in the chronology). `date_from`: 'doc' when the date was read from the protocol, 'file'
+-- when it fell back to the Drive file's creation date, 'admin' when an admin corrected it.
 
 create table public.history_protocols (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.orgs on delete cascade,
   drive_file_id text not null check (drive_file_id ~ '^[A-Za-z0-9_-]{10,200}$'),
+  section smallint not null default 0 check (section between 0 and 59),
   meeting_date date not null,
-  date_from text not null check (date_from in ('doc', 'file')),
+  date_from text not null check (date_from in ('doc', 'file', 'admin')),
   imported_by uuid references auth.users on delete set null,
   imported_at timestamptz not null default now(),
-  unique (org_id, drive_file_id)
+  unique (org_id, drive_file_id, section)
 );
 create index history_protocols_org_idx on public.history_protocols (org_id, meeting_date);
 
@@ -51,11 +54,15 @@ create policy history_protocols_select on public.history_protocols for select to
 create policy history_items_select on public.history_items for select to authenticated
   using (public.is_org_member(org_id));
 
--- Admins only: stores one imported protocol, replacing an earlier import of the same Doc.
--- `p_items`: [{ kind, text, topic?, owner?, done? }] (at most 200, in order). Returns the row id.
+-- Admins only: stores one imported protocol (section `p_section` of the `p_sections` the Doc
+-- splits into), replacing an earlier import of that section and dropping sections the Doc no
+-- longer has. `p_items`: [{ kind, text, topic?, owner?, done? }] (at most 200, in order).
+-- Returns the row id.
 create function public.save_history_protocol(
   p_org_id uuid,
   p_drive_file_id text,
+  p_section smallint,
+  p_sections smallint,
   p_meeting_date date,
   p_date_from text,
   p_items jsonb
@@ -71,13 +78,20 @@ begin
   if not public.is_org_admin(p_org_id) then
     raise exception 'only org admins can import protocols' using errcode = '42501';
   end if;
+  if p_meeting_date > current_date then
+    raise exception 'meeting date in the future' using errcode = '22023';
+  end if;
+  if p_sections is null or p_sections < 1 or p_section is null or p_section < 0 or p_section >= p_sections then
+    raise exception 'bad section' using errcode = '22023';
+  end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) > 200 then
     raise exception 'items must be an array of at most 200' using errcode = '22023';
   end if;
   perform 1 from public.orgs o where o.id = p_org_id for update;
-  delete from public.history_protocols where org_id = p_org_id and drive_file_id = p_drive_file_id;
-  insert into public.history_protocols (org_id, drive_file_id, meeting_date, date_from, imported_by)
-  values (p_org_id, p_drive_file_id, p_meeting_date, p_date_from, auth.uid())
+  delete from public.history_protocols
+   where org_id = p_org_id and drive_file_id = p_drive_file_id and (section = p_section or section >= p_sections);
+  insert into public.history_protocols (org_id, drive_file_id, section, meeting_date, date_from, imported_by)
+  values (p_org_id, p_drive_file_id, p_section, p_meeting_date, p_date_from, auth.uid())
   returning id into v_id;
   for v_item in select value from jsonb_array_elements(p_items) loop
     if jsonb_typeof(v_item) <> 'object' or jsonb_typeof(v_item -> 'text') is distinct from 'string' then
@@ -100,8 +114,8 @@ begin
 end;
 $$;
 
-revoke all on function public.save_history_protocol(uuid, text, date, text, jsonb) from public, anon, authenticated;
-grant execute on function public.save_history_protocol(uuid, text, date, text, jsonb) to authenticated;
+revoke all on function public.save_history_protocol(uuid, text, smallint, smallint, date, text, jsonb) from public, anon, authenticated;
+grant execute on function public.save_history_protocol(uuid, text, smallint, smallint, date, text, jsonb) to authenticated;
 
 -- Admins only: removes every imported protocol of the org (the "Ta bort" on the Översikt).
 -- Returns how many protocols were removed.
@@ -124,6 +138,28 @@ $$;
 revoke all on function public.clear_history_protocols(uuid) from public, anon, authenticated;
 grant execute on function public.clear_history_protocols(uuid) to authenticated;
 
+-- Admins only: corrects an imported protocol's date (one that fell back to the file's date).
+-- Not in the future. Returns false when the protocol is not the org's.
+create function public.set_history_protocol_date(p_org_id uuid, p_protocol_id uuid, p_date date)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not public.is_org_admin(p_org_id) then
+    raise exception 'only org admins can change imported protocols' using errcode = '42501';
+  end if;
+  if p_date is null or p_date > current_date then
+    raise exception 'date missing or in the future' using errcode = '22023';
+  end if;
+  update public.history_protocols set meeting_date = p_date, date_from = 'admin'
+   where id = p_protocol_id and org_id = p_org_id;
+  return found;
+end;
+$$;
+
+revoke all on function public.set_history_protocol_date(uuid, uuid, date) from public, anon, authenticated;
+grant execute on function public.set_history_protocol_date(uuid, uuid, date) to authenticated;
+
 -- ---------------------------------------------------------------------------------------------
 -- history_import_claims: one row per protocol read with Claude. At most 60 per förening per 24 h,
 -- so one admin can never use up the global daily Claude cap that live notes depend on (the same
@@ -141,14 +177,15 @@ alter table public.history_import_claims enable row level security;
 revoke all on table public.history_import_claims from anon, authenticated, service_role;
 grant select, insert, update, delete on table public.history_import_claims to service_role;
 
--- Admins only: claims one protocol read. True = go ahead (the row is written), false = the 60 per
--- 24 h are used up. Locks the org row, so concurrent claims cannot both get the last one.
+-- Admins only: claims one protocol read. The claim's id = go ahead (the row is written), null =
+-- the 60 per 24 h are used up. Locks the org row, so concurrent claims cannot both get the last one.
 create function public.claim_history_import(p_org_id uuid)
-returns boolean
+returns bigint
 language plpgsql volatile security definer set search_path = ''
 as $$
 declare
   v_count integer;
+  v_id bigint;
 begin
   if not public.is_org_admin(p_org_id) then
     raise exception 'only org admins can import protocols' using errcode = '42501';
@@ -158,12 +195,31 @@ begin
   select count(*) into v_count from public.history_import_claims
    where org_id = p_org_id and at > now() - interval '24 hours';
   if v_count >= 60 then
-    return false;
+    return null;
   end if;
-  insert into public.history_import_claims (org_id, requested_by) values (p_org_id, auth.uid());
-  return true;
+  insert into public.history_import_claims (org_id, requested_by) values (p_org_id, auth.uid()) returning id into v_id;
+  return v_id;
 end;
 $$;
 
 revoke all on function public.claim_history_import(uuid) from public, anon, authenticated;
 grant execute on function public.claim_history_import(uuid) to authenticated;
+
+-- Admins only: gives a claim back when the Claude call never happened (spend gate, request
+-- failed before an answer). Only the caller's own claim of this org. True when one was removed.
+create function public.release_history_import(p_org_id uuid, p_claim_id bigint)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not public.is_org_admin(p_org_id) then
+    raise exception 'only org admins can import protocols' using errcode = '42501';
+  end if;
+  delete from public.history_import_claims
+   where id = p_claim_id and org_id = p_org_id and requested_by = auth.uid();
+  return found;
+end;
+$$;
+
+revoke all on function public.release_history_import(uuid, bigint) from public, anon, authenticated;
+grant execute on function public.release_history_import(uuid, bigint) to authenticated;

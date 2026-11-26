@@ -60,14 +60,31 @@ export async function loadImportedHistory(db: SupabaseClient, orgId: string): Pr
 
 export async function saveImportedProtocol(
   db: SupabaseClient,
-  input: { orgId: string; driveFileId: string; date: string; dateFrom: "doc" | "file"; items: HistoryItem[] },
-): Promise<{ ok: true } | { ok: false; code: string | null; message: string }> {
-  const { error } = await db.rpc("save_history_protocol", {
+  input: { orgId: string; driveFileId: string; section: number; sections: number; date: string; dateFrom: "doc" | "file"; items: HistoryItem[] },
+): Promise<{ ok: true; id: string } | { ok: false; code: string | null; message: string }> {
+  const { data, error } = await db.rpc("save_history_protocol", {
     p_org_id: input.orgId,
     p_drive_file_id: input.driveFileId,
+    p_section: input.section,
+    p_sections: input.sections,
     p_meeting_date: input.date,
     p_date_from: input.dateFrom,
     p_items: input.items,
   });
-  return error ? { ok: false, code: error.code ?? null, message: error.message } : { ok: true };
+  return error ? { ok: false, code: error.code ?? null, message: error.message } : { ok: true, id: data as string };
+}
+
+/** An admin's correction of a protocol's date (one that came from the file's creation date). */
+export async function setProtocolDate(db: SupabaseClient, orgId: string, protocolId: string, date: string): Promise<{ ok: boolean; code: string | null }> {
+  const { data, error } = await db.rpc("set_history_protocol_date", { p_org_id: orgId, p_protocol_id: protocolId, p_date: date });
+  if (error) return { ok: false, code: error.code ?? null };
+  return { ok: data === true, code: null };
+}
+
+/** Drive ids of the org's own Simon Says Docs (their meetings are already in the history). */
+export async function ownDocIds(db: SupabaseClient, orgId: string, docIds: string[]): Promise<Set<string>> {
+  if (!docIds.length) return new Set();
+  const { data, error } = await db.from("meetings").select("doc_id").eq("org_id", orgId).in("doc_id", docIds);
+  if (error) throw new Error(`history: own docs: ${error.message}`);
+  return new Set(((data ?? []) as { doc_id: string }[]).map((r) => r.doc_id));
 }
