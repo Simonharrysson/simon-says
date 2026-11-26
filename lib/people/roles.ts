@@ -33,10 +33,14 @@ export function ownerLabel(
 
 const norm = (s: string) => s.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("sv");
 
-/** "kassören" -> "kassör", "ordföranden" -> "ordförande", "sekreteraren" -> "sekreterare". */
+/**
+ * "kassören" -> "kassör", "ordföranden" -> "ordförande", "sekreteraren" -> "sekreterare",
+ * "PR-ansvarige" -> "PR-ansvarig" (an adjective role's definite form). Both sides of a match are
+ * stemmed, so a base form ending in -e ("ordförande") still matches itself.
+ */
 function stems(word: string): string[] {
   const out = new Set([word]);
-  for (const suffix of ["en", "n", "et"]) {
+  for (const suffix of ["en", "n", "et", "e"]) {
     if (word.length > suffix.length + 2 && word.endsWith(suffix)) out.add(word.slice(0, -suffix.length));
   }
   return [...out];

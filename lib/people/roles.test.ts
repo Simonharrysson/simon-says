@@ -40,6 +40,21 @@ describe("resolveOwner", () => {
     expect(resolveOwner("ordföranden", people)?.id).toBe("p3");
     expect(resolveOwner("Kassör", people)?.id).toBe("p1");
   });
+  it("matches the definite form of an -ansvarig role, and still ordförande / sekreterare", () => {
+    const ansvariga = [
+      { id: "pr", name: "Sam Carter", role: "PR-ansvarig" },
+      { id: "ev", name: "Fatima Rahimi", role: "Eventansvarig" },
+      { id: "ordf", name: "Maja Holm", role: "Ordförande" },
+      { id: "sekr", name: "Elin Sjöberg", role: "Sekreterare" },
+    ];
+    expect(resolveOwner("PR-ansvarige", ansvariga)?.id).toBe("pr");
+    expect(resolveOwner("eventansvarige", ansvariga)?.id).toBe("ev");
+    expect(resolveOwner("PR-ansvarig", ansvariga)?.id).toBe("pr");
+    expect(resolveOwner("ordförande", ansvariga)?.id).toBe("ordf");
+    expect(resolveOwner("ordföranden", ansvariga)?.id).toBe("ordf");
+    expect(resolveOwner("sekreterare", ansvariga)?.id).toBe("sekr");
+    expect(resolveOwner("sekreteraren", ansvariga)?.id).toBe("sekr");
+  });
   it("is null when ambiguous or unknown", () => {
     expect(resolveOwner("Anna", [...people, { id: "p4", name: "Anna Ek" }])).toBeNull();
     expect(resolveOwner("Pelle", people)).toBeNull();

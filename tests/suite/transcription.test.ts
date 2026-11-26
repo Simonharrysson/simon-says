@@ -80,11 +80,10 @@ describe("feature: transcription (how people name each other)", () => {
     expect(label("jag")).toBe("jag");
   });
 
-  // BUG (lib/people/roles.ts stems, line 37): the definite form of an "-ansvarig" role ends in
-  // "-e" ("PR-ansvarige", "eventansvarige"), which no suffix rule strips, so a task Claude gives
-  // "PR-ansvarige" renders as "PR-ansvarige: …" with no person id instead of "PR-ansvarig: …".
-  it.fails("BUG: the definite form of an -ansvarig role ('PR-ansvarige') resolves to its person", () => {
+  // Was a bug found by the suite (lib/people/roles.ts stems): the definite form ending in -e.
+  it("the definite form of an -ansvarig role ('PR-ansvarige') resolves to its person", () => {
     expect(resolveOwner("PR-ansvarige", PEOPLE)?.id).toBe("p-sam");
+    expect(label("PR-ansvarige")).toBe("PR-ansvarig");
   });
 
   it("each way of naming an owner, rendered in the agenda Doc and stored with its person id", async () => {
