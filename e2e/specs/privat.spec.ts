@@ -153,6 +153,10 @@ test("Privat: deleting a recording removes its notes and summary", async ({ sign
   await db.from("note_items").insert({ meeting_id: m!.id, id: "n1", section: "decision", text: "Offerten skickas på måndag" });
   await db.from("private_summaries").insert({ meeting_id: m!.id, context_id: ctx!.id, summary: "Genomgång av offerten.", decisions: ["Offerten skickas på måndag"] });
 
+  // Not a förening: its förening routes answer 404 (the shared guard in proxy.ts).
+  expect((await page.request.get(`/api/orgs/${space}/formats`)).status()).toBe(404);
+  expect((await page.request.get(`/orgs/${space}/protokoll`)).status()).toBe(404);
+
   await page.goto(`/privat/mote/${m!.id}`);
   await expect(page.getByText("Genomgång av offerten.")).toBeVisible();
   await page.getByRole("button", { name: "Radera inspelningen" }).click();

@@ -32,7 +32,7 @@ beforeAll(() => {
   });
 });
 
-const { proxy } = await import("./proxy");
+const { proxy, privatGuardedOrgId } = await import("./proxy");
 
 describe("proxy", () => {
   it("refreshes an expired session and writes the new cookie httpOnly", async () => {
@@ -83,5 +83,20 @@ describe("proxy", () => {
   it("passes through without a session", async () => {
     const response = await proxy(new NextRequest("https://simonsays.example/"));
     expect(response.cookies.getAll()).toEqual([]);
+  });
+});
+
+describe("the Privat guard's paths", () => {
+  const id = "1e2969d6-c2ba-435f-a1f9-56c89534609c";
+  it("every /api/orgs/<id> route and every page below /orgs/<id>/, not /orgs/<id> itself", () => {
+    expect(privatGuardedOrgId(`/api/orgs/${id}`)).toBe(id);
+    expect(privatGuardedOrgId(`/api/orgs/${id}/history/import`)).toBe(id);
+    expect(privatGuardedOrgId(`/orgs/${id}/protokoll`)).toBe(id);
+    expect(privatGuardedOrgId(`/orgs/${id}/forbered`)).toBe(id);
+    expect(privatGuardedOrgId(`/orgs/${id}`)).toBeNull();
+    expect(privatGuardedOrgId(`/orgs/${id}/`)).toBeNull();
+    expect(privatGuardedOrgId("/orgs")).toBeNull();
+    expect(privatGuardedOrgId("/privat")).toBeNull();
+    expect(privatGuardedOrgId(`/api/meetings/${id}`)).toBeNull();
   });
 });
