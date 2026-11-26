@@ -111,7 +111,7 @@ export const FORMAT_NAMES: Record<FormatKind, string> = {
   veckomote: "Veckomöte",
   styrelseprotokoll: "Styrelseprotokoll",
   enkel: "Enkel",
-  learned: "Eget",
+  learned: "Ert format",
   arsmote: "Årsmöte",
 };
 
@@ -120,12 +120,20 @@ export function formatName(kind: FormatKind, locale: Locale = defaultLocale): st
   return translator(locale)(`formats.names.${kind}`);
 }
 
+/** "26 nov" / "Nov 26" in the UI language. */
+function shortDate(iso: string, locale: Locale): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(d).replace(/\./g, "");
+}
+
 /** A saved format's display name: the standard name; "(date)" for learned and custom versions (R3-I2). */
-export function formatLabel(f: { kind: FormatKind; createdAt: string; custom: boolean; requiredCount: number }, locale: Locale = defaultLocale): string {
+export function formatLabel(f: { kind: FormatKind; createdAt: string; custom: boolean; requiredCount: number; name?: string }, locale: Locale = defaultLocale): string {
   const t = translator(locale);
   const date = f.createdAt.slice(0, 10);
+  if (f.name) return f.name;
   const name = formatName(f.kind, locale);
-  if (f.kind === "learned") return t("formats.labelLearned", { name, date });
+  if (f.kind === "learned") return t("formats.labelLearned", { date: shortDate(f.createdAt, locale) });
   if (!f.custom) return name;
   return f.requiredCount > 0 ? t("formats.labelStatutes", { name, date }) : t("formats.labelCustom", { name, date });
 }

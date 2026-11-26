@@ -3,10 +3,10 @@
     "veckomote": "Weekly meeting",
     "styrelseprotokoll": "Board minutes",
     "enkel": "Simple",
-    "learned": "Your own",
+    "learned": "Your format",
     "arsmote": "Annual meeting"
   },
-  "labelLearned": "{name} ({date})",
+  "labelLearned": "Your format (learned {date})",
   "labelStatutes": "{name} with the statutes' items ({date})",
   "labelCustom": "{name}, customised ({date})",
   "meetingTypes": {

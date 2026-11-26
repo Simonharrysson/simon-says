@@ -31,6 +31,8 @@ export interface FormatProfile {
    * before) = off. Written only when true.
    */
   hideCheckin?: boolean;
+  /** Optional display name an admin gave the format (learned ones default to "Ert format (inlärt <datum>)"). */
+  name?: string;
 }
 
 const label = z.string().trim().min(1).max(80);
@@ -59,6 +61,7 @@ export const FormatProfileSchema = z
     signatures: z.array(label).max(8).nullable(),
     requiredItems: z.array(label).max(15),
     hideCheckin: z.boolean().optional(),
+    name: z.string().trim().min(1).max(60).optional(),
   })
   .superRefine((p, ctx) => {
     const keys = new Set<string>();

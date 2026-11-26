@@ -36,7 +36,7 @@ export async function formatById(id: string): Promise<FormatProfile | null> {
 export async function listOrgFormats(
   db: SupabaseClient,
   orgId: string,
-): Promise<{ id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom: boolean; requiredCount: number }[]> {
+): Promise<{ id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom: boolean; requiredCount: number; name?: string }[]> {
   const { data, error } = await db
     .from("format_profiles")
     .select("id, kind, is_default, created_at, profile")
@@ -53,6 +53,7 @@ export async function listOrgFormats(
       createdAt: r.created_at as string,
       custom: kind === "learned" || (profile !== null && kind in STANDARD && canonical(profile) !== canonical(STANDARD[kind as keyof typeof STANDARD])),
       requiredCount: profile?.requiredItems.length ?? 0,
+      ...(profile?.name ? { name: profile.name } : {}),
     };
   });
 }

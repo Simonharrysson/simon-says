@@ -18,7 +18,7 @@
   },
   "short": {
     "audio": "We don't store any audio recording. The audio goes straight from the laptop to the transcription and becomes text while you talk.",
-    "doc": "The notes end up in a Google Doc in the Drive of the person who started the meeting. All of the association's members get edit access to the document (but can't share it further).",
+    "doc": "The notes end up in a Google Doc in the association's meeting folder (otherwise in the Drive of the person who started the meeting). All of the association's members get edit access to the document (but can't share it further).",
     "kept": "The transcript and the notes are also stored with us until you delete the meeting or the association.",
     "accounts": "Members of the association who sign in have an account. Everyone else taking part in the meeting is just a name on the association's people list.",
     "controller": "The data controller is <strong>Harrysson & Company AB</strong>."
@@ -64,7 +64,7 @@
       "note": "Gets the text, not the audio. Processing may take place outside the EU."
     },
     "google": {
-      "what": "Sign-in, and the document in the Drive of the person who starts the meeting.",
+      "what": "Sign-in, and the document in the association's meeting folder (otherwise in the Drive of the person who starts the meeting).",
       "note": "We may only touch files Simon Says itself created or that you have chosen. Exception: an admin importing old minutes can give read access to their Drive, and whoever connects their calendar gives read access to their calendar (see What is stored). Processing may take place outside the EU."
     },
     "supabase": {

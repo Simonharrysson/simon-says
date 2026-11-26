@@ -155,7 +155,7 @@
     "agendaDoc": "Anteckningarna skrivs i den valda dagordningen",
     "agendaWithTranscript": ", med hela transkriptet i en egen flik.",
     "agendaNoTranscript": ". Transkriptet läggs inte i dokumentet.",
-    "newDoc": "Anteckningarna skrivs i ett nytt Google-dokument i din Drive och delas med föreningens medlemmar",
+    "newDoc": "Anteckningarna skrivs i ett nytt Google-dokument i föreningens mötesmapp (annars i din Drive) och delas med medlemmarna",
     "newWithTranscript": ", med hela transkriptionen i en egen flik.",
     "newNoTranscript": ". Transkriptionen delas inte.",
     "pause": "Paus stoppar ljudet direkt.",

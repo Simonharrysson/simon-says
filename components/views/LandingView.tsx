@@ -55,7 +55,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
             </div>
             <p className="text-sm text-ink-3">
               {user ? (
-                t.rich("signedInAs", { email: user.email, id: user.id, code: (chunks) => <code>{chunks}</code> })
+                t("signedInAs", { email: user.email })
               ) : (
                 t("freeLine")
               )}
@@ -141,6 +141,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
               status: (chunks) => <a href="/status">{chunks}</a>,
             })}
           </p>
+          <p className="mt-3 max-w-[48rem] text-ink-2">{t("privatLine")}</p>
         </div>
       </section>
 
