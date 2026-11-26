@@ -81,7 +81,7 @@ function tabOf(
     if (name) ranges.set(name, [[{ start: at, end: at + text.length - (shrink ? 1 : 0) }]]);
     at += text.length + 1;
   };
-  push("● LIVE · uppdaterad –", `ss-${meetingId}-header`);
+  push("LIVE · uppdaterad –", `ss-${meetingId}-header`);
   for (const r of rows) {
     const t = opts.text && r.id in opts.text ? opts.text[r.id] : r.last_rendered_text;
     if (t === null) continue; // range and paragraph deleted
@@ -110,13 +110,13 @@ describe("headers and time", () => {
     expect(tick.stockholmTime(new Date("2026-07-01T22:30:00Z"))).toBe("00:30");
   });
   it("live and ended header lines", () => {
-    expect(tick.liveHeader(new Date("2026-11-24T13:05:00Z"))).toBe("● LIVE · uppdaterad 14:05");
+    expect(tick.liveHeader(new Date("2026-11-24T13:05:00Z"))).toBe("LIVE · uppdaterad 14:05");
     expect(tick.endedHeader(new Date("2026-11-24T15:59:00Z"))).toBe("Avslutat 16:59");
   });
   it("format layout header lines (the status line in the notes section)", () => {
     expect(tick.liveHeader(new Date("2026-11-25T17:05:00Z"), "format")).toBe("Simon Says antecknar live · uppdaterad 18:05");
     expect(tick.endedHeader(new Date("2026-11-25T18:10:00Z"), "format")).toBe("Simon Says · avslutat 19:10");
-    expect(tick.liveHeader(new Date("2026-11-25T17:05:00Z"), "v1")).toBe("● LIVE · uppdaterad 18:05");
+    expect(tick.liveHeader(new Date("2026-11-25T17:05:00Z"), "v1")).toBe("LIVE · uppdaterad 18:05");
   });
   it("tickDue: 45 s target", () => {
     const now = new Date("2026-11-24T12:00:45Z");
@@ -702,7 +702,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
       notes_tab_id: "t.notes",
       transcript_tab_id: opts.transcript === false ? null : "t.transcript",
       header_range: `ss-${id}-header`,
-      header_rendered: "● LIVE · uppdaterad –",
+      header_rendered: "LIVE · uppdaterad –",
       status: "live",
       consent_confirmed_at: new Date().toISOString(),
       started_at: startedAt,
@@ -848,7 +848,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(f.calls).toHaveLength(1);
     expect(f.calls[0].transcriptBlocks).toEqual(["[00:00:01] S1-speaker_0: Vi bestämmer budgeten"]);
     expect(f.calls[0].orgName).toBe("Tickföreningen");
-    expect(f.headers[0]).toMatch(/^● LIVE · uppdaterad \d\d:\d\d$/);
+    expect(f.headers[0]).toMatch(/^LIVE · uppdaterad \d\d:\d\d$/);
     const m = await read(id);
     expect(m.notes_next_id).toBe("n2");
     expect(m.header_rendered).toBe(f.headers[0]);

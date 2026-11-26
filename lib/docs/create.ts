@@ -15,7 +15,7 @@ export const SECTIONS: { section: NoteSection; title: string }[] = [
 ];
 
 /** The header line a new Doc starts with; stored as meetings.header_rendered. */
-export const INITIAL_HEADER = "● LIVE · uppdaterad –";
+export const INITIAL_HEADER = "LIVE · uppdaterad –";
 
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 const DOC_MIME = "application/vnd.google-apps.document";

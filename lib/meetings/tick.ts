@@ -126,9 +126,9 @@ export function stockholmTime(at: Date): string {
   }).format(at);
 }
 
-/** The header line: v1's "● LIVE" title line, or the format layout's status line in the notes section. */
+/** The header line: v1's "LIVE" title line, or the format layout's status line in the notes section. */
 export const liveHeader = (now: Date, layout: "v1" | "format" = "v1") =>
-  layout === "format" ? `Simon Says antecknar live · uppdaterad ${stockholmTime(now)}` : `● LIVE · uppdaterad ${stockholmTime(now)}`;
+  layout === "format" ? `Simon Says antecknar live · uppdaterad ${stockholmTime(now)}` : `LIVE · uppdaterad ${stockholmTime(now)}`;
 export const endedHeader = (endedAt: Date, layout: "v1" | "format" = "v1") =>
   layout === "format" ? `Simon Says · avslutat ${stockholmTime(endedAt)}` : `Avslutat ${stockholmTime(endedAt)}`;
 

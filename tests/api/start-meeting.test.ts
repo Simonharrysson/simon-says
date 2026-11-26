@@ -168,7 +168,7 @@ const doc = {
   notesTabId: "t.0",
   transcriptTabId: "t.1",
   headerRange: "ss-x-header",
-  headerRendered: "● LIVE · uppdaterad –",
+  headerRendered: "LIVE · uppdaterad –",
   sectionRanges: { attendees: "a", decision: "b", action: "c", now: "d" },
   shareFailed: [],
 };
@@ -289,7 +289,7 @@ describe("POST /api/meetings", () => {
       notes_tab_id: "t.0",
       transcript_tab_id: "t.1",
       header_range: "ss-x-header",
-      header_rendered: "● LIVE · uppdaterad –",
+      header_rendered: "LIVE · uppdaterad –",
       section_ranges: doc.sectionRanges,
       status: "live",
     });

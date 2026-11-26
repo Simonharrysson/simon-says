@@ -89,7 +89,7 @@ const meeting: MeetingRow = {
   notes_tab_id: TAB,
   transcript_tab_id: null,
   header_range: `ss-${M}-header`,
-  header_rendered: "● LIVE · uppdaterad 10:00",
+  header_rendered: "LIVE · uppdaterad 10:00",
   section_ranges: {
     attendees: `ss-${M}-sec-attendees`,
     decision: `ss-${M}-sec-decision`,
@@ -136,7 +136,7 @@ const rows = (): NoteItemRow[] => [
 ];
 const desiredFrom = (rs: NoteItemRow[]): NotesItem[] => rs.map(toNotesItem);
 
-const H = `{ss-m1-header}● LIVE · uppdaterad 10:00{/ss-m1-header}`;
+const H = `{ss-m1-header}LIVE · uppdaterad 10:00{/ss-m1-header}`;
 const SEC = (s: string, title: string) => `{ss-m1-sec-${s}}${title}{/ss-m1-sec-${s}}`;
 const R = (id: string, text: string) => `{ss-m1-${id}}${text}{/ss-m1-${id}}`;
 
@@ -419,7 +419,7 @@ describe("renderItems", () => {
         { id: "n6", section: "decision", text: "Ja till 😀-tröjor" },
         { id: "n7", section: "attendees", text: "Simon, Anna" },
       ],
-      "● LIVE · uppdaterad 10:01",
+      "LIVE · uppdaterad 10:01",
     );
     for (const r of requests) expect(tabIdsOf(r)).toEqual([TAB]);
     const idx = movingIndices(requests);
@@ -462,7 +462,7 @@ describe("renderItems", () => {
       replaceNamedRangeContent: { namedRangeName: "ss-m1-n4", text: "Budget för våren", tabsCriteria: { tabIds: [TAB] } },
     });
     expect(requests.at(-1)).toEqual({
-      replaceNamedRangeContent: { namedRangeName: "ss-m1-header", text: "● LIVE · uppdaterad 10:01", tabsCriteria: { tabIds: [TAB] } },
+      replaceNamedRangeContent: { namedRangeName: "ss-m1-header", text: "LIVE · uppdaterad 10:01", tabsCriteria: { tabIds: [TAB] } },
     });
     // Group order: n4 replace (index of n4) is before the n3 delete, which is before the n5 insert.
     const pos = (pred: (r: docs_v1.Schema$Request) => boolean) => requests.findIndex(pred);
@@ -511,9 +511,9 @@ describe("renderItems", () => {
   });
 
   it("header only → a replace of the header range", async () => {
-    const { requests } = await tick(tabText(), desiredFrom, "● LIVE · uppdaterad 10:05");
+    const { requests } = await tick(tabText(), desiredFrom, "LIVE · uppdaterad 10:05");
     expect(requests).toEqual([
-      { replaceNamedRangeContent: { namedRangeName: "ss-m1-header", text: "● LIVE · uppdaterad 10:05", tabsCriteria: { tabIds: [TAB] } } },
+      { replaceNamedRangeContent: { namedRangeName: "ss-m1-header", text: "LIVE · uppdaterad 10:05", tabsCriteria: { tabIds: [TAB] } } },
     ]);
   });
 
@@ -588,33 +588,41 @@ describe("fix round 1", () => {
   describe("header ownership", () => {
     const HDR = "ss-m1-header";
     it("replaced while it is the single line we last wrote", async () => {
-      const { requests, res } = await tick(tabText(), desiredFrom, "● LIVE · uppdaterad 10:05");
+      const { requests, res } = await tick(tabText(), desiredFrom, "LIVE · uppdaterad 10:05");
       expect(replaceOf(requests, HDR)).toHaveLength(1);
-      expect(res).toMatchObject({ status: "ok", headerRendered: "● LIVE · uppdaterad 10:05" });
+      expect(res).toMatchObject({ status: "ok", headerRendered: "LIVE · uppdaterad 10:05" });
+    });
+
+    it("a Doc/meeting from before the dot was dropped (old \"● LIVE\" text) is still ours and gets the new line", async () => {
+      const old = "● LIVE · uppdaterad 10:00";
+      const m = { ...meeting, header_rendered: old };
+      const { requests, res } = await tick(tabText({ 0: `{ss-m1-header}${old}{/ss-m1-header}` }), desiredFrom, "LIVE · uppdaterad 10:05", { meeting: m });
+      expect(replaceOf(requests, HDR)).toHaveLength(1);
+      expect(res).toMatchObject({ status: "ok", headerRendered: "LIVE · uppdaterad 10:05" });
     });
 
     it("a human typed inside the header range → not replaced", async () => {
-      const { requests, res } = await tick(tabText({ 0: "{ss-m1-header}● LIVE · uppdaterad 10:00 Simons rad{/ss-m1-header}" }), desiredFrom, "● LIVE · uppdaterad 10:05");
+      const { requests, res } = await tick(tabText({ 0: "{ss-m1-header}LIVE · uppdaterad 10:00 Simons rad{/ss-m1-header}" }), desiredFrom, "LIVE · uppdaterad 10:05");
       expect(requests).toEqual([]);
       expect(res).toMatchObject({ status: "ok", headerRendered: null });
     });
 
     it("Enter inside the header range (a second paragraph) → not replaced", async () => {
-      const { requests } = await tick(tabText({ 0: "{ss-m1-header}● LIVE · uppdaterad\n10:00{/ss-m1-header}" }), desiredFrom, "● LIVE · uppdaterad 10:05");
+      const { requests } = await tick(tabText({ 0: "{ss-m1-header}LIVE · uppdaterad\n10:00{/ss-m1-header}" }), desiredFrom, "LIVE · uppdaterad 10:05");
       expect(requests).toEqual([]);
     });
 
     it("text typed just outside the header range → not replaced", async () => {
-      const { requests } = await tick(tabText({ 0: `${H} – Styrelsemöte` }), desiredFrom, "● LIVE · uppdaterad 10:05");
+      const { requests } = await tick(tabText({ 0: `${H} – Styrelsemöte` }), desiredFrom, "LIVE · uppdaterad 10:05");
       expect(requests).toEqual([]);
     });
 
     it("no recorded header yet: the coverage check alone decides", async () => {
       const m = { ...meeting, header_rendered: null };
-      const ok = await tick(tabText(), desiredFrom, "● LIVE · uppdaterad 10:05", { meeting: m });
+      const ok = await tick(tabText(), desiredFrom, "LIVE · uppdaterad 10:05", { meeting: m });
       expect(replaceOf(ok.requests, HDR)).toHaveLength(1);
       api.batchUpdate.mockReset();
-      const edited = await tick(tabText({ 0: `X${H}` }), desiredFrom, "● LIVE · uppdaterad 10:05", { meeting: m });
+      const edited = await tick(tabText({ 0: `X${H}` }), desiredFrom, "LIVE · uppdaterad 10:05", { meeting: m });
       expect(edited.requests).toEqual([]);
     });
   });
