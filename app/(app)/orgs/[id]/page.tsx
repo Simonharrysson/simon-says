@@ -35,7 +35,8 @@ import type { InviteRow } from "@/lib/invites/rules";
 import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
-import { dismissAction } from "./kom-igang/actions";
+import { dismissAction, saveProfileAction } from "./kom-igang/actions";
+import { OrgProfileForm } from "@/components/views/OrgProfileForm";
 import {
   addPersonAction,
   changeFormatAction,
@@ -215,6 +216,7 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
+      profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
       summarySettings={
         isAdmin ? (
           <SummarySettingsForm

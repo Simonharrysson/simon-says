@@ -26,6 +26,8 @@ import { LoginView } from "@/components/views/LoginView";
 import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
+import { OrgProfileForm } from "@/components/views/OrgProfileForm";
+import { parseProfile } from "@/lib/orgs/profile";
 import { OrgsView } from "@/components/views/OrgsView";
 import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
@@ -76,6 +78,13 @@ const actions: OrgDetailViewProps["actions"] = {
 };
 
 const org = { id: ORG_ID, name: "Exempelföreningen", share_transcript: true, show_on_status: false };
+// "Om oss" (todo #13): fictional text and example links.
+const orgProfile = {
+  about: "Vi är en ideell förening för golfintresserade i alla åldrar.\nVi spelar varje tisdag från maj till september och avslutar säsongen med en klubbmatch.",
+  website_url: "https://exempel.se/",
+  facebook_url: "https://facebook.com/exempel",
+  instagram_url: "https://instagram.com/exempel",
+};
 
 const speakers: Speaker[] = [
   { elSessionId: "s1", speakerLabel: "0", label: "Talare 1", displayName: "Anna Berg", needsConfirm: false },
@@ -487,6 +496,10 @@ const render: Record<string, () => ReactNode> = {
         people={people}
         meetings={meetings}
         notice={orgNotice("mote-active")}
+        profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async (_id, input) => {
+          const r = parseProfile(input);
+          return r.ok ? { ok: true, profile: r.profile } : { ok: false, message: "Kontrollera fälten och försök igen.", errors: r.errors };
+        }} />}
         summarySettings={<SummarySettingsDemo />}
         startMeetingHref="#"
         formatCard={
@@ -501,6 +514,25 @@ const render: Record<string, () => ReactNode> = {
         }
         liveMeetingHref={() => "/design?vy=live"}
         tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin") }}
+        actions={actions}
+      />
+    </AppChrome>
+  ),
+  "org-member-about": () => (
+    <AppChrome>
+      <OrgDetailView
+        org={{ ...org, ...orgProfile }}
+        isAdmin={false}
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={[
+          { userId: "00000000-0000-4000-8000-0000000000dd", email: "ordforande@example.com", role: "admin" },
+          { userId: ME, email: "anna.berg@example.com", role: "member" },
+        ]}
+        people={people}
+        meetings={meetings}
+        notice={null}
+        startMeetingHref="#"
         actions={actions}
       />
     </AppChrome>

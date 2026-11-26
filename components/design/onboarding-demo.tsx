@@ -9,6 +9,7 @@ import { LearnFormatView } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
 import type { StepId } from "@/lib/onboarding/steps";
+import { PROFILE_ERRORS, type ProfileInput } from "@/lib/orgs/profile";
 import type { BoardRow } from "@/lib/people/board";
 
 // Kom igång (todo #5) in the /design gallery. Everything is fictional: an invented förening,
@@ -44,11 +45,27 @@ function Frame({ step, done = [], skipped = [], children, footer, logo = null, t
 
 const footer = (first = false, nextLabel?: string) => <StepFooter onBack={first ? undefined : noop} onSkip={first ? undefined : noop} onNext={noop} nextLabel={nextLabel} />;
 
-function LogoDemo({ withLogo }: { withLogo: boolean }) {
+function LogoDemo({ withLogo, withProfile = false }: { withLogo: boolean; withProfile?: boolean }) {
   const [name, setName] = useState(ORG);
+  const [profile, setProfile] = useState<ProfileInput>(
+    withProfile
+      ? { about: "Vi är en ideell förening för golfintresserade i alla åldrar.\nVi spelar varje tisdag från maj till september.", website: "exempel.se", facebook: "", instagram: "exempel.se" }
+      : { about: "", website: "", facebook: "", instagram: "" },
+  );
   return (
     <Frame step="namn" logo={withLogo ? DEMO_LOGO : null} title="Välkommen! Hur ser ni ut?" lead="Kontrollera namnet och lägg gärna till er logga, så känner alla igen föreningen." footer={footer(true)}>
-      <LogoStep orgName={name} logoUrl={withLogo ? DEMO_LOGO : null} onFile={noop} onRemove={noop} name={name} onName={setName} message={withLogo ? { text: "Loggan är sparad.", tone: "success" } : null} />
+      <LogoStep
+        orgName={name}
+        logoUrl={withLogo ? DEMO_LOGO : null}
+        onFile={noop}
+        onRemove={noop}
+        name={name}
+        onName={setName}
+        message={withLogo ? { text: "Loggan är sparad.", tone: "success" } : null}
+        profile={profile}
+        onProfile={(field, text) => setProfile((v) => ({ ...v, [field]: text }))}
+        profileErrors={withProfile ? { instagram: PROFILE_ERRORS.instagram } : undefined}
+      />
     </Frame>
   );
 }
@@ -156,6 +173,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
   ),
   "onboarding-1": () => <LogoDemo withLogo={false} />,
   "onboarding-1-logo": () => <LogoDemo withLogo />,
+  "onboarding-1-about": () => <LogoDemo withLogo withProfile />,
   "onboarding-2-empty": () => <BoardDemo rows={[]} />,
   "onboarding-2": () => <BoardDemo rows={boardRows} />,
   "onboarding-3-empty": () => (

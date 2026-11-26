@@ -9,6 +9,7 @@ import { useMeetingFolderPicker } from "@/components/views/useMeetingFolderPicke
 import type { FormatProfile } from "@/lib/formats/schema";
 import { STEP_IDS, markStep, stepNumber, type OnboardingState, type StepId } from "@/lib/onboarding/steps";
 import { logoUrl as versionedLogoUrl } from "@/lib/orgs/logo";
+import { parseProfile, profileInput, sameProfile, type OrgProfile, type ProfileErrors, type ProfileInput } from "@/lib/orgs/profile";
 import type { BoardRow } from "@/lib/people/board";
 import type { InviteRow } from "@/lib/invites/rules";
 import { InviteByEmail } from "@/components/views/InviteByEmail";
@@ -16,6 +17,7 @@ import {
   addBoardPersonAction,
   removeBoardPersonAction,
   renameOrgAction,
+  saveProfileAction,
   stepAction,
   updateBoardPersonAction,
   voiceConsentAction,
@@ -30,7 +32,7 @@ import { BoardStep, DoneStep, FolderStep, FormatStep, HistoryStep, LogoStep, Voi
 // left and resumed from the förening page's card.
 
 export interface OnboardingProps {
-  org: { id: string; name: string; logoUpdatedAt: string | null; folderSet: boolean; folderName: string | null };
+  org: { id: string; name: string; logoUpdatedAt: string | null; folderSet: boolean; folderName: string | null; profile?: Partial<OrgProfile> };
   initialStep: ShellStep;
   state: OnboardingState;
   board: BoardRow[];
@@ -76,6 +78,9 @@ export function Onboarding(p: OnboardingProps) {
   const [logoAt, setLogoAt] = useState(p.org.logoUpdatedAt);
   const [logoBusy, setLogoBusy] = useState(false);
   const [logoMsg, setLogoMsg] = useState<{ text: string; tone: "neutral" | "danger" | "success" } | null>(null);
+  const [savedProfile, setSavedProfile] = useState<Partial<OrgProfile>>(p.org.profile ?? {});
+  const [profile, setProfile] = useState<ProfileInput>(() => profileInput(p.org.profile ?? {}));
+  const [profileErrors, setProfileErrors] = useState<ProfileErrors | undefined>();
 
   // 3, 4, 6
   const folder = useMeetingFolderPicker(orgId);
@@ -191,12 +196,27 @@ export function Onboarding(p: OnboardingProps) {
                   const r = await renameOrgAction(orgId, name);
                   if (!r.ok) return setNameError(r.message);
                 }
+                // Om oss (optional): saved only when something changed; empty fields are fine.
+                const parsed = parseProfile(profile);
+                if (!parsed.ok) return setProfileErrors(parsed.errors);
+                if (!sameProfile(parsed.profile, savedProfile)) {
+                  const r = await saveProfileAction(orgId, profile).catch(() => ({ ok: false as const, message: "Vi nådde inte servern. Försök igen.", errors: undefined }));
+                  if (!r.ok) return setProfileErrors(r.errors ?? { about: r.message });
+                  setSavedProfile(r.profile);
+                }
                 await finish("namn", "done");
               }}
             />
           }
         >
-          <LogoStep orgName={shell.orgName} logoUrl={logoUrl} busy={logoBusy} message={logoMsg} onFile={uploadLogo} onRemove={removeLogo} name={name} onName={(v) => { setName(v); setNameError(undefined); }} nameError={nameError} />
+          <LogoStep orgName={shell.orgName} logoUrl={logoUrl} busy={logoBusy} message={logoMsg} onFile={uploadLogo} onRemove={removeLogo} name={name} onName={(v) => { setName(v); setNameError(undefined); }} nameError={nameError}
+            profile={profile}
+            onProfile={(field, text) => {
+              setProfile((v) => ({ ...v, [field]: text }));
+              setProfileErrors((e) => (e?.[field] ? { ...e, [field]: undefined } : e));
+            }}
+            profileErrors={profileErrors}
+          />
         </OnboardingShell>
       );
     case "styrelsen":

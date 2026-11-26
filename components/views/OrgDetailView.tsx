@@ -23,6 +23,8 @@ import type { DocAccess } from "@/lib/docs/access-state";
 import { OrgSettingsForm } from "./OrgSettingsForm";
 import { PersonRow } from "./PersonRow";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
+import type { OrgProfile } from "@/lib/orgs/profile";
+import { OrgAbout } from "./OrgAbout";
 
 export interface OrgDetailMeeting {
   id: string;
@@ -34,7 +36,8 @@ export interface OrgDetailMeeting {
 }
 
 export interface OrgDetailViewProps {
-  org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean };
+  /** `about` and the links (0044, todo #13) show in the header when set. */
+  org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean } & Partial<OrgProfile>;
   isAdmin: boolean;
   userId: string | null;
   inviteUrl: string;
@@ -61,6 +64,8 @@ export interface OrgDetailViewProps {
   formatCard?: ReactNode;
   /** Admins: "Sammanfattning efter mötet" (`SummarySettingsForm`, 0037), in Inställningar. */
   summarySettings?: ReactNode;
+  /** Admins: "Om oss" (`OrgProfileForm`, 0044), in Inställningar. */
+  profileSettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
    * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
@@ -243,7 +248,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, profileSettings, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
@@ -262,11 +267,14 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </span>
         }
         meta={
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? "Du är admin" : "Du är medlem"}</Badge>
-            <span className="text-sm text-ink-3">
-              {plural(people.length, "person", "personer")} · {plural(meetings.length, "möte", "möten")}
-            </span>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? "Du är admin" : "Du är medlem"}</Badge>
+              <span className="text-sm text-ink-3">
+                {plural(people.length, "person", "personer")} · {plural(meetings.length, "möte", "möten")}
+              </span>
+            </div>
+            <OrgAbout profile={org} />
           </div>
         }
         actions={
@@ -405,6 +413,11 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <>
           <Panel title="Inställningar" titleId="settings-title" id="installningar">
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
+            {profileSettings && (
+              <div id="om-oss" className="mt-6 scroll-mt-6 border-t border-line pt-6">
+                {profileSettings}
+              </div>
+            )}
             {summarySettings && (
               <div id="sammanfattning" className="mt-6 scroll-mt-6 border-t border-line pt-6">
                 {summarySettings}

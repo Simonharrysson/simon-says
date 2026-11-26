@@ -191,6 +191,29 @@ export const IconLink = (p: IconProps) => (
   </Svg>
 );
 
+export const IconGlobe = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5s-1.2 6.1-3.5 8.5c-2.3-2.4-3.5-5.2-3.5-8.5s1.2-6.1 3.5-8.5z" />
+  </Svg>
+);
+
+// Facebook and Instagram as outline glyphs in the same stroke (not the brands' filled marks), so
+// they sit quietly next to the other icons.
+export const IconFacebook = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M14.5 20.5v-7.25h2.5l.5-3h-3V8.5c0-.9.45-1.5 1.5-1.5h1.5V4.25c-.6-.1-1.5-.25-2.5-.25-2.45 0-4 1.45-4 4.1v2.15H8.5v3h2.5v7.25" />
+  </Svg>
+);
+
+export const IconInstagram = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.75" y="3.75" width="16.5" height="16.5" rx="4.5" />
+    <circle cx="12" cy="12" r="3.75" />
+    <path d="M16.9 7.1h.01" />
+  </Svg>
+);
+
 export const IconGoogle = ({ size = 18 }: { size?: number }) => (
   // Google's "G" mark, as required on Google sign-in buttons.
   <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true" focusable="false">

@@ -6,6 +6,7 @@ import { deletePerson, listPeople, myRole, renamePerson, setPersonRole, updateOr
 import { validName } from "@/lib/names/validate";
 import { recordStep, setDismissed } from "@/lib/onboarding/store";
 import { isStepId } from "@/lib/onboarding/steps";
+import { parseProfile, type OrgProfile, type ProfileErrors, type ProfileInput } from "@/lib/orgs/profile";
 import { cleanEmail } from "@/lib/people/board";
 import { validRole } from "@/lib/people/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -160,4 +161,21 @@ export async function renameOrgAction(orgId: string, name: string): Promise<Acti
   if (!(await updateOrgSettings(db, orgId, { name: clean }))) return fail(ADMIN_ONLY);
   refresh(orgId);
   return OK;
+}
+
+export type ProfileResult = { ok: true; profile: OrgProfile } | { ok: false; message: string; errors?: ProfileErrors };
+
+/**
+ * "Om oss" (todo #13, 0044): the short text and the links, from Inställningar and step 1. The
+ * parser gives the canonical form the database checks accept; RLS and the column grant decide.
+ */
+export async function saveProfileAction(orgId: string, input: ProfileInput): Promise<ProfileResult> {
+  const db = await adminDb(orgId);
+  if (!db) return { ok: false, message: ADMIN_ONLY };
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const parsed = parseProfile({ about: str(input?.about), website: str(input?.website), facebook: str(input?.facebook), instagram: str(input?.instagram) });
+  if (!parsed.ok) return { ok: false, message: "Kontrollera fälten och försök igen.", errors: parsed.errors };
+  if (!(await updateOrgSettings(db, orgId, parsed.profile))) return { ok: false, message: ADMIN_ONLY };
+  refresh(orgId);
+  return { ok: true, profile: parsed.profile };
 }
