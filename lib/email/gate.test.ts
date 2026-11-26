@@ -1,9 +1,10 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import ts from "typescript";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import type { Mailer, MailMessage } from "@/lib/mail";
-import { mayEmail, sendUserMail } from "./prefs";
+import { checkEmailGate, mayEmail, sendUserMail } from "./prefs";
 
 const fakeDb = (answer: { data?: unknown; error?: { message: string } | null }) => {
   const calls: unknown[] = [];
@@ -29,6 +30,15 @@ describe("the e-mail gate", () => {
     expect(calls).toEqual([
       { fn: "may_email", args: { p_user_id: "u1", p_email: "anna@example.com", p_category: "invite" } },
     ]);
+  });
+
+  it("no usable recipient is a permanent failure, not a retry", async () => {
+    const { db, calls } = fakeDb({ data: true });
+    expect(await checkEmailGate({}, "invite", db)).toBe("invalid");
+    expect(await sendUserMail(fakeMailer().mailer, { email: "not an address" }, "invite", { subject: "S", text: "T" }, db)).toBe(
+      "invalid",
+    );
+    expect(calls).toEqual([]);
   });
 
   it("fails closed: no recipient, a database error or a non-true answer sends nothing", async () => {
@@ -57,13 +67,19 @@ describe("the e-mail gate", () => {
   });
 });
 
-// Every mail to a user must pass the gate. Direct mailer.send() calls are allowed only for the
-// operator's own alarms (to ALARM_EMAIL) and inside the gate itself. A new user-facing sender
-// goes through sendUserMail() (or calls mayEmail() and is added here with a reason).
-const DIRECT_SEND_ALLOWED: Record<string, string> = {
-  "lib/alarm.ts": "operator alarms to ALARM_EMAIL",
-  "lib/meetings/tick.ts": "operator alarms to ALARM_EMAIL",
-  "lib/email/prefs.ts": "the gate",
+// Every mail to a user must pass the gate. The TypeScript checker finds every call of
+// Mailer.send (whatever the variable is called) and every string naming api.resend.com; each must
+// sit in a function on this list. A new user-facing sender goes through sendUserMail() (or calls
+// checkEmailGate() first and is added here with a reason).
+const SEND_ALLOWED: Record<string, string> = {
+  "lib/alarm.ts#sendDailySummary": "operator mail to ALARM_EMAIL",
+  "lib/alarm.ts#checkSpendAlarm": "operator mail to ALARM_EMAIL",
+  "lib/meetings/tick.ts#alarmIfNeeded": "operator mail to ALARM_EMAIL",
+  "lib/meetings/tick.ts#finishMeeting": "operator mail to ALARM_EMAIL",
+  "lib/email/prefs.ts#sendUserMail": "the gate",
+};
+const RESEND_ALLOWED: Record<string, string> = {
+  "lib/mail.ts#resendMailer": "the provider adapter",
 };
 
 function sourceFiles(dir: string): string[] {
@@ -74,12 +90,60 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
+/** The outermost named function around a node (the module-level function a reviewer would look for). */
+function enclosingFunction(node: ts.Node): string {
+  let name = "(top level)";
+  for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
+    if ((ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n)) && n.name) name = n.name.getText();
+    else if ((ts.isArrowFunction(n) || ts.isFunctionExpression(n)) && ts.isVariableDeclaration(n.parent)) name = n.parent.name.getText();
+  }
+  return name;
+}
+
 describe("mail call sites", () => {
-  it("only the operator alarms and the gate call mailer.send directly", () => {
-    const offenders = ["lib", "app", "components"]
-      .flatMap(sourceFiles)
-      .filter((file) => /\bmailer\.send\(/i.test(readFileSync(file, "utf8")))
-      .filter((file) => !(file in DIRECT_SEND_ALLOWED));
+  it("only the operator alarms and the gate send mail; only the adapter talks to Resend", () => {
+    const root = process.cwd();
+    const files = ["lib", "app", "components", "scripts"]
+      .filter((d) => existsSync(join(root, d)))
+      .flatMap((d) => sourceFiles(join(root, d)));
+    const program = ts.createProgram(files, {
+      strict: true,
+      jsx: ts.JsxEmit.Preserve,
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      target: ts.ScriptTarget.ES2022,
+      baseUrl: root,
+      paths: { "@/*": ["./*"] },
+      skipLibCheck: true,
+      noEmit: true,
+    });
+    const checker = program.getTypeChecker();
+    const mailFile = program.getSourceFile(join(root, "lib/mail.ts"));
+    expect(mailFile).toBeDefined();
+    const offenders: string[] = [];
+    let sendCalls = 0;
+    for (const sf of program.getSourceFiles()) {
+      if (!sf.fileName.startsWith(root) || sf.fileName.includes("node_modules")) continue;
+      const rel = relative(root, sf.fileName);
+      const visit = (node: ts.Node) => {
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "send") {
+          const decl = checker.getResolvedSignature(node)?.getDeclaration();
+          if (decl && decl.getSourceFile() === mailFile) {
+            sendCalls++;
+            const at = `${rel}#${enclosingFunction(node)}`;
+            if (!(at in SEND_ALLOWED)) offenders.push(`Mailer.send in ${at}`);
+          }
+        }
+        if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node)) && /api\.resend\.com/i.test(node.text)) {
+          const at = `${rel}#${enclosingFunction(node)}`;
+          if (!(at in RESEND_ALLOWED)) offenders.push(`api.resend.com in ${at}`);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sf);
+    }
     expect(offenders).toEqual([]);
-  });
+    // The checker really found them (a broken resolution would pass the test silently).
+    expect(sendCalls).toBeGreaterThanOrEqual(Object.keys(SEND_ALLOWED).length);
+  }, 120_000);
 });
