@@ -141,7 +141,11 @@ describe("ownHistory / mergeHistory / the digest text", () => {
     expect(all).not.toMatch(/Ada|Kask|Mår bra|Testbeslut|Må-runda/);
     expect(h[0].items).toContainEqual({ kind: "decision", text: "en person leder värvningen", topic: "Medlemsvärvning", owner: null, done: null });
     expect(h[0].items).toContainEqual({ kind: "task", text: "Göra affischer", topic: "Medlemsvärvning", owner: null, done: false });
-    expect(h[1].items.filter((i) => i.kind === "task")).toEqual([{ kind: "task", text: "Boka bord på mässan", topic: "Medlemsvärvning", owner: "Kassören", done: false }]);
+    // The carried task closed in m2 shows as done there; carried but still open would not repeat.
+    expect(h[1].items.filter((i) => i.kind === "task")).toEqual([
+      { kind: "task", text: "Göra affischer", topic: "Medlemsvärvning", owner: "Kassören", done: true },
+      { kind: "task", text: "Boka bord på mässan", topic: "Medlemsvärvning", owner: "Kassören", done: false },
+    ]);
   });
 
   it("merge: oldest first, imported before own on the same day, meetings with only topics dropped", () => {
@@ -227,7 +231,7 @@ describe("finalizeGoals: the temporal rules in code", () => {
     }));
     const { approve, others } = splitForApproval(goals);
     expect(approve).toHaveLength(5);
-    expect(approve[0]).toEqual({ title: "Mål 0", why: null });
+    expect(approve[0]).toEqual({ title: "Mål 0", why: null, evidence: [] });
     expect(others.map((o) => o.status)).toEqual(["current", "achieved"]);
   });
 

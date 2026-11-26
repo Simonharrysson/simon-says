@@ -121,8 +121,8 @@ describe.skipIf(!hasLocalSupabase)("history routes", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.source).toBe("history");
-    expect(json.goals).toEqual([{ title: "Spelkafé på biblioteket", why: "Pågår." }]);
-    expect(json.others).toEqual([{ title: "Eget förråd", why: "Tystnat.", status: "stale", lastMentioned: "2025-09-02" }]);
+    expect(json.goals).toEqual([{ title: "Spelkafé på biblioteket", why: "Pågår.", evidence: [] }]);
+    expect(json.others).toEqual([{ title: "Eget förråd", why: "Tystnat.", status: "stale", lastMentioned: "2025-09-02", evidence: [] }]);
     expect(m.proposeGoals).not.toHaveBeenCalled();
     expect(m.digestGoals.mock.calls[0][0].history).toHaveLength(3);
   });

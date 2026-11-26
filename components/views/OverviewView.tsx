@@ -24,6 +24,8 @@ import { cn } from "@/lib/utils";
 export interface OverviewGoal {
   title: string;
   why: string | null;
+  /** Whole-history proposals only: the dated lines the goal rests on (never stored). */
+  evidence?: { date: string; text: string }[];
 }
 
 export type GoalsPhase =
@@ -296,7 +298,7 @@ function GoalsEditor({
 }) {
   const router = useRouter();
   const uid = useId();
-  const [goals, setGoals] = useState(() => initial.map((g) => ({ title: g.title, why: g.why ?? "" })));
+  const [goals, setGoals] = useState(() => initial.map((g) => ({ title: g.title, why: g.why ?? "", evidence: g.evidence ?? [] })));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const titleId = (i: number) => `${uid}-goal-${i}`;
@@ -307,14 +309,14 @@ function GoalsEditor({
     focusSoon(goals.length > 1 ? titleId(Math.max(0, Math.min(i, goals.length - 2))) : `${uid}-add`);
   };
   const add = () => {
-    setGoals((gs) => [...gs, { title: "", why: "" }]);
+    setGoals((gs) => [...gs, { title: "", why: "", evidence: [] }]);
     focusSoon(titleId(goals.length));
   };
   const empty = goals.some((g) => !g.title.trim());
   const [added, setAdded] = useState<Set<number>>(() => new Set());
   const addSuggestion = (k: number) => {
     const sg = suggestions[k];
-    setGoals((gs) => [...gs, { title: sg.title, why: sg.why ?? "" }]);
+    setGoals((gs) => [...gs, { title: sg.title, why: sg.why ?? "", evidence: sg.evidence }]);
     setAdded((a) => new Set(a).add(k));
   };
 
@@ -371,6 +373,7 @@ function GoalsEditor({
                 className="text-sm"
                 onChange={(e) => set(i, { why: e.target.value })}
               />
+              <Evidence lines={g.evidence} />
             </div>
             <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={18} />} onClick={() => remove(i)}>
               {`Ta bort mål ${i + 1}`}
@@ -396,6 +399,23 @@ function GoalsEditor({
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The dated protocol lines a proposed goal rests on (shown, never stored). */
+function Evidence({ lines }: { lines: { date: string; text: string }[] }) {
+  if (!lines.length) return null;
+  return (
+    <details className="text-sm text-ink-3">
+      <summary className="cursor-pointer select-none">Underlag ({lines.length})</summary>
+      <ul className="mt-1 flex flex-col gap-1 pl-4">
+        {lines.map((l, k) => (
+          <li key={k}>
+            <span className="tabular-nums">{l.date}</span> · {l.text}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -431,6 +451,7 @@ function SuggestionList({
               <span className="text-sm text-ink-3">
                 {sg.why ? `${sg.why} ` : ""}Senast nämnt {sg.lastMentioned}.
               </span>
+              <Evidence lines={sg.evidence} />
             </span>
             {!added.has(k) && !full && (
               <Button variant="ghost" size="sm" icon={<IconPlus size={16} />} onClick={() => onAdd(k)}>

@@ -27,8 +27,9 @@ const collapse = (s: string) => s.normalize("NFC").replace(/\s+/g, " ").trim();
 const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 
 /**
- * Simon Says' own ended meetings as history: decisions, tasks written in that meeting (not the
- * carried copies) and the agenda labels. Same privacy rules as the goals proposal: no Testmöte,
+ * Simon Says' own ended meetings as history: decisions, tasks written in that meeting, carried
+ * tasks closed in it (as done) and the agenda labels. No status "reports": Simon Says' notes have
+ * none, so in the förening's own meetings progress shows only as decisions and tasks. Same privacy rules as the goals proposal: no Testmöte,
  * nothing under a Må-runda item, people's names → "en person", no owners' names (an owner that is
  * a person becomes null).
  */
@@ -54,7 +55,8 @@ export function ownHistory(orgId: string, input: DashInput): HistoryMeeting[] {
     const label = itemLabel(m, r.anchor);
     const topic = label ? text(label) : null;
     if (isDecision(r)) items.get(m.id)!.push({ kind: "decision", text: text(r.text), topic, owner: null, done: null });
-    else if (isTask(r) && !r.carried_from_id) {
+    else if (isTask(r) && (!r.carried_from_id || r.done)) {
+      // Written in this meeting, or carried here and closed here (shown done in the meeting that closed it).
       const owner = r.owner_person_id || !r.owner ? null : text(r.owner);
       items.get(m.id)!.push({ kind: "task", text: text(r.text), topic, owner: owner === "en person" ? null : owner, done: Boolean(r.done) });
     }
@@ -224,6 +226,14 @@ export interface GoalSuggestion {
   why: string | null;
   status: GoalStatus;
   lastMentioned: string;
+  /** The dated lines the status rests on (newest last, at most 3). */
+  evidence: { date: string; text: string }[];
+}
+
+export interface ProposedGoal {
+  title: string;
+  why: string | null;
+  evidence: { date: string; text: string }[];
 }
 
 /**
@@ -231,14 +241,16 @@ export interface GoalSuggestion {
  * recently mentioned first) and the rest as suggestions with their status. A goal's `why` is
  * the digest's sentence, cut to the approved goal's 240 characters.
  */
-export function splitForApproval(goals: DigestGoal[]): { approve: { title: string; why: string | null }[]; others: GoalSuggestion[] } {
+export function splitForApproval(goals: DigestGoal[]): { approve: ProposedGoal[]; others: GoalSuggestion[] } {
   const current = goals.filter((g) => g.status === "current");
-  const approve = current.slice(0, MAX_APPROVE).map((g) => ({ title: g.title, why: g.why || null }));
+  const evidence = (g: DigestGoal) => g.evidence.slice(-3);
+  const approve = current.slice(0, MAX_APPROVE).map((g) => ({ title: g.title, why: g.why || null, evidence: evidence(g) }));
   const others = [...current.slice(MAX_APPROVE), ...goals.filter((g) => g.status !== "current")].map((g) => ({
     title: g.title,
     why: g.why || null,
     status: g.status,
     lastMentioned: g.lastMentioned,
+    evidence: evidence(g),
   }));
   return { approve, others };
 }
