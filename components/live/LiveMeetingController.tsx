@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { MicCapture } from "@/lib/audio/capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import { runEndFlow } from "@/lib/live/end-flow";
+import { SIGNED_IN_CHANNEL, SIGNED_IN_PATH } from "@/lib/live/signed-in";
 import { stopParam } from "@/lib/ui/limit-copy";
 import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption } from "./AgendaStep";
 import type { StartError } from "./ConsentStep";
@@ -42,6 +43,8 @@ export interface LiveMeetingInfo {
   currentElSessionId: string | null;
   /** live, or abandoned < 2 h ago: offer "Fortsätt mötet". */
   resumable: boolean;
+  /** Live and another tab is recording it right now: the resume screen offers "Ta över här". */
+  connectedElsewhere?: boolean;
   lastTickOkAt: string | null;
   docPaused: boolean;
   /** Seconds the meeting lasted, for an ended meeting. */
@@ -127,7 +130,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [signedOutUnsent, setSignedOutUnsent] = useState<number | null>(null);
   /** Another tab (or laptop) took over this meeting's session. */
   const [superseded, setSuperseded] = useState(false);
-  /** The stream's last refusal code (e.g. "not_starter": signed in as someone else). */
+  /** The stream's last refusal code (e.g. "not_member": signed in with an account outside the förening). */
   const [refusal, setRefusal] = useState<string | null>(null);
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
   const [people, setPeople] = useState<PersonOption[]>([]);
@@ -153,6 +156,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setMeeting((cur) => (cur && cur.id === m.id ? { ...cur, status: m.status, durationSeconds: m.durationSeconds } : cur));
     if (m.status !== "ending") setPhase((p) => (p === "ending" ? initialPhase(m) : p));
   }, [props.meeting]);
+
+  // Signed in again in the other tab (/inloggad): send what waits now (U8).
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const ch = new BroadcastChannel(SIGNED_IN_CHANNEL);
+    ch.onmessage = () => stream.current?.signedInAgain();
+    return () => ch.close();
+  }, []);
 
   // Clock for the timer, "uppdaterat för N min sedan" and the stale check.
   useEffect(() => {
@@ -611,15 +622,17 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         ? Math.max(0, (stoppedAt ?? now) - Date.parse(startedAt))
         : 0;
 
-  const reLogin = () => window.open(`/login?next=/meetings/${meeting?.id ?? ""}`, "_blank", "noopener");
+  // The sign-in tab lands on /inloggad ("close this tab"), never on this meeting: a second
+  // meeting tab would offer "Fortsätt mötet" and take the recording over from this one (U8).
+  const reLogin = () => window.open(`/login?next=${SIGNED_IN_PATH}`, "_blank", "noopener");
   // Silent failures the status line doesn't cover: say what happened and what to do.
   const notice: LiveNotice | null = !["live", "paused", "error", "name-round"].includes(phase)
     ? null
-    : refusal === "not_starter"
+    : refusal === "not_member"
       ? {
           tone: "danger",
-          title: "Du är inloggad som någon annan",
-          text: "Bara den som startade mötet kan köra det. Logga in med det kontot igen; inget mer ljud skickas från den här fliken.",
+          title: "Du är inloggad med fel konto",
+          text: "Kontot är inte med i föreningen. Logga in med ditt föreningskonto igen; inget mer ljud skickas från den här fliken.",
           action: { label: "Logga in igen", onClick: reLogin },
         }
       : health.authLost
@@ -771,6 +784,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       onNameRoundDone={onNameRoundDone}
       onNameRoundSkip={closeNameRound}
       onResumeMeeting={onResumeMeeting}
+      connectedElsewhere={meeting?.connectedElsewhere ?? false}
+      resumeLive={meeting?.status === "live"}
       // An abandoned meeting is already ended (its notes are final); only a live one can be ended here.
       onEndUnfinished={meeting?.status === "live" ? onEndUnfinished : undefined}
       onRetry={() => void stream.current?.retry()}
