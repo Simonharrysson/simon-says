@@ -8,6 +8,8 @@ import { createOrg } from "@/lib/db/orgs";
 vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 const { acquireLease, releaseLease, preparedForDate } = await import("@/lib/prepare/store");
 
+const [T1, T2, T3] = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"];
+
 describe.skipIf(!hasLocalSupabase)("prepared agendas (0033)", () => {
   let orgId: string;
   let id: string;
@@ -37,15 +39,20 @@ describe.skipIf(!hasLocalSupabase)("prepared agendas (0033)", () => {
   });
 
   it("two concurrent updates: exactly one gets the lease; after release (or expiry) the next one does", async () => {
-    const [a, b] = await Promise.all([acquireLease(id), acquireLease(id)]);
+    const [a, b] = await Promise.all([acquireLease(id, T1), acquireLease(id, T2)]);
     expect([a, b].filter(Boolean)).toHaveLength(1);
-    expect(await acquireLease(id)).toBeNull();
-    await releaseLease(id);
-    expect(await acquireLease(id)).not.toBeNull();
-    // An expired lease (a crashed request) is taken over.
+    const holder = a ? T1 : T2;
+    const other = a ? T2 : T1;
+    expect(await acquireLease(id, T3)).toBeNull();
+    // Only the holder releases.
+    expect(await releaseLease(id, other)).toBe(false);
+    expect(await releaseLease(id, holder)).toBe(true);
+    expect(await acquireLease(id, T1)).not.toBeNull();
+    // An expired lease (a crashed or slow request) is taken over; the old holder can no longer release it.
     await adminClient().from("prepared_agendas").update({ busy_until: new Date(Date.now() - 1000).toISOString() }).eq("id", id);
-    expect(await acquireLease(id)).not.toBeNull();
-    await releaseLease(id);
+    expect(await acquireLease(id, T2)).not.toBeNull();
+    expect(await releaseLease(id, T1)).toBe(false);
+    expect(await releaseLease(id, T2)).toBe(true);
   });
 
   it("format_profiles accepts the Årsmöte kind", async () => {

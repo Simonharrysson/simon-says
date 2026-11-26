@@ -49,6 +49,7 @@ create table public.prepared_agendas (
   gen integer not null default 0,
   journal jsonb,
   busy_until timestamptz,
+  busy_token uuid,
   prepared_by uuid references auth.users on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -65,15 +66,29 @@ create policy prepared_agendas_select on public.prepared_agendas for select to a
 
 -- The lease (service role only): one conditional update, so of two concurrent callers exactly one
 -- gets the row back; an expired lease (a crashed request) is taken over.
-create function public.acquire_prepared_lease(p_id uuid, p_ms integer)
+-- `p_token` is the holder's: only that holder releases it.
+create function public.acquire_prepared_lease(p_id uuid, p_ms integer, p_token uuid)
 returns setof public.prepared_agendas
 language sql volatile security definer set search_path = ''
 as $$
   update public.prepared_agendas
-     set busy_until = now() + make_interval(secs => p_ms / 1000.0)
+     set busy_until = now() + make_interval(secs => p_ms / 1000.0), busy_token = p_token
    where id = p_id
      and (busy_until is null or busy_until < now())
   returning *;
 $$;
-revoke all on function public.acquire_prepared_lease(uuid, integer) from public, anon, authenticated;
-grant execute on function public.acquire_prepared_lease(uuid, integer) to service_role;
+create function public.release_prepared_lease(p_id uuid, p_token uuid)
+returns boolean
+language sql volatile security definer set search_path = ''
+as $$
+  with released as (
+    update public.prepared_agendas set busy_until = null, busy_token = null
+     where id = p_id and busy_token = p_token
+    returning 1
+  )
+  select exists (select 1 from released);
+$$;
+revoke all on function public.acquire_prepared_lease(uuid, integer, uuid) from public, anon, authenticated;
+revoke all on function public.release_prepared_lease(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.acquire_prepared_lease(uuid, integer, uuid) to service_role;
+grant execute on function public.release_prepared_lease(uuid, uuid) to service_role;
