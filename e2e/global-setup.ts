@@ -19,6 +19,14 @@ const WARM = [
   "/meetings/ny/00000000-0000-4000-8000-000000000000",
   "/meetings/00000000-0000-4000-8000-000000000000",
   "/join/e2e-warmup-code",
+  // API routes compile on first request too (a GET is enough: 405 or 404, but compiled). The
+  // import's estimate took 14 s to compile under the parallel specs, past a 15 s expect.
+  "/api/orgs/00000000-0000-4000-8000-000000000000/history/drive",
+  "/api/orgs/00000000-0000-4000-8000-000000000000/history/estimate",
+  "/api/orgs/00000000-0000-4000-8000-000000000000/history/import",
+  "/api/orgs/00000000-0000-4000-8000-000000000000/history/jobs",
+  "/api/orgs/00000000-0000-4000-8000-000000000000/goals/propose",
+  "/api/orgs/00000000-0000-4000-8000-000000000000/prepare",
 ];
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
