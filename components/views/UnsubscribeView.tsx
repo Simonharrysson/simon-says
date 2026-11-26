@@ -36,8 +36,8 @@ export function UnsubscribeView(props: UnsubscribeViewProps) {
           <>
             <h1 className="text-2xl">Klart</h1>
             <Banner tone="success" title="Prenumerationen är avslutad" live={false}>
-              Du får inga fler sammanfattningar från {props.orgName}. Vill du ha dem igen kan en admin i föreningen slå på
-              det.
+              Du får inga fler sammanfattningar från {props.orgName}. Ångrar du dig, mejla{" "}
+              <a href="mailto:simon@harrysson.co">simon@harrysson.co</a>.
             </Banner>
           </>
         )}

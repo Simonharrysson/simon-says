@@ -19,10 +19,11 @@ vi.mock("@/lib/env", async (importOriginal) => {
 const { createOrg, joinOrg, setSummarySettings } = await import("@/lib/db/orgs");
 const { sendMeetingSummaries, sendPendingSummaries } = await import("@/lib/summaries/send");
 const { POST: postUnsubscribe, GET: getUnsubscribe } = await import("@/app/api/summaries/unsubscribe/route");
+const { lookupUnsubscribe } = await import("@/lib/summaries/unsubscribe");
 
 function fakeMailer(ok = true) {
   const sent: MailMessage[] = [];
-  return { sent, mailer: { send: async (m: MailMessage) => (sent.push(m), ok) }, now: () => new Date() };
+  return { sent, mailer: { send: async (m: MailMessage) => (sent.push(m), ok) }, now: () => new Date(), sleep: async () => {} };
 }
 
 describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
@@ -200,12 +201,17 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     expect(get.status).toBe(303);
     expect((await db().from("people").select("summary_unsubscribed_at").eq("id", ids.sara).single()).data!.summary_unsubscribed_at).toBeNull();
 
+    const token = new URL(url).searchParams.get("t");
+    expect(await lookupUnsubscribe(token)).toEqual({ orgName: "Sammanfattningsföreningen", unsubscribed: false });
+    expect(await lookupUnsubscribe("nope")).toBeNull();
+
     const bad = await postUnsubscribe(new NextRequest(url.replace(/t=.*/, "t=nope"), { method: "POST", body: "List-Unsubscribe=One-Click" }));
     expect(bad.status).toBe(400);
     const res = await postUnsubscribe(new NextRequest(url, { method: "POST", body: "List-Unsubscribe=One-Click" }));
     expect(res.status).toBe(200);
     expect((await postUnsubscribe(new NextRequest(url, { method: "POST" }))).status).toBe(200);
     expect((await db().from("people").select("summary_unsubscribed_at").eq("id", ids.sara).single()).data!.summary_unsubscribed_at).not.toBeNull();
+    expect(await lookupUnsubscribe(token)).toEqual({ orgName: "Sammanfattningsföreningen", unsubscribed: true });
 
     await setSummarySettings(admin.db as SupabaseClient, orgId, "selected", [ids.sara, ids.erik]);
     const next = await meeting();

@@ -1066,6 +1066,33 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(s?.closed_at).not.toBeNull();
   });
 
+  it("the end mails the summary (0037): to a person with an address who wasn't there, once", async () => {
+    // The starter is in the people list (so the meeting has a known attendee); Zelda wasn't there.
+    const { data: added } = await adminClient()
+      .from("people")
+      .insert([
+        { org_id: orgId, name: "Ture Startare", member_user_id: starter.id },
+        { org_id: orgId, name: "Zelda Frånvarande", email: "zelda@example.com" },
+      ])
+      .select("id");
+    try {
+      const { id, sessionId } = await meeting({ heartbeatAgoSec: 6 * 60 });
+      await say(id, sessionId, "hej", 1000);
+      const f = fakes();
+      await tick.finalizeSweep({ deps: f.deps, orgId });
+      await tick.finalizeSweep({ deps: f.deps, orgId });
+      expect((await read(id)).status).toBe("done");
+      expect(f.mails.filter((s) => s.startsWith("Sammanfattning: "))).not.toHaveLength(0);
+      // The fake mailer answers false: recorded as failed, never retried by the next sweep.
+      const ev = await events(id, "summary");
+      expect(ev).toHaveLength(1);
+      expect(ev[0].detail).toMatchObject({ state: "sent", mode: "missed", sent: 0, failed: 1 });
+      expect((await read(id)).summary_state).toBe("sent");
+    } finally {
+      await adminClient().from("people").delete().in("id", (added ?? []).map((p) => p.id as string));
+    }
+  });
+
   it("presence: nothing ever said → abandoned (the empty case, never a carry source)", async () => {
     const { id } = await meeting({ heartbeatAgoSec: 6 * 60 });
     const f = fakes();
