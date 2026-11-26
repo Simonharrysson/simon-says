@@ -53,8 +53,10 @@ function isInvalidGrant(err: unknown): boolean {
  * refresh token surfaces here, not halfway through a Docs write).
  * Throws GoogleAuthLostError on a missing token or `invalid_grant`.
  *
- * This is the sign-in token (drive.file). Fail closed: a stored token whose scope includes
- * drive.readonly is never used here (only the import's separate token may carry it).
+ * This is the sign-in token. Google may report earlier grants (drive.readonly from an import
+ * consent) on a later plain sign-in; the token is still used as before; it still has drive.file.
+ * The rule lives in our code: only the import's routes list or read files Simon Says did not
+ * create or get picked, and they use the separate import token (getImportGoogleAuth).
  */
 export async function getGoogleAuth(userId: string): Promise<OAuth2Client> {
   const { data, error } = await supabaseAdmin()
@@ -64,9 +66,14 @@ export async function getGoogleAuth(userId: string): Promise<OAuth2Client> {
     .maybeSingle();
   if (error) throw new Error(`getGoogleAuth: ${error.message}`);
   if (!data) throw new GoogleAuthLostError(userId, "no stored refresh token");
-  if (hasDriveReadonly(data.scope as string | undefined)) throw new GoogleAuthLostError(userId, "stored token is wider than drive.file");
+  if (hasDriveReadonly(data.scope as string | undefined) && !loggedWide.has(userId)) {
+    loggedWide.add(userId);
+    console.info(`google: sign-in grant of ${userId} includes drive.readonly (used as drive.file)`);
+  }
   return clientFor(userId, decrypt(data.refresh_token_enc as string));
 }
+
+const loggedWide = new Set<string>();
 
 async function clientFor(userId: string, refreshToken: string): Promise<OAuth2Client> {
   const env = getEnv();

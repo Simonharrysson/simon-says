@@ -156,7 +156,8 @@ it is deleted when they leave the org.
   Picker, because with `drive.file` picking a folder does not grant its children. The refresh
   token from that consent is stored **apart** (`google_import_tokens`, 0034, encrypted like
   `google_tokens`) and used only by the import's routes; the sign-in token is never replaced and
-  keeps its own scopes, and `getGoogleAuth` fails closed on any stored token wider than drive.file.
+  keeps working as before (if Google reports drive.readonly on a later sign-in, it is still used
+  only for app-created or picked files: only the import's routes read other files, with the import token).
   The import token lives 24 h (lookup cutoff + the 5-minute cron deletes it); "Ta bort
   läsåtkomst" deletes our copy at once. We do not call Google's revoke: revoking any token of a
   combined (incremental) grant revokes all of its scopes, the sign-in drive.file included. The

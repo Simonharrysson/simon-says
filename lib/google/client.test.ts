@@ -98,10 +98,11 @@ describe("getGoogleAuth", () => {
 describe("the import's separate drive.readonly grant", () => {
   const READONLY = "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly";
 
-  it("fails closed: a sign-in token whose scope includes drive.readonly is never used", async () => {
+  it("a sign-in token whose reported scope includes drive.readonly still works as before", async () => {
     row.current = { refresh_token_enc: encrypt("1//both"), scope: READONLY };
-    await expect(getGoogleAuth("u1")).rejects.toBeInstanceOf(GoogleAuthLostError);
-    expect(getAccessToken).not.toHaveBeenCalled();
+    getAccessToken.mockResolvedValue({ token: "ya29" });
+    const client = (await getGoogleAuth("u1")) as unknown as { credentials: unknown };
+    expect(client.credentials).toEqual({ refresh_token: "1//both" });
   });
 
   it("the sign-in token (drive.file) works as before", async () => {
