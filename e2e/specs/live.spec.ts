@@ -53,14 +53,13 @@ async function freshStarter(
 }
 
 test("Starta möte → namnrunda → live notes in the Doc → Avsluta → listed, summary to who missed it @phone", async ({ seedOrg, signedIn, newEmail, db }) => {
-  // The fake has four voices; the scripted name round calls them Anna, Erik, Lisa and Omar.
+  // The fake's voices are Anna, Erik and Lisa (its fourth voice is Erik again: it merges them).
   const anna = newEmail("anna");
   const karin = newEmail("karin");
   const { org, page } = await freshStarter(seedOrg, signedIn, newEmail, [
     { name: "Anna Berg", email: anna },
     "Erik Lund",
     "Lisa Holm",
-    "Omar Said",
     { name: "Karin Sjö", email: karin },
   ]);
   const { meetingId, docId } = await startMeeting(page, org);
