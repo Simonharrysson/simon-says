@@ -4,7 +4,7 @@ import { PublicShell } from "@/components/views/PublicShell";
 export const metadata: Metadata = { title: "Integritet" };
 
 // Plain-language privacy text for a free service. Update UPDATED when the content changes.
-const UPDATED = "24 november 2026";
+const UPDATED = "26 november 2026";
 
 const processors: [string, string, string][] = [
   ["ElevenLabs", "Gör om ljudet till text under mötet.", "Loggar förfrågningar som standard; noll lagring kan kräva särskilt avtal. Behandlingen kan ske utanför EU. Ljudet skickas direkt från laptopen."],
@@ -85,6 +85,11 @@ export default function PrivacyPage() {
             <li>
               För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har
               godkänt. Rubrikerna försvinner med mötet, målen med föreningen.
+            </li>
+            <li>
+              Gamla protokoll som admin väljer att läsa in: texten skickas till Anthropic (Claude), som plockar ut datum,
+              beslut, uppgifter (med roll, inte namn) och korta lägesrader. Bara de raderna sparas, aldrig dokumentets text;
+              admin kan ta bort dem när som helst och de försvinner med föreningen.
             </li>
           </ul>
           <p>
