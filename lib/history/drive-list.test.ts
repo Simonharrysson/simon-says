@@ -139,6 +139,13 @@ describe("listFilesInFolders", () => {
     expect(r.files.filter((f) => f.id === id("d2"))).toHaveLength(1);
   });
 
+  it("Drive answering with an incomplete search counts as truncated", async () => {
+    const { api } = fakeDrive(tree);
+    const list = api.files.list;
+    api.files.list = async (p) => ({ data: { ...(await list(p)).data, incompleteSearch: true } });
+    expect((await listFilesInFolders(api, [{ id: id("ht25"), name: "HT25" }], { subfolders: false })).truncated).toBe(true);
+  });
+
   it("stops at the folder cap and says so", async () => {
     const many: Node[] = [{ id: id("top"), name: "Top", mimeType: FOLDER_MIME, parent: "root" }];
     for (let i = 0; i < 80; i++) many.push({ id: id(`sub${i}`), name: `Sub ${i}`, mimeType: FOLDER_MIME, parent: id("top") });

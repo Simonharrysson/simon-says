@@ -34,7 +34,7 @@ interface DriveFile {
 /** The few Drive v3 calls we use (googleapis' drive_v3.Drive fits; tests pass a fake). */
 export interface DriveLike {
   files: {
-    list(params: Record<string, unknown>): Promise<{ data: { files?: DriveFile[] | null; nextPageToken?: string | null } }>;
+    list(params: Record<string, unknown>): Promise<{ data: { files?: DriveFile[] | null; nextPageToken?: string | null; incompleteSearch?: boolean | null } }>;
     get(params: Record<string, unknown>): Promise<{ data: DriveFile }>;
   };
   drives: {
@@ -204,9 +204,11 @@ export async function listFilesInFolders(
           ...scope(folder.driveId),
           ...ALL_DRIVES,
           pageSize: PAGE_SIZE,
-          fields: "nextPageToken, files(id, name, mimeType, driveId, modifiedTime, createdTime)",
+          fields: "nextPageToken, incompleteSearch, files(id, name, mimeType, driveId, modifiedTime, createdTime)",
           ...(pageToken ? { pageToken } : {}),
         });
+        // allDrives can answer with only part of the result: say so, never drop Docs silently.
+        if (res.data.incompleteSearch) truncated = true;
         for (const f of res.data.files ?? []) {
           if (!f.id || !f.name) continue;
           if (f.mimeType === FOLDER_MIME) {

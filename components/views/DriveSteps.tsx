@@ -137,6 +137,7 @@ export function FolderStep({
             folder={meetingFolder}
             label={meetingFolder.name}
             meta="Föreningens mötesmapp"
+            className="border-t-0"
             checked={isSelected(meetingFolder.id)}
             disabled={full && !isSelected(meetingFolder.id)}
             onToggle={() => toggle(meetingFolder)}
@@ -287,10 +288,12 @@ function FolderRow({
   disabled,
   onToggle,
   onOpen,
+  className,
 }: {
   folder: DriveFolder;
   label: string;
   meta?: string;
+  className?: string;
   checked: boolean;
   disabled?: boolean;
   onToggle: () => void;
@@ -298,7 +301,7 @@ function FolderRow({
 }) {
   const id = `folder-${folder.id}`;
   return (
-    <div className={rowBase}>
+    <div className={cn(rowBase, className)}>
       <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={onToggle} aria-label={`Välj ${label}`} />
       <button
         type="button"
@@ -328,14 +331,20 @@ const HINT: Record<ImportFile["status"], string | null> = {
   template: "Ser ut som en mall, kallelse eller dagordning, inte ett protokoll.",
   docx: "Word-fil. Öppna den i Google Docs och spara som Google-dokument för att kunna läsa in den.",
   own: "Simon Says eget mötesdokument. Mötet finns redan med.",
-  imported: null,
+  imported: "Kryssa i för att läsa in det igen (till exempel om dokumentet har fått fler möten).",
 };
 
-/** The rows ticked from the start: every protocol-looking one, if they fit in one import. */
+/**
+ * The rows ticked from the start (and by "Välj alla"): the protocol-looking ones not imported
+ * yet, oldest first, at most one import's worth. The rest show up next time, as the imported
+ * ones are marked.
+ */
 export function defaultTicks(files: ImportFile[]): Set<string> {
-  const ready = files.filter((f) => f.status === "ready").map((f) => f.id);
-  return new Set(ready.length <= MAX_IMPORT_DOCS ? ready : []);
+  return new Set(files.filter((f) => f.status === "ready").slice(0, MAX_IMPORT_DOCS).map((f) => f.id));
 }
+
+/** Rows the admin may tick: also templates (a hunch, not a rule) and imported ones (read again). */
+const canTick = (f: ImportFile) => f.status === "ready" || f.status === "template" || f.status === "imported";
 
 export function FileStep({
   orgId,
@@ -404,10 +413,11 @@ export function FileStep({
     );
   }
 
-  const selectable = list.files.filter((f) => f.status === "ready" || f.status === "template");
+  const all = defaultTicks(list.files);
+  const ready = list.files.filter((f) => f.status === "ready").length;
   const done = list.files.filter((f) => f.status === "imported").length;
   const n = ticked.size;
-  const allTicked = selectable.length > 0 && selectable.every((f) => ticked.has(f.id));
+  const allTicked = all.size > 0 && [...all].every((id) => ticked.has(id));
   const tooMany = n > MAX_IMPORT_DOCS;
   const toggle = (id: string) =>
     setTicked((t) => {
@@ -435,15 +445,15 @@ export function FileStep({
 
       {list.files.length > 0 && (
         <div className="rounded-lg border border-line bg-surface">
-          <div className={cn(rowBase, "bg-sunk/60 rounded-t-lg")}>
+          <div className={cn(rowBase, "border-t-0 bg-sunk/60 rounded-t-lg")}>
             <Checkbox
               id="import-all"
               checked={allTicked}
-              disabled={!selectable.length}
-              onCheckedChange={() => setTicked(allTicked ? new Set() : new Set(selectable.map((f) => f.id)))}
+              disabled={!all.size}
+              onCheckedChange={() => setTicked(allTicked ? new Set() : all)}
             />
             <label htmlFor="import-all" className="flex min-h-11 flex-1 cursor-pointer items-center text-sm font-medium">
-              Välj alla ({selectable.length})
+              {ready > MAX_IMPORT_DOCS ? `Välj de ${MAX_IMPORT_DOCS} äldsta som inte är inlästa` : `Välj alla som inte är inlästa (${ready})`}
             </label>
           </div>
           <ul className="max-h-[28rem] overflow-y-auto overscroll-contain" aria-label="Dokument">
@@ -479,17 +489,11 @@ export function FileStep({
 
 function FileRow({ file, checked, onToggle }: { file: ImportFile; checked: boolean; onToggle: () => void }) {
   const id = `file-${file.id}`;
-  const selectable = file.status === "ready" || file.status === "template";
+  const selectable = canTick(file);
   const hint = HINT[file.status];
   return (
     <div className={cn(rowBase, "items-start py-2")}>
-      {file.status === "imported" ? (
-        <span className="mt-0.5 grid size-5 flex-none place-content-center text-green" aria-hidden>
-          <IconCheck size={16} strokeWidth={2.25} />
-        </span>
-      ) : (
-        <Checkbox id={id} className="mt-0.5" checked={selectable && checked} disabled={!selectable} onCheckedChange={onToggle} />
-      )}
+      <Checkbox id={id} className="mt-0.5" checked={selectable && checked} disabled={!selectable} onCheckedChange={onToggle} />
       <label htmlFor={selectable ? id : undefined} className={cn("flex min-w-0 flex-1 flex-col gap-0.5", selectable && "cursor-pointer")}>
         <span className="flex items-start gap-2">
           <IconDoc size={16} className="mt-0.5 flex-none text-ink-3" />
@@ -500,7 +504,12 @@ function FileRow({ file, checked, onToggle }: { file: ImportFile; checked: boole
           {file.date && file.dateInferred && " (gissat)"}
           {" · "}
           <span className="wrap-anywhere">{file.folderName}</span>
-          {file.status === "imported" && <span className="text-green"> · Redan inläst</span>}
+          {file.status === "imported" && (
+            <span className="text-green">
+              {" · "}
+              <IconCheck size={12} strokeWidth={2.5} className="inline align-[-0.1em]" /> Redan inläst
+            </span>
+          )}
         </span>
         {hint && <span className="pl-6 text-xs text-ink-3">{hint}</span>}
       </label>
