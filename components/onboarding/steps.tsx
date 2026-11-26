@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useId, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink, Spinner } from "@/components/ui/button";
@@ -9,12 +10,10 @@ import { Check, Field, hintClass } from "@/components/ui/Field";
 import { IconCheck, IconFolder, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { plural } from "@/lib/format";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
 import { LOGO_TYPES } from "@/lib/orgs/logo";
 import { formatDateTime } from "@/lib/format";
 import type { InviteRow } from "@/lib/invites/rules";
-import { messages } from "@/lib/i18n/messages";
 import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
 import { OrgLogo } from "./OrgLogo";
@@ -22,7 +21,6 @@ import { OrgLogo } from "./OrgLogo";
 // Kom igång's six steps and the end, presentational (no fetching): the container
 // (Onboarding.tsx) and the /design gallery give them data and callbacks.
 
-const ROLE_SUGGESTIONS = ["Ordförande", "Vice ordförande", "Kassör", "Sekreterare", "Ledamot", "Suppleant", "PR-ansvarig"];
 
 /** A quiet sentence under an action: what happened (polite live region). */
 function Note({ children, tone = "neutral" }: { children?: ReactNode; tone?: "neutral" | "danger" | "success" }) {
@@ -51,6 +49,7 @@ export interface LogoStepProps {
 export function LogoStep(p: LogoStepProps) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
+  const t = useTranslations("onboarding.logo");
   const [over, setOver] = useState(false);
   const drop = (e: DragEvent) => {
     e.preventDefault();
@@ -62,7 +61,7 @@ export function LogoStep(p: LogoStepProps) {
     <div className="flex flex-col gap-8">
       <Field
         id={`${id}-name`}
-        label="Föreningens namn"
+        label={t("orgName")}
         value={p.name}
         maxLength={100}
         autoComplete="organization"
@@ -70,7 +69,7 @@ export function LogoStep(p: LogoStepProps) {
         error={p.nameError}
       />
       <div className="flex flex-col gap-3">
-        <span className="text-sm font-medium">Logga (valfritt)</span>
+        <span className="text-sm font-medium">{t("label")}</span>
         <div className="flex items-center gap-6 max-[30rem]:flex-col max-[30rem]:items-start">
           <button
             type="button"
@@ -94,7 +93,7 @@ export function LogoStep(p: LogoStepProps) {
             ) : (
               <span className="flex flex-col items-center gap-2 px-3 text-center text-xs text-ink-3">
                 <OrgLogo name={p.orgName} size="md" className="opacity-90" />
-                Släpp en bild här
+                {t("drop")}
               </span>
             )}
             {p.busy && (
@@ -102,22 +101,21 @@ export function LogoStep(p: LogoStepProps) {
                 <Spinner className="text-xl text-ink-2" />
               </span>
             )}
-            <span className="sr-only">{p.logoUrl ? "Byt logga" : "Ladda upp logga"}</span>
+            <span className="sr-only">{p.logoUrl ? t("change") : t("upload")}</span>
           </button>
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => input.current?.click()} loading={p.busy}>
-                {p.logoUrl ? "Byt bild" : "Ladda upp logga"}
+                {p.logoUrl ? t("changeImage") : t("upload")}
               </Button>
               {p.logoUrl && !p.busy && (
                 <Button variant="ghost" onClick={p.onRemove}>
-                  Ta bort
+                  {t("remove")}
                 </Button>
               )}
             </div>
             <p id={`${id}-hint`} className={cn(hintClass, "max-w-[22rem]")}>
-              PNG, JPEG eller WebP. Simon Says beskär den till en kvadrat. Den syns bara här i Simon Says – på
-              föreningssidan och i listan – aldrig i mötesdokumenten.
+              {t("hint")}
             </p>
           </div>
         </div>
@@ -172,24 +170,21 @@ export interface BoardStepProps {
 export function BoardStep(p: BoardStepProps) {
   const id = useId();
   const [editing, setEditing] = useState<string | null>(null);
+  const t = useTranslations("onboarding.board");
   const invited = p.rows.filter((r) => r.status === "invited");
   return (
     <div className="flex flex-col gap-6">
       <datalist id={`${id}-roles`}>
-        {ROLE_SUGGESTIONS.map((r) => (
+        {(t.raw("roles") as string[]).map((r) => (
           <option key={r} value={r} />
         ))}
       </datalist>
       {p.rows.length === 0 ? (
-        <EmptyState title="Vilka sitter i styrelsen?">
-          <p>
-            Börja med dig själv. Namnen hjälper Simon Says att känna igen vem som talar, och rollerna hamnar i
-            protokollet: ”Kassör: boka lokal”. E-post behövs bara för den som ska kunna starta möten och få
-            dokumenten.
-          </p>
+        <EmptyState title={t("emptyTitle")}>
+          <p>{t("emptyText")}</p>
         </EmptyState>
       ) : (
-        <ul className="flex flex-col rounded-lg bg-surface shadow-panel" aria-label="Styrelsen">
+        <ul className="flex flex-col rounded-lg bg-surface shadow-panel" aria-label={t("listLabel")}>
           {p.rows.map((row) => {
             const key = row.personId ?? `m:${row.member?.userId}`;
             return (
@@ -200,7 +195,7 @@ export function BoardStep(p: BoardStepProps) {
                     rolesList={`${id}-roles`}
                     initial={{ name: row.name ?? "", role: row.role ?? "", email: row.personId ? (row.email ?? "") : "" }}
                     emailLocked={!row.personId}
-                    submitLabel={row.personId ? "Spara" : "Lägg till"}
+                    submitLabel={row.personId ? t("save") : t("add")}
                     onCancel={() => setEditing(null)}
                     onSubmit={async (input) => {
                       const err = row.personId ? await p.onUpdate(row.personId, input) : await p.onAdd(input, row.member?.userId);
@@ -219,28 +214,23 @@ export function BoardStep(p: BoardStepProps) {
       )}
 
       <div className="flex flex-col gap-3 rounded-lg border border-dashed border-rail p-4">
-        <span className="text-sm font-medium">Lägg till någon</span>
-        <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel="Lägg till" onSubmit={(input) => p.onAdd(input)} onEditExisting={setEditing} resetOnSuccess />
+        <span className="text-sm font-medium">{t("addSomeone")}</span>
+        <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel={t("add")} onSubmit={(input) => p.onAdd(input)} onEditExisting={setEditing} resetOnSuccess />
       </div>
 
       {invited.length > 0 && (
         <div className="flex flex-col gap-3">
           {p.inviteEmail ? (
             <>
-              <span className="text-sm font-medium">Bjud in via mejl</span>
-              <p className="text-sm text-ink-2">
-                Simon Says skickar ett mejl med föreningens länk till adresserna. Den som loggar in med adressen ni skrev
-                kopplas till sitt namn här.
-              </p>
+              <span className="text-sm font-medium">{t("inviteByEmail")}</span>
+              <p className="text-sm text-ink-2">{t("inviteText")}</p>
               {p.inviteEmail}
-              <CopyField id={`${id}-invite`} value={p.inviteUrl} label="Eller dela länken själv" />
+              <CopyField id={`${id}-invite`} value={p.inviteUrl} label={t("orShare")} />
             </>
           ) : (
             <>
-              <p className="text-sm text-ink-2">
-                Dela länken med dem, t.ex. i styrelsens chatt. Den som loggar in med adressen ni skrev kopplas till sitt namn här.
-              </p>
-              <CopyField id={`${id}-invite`} value={p.inviteUrl} label="Inbjudningslänk" />
+              <p className="text-sm text-ink-2">{t("shareText")}</p>
+              <CopyField id={`${id}-invite`} value={p.inviteUrl} label={t("inviteLink")} />
             </>
           )}
         </div>
@@ -249,14 +239,17 @@ export function BoardStep(p: BoardStepProps) {
   );
 }
 
-function statusLine(row: BoardRow, me: boolean, invite?: InviteRow): ReactNode {
+function StatusLine({ row, me, invite }: { row: BoardRow; me: boolean; invite?: InviteRow }): ReactNode {
+  const t = useTranslations("onboarding.board");
+  const statuses = useTranslations("invites.status");
+  const locale = useLocale();
   if (row.status === "account") {
     return (
       <>
-        <span className="text-green">Har konto</span>
+        <span className="text-green">{t("hasAccount")}</span>
         {row.member?.email && <span className="wrap-anywhere"> · {row.member.email}</span>}
-        {me && " · du"}
-        {row.member?.role === "admin" && " · admin"}
+        {me && t("you")}
+        {row.member?.role === "admin" && t("admin")}
       </>
     );
   }
@@ -265,17 +258,20 @@ function statusLine(row: BoardRow, me: boolean, invite?: InviteRow): ReactNode {
     return (
       <span className="wrap-anywhere">
         {row.email}
-        {invite ? ` · Inbjudan: ${messages.sv.invites.status[invite.status].toLowerCase()}${sent ? ` ${formatDateTime(sent)}` : ""}` : " · ingen inbjudan skickad än"}
+        {invite
+          ? `${t("invite", { status: statuses(invite.status).toLowerCase() })}${sent ? ` ${formatDateTime(sent, locale)}` : ""}`
+          : t("noInvite")}
       </span>
     );
   }
-  return "Bara namn – lägg till e-post om hen ska kunna starta möten";
+  return t("nameOnly");
 }
 
 function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me: boolean; invite?: InviteRow; onEdit: () => void; onRemove?: () => Promise<string | null> }) {
+  const t = useTranslations("onboarding.board");
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const display = row.name ?? row.email ?? "Okänd";
+  const display = row.name ?? row.email ?? t("unknown");
   return (
     <div className="flex flex-col gap-1 px-4 py-3">
       <div className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
@@ -284,14 +280,16 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
         </span>
         <span className="flex min-w-0 flex-col">
           <span className="font-medium wrap-anywhere">
-            {row.name ?? <span className="text-ink-3">Namn saknas</span>}
+            {row.name ?? <span className="text-ink-3">{t("noName")}</span>}
             {row.role && <span className="font-normal text-ink-2"> · {row.role}</span>}
           </span>
-          <span className="text-sm text-ink-3">{statusLine(row, me, invite)}</span>
+          <span className="text-sm text-ink-3">
+            <StatusLine row={row} me={me} invite={invite} />
+          </span>
           {!row.personId && (
             <span className="mt-2">
               <Button variant="secondary" size="sm" icon={<IconPlus size={16} />} onClick={onEdit}>
-                Lägg till namn
+                {t("addName")}
               </Button>
             </span>
           )}
@@ -299,7 +297,7 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
         <span className="flex items-center gap-1">
           {row.personId && (
             <Button variant="ghost" size="sm" icon={<IconPencil size={16} />} iconOnly onClick={onEdit}>
-              {`Ändra ${display}`}
+              {t("edit", { name: display })}
             </Button>
           )}
           {onRemove && (
@@ -315,7 +313,7 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
                 setRemoving(false);
               }}
             >
-              {`Ta bort ${display} ur listan`}
+              {t("remove", { name: display })}
             </Button>
           )}
         </span>
@@ -347,6 +345,8 @@ function PersonForm({
   resetOnSuccess?: boolean;
   emailLocked?: boolean;
 }) {
+  const t = useTranslations("onboarding.board");
+  const common = useTranslations("common");
   const [v, setV] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<FormError>(null);
@@ -355,7 +355,7 @@ function PersonForm({
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!v.name.trim()) {
-      setError("Skriv ett namn, t.ex. Anna Berg.");
+      setError(t("nameRequired"));
       nameRef.current?.focus();
       return;
     }
@@ -372,18 +372,18 @@ function PersonForm({
     <form onSubmit={submit} className={cn("flex flex-col gap-3", onCancel && "bg-board px-4 py-4")} noValidate>
       <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-3 max-[36rem]:grid-cols-1">
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`${uid}-name`}>Namn</Label>
-          <Input ref={nameRef} id={`${uid}-name`} value={v.name} maxLength={100} placeholder="Anna Berg" autoComplete="off" onChange={(e) => setV({ ...v, name: e.target.value })} />
+          <Label htmlFor={`${uid}-name`}>{t("name")}</Label>
+          <Input ref={nameRef} id={`${uid}-name`} value={v.name} maxLength={100} placeholder={t("namePlaceholder")} autoComplete="off" onChange={(e) => setV({ ...v, name: e.target.value })} />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`${uid}-role`}>Roll</Label>
-          <Input id={`${uid}-role`} value={v.role} maxLength={40} placeholder="Kassör" list={rolesList} autoComplete="off" onChange={(e) => setV({ ...v, role: e.target.value })} />
+          <Label htmlFor={`${uid}-role`}>{t("role")}</Label>
+          <Input id={`${uid}-role`} value={v.role} maxLength={40} placeholder={t("rolePlaceholder")} list={rolesList} autoComplete="off" onChange={(e) => setV({ ...v, role: e.target.value })} />
         </div>
       </div>
       {!emailLocked && (
         <div className="flex flex-col gap-2">
           <Label htmlFor={`${uid}-email`}>
-            E-post <span className="font-normal text-ink-3">(valfritt – bjuder in)</span>
+            {t("email")} <span className="font-normal text-ink-3">{t("emailOptional")}</span>
           </Label>
           <Input id={`${uid}-email`} type="email" inputMode="email" value={v.email} maxLength={254} placeholder="anna@example.com" autoComplete="off" onChange={(e) => setV({ ...v, email: e.target.value })} />
         </div>
@@ -394,7 +394,7 @@ function PersonForm({
         </Button>
         {onCancel && (
           <Button variant="ghost" icon={<IconX size={18} />} onClick={onCancel} disabled={busy}>
-            Avbryt
+            {common("cancel")}
           </Button>
         )}
       </div>
@@ -403,7 +403,7 @@ function PersonForm({
           <Note tone="danger">{errText(error)}</Note>
           {existing && onEditExisting && (
             <Button variant="secondary" size="sm" icon={<IconPencil size={16} />} onClick={() => onEditExisting(existing)}>
-              Ändra {v.name.trim()}
+              {t("editExisting", { name: v.name.trim() })}
             </Button>
           )}
         </div>
@@ -425,6 +425,7 @@ export interface FolderStepProps {
 }
 
 export function FolderStep(p: FolderStepProps) {
+  const t = useTranslations("onboarding.folder");
   return (
     <div className="flex flex-col gap-6">
       {p.folderSet ? (
@@ -433,35 +434,32 @@ export function FolderStep(p: FolderStepProps) {
             <IconFolder size={22} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="font-medium wrap-anywhere">{p.folderName ?? "Mötesmappen"}</span>
-            <span className="text-sm text-green">Vald – nya mötesdokument hamnar här</span>
+            <span className="font-medium wrap-anywhere">{p.folderName ?? t("fallbackName")}</span>
+            <span className="text-sm text-green">{t("chosen")}</span>
           </span>
           {p.pickerEnabled && (
             <Button variant="ghost" size="sm" onClick={p.onPick} loading={p.busy}>
-              Byt
+              {t("change")}
             </Button>
           )}
         </div>
       ) : (
         <EmptyState
-          title="Ingen mötesmapp än"
+          title={t("noneTitle")}
           action={
             p.pickerEnabled ? (
               <Button variant="secondary" icon={<IconFolder size={18} />} onClick={p.onPick} loading={p.busy}>
-                Välj mapp i Google Drive
+                {t("pick")}
               </Button>
             ) : undefined
           }
         >
-          <p>
-            Välj mappen där ni redan har era protokoll, eller skapa en ny i Drive först (t.ex. ”Styrelsen 2026–2027”).
-            Dela den med styrelsen, så kommer alla åt dokumenten.
-          </p>
+          <p>{t("noneText")}</p>
         </EmptyState>
       )}
       {!p.pickerEnabled && (
         <Banner tone="neutral" live={false}>
-          Google-väljaren är inte inställd än. Utan mötesmapp hamnar dokumenten i den som startar mötets egen Drive.
+          {t("pickerOff")}
         </Banner>
       )}
       <Note>{p.message}</Note>
@@ -499,31 +497,21 @@ export interface FormatStepProps {
   onStadgarCancel: () => void;
 }
 
-const VECKO_PREVIEW = ["Godkänn dagordning", "Må-runda", "Från förra veckan", "Era punkter", "Övrigt"];
 
 export function FormatStep(p: FormatStepProps) {
+  const t = useTranslations("onboarding.format");
   const id = useId();
+  // The Veckomöte's items as they will stand in the (Swedish) Doc.
+  const preview = t.raw("preview") as string[];
   const options: { value: WeeklyChoice; title: string; hint: ReactNode }[] = [
-    ...(p.currentName ? [{ value: "current" as const, title: `Behåll ${p.currentName}`, hint: "Formatet ni redan har valt." }] : []),
-    {
-      value: "veckomote",
-      title: "Veckomöte",
-      hint: (
-        <>
-          Det vanliga mötet: {VECKO_PREVIEW.join(" · ")}. Uppgifterna följs upp nästa gång.
-        </>
-      ),
-    },
-    {
-      value: "learn",
-      title: "Som våra gamla protokoll",
-      hint: "Simon Says läser strukturen i ett par gamla protokoll (bara rubrikerna och ordningen) och skriver likadant.",
-    },
+    ...(p.currentName ? [{ value: "current" as const, title: t("keep", { name: p.currentName }), hint: t("keepHint") }] : []),
+    { value: "veckomote", title: t("weekly"), hint: t("weeklyHint", { items: preview.join(" · ") }) },
+    { value: "learn", title: t("learn"), hint: t("learnHint") },
   ];
   return (
     <div className="flex flex-col gap-10">
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-3 text-lg font-semibold">Era vanliga möten</legend>
+        <legend className="mb-3 text-lg font-semibold">{t("legend")}</legend>
         {options.map((o) => {
           const checked = p.choice === o.value;
           return (
@@ -533,7 +521,7 @@ export function FormatStep(p: FormatStepProps) {
                 <span className="flex flex-col gap-1">
                   <span className="font-medium">
                     {o.title}
-                    {o.value === "veckomote" && !p.currentName && <span className="font-normal text-ink-3"> (förvalt)</span>}
+                    {o.value === "veckomote" && !p.currentName && <span className="font-normal text-ink-3">{t("default")}</span>}
                   </span>
                   <span className={hintClass}>{o.hint}</span>
                 </span>
@@ -547,12 +535,9 @@ export function FormatStep(p: FormatStepProps) {
       <section className="flex flex-col gap-4" aria-labelledby={`${id}-stadgar`}>
         <div className="flex flex-col gap-1">
           <h2 id={`${id}-stadgar`} className="text-lg">
-            Stadgar <span className="font-normal text-ink-3">(valfritt)</span>
+            {t("statutes")} <span className="font-normal text-ink-3">{t("optional")}</span>
           </h2>
-          <p className="max-w-[34rem] text-sm text-ink-2">
-            Har ni stadgar ser Simon Says till att <strong>styrelsemötena</strong> får punkterna stadgarna kräver och att
-            <strong> årsmötet</strong> får dagordningen de beskriver. Ni ser och kan ändra allt innan det sparas.
-          </p>
+          <p className="max-w-[34rem] text-sm text-ink-2">{t.rich("statutesText", { strong: (chunks) => <strong>{chunks}</strong> })}</p>
         </div>
         <StadgarBlock {...p} uid={id} />
       </section>
@@ -561,11 +546,13 @@ export function FormatStep(p: FormatStepProps) {
 }
 
 function StadgarBlock(p: FormatStepProps & { uid: string }) {
+  const t = useTranslations("onboarding.format");
+  const common = useTranslations("common");
   const s = p.stadgar;
   if (s.phase === "reading") {
     return (
       <p className="flex items-center gap-2 text-sm text-ink-2" role="status" aria-live="polite">
-        <Spinner /> Simon Says läser stadgarna … det tar ungefär en halv minut.
+        <Spinner /> {t("reading")}
       </p>
     );
   }
@@ -574,26 +561,26 @@ function StadgarBlock(p: FormatStepProps & { uid: string }) {
       <div className="mt-2 flex flex-col gap-6 animate-notice-in">
         <ItemList
           uid={`${p.uid}-board`}
-          title="Varje styrelsemöte"
-          empty="Stadgarna kräver inget särskilt på styrelsemöten. Styrelsemöten följer standardprotokollet."
+          title={t("boardTitle")}
+          empty={t("boardEmpty")}
           items={s.board}
           max={15}
           onChange={(board) => p.onStadgarChange(board, s.arsmote)}
         />
         <ItemList
           uid={`${p.uid}-ars`}
-          title="Årsmötet"
-          empty="Stadgarna listar ingen dagordning för årsmötet. Årsmötet följer standarddagordningen."
+          title={t("annualTitle")}
+          empty={t("annualEmpty")}
           items={s.arsmote}
           max={18}
           onChange={(arsmote) => p.onStadgarChange(s.board, arsmote)}
         />
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={p.onStadgarSave} loading={s.phase === "saving"}>
-            Spara för styrelse- och årsmöten
+            {t("save")}
           </Button>
           <Button variant="ghost" onClick={p.onStadgarCancel} disabled={s.phase === "saving"}>
-            Avbryt
+            {common("cancel")}
           </Button>
         </div>
       </div>
@@ -606,13 +593,15 @@ function StadgarBlock(p: FormatStepProps & { uid: string }) {
           <IconCheck size={18} className="mt-[0.1rem] flex-none" />
           <span>
             {s.phase === "saved"
-              ? `Sparat: ${plural(s.board, "punkt", "punkter")} på varje styrelsemöte${s.arsmote ? ` och årsmötets ${plural(s.arsmote, "punkt", "punkter")}` : ", årsmötet följer standarden"}.`
-              : "Styrelse- och årsmöten följer era stadgar."}
+              ? s.arsmote
+                ? t("savedBoth", { board: s.board, annual: s.arsmote })
+                : t("savedBoard", { board: s.board })
+              : t("followStatutes")}
           </span>
         </p>
         {p.pickerEnabled && (
           <Button variant="ghost" size="sm" onClick={p.onStadgarPick}>
-            Läs in stadgarna igen
+            {t("readAgain")}
           </Button>
         )}
       </div>
@@ -623,17 +612,18 @@ function StadgarBlock(p: FormatStepProps & { uid: string }) {
       {s.phase === "error" && <Banner tone="danger" live={false}>{s.message}</Banner>}
       {p.pickerEnabled ? (
         <Button variant="secondary" onClick={p.onStadgarPick}>
-          {s.phase === "error" ? "Försök igen" : "Välj stadgarna i Google Drive"}
+          {s.phase === "error" ? t("tryAgain") : t("pickStatutes")}
         </Button>
       ) : (
-        <p className="text-sm text-ink-3">Google-väljaren är inte inställd än, så stadgarna kan läsas in senare.</p>
+        <p className="text-sm text-ink-3">{t("pickerOff")}</p>
       )}
-      <p className={hintClass}>Ett Google-dokument eller en PDF. Simon Says sparar bara punkterna, aldrig stadgarna.</p>
+      <p className={hintClass}>{t("statutesHint")}</p>
     </div>
   );
 }
 
 function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; title: string; empty: string; items: string[]; max: number; onChange: (items: string[]) => void }) {
+  const t = useTranslations("onboarding.format");
   const [draft, setDraft] = useState("");
   const add = (e: FormEvent) => {
     e.preventDefault();
@@ -645,7 +635,7 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-base font-semibold">
-        {title} <span className="font-normal text-ink-3">· {plural(items.length, "punkt", "punkter")}</span>
+        {title} <span className="font-normal text-ink-3">· {t("items", { count: items.length })}</span>
       </h3>
       {items.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
@@ -656,7 +646,7 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
               <span className="w-6 flex-none font-mono text-xs text-ink-3">{i + 1}.</span>
               <span className="min-w-0 flex-1 text-sm wrap-anywhere">{item}</span>
               <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={16} />} onClick={() => onChange(items.filter((_, j) => j !== i))}>
-                {`Ta bort ${item}`}
+                {t("removeItem", { item })}
               </Button>
             </li>
           ))}
@@ -665,11 +655,11 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
       {items.length < max && (
         <form onSubmit={add} className="flex gap-2">
           <Label htmlFor={`${uid}-add`} className="sr-only">
-            Ny punkt under {title}
+            {t("newItem", { title })}
           </Label>
-          <Input id={`${uid}-add`} value={draft} maxLength={80} placeholder="Lägg till punkt" onChange={(e) => setDraft(e.target.value)} />
+          <Input id={`${uid}-add`} value={draft} maxLength={80} placeholder={t("addPlaceholder")} onChange={(e) => setDraft(e.target.value)} />
           <Button type="submit" variant="ghost" icon={<IconPlus size={18} />} disabled={!draft.trim()}>
-            Lägg till
+            {t("add")}
           </Button>
         </form>
       )}
@@ -681,20 +671,21 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
 // 5. Era tidigare möten
 
 export function HistoryStep({ importHref, historyCount, onOpen }: { importHref: string; historyCount: number; onOpen?: () => void }) {
+  const t = useTranslations("onboarding.history");
   return (
     <div className="flex flex-col gap-6">
       <ol className="flex flex-col gap-4 text-sm text-ink-2">
         {[
-          ["Välj protokoll", "Markera era gamla protokoll i Google Drive – gärna ett helt verksamhetsår."],
-          ["Se vad det kostar", "Innan något läses ser du hur många möten det blir och vad det kostar."],
-          ["Simon Says läser i tidsordning", "Beslut, uppgifter och det ni jobbat med hamnar i Översikt, och blir förslag på mål."],
-        ].map(([t, d], i) => (
-          <li key={t} className="flex gap-4">
+          [t("pick"), t("pickText")],
+          [t("cost"), t("costText")],
+          [t("order"), t("orderText")],
+        ].map(([title, d], i) => (
+          <li key={title} className="flex gap-4">
             <span className="grid size-7 flex-none place-items-center rounded-full bg-sunk font-mono text-xs text-ink-2" aria-hidden="true">
               {i + 1}
             </span>
             <span className="flex flex-col gap-0.5 pt-0.5">
-              <span className="font-medium text-ink">{t}</span>
+              <span className="font-medium text-ink">{title}</span>
               {d}
             </span>
           </li>
@@ -702,14 +693,14 @@ export function HistoryStep({ importHref, historyCount, onOpen }: { importHref: 
       </ol>
       {historyCount > 0 && (
         <p className="flex items-center gap-2 text-sm text-green">
-          <IconCheck size={18} /> {plural(historyCount, "protokoll", "protokoll")} inlästa hittills.
+          <IconCheck size={18} /> {t("soFar", { count: historyCount })}
         </p>
       )}
       <div className="flex flex-col items-start gap-2">
         <ButtonLink href={importHref} variant="secondary" onClick={onOpen}>
-          {historyCount > 0 ? "Läs in fler protokoll" : "Välj gamla protokoll"}
+          {historyCount > 0 ? t("more") : t("choose")}
         </ButtonLink>
-        <p className={hintClass}>Öppnar Översikt. Kom tillbaka hit med ”Kom igång” på föreningssidan.</p>
+        <p className={hintClass}>{t("hint")}</p>
       </div>
     </div>
   );
@@ -727,28 +718,22 @@ export interface VoicesStepProps {
 }
 
 export function VoicesStep(p: VoicesStepProps) {
+  const t = useTranslations("onboarding.voices");
   const id = useId();
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel">
-        <p className="font-medium">Snart: Simon Says lär sig rösterna från namnrundan i ert första möte — ingen behöver spela in något.</p>
-        <p className="text-sm text-ink-2">
-          Tanken: alla säger sitt namn i namnrundan, som vanligt, och den meningen blir rösten Simon Says känner
-          igen – en gång, aldrig mer. Då står namnen där direkt från andra mötet.
-        </p>
-        <p className="text-sm text-ink-3">
-          Det fungerar inte än: funktionen testas och slås på senare. Fram till dess sparas ingen röst, och namnrundan
-          fungerar som i dag. En röst är känslig information: när funktionen kommer sparas den bara för den som har
-          sagt ja, kan tas bort när som helst och tas bort när någon lämnar föreningen (då tas också ert ja bort).
-        </p>
+        <p className="font-medium">{t("soon")}</p>
+        <p className="text-sm text-ink-2">{t("idea")}</p>
+        <p className="text-sm text-ink-3">{t("notYet")}</p>
       </div>
       {p.people.length === 0 ? (
-        <EmptyState title="Ingen i styrelsen än" action={<Button variant="secondary" onClick={p.onBoard}>Lägg till styrelsen</Button>}>
-          <p>Lägg till styrelsen först, så kan du bocka för vilka som har sagt ja.</p>
+        <EmptyState title={t("noBoardTitle")} action={<Button variant="secondary" onClick={p.onBoard}>{t("addBoard")}</Button>}>
+          <p>{t("noBoardText")}</p>
         </EmptyState>
       ) : (
         <fieldset className="flex flex-col gap-1">
-          <legend className="mb-3 text-sm font-medium">Vilka har sagt ja till att Simon Says lär sig deras röst?</legend>
+          <legend className="mb-3 text-sm font-medium">{t("legend")}</legend>
           <ul className="flex flex-col rounded-lg bg-surface shadow-panel">
             {p.people.map((person) => (
               <li key={person.personId} className="border-t border-line px-4 py-3 first:border-t-0">
@@ -764,12 +749,12 @@ export function VoicesStep(p: VoicesStepProps) {
                   disabled={p.pending === person.personId}
                   onCheckedChange={(v) => p.onConsent(person.personId, v === true)}
                 >
-                  {person.consent ? "Har sagt ja. Hen tillfrågas igen innan något sparas." : undefined}
+                  {person.consent ? t("saidYes") : undefined}
                 </Check>
               </li>
             ))}
           </ul>
-          <p className={cn(hintClass, "mt-2")}>Fråga var och en. Bocka bara för den som själv har sagt ja.</p>
+          <p className={cn(hintClass, "mt-2")}>{t("askEach")}</p>
           <Note tone="danger">{p.error}</Note>
         </fieldset>
       )}
@@ -781,6 +766,7 @@ export function VoicesStep(p: VoicesStepProps) {
 // Klart
 
 export function DoneStep({ done, skipped, prepareHref, orgHref, onGo }: { done: StepId[]; skipped: StepId[]; prepareHref: string; orgHref: string; onGo?: (s: StepId) => void }) {
+  const t = useTranslations("onboarding");
   return (
     <div className="flex flex-col gap-8">
       <ul className="flex flex-col rounded-lg bg-surface shadow-panel">
@@ -792,12 +778,12 @@ export function DoneStep({ done, skipped, prepareHref, orgHref, onGo }: { done: 
                 {isDone ? <IconCheck size={18} /> : "–"}
               </span>
               <span className="flex-1">
-                {s.title}
-                <span className="sr-only">{isDone ? ": klart" : ": hoppades över"}</span>
+                {t(`steps.${s.id}.title`)}
+                <span className="sr-only">{isDone ? t("done.isDone") : t("done.isSkipped")}</span>
               </span>
               {!isDone && onGo && (
                 <Button variant="ghost" size="sm" onClick={() => onGo(s.id)}>
-                  {skipped.includes(s.id) ? "Gör nu" : "Öppna"}
+                  {skipped.includes(s.id) ? t("done.doNow") : t("done.open")}
                 </Button>
               )}
             </li>
@@ -806,10 +792,10 @@ export function DoneStep({ done, skipped, prepareHref, orgHref, onGo }: { done: 
       </ul>
       <div className="flex flex-wrap items-center gap-3 max-[30rem]:flex-col max-[30rem]:items-stretch">
         <ButtonLink href={prepareHref} variant="primary" size="lg">
-          Förbered första mötet →
+          {t("done.prepare")}
         </ButtonLink>
         <ButtonLink href={orgHref} variant="ghost" size="lg">
-          Till föreningen
+          {t("done.toOrg")}
         </ButtonLink>
       </div>
     </div>

@@ -21,7 +21,6 @@ const ALLOWED: Record<string, string> = {
 
 /** Files not moved to the catalogs yet. Shrinks to nothing; don't add to it. */
 const NOT_YET = new Set<string>([
-  "app/(app)/orgs/[id]/kom-igang/actions.ts",
   "app/api/google/picker-token/route.ts",
   "app/api/meetings/[id]/doc-access/route.ts",
   "app/api/meetings/route.ts",
@@ -62,11 +61,6 @@ const NOT_YET = new Set<string>([
   "components/live/PartialStrip.tsx",
   "components/live/ResumeMeeting.tsx",
   "components/live/SpeakerList.tsx",
-  "components/onboarding/KomIgangCard.tsx",
-  "components/onboarding/logo-image.ts",
-  "components/onboarding/Onboarding.tsx",
-  "components/onboarding/OnboardingShell.tsx",
-  "components/onboarding/steps.tsx",
 ]);
 
 /** Literals that may appear anywhere (proper nouns, Doc-bound values, technical tokens). */
