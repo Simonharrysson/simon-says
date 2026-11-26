@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isEmptySummary, MAX_DECISIONS, summaryContent, type SummaryItem } from "./content";
+import { hasOwnNotes, isEmptySummary, MAX_DECISIONS, summaryContent, type SummaryItem } from "./content";
 
 let pos = 0;
 const item = (over: Partial<SummaryItem> & Pick<SummaryItem, "id" | "section" | "text">): SummaryItem => ({
@@ -62,6 +62,25 @@ describe("summaryContent", () => {
 
   it("nothing but Närvarande and 'Pågår nu' is empty", () => {
     expect(isEmptySummary(summaryContent([items[10], items[11]]))).toBe(true);
+  });
+
+  it("Övrigt skips notes under procedural and follow-up items", () => {
+    const c = summaryContent(
+      [
+        item({ id: "o1", section: "note", kind: "note", text: "Mötet öppnades 18.05", anchor: "ag-0" }),
+        item({ id: "o2", section: "note", kind: "note", text: "Förra protokollet lades till handlingarna", anchor: "ag-2" }),
+        item({ id: "o3", section: "note", kind: "note", text: "Kåren bjuder på fika", anchor: "ag-9" }),
+      ],
+      { agendaRoles: { "ag-0": "procedural", "ag-2": "followup", "ag-9": "other" } },
+    );
+    expect(c.other).toEqual(["Kåren bjuder på fika"]);
+  });
+
+  it("tasks carried in from the last meeting are shown, but alone they are no notes", () => {
+    const carried = item({ id: "c1", section: "action", kind: "task", text: "Gammal uppgift", carried_from_id: "n3", carried_from_meeting: "m0" });
+    expect(summaryContent([carried]).tasks.map((t) => t.text)).toEqual(["Gammal uppgift"]);
+    expect(hasOwnNotes([carried])).toBe(false);
+    expect(hasOwnNotes([carried, item({ id: "d", section: "decision", kind: "decision", text: "Nytt beslut" })])).toBe(true);
   });
 
   it("legacy rows without kind still count by section", () => {

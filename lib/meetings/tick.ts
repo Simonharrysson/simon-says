@@ -1275,7 +1275,7 @@ export async function finishMeeting(
     }
     // The summary e-mails (0037), best effort: never changes how the meeting ended. A Doc paused
     // at the end is skipped here; the cron sends once its final pass is written.
-    if (finalStatus === "done" && !getEnv().KILL_SWITCH) await trySendMeetingSummaries(meetingId, { mailer: deps.mailer, now: deps.now });
+    if (finalStatus === "done" && !getEnv().KILL_SWITCH) await trySendMeetingSummaries(meetingId, { mailer: deps.mailer, now: deps.now, sleep: deps.sleep });
     return "done";
   } catch (e) {
     console.error(`end ${meetingId}: attempt ${attempt}: ${errorText(e)}`);
@@ -1473,7 +1473,7 @@ export async function finalizeSweep(
 
   // Summaries (0037) the end didn't send: a Doc that was paused at the end, or a failed attempt.
   try {
-    summary.summaries = await sendPendingSummaries({ mailer: deps.mailer, now: deps.now }, { orgId: opts.orgId, left });
+    summary.summaries = await sendPendingSummaries({ mailer: deps.mailer, now: deps.now, sleep: deps.sleep }, { orgId: opts.orgId, left });
   } catch (e) {
     console.error(`sweep: summaries: ${errorText(e)}`);
   }

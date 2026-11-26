@@ -7,7 +7,7 @@ import type { Mailer } from "@/lib/mail";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
-import { isEmptySummary, summaryContent, type SummaryItem } from "./content";
+import { hasOwnNotes, summaryContent, type SummaryItem } from "./content";
 import { renderSummaryEmail } from "./email";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 import { issueUnsubscribeToken } from "./token";
@@ -25,7 +25,12 @@ import { issueUnsubscribeToken } from "./token";
 export interface SummaryDeps {
   mailer: Mailer;
   now(): Date;
+  /** Between two e-mails (Resend allows a few requests per second per team). Default: a real wait. */
+  sleep?(ms: number): Promise<void>;
 }
+
+/** Pause between two e-mails of one meeting: stays under Resend's default rate limit. */
+export const SEND_GAP_MS = 600;
 
 export interface SummaryResult {
   state: SummaryState;
@@ -115,7 +120,7 @@ export async function sendMeetingSummaries(meetingId: string, deps: SummaryDeps)
         .eq("meeting_id", m.id),
     ) as SummaryItem[];
     if (mode === "off") state = "off";
-    else if (isEmptySummary(summaryContent(items, { agendaRoles: m.agenda_roles }))) state = "no_notes";
+    else if (!hasOwnNotes(items, m.agenda_roles)) state = "no_notes";
     else {
       const [peopleRows, speakers, members] = await Promise.all([
         db.from("people").select("id, name, role, email, member_user_id, summary_selected, summary_unsubscribed_at").eq("org_id", m.org_id),
@@ -158,7 +163,11 @@ export async function sendMeetingSummaries(meetingId: string, deps: SummaryDeps)
     const origin = appOrigin();
     const key = getEnv().TOKEN_ENC_KEY;
     const starterName = people.find((p) => m.started_by && p.member_user_id === m.started_by)?.name ?? null;
+    const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    let first = true;
     for (const r of recipients) {
+      if (!first) await sleep(SEND_GAP_MS);
+      first = false;
       // The ledger row first: a second sender (or a retry) never mails this person again.
       const ledger = must(
         "summary: ledger",

@@ -47,6 +47,9 @@ function visible(r: SummaryItem, roles: Record<string, ItemRole>): boolean {
   return clean(r.text).length > 0;
 }
 
+/** Övrigt: notes under a topic or the Övrigt item (or none), not under opening/procedural or follow-up items. */
+const OTHER_SKIP = new Set<ItemRole>(["procedural", "followup", "checkin"]);
+
 const asChain = (r: SummaryItem) => ({
   meeting_id: r.meeting_id ?? "",
   id: r.id,
@@ -82,7 +85,7 @@ export function summaryContent(
     .map((r) => ({ text: clean(r.text), owner: r.owner?.trim() || null, due: r.due?.trim() || null, mine: mine(r) }));
   const tasks = [...allTasks.filter((t) => t.mine), ...allTasks.filter((t) => !t.mine)];
   const other = rows
-    .filter((r) => (r.kind === "note" || (r.kind == null && r.section === "note")) && !isCopy(r))
+    .filter((r) => (r.kind === "note" || (r.kind == null && r.section === "note")) && !isCopy(r) && !(r.anchor && OTHER_SKIP.has(roles[r.anchor])))
     .map((r) => clean(r.text));
   return {
     decisions: decisions.slice(0, MAX_DECISIONS),
@@ -99,4 +102,12 @@ export function summaryContent(
 /** Nothing worth mailing: no decision, no open task, no other note. */
 export function isEmptySummary(c: SummaryContent): boolean {
   return c.decisions.length === 0 && c.tasks.length === 0 && c.other.length === 0;
+}
+
+/**
+ * Did the meeting itself note anything? Rows carried in from the last meeting ("Från förra veckan")
+ * are there from the start, so they alone don't make a summary.
+ */
+export function hasOwnNotes(items: SummaryItem[], agendaRoles?: Record<string, ItemRole> | null): boolean {
+  return !isEmptySummary(summaryContent(items.filter((r) => !r.carried_from_id), { agendaRoles }));
 }

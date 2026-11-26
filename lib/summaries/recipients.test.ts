@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { peopleNamed, presentPeople, summaryOptions, summaryRecipients, type SummaryPerson } from "./recipients";
+import { attendeeNames, peopleNamed, presentPeople, summaryOptions, summaryRecipients, type SummaryPerson } from "./recipients";
 
 const P = (id: string, name: string, over: Partial<SummaryPerson> = {}): SummaryPerson => ({
   id,
@@ -40,6 +40,13 @@ describe("presentPeople", () => {
       startedBy: "u-anna",
     });
     expect([...present].sort()).toEqual(["p-anna", "p-erik", "p-sara"]);
+  });
+
+  it("a typed Närvarande list counts everyone in it", () => {
+    expect(attendeeNames("Närvarande: Anna, Erik och Sara")).toEqual(["Anna", "Erik", "Sara"]);
+    expect(attendeeNames("Nils & Sara Holm")).toEqual(["Nils", "Sara Holm"]);
+    const present = presentPeople({ people, speakers: [], attendeeNames: ["Anna Berg, Sara och Nils"], startedBy: null });
+    expect([...present].sort()).toEqual(["p-anna", "p-nils", "p-sara"]);
   });
 
   it("a named voice without a person id is matched by its name", () => {

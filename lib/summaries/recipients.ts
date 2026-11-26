@@ -66,6 +66,18 @@ export function peopleNamed(text: string, people: Pick<SummaryPerson, "id" | "na
   return people.filter((p) => norm(p.name).split(" ")[0] === first).map((p) => p.id);
 }
 
+/**
+ * The names in a Närvarande text: one row may hold one name or a typed list ("Närvarande: Anna,
+ * Erik och Sara").
+ */
+export function attendeeNames(text: string): string[] {
+  return text
+    .replace(/^\s*närvarande\s*:?/i, "")
+    .split(/,|;|\n|\s+och\s+|\s+&\s+/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Ids of the people who were at the meeting (see the rules above). */
 export function presentPeople(input: {
   people: Pick<SummaryPerson, "id" | "name" | "member_user_id">[];
@@ -85,7 +97,7 @@ export function presentPeople(input: {
       else if (res.displayName !== res.label) for (const id of peopleNamed(res.displayName, input.people)) present.add(id);
     }
   }
-  for (const name of input.attendeeNames) for (const id of peopleNamed(name, input.people)) present.add(id);
+  for (const text of input.attendeeNames) for (const name of attendeeNames(text)) for (const id of peopleNamed(name, input.people)) present.add(id);
   if (input.startedBy) for (const p of input.people) if (p.member_user_id === input.startedBy) present.add(p.id);
   return present;
 }
