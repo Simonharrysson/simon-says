@@ -2,11 +2,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { useTestEnv } from "@/test/env";
 
 const m = vi.hoisted(() => ({
-  load: vi.fn(),
+  unsub: vi.fn(),
   save: vi.fn(),
 }));
 
-vi.mock("@/lib/email/prefs", () => ({ loadEmailPrefs: m.load, saveAddressEmailPrefs: m.save }));
+vi.mock("@/lib/email/prefs", () => ({ unsubscribeCategory: m.unsub, saveAddressEmailPrefs: m.save }));
 
 useTestEnv();
 const { GET, POST } = await import("@/app/api/mejl/avsluta/route");
@@ -19,15 +19,14 @@ const post = (url: string) =>
 describe("one-click unsubscribe and the /mejl action", () => {
   beforeAll(useTestEnv);
   beforeEach(() => {
-    m.load.mockReset().mockResolvedValue({ allOff: false, off: ["invite"] });
+    m.unsub.mockReset().mockResolvedValue(true);
     m.save.mockReset().mockResolvedValue(true);
   });
 
-  it("turns off the one category for the signed address, keeping the rest", async () => {
+  it("turns off the one category for the signed address (atomically, in the database)", async () => {
     const res = await post(oneClickUnsubscribeUrl("anna@example.com", "meeting_summary"));
     expect(res.status).toBe(200);
-    expect(m.load).toHaveBeenCalledWith({ email: "anna@example.com" });
-    expect(m.save).toHaveBeenCalledWith("anna@example.com", { allOff: false, off: ["meeting_summary", "invite"] });
+    expect(m.unsub).toHaveBeenCalledWith("anna@example.com", "meeting_summary");
   });
 
   it("refuses a bad token or category and changes nothing", async () => {
@@ -38,7 +37,7 @@ describe("one-click unsubscribe and the /mejl action", () => {
     const badCategory = new URL(good);
     badCategory.searchParams.set("k", "spam");
     expect((await post(badCategory.toString())).status).toBe(400);
-    expect(m.save).not.toHaveBeenCalled();
+    expect(m.unsub).not.toHaveBeenCalled();
   });
 
   it("GET only redirects to the /mejl page on APP_URL, changing nothing", async () => {
@@ -50,14 +49,12 @@ describe("one-click unsubscribe and the /mejl action", () => {
     expect(to.pathname).toBe("/mejl");
     expect(to.searchParams.get("k")).toBe("invite");
     expect(to.searchParams.get("t")).toBe(new URL(url).searchParams.get("t"));
-    expect(m.load).not.toHaveBeenCalled();
-    expect(m.save).not.toHaveBeenCalled();
+    expect(m.unsub).not.toHaveBeenCalled();
   });
 
   it("says try again when the database is down", async () => {
-    m.load.mockResolvedValue(null);
+    m.unsub.mockResolvedValue(false);
     expect((await post(oneClickUnsubscribeUrl("anna@example.com", "invite"))).status).toBe(503);
-    expect(m.save).not.toHaveBeenCalled();
   });
 
   it("the page's action saves only for the address in a valid token", async () => {

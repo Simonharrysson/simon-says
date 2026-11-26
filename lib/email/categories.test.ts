@@ -9,12 +9,14 @@ describe("e-mail categories", () => {
     }
   });
 
-  it("matches the categories the database accepts (0039 check constraints)", async () => {
+  it("matches the database's one list (0039 email_categories())", async () => {
     const { readFileSync } = await import("node:fs");
     const sql = readFileSync(new URL("../../supabase/migrations/0039_email_preferences.sql", import.meta.url), "utf8");
-    const lists = [...sql.matchAll(/array\[([^\]]*)\]::text\[\]/g)].map((m) => m[1]);
-    expect(lists.length).toBeGreaterThan(0);
-    for (const list of lists) expect(list.replace(/['\s]/g, "").split(",")).toEqual([...EMAIL_CATEGORIES]);
+    const m = /function public\.email_categories\(\)[\s\S]*?array\[([^\]]*)\]::text\[\]/.exec(sql);
+    expect(m).not.toBeNull();
+    expect(m![1].replace(/['\s]/g, "").split(",")).toEqual([...EMAIL_CATEGORIES]);
+    // No other hard-coded list: constraints and writers all call email_categories().
+    expect([...sql.matchAll(/array\['meeting_summary'/g)].length).toBe(1);
   });
 
   it("all on by default; Inga mejl alls wins; one category off keeps the rest", () => {

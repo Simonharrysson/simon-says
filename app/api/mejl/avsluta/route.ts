@@ -1,5 +1,5 @@
-import { isEmailCategory, withCategory } from "@/lib/email/categories";
-import { loadEmailPrefs, saveAddressEmailPrefs } from "@/lib/email/prefs";
+import { isEmailCategory } from "@/lib/email/categories";
+import { unsubscribeCategory } from "@/lib/email/prefs";
 import { checkEmailPrefsToken } from "@/lib/email/token";
 import { appOrigin } from "@/lib/origin";
 
@@ -26,8 +26,6 @@ export async function POST(request: Request) {
   const email = checkEmailPrefsToken(url.searchParams.get("t"));
   const category = url.searchParams.get("k");
   if (!email || !isEmailCategory(category)) return new Response("Ogiltig länk", { status: 400 });
-  const current = await loadEmailPrefs({ email });
-  if (!current) return new Response("Försök igen", { status: 503 });
-  const ok = await saveAddressEmailPrefs(email, withCategory(current, category, false));
+  const ok = await unsubscribeCategory(email, category);
   return new Response(ok ? "Avslutat" : "Försök igen", { status: ok ? 200 : 503 });
 }
