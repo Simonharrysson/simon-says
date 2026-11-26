@@ -2,7 +2,15 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { testEnv } from "@/test/env";
 import { adminClient, anonClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
-import { loadEmailPrefs, mayEmail, saveAddressEmailPrefs, saveMyEmailPrefs, sendUserMail } from "@/lib/email/prefs";
+import { createOrg } from "@/lib/db/orgs";
+import {
+  loadEmailPrefs,
+  mayEmail,
+  saveAddressEmailPrefs,
+  saveMyEmailPrefs,
+  sendUserMail,
+  unsubscribeCategory,
+} from "@/lib/email/prefs";
 import type { Mailer, MailMessage } from "@/lib/mail";
 
 // 0039: e-mail preferences per account and per address, and the may_email gate.
@@ -112,5 +120,55 @@ describe.skipIf(!hasLocalSupabase)("e-mail preferences (0039)", () => {
     expect(await saveAddressEmailPrefs(c.email, { allOff: true, off: [] })).toBe(true);
     const { data } = await c.db.from("email_preferences").select("all_off");
     expect(data).toEqual([{ all_off: true }]);
+  });
+
+  // A förening lists the person at B; they log in with A (I1 in the PR review).
+  async function personAtOtherAddress(label: string): Promise<{ user: TestUser; other: string }> {
+    const user = await createTestUser(label);
+    const org = await createOrg(user.db, `Förening ${label}`);
+    if (!org.ok) throw new Error("org");
+    const other = `${label}-b-${randomUUID()}@test.local`;
+    const { error } = await adminClient()
+      .from("people")
+      .insert({ org_id: org.id, name: "Bea Annan", email: other, member_user_id: user.id });
+    if (error) throw new Error(`person: ${error.message}`);
+    return { user, other };
+  }
+
+  it("A/B: unsubscribed at B by link → Konto (A) shows it off and can turn it back on", async () => {
+    const { user, other } = await personAtOtherAddress("ab1");
+    expect(await unsubscribeCategory(other, "meeting_summary")).toBe(true);
+    expect(await mayEmail({ userId: user.id, email: other }, "meeting_summary")).toBe(false);
+    expect(await mayEmail({ userId: user.id }, "meeting_summary")).toBe(false);
+    expect(await loadEmailPrefs({ userId: user.id })).toEqual({ allOff: false, off: ["meeting_summary"] });
+    expect(await saveMyEmailPrefs(user.db, { allOff: false, off: [] })).toBe(true);
+    expect(await mayEmail({ userId: user.id, email: other }, "meeting_summary")).toBe(true);
+    expect(await mayEmail({ email: other }, "meeting_summary")).toBe(true);
+    expect(await loadEmailPrefs({ email: other })).toEqual({ allOff: false, off: [] });
+  });
+
+  it("A/B: turned off in Konto (A) → blocked at B too, and /mejl for B shows it off", async () => {
+    const { user, other } = await personAtOtherAddress("ab2");
+    expect(await saveMyEmailPrefs(user.db, { allOff: false, off: ["invite"] })).toBe(true);
+    expect(await mayEmail({ email: other }, "invite")).toBe(false);
+    expect(await mayEmail({ email: user.email }, "invite")).toBe(false);
+    expect(await loadEmailPrefs({ email: other })).toEqual({ allOff: false, off: ["invite"] });
+    expect(await mayEmail({ email: other }, "meeting_summary")).toBe(true);
+  });
+
+  it("one-click unsubscribe appends once, keeps the rest, and reaches the login account", async () => {
+    const d = await createTestUser("prefd");
+    await saveMyEmailPrefs(d.db, { allOff: false, off: ["invite"] });
+    expect(await unsubscribeCategory(d.email, "meeting_summary")).toBe(true);
+    expect(await unsubscribeCategory(d.email, "meeting_summary")).toBe(true);
+    const { data: acc } = await d.db.from("email_preferences").select("off_categories");
+    expect(acc).toEqual([{ off_categories: ["invite", "meeting_summary"] }]);
+    const { data: addr } = await adminClient()
+      .from("email_address_preferences")
+      .select("off_categories")
+      .eq("email", d.email.toLowerCase());
+    expect(addr).toEqual([{ off_categories: ["invite", "meeting_summary"] }]);
+    const { error } = await adminClient().rpc("unsubscribe_email_category", { p_email: d.email, p_category: "spam" });
+    expect(error).not.toBeNull();
   });
 });
