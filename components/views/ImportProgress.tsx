@@ -365,7 +365,7 @@ function Row({
   const why = i.state === "skipped" || i.state === "failed" ? reasonMessage(i.reason) : null;
   const stateText = i.state === "reading" && batchRunning ? "Hos Claude" : ROW_STATE[i.state];
   return (
-    <li className="flex items-start gap-3 border-t border-line px-3 py-2 first:border-t-0">
+    <li className="flex flex-wrap items-start gap-x-3 gap-y-1 border-t border-line px-3 py-2 first:border-t-0">
       <span className="mt-0.5 grid size-5 flex-none place-content-center text-ink-3" aria-hidden>
         {i.state === "reading" ? (
           batchRunning ? <IconClock size={16} /> : <Spinner />
@@ -375,12 +375,12 @@ function Row({
           <IconAlert size={16} className="text-red" />
         ) : null}
       </span>
-      <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-[min(12rem,100%)] flex-1 flex-col">
         <span className={cn("text-sm wrap-anywhere", (i.state === "waiting" || i.state === "skipped") && "text-ink-3")}>{i.label}</span>
         {why && <span className="text-xs text-ink-3">{why}</span>}
         {i.state === "done" && i.dateFrom === "file" && <span className="text-xs text-ink-3">Datum från filen — kontrollera det efteråt.</span>}
       </span>
-      <span className="flex flex-none items-center gap-2">
+      <span className="ml-auto flex flex-none items-center gap-2">
         {canRetry && (
           <Button variant="ghost" size="sm" icon={<IconRefresh size={14} />} loading={retrying} onClick={onRetry}>
             Försök igen
