@@ -10,7 +10,7 @@ export type OrgTabId = "moten" | "oversikt" | "installningar";
 /** `?fel=` / `?klart=` codes of Inställningar's forms (lib/ui/messages.ts, app/(app)/orgs/actions.ts). */
 export function isSettingsCode(code: string | null | undefined): boolean {
   if (!code) return false;
-  return ["namn", "sammanfattning", "kalender", "medlem", "rollnamn", "roll-admin"].includes(code) || /^(medlem|admin|org)-/.test(code);
+  return ["namn", "personnamn", "sammanfattning", "kalender", "medlem", "rollnamn", "roll-admin"].includes(code) || /^(medlem|admin|org)-/.test(code);
 }
 
 export function orgTab(input: {

@@ -181,7 +181,7 @@ describe("auth callback", () => {
       expect((await get("next=%2Fjoin%2FAbc-1_x")).headers.get("location")).toBe(LOGIN("kod"));
     });
 
-    it.each(["%2F%2Fevil.com", "https%3A%2F%2Fevil.com", "%2F%5Cevil.com", "%2Fa%3Fb%3D1"])(
+    it.each(["%2F%2Fevil.com", "https%3A%2F%2Fevil.com", "%2F%5Cevil.com", "%2Fa%3Fb%3D%5Cevil"])(
       "drops an unsafe next (%s) from the error redirect",
       async (bad) => {
         grantedScope = "openid email";

@@ -49,7 +49,7 @@ export const demoSummaryEmails: Record<"missed" | "admin" | "short", SummaryEmai
     },
     buttonHref: "https://docs.google.com/document/d/exempel/edit",
     accessNote: null,
-    settingsHref: `${APP}/orgs/${ORG}?flik=installningar#sammanfattning`,
+    settingsHref: `${APP}/orgs/${ORG}/installningar#sammanfattning`,
     unsubscribeHref,
   },
   short: {

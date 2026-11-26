@@ -24,8 +24,8 @@ describe("orgTab", () => {
 
 describe("isSettingsCode", () => {
   it("knows the settings codes", () => {
-    for (const c of ["namn", "sammanfattning", "kalender", "medlem", "org-active", "admin-bort", "rollnamn"]) expect(isSettingsCode(c)).toBe(true);
-    for (const c of ["mote", "avslutat", "personnamn", "mote-active", undefined, null, ""]) expect(isSettingsCode(c)).toBe(false);
+    for (const c of ["namn", "sammanfattning", "kalender", "medlem", "org-active", "admin-bort", "rollnamn", "personnamn"]) expect(isSettingsCode(c)).toBe(true);
+    for (const c of ["mote", "avslutat", "mote-active", undefined, null, ""]) expect(isSettingsCode(c)).toBe(false);
   });
 });
 

@@ -39,7 +39,7 @@ export async function proxy(request: NextRequest) {
     const to = request.nextUrl.clone();
     to.pathname = "/login";
     to.search = "";
-    const next = safeNextPath(request.nextUrl.pathname);
+    const next = safeNextPath(request.nextUrl.pathname + request.nextUrl.search);
     if (next !== "/") to.searchParams.set("next", next);
     const redirect = NextResponse.redirect(to);
     // A failed refresh clears the session cookies: keep that on the redirect.

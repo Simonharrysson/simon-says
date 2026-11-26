@@ -4,6 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useId, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink, Spinner } from "@/components/ui/button";
+import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Check, Field, hintClass } from "@/components/ui/Field";
@@ -201,7 +202,7 @@ export interface BoardStepProps {
   /**
    * The förening page's Inställningar (one board list): per member user id, the account controls
    * (make/remove admin, step down, remove from the förening, leave). A row with an account then
-   * offers those instead of the trash, which would only delete the name.
+   * also offers those (the trash still deletes only the name and role, after a confirm).
    */
   memberControls?: Record<string, ReactNode>;
   /** False: no invite area under the list (the page has its own "Bjud in" panel). Default true. */
@@ -251,7 +252,7 @@ export function BoardStep(p: BoardStepProps) {
                     invite={p.invites?.find((i) => i.email === row.email?.toLowerCase())}
                     me={Boolean(p.myEmail && (row.member?.email ?? "").toLowerCase() === p.myEmail)}
                     onEdit={() => setEditing(key)}
-                    onRemove={row.personId && !(p.memberControls && row.member) ? () => p.onRemove(row.personId!) : undefined}
+                    onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined}
                     controls={row.member ? p.memberControls?.[row.member.userId] : undefined}
                   />
                 )}
@@ -332,6 +333,7 @@ function BoardRowView({
   controls?: ReactNode;
 }) {
   const t = useTranslations("onboarding.board");
+  const orgT = useTranslations("org");
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const display = row.name ?? row.email ?? t("unknown");
@@ -364,7 +366,24 @@ function BoardRowView({
               {t("edit", { name: display })}
             </Button>
           )}
-          {onRemove && (
+          {onRemove && controls ? (
+            // A row with an account (the förening page): deletes the name and role only, asked
+            // first as the people list did; the account goes with "Ta bort" among the controls.
+            <ConfirmAction
+              action={async () => {
+                setError(await onRemove());
+              }}
+              hidden={{}}
+              trigger={t("remove", { name: display })}
+              triggerIcon={<IconTrash size={16} />}
+              triggerIconOnly
+              triggerVariant="danger-ghost"
+              title={orgT("removePersonTitle", { name: display })}
+              description={orgT("removePersonText")}
+              confirmLabel={orgT("remove")}
+              pendingLabel={orgT("removing")}
+            />
+          ) : onRemove && (
             <Button
               variant="danger-ghost"
               size="sm"
