@@ -145,7 +145,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
               {COPY.stadgar.start}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem hint="Nya mötesdokument hamnar där." onSelect={() => void folder.pick()}>
+            <DropdownMenuItem hint="Nya mötesdokument hamnar där och får mappens delning, även transkriptet. Dela mappen bara med styrelsen." onSelect={() => void folder.pick()}>
               {meetingFolder.id ? "Byt mötesmapp" : "Välj mötesmapp"}
             </DropdownMenuItem>
           </>

@@ -427,11 +427,12 @@ page view (a member's drive.file grant is not expected to see a Doc it didn't cr
 | Viewer | Shows |
 |---|---|
 | the starter, or a member Simon Says shared the Doc with | **Dokument** (opens in a new tab) |
-| any other member | **Få åtkomst** (`DocAccessButton` → `POST /api/meetings/<id>/doc-access`, shared through the starter's grant) → **Dokument**; if that fails: "Be <starter> dela dokumentet med dig." |
+| any other member, Doc Simon Says created | **Få åtkomst** (`DocAccessButton` → `POST /api/meetings/<id>/doc-access`, shared through the starter's grant) → **Dokument**; if that fails (or after 3 presses in an hour): "Be <starter> dela dokumentet med dig." After a share: "Delat till <email>". |
+| any other member, the förening's own agenda Doc | "Be <starter> dela dokumentet med dig." (Simon Says never shares a Doc it didn't create) |
 
 The "Ett möte pågår" banner follows the same rule. New members get the earlier Docs Simon Says
-created shared on join (after the redirect, so the first view may still show "Få åtkomst"); an
-agenda Doc (the förening's own) is shared only when a member presses "Få åtkomst". Sharing always
+created shared on join (after the redirect, so the first view may still show "Få åtkomst"). Under the list: "Mötesdokumenten
+delas till <email> – öppna dem i Google med den adressen." Sharing always
 goes through the starter's grant, and only while the starter is still a member. On the live page, "Dokumentet hamnade i din Drive" (warning, dismissable)
 when the förening has a meeting folder but the starter's grant could not add to it.
 

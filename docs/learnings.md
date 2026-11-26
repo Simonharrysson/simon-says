@@ -502,11 +502,12 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - **Access.** Access is what we record, not a Drive call per page view (a member's drive.file token is not
   expected to see a Doc it didn't create or pick; not measured): `meeting_doc_shares` (start, join, "Få
   åtkomst"). Shares always use the **starter's** grant (owner; `writersCanShare=false`), and only while the
-  starter is still a member. On join, `after()` shares up to 60 earlier Docs Simon Says created. Agenda Docs
-  (the förening's own) are shared only on "Få åtkomst"; Google refuses if the starter's account may not share
-  them, and the page then says "Be <starter> dela dokumentet med dig". Backfill in 0030: members who joined
-  before a pre-0030 meeting started (not agenda Docs), unless that start logged `shareFailed > 0`.
+  starter is still a member. On join, `after()` shares up to 60 earlier Docs Simon Says created. Simon Says
+  only shares Docs it created (`meetings.app_created_doc`, null = `not agenda_doc`): the förening's own agenda
+  Doc shows "Be <starter> dela dokumentet med dig" with no Drive call. "Få åtkomst" is capped at 3 per member
+  and meeting per hour (`doc_access_requests`). Shares go to the sign-in email (no separate Google email is
+  stored); the org page says "Mötesdokumenten delas till <email>". Backfill in 0030: members who joined
+  before a pre-0030 meeting started (not agenda Docs), unless that start logged `shareFailed > 0`, and only members with an email.
 - **Not measured with real Google yet (controller):** (1) starter picks the meeting folder, starts, and the Doc
   appears there; (2) the same with a folder another member owns; (3) a shared-drive meeting folder; (4)
-  permissions.create through the starter's refresh token for a member who joined later, and for an agenda Doc
-  the starter only edits. Folders picked before 0030 show "mötesmapp vald" until an admin picks them once more.
+  permissions.create through the starter's refresh token for a member who joined later. Folders picked before 0030 show "mötesmapp vald" until an admin picks them once more.
