@@ -95,8 +95,6 @@ export interface PersonRow {
   voice_consent_by?: string | null;
   /** 0037: ticked for summary_mode 'selected' (only through set_summary_settings). */
   summary_selected?: boolean;
-  /** 0037: unsubscribed from summaries with the e-mail's link (wins in every mode). */
-  summary_unsubscribed_at?: string | null;
   /** 0037: set when the linked member was removed (or deleted their account); no e-mail by the old address. */
   summary_removed_at?: string | null;
 }

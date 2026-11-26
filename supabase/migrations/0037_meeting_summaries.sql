@@ -4,8 +4,10 @@
 --
 -- Strictly additive and backward compatible with the deployed code:
 -- * new columns with defaults (orgs.summary_mode, people.summary_selected,
---   people.summary_unsubscribed_at, meetings.summary_state, meetings.summary_at) that old code
---   never reads;
+--   people.summary_removed_at, meetings.summary_state, meetings.summary_at) that old code never
+--   reads;
+-- * unsubscribing is NOT here: every summary goes through the e-mail gate of 0039 (category
+--   'meeting_summary', may_email; /mejl and the one-click endpoint), so no second opt-out list;
 -- * every meeting that has already ended is stamped as handled ('before'), so the first sweep after
 --   the deploy never mails the backlog;
 -- * a server-only ledger table meeting_summary_sends (one row per meeting and person: at most one
@@ -22,13 +24,10 @@ alter table public.orgs
     check (summary_mode in ('missed', 'all', 'selected', 'off'));
 
 -- ---------------------------------------------------------------------------------------------
--- people: ticked for "Till utvalda personer"; and a one-click unsubscribe (wins in every mode).
--- summary_selected is written only through set_summary_settings(); summary_unsubscribed_at only by
--- the server (the signed unsubscribe link, service role).
+-- people: ticked for "Till utvalda personer" (written only through set_summary_settings()).
 
 alter table public.people
   add column summary_selected boolean not null default false,
-  add column summary_unsubscribed_at timestamptz,
   -- Set when the linked member is removed from the förening (0018 clears member_user_id) or their
   -- account is deleted: the person stays as a name, but gets no summary by the old address until
   -- they are linked again or an admin sets an e-mail for them.
@@ -36,7 +35,7 @@ alter table public.people
 
 -- Members may update people directly (0002: table-wide grant, any member), so the columns a
 -- summary is sent by are guarded here: a client (role authenticated) can neither tick people,
--- unsubscribe someone else, clear the removal mark, nor write an e-mail address. E-mail goes only
+-- clear the removal mark, nor write an e-mail address. E-mail goes only
 -- through the admin functions (set_person_email, add_board_person; security definer), so an
 -- e-mail-only recipient is always one an admin added. The server (service role) can write all.
 create function public.people_guard_summary()
@@ -46,12 +45,11 @@ as $$
 begin
   if current_user in ('authenticated', 'anon') then
     if tg_op = 'INSERT' then
-      if new.summary_selected or new.summary_unsubscribed_at is not null or new.summary_removed_at is not null
+      if new.summary_selected or new.summary_removed_at is not null
         or new.email is not null then
         raise exception 'summary settings and e-mail change only through the admin functions' using errcode = '42501';
       end if;
     elsif new.summary_selected is distinct from old.summary_selected
-      or new.summary_unsubscribed_at is distinct from old.summary_unsubscribed_at
       or new.summary_removed_at is distinct from old.summary_removed_at
       or new.email is distinct from old.email then
       raise exception 'summary settings and e-mail change only through the admin functions' using errcode = '42501';
