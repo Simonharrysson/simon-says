@@ -1,10 +1,12 @@
+import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Skeleton while a logged-in page reads its data. */
 export default function Loading() {
+  const t = useTranslations("common");
   return (
     <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-gutter" aria-busy="true" aria-live="polite">
-      <span className="sr-only">Laddar…</span>
+      <span className="sr-only">{t("loading")}</span>
       <Skeleton className="h-10 w-[min(20rem,70%)]" />
       <Skeleton className="h-4 w-48" />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">

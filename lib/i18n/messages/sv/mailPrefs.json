@@ -1,0 +1,28 @@
+{
+  "metaTitle": "Mejl",
+  "categories": {
+    "meeting_summary": {
+      "label": "Sammanfattning efter möten",
+      "description": "Anteckningarna från ett möte du missade, eller från alla möten om föreningen valt det."
+    },
+    "invite": {
+      "label": "Inbjudningar",
+      "description": "När en förening bjuder in dig till Simon Says, och påminnelser om inbjudan."
+    }
+  },
+  "allOff": "Inga mejl alls",
+  "allOffOn": "Simon Says skickar inga mejl till dig. Valen ovanför finns kvar när du stänger av det här.",
+  "allOffOff": "Stänger av allt ovanför på en gång.",
+  "saved": "Sparat",
+  "saveFailed": "Det gick inte att spara. Försök igen.",
+  "title": "Mejl från Simon Says",
+  "chooseFor": "Välj vilka mejl som ska gå till <strong>{email}</strong>.",
+  "highlight": " Vill du slippa {category}, stäng av den översta.",
+  "appliesAtOnce": "Ändringen gäller direkt.",
+  "accountHint": "Har du ett konto hittar du samma val under Konto. Läs mer i <link>integritetsinformationen</link>.",
+  "invalidTitle": "Länken fungerar inte",
+  "invalidBannerTitle": "Vi känner inte igen länken",
+  "invalidBannerText": "Den kan ha klippts av i mejlet. Öppna länken längst ner i mejlet igen, eller logga in och välj under Konto.",
+  "errorBannerTitle": "Dina val gick inte att hämta just nu",
+  "errorBannerText": "Ladda om sidan om en stund. Valen du gjort tidigare gäller fortfarande."
+}

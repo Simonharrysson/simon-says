@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 import { navLinkClass, SiteHeader } from "@/components/ui/SiteHeader";
@@ -15,17 +16,18 @@ export function PublicShell({
   flush?: boolean;
   noLoginLink?: boolean;
 }) {
+  const t = useTranslations("common");
   return (
     <>
       <SiteHeader
         nav={
           signedIn ? (
             <a className={navLinkClass} href="/orgs">
-              Föreningar
+              {t("orgs")}
             </a>
           ) : noLoginLink ? null : (
             <a className={navLinkClass} href="/login">
-              Logga in
+              {t("signIn")}
             </a>
           )
         }
