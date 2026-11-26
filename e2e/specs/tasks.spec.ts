@@ -16,8 +16,13 @@ test("incomplete tasks → Avsluta asks: complete one inline, leave one → ends
   const { page } = await signedIn(email, org.url);
 
   await page.getByRole("link", { name: "Starta möte", exact: true }).click();
-  await page.getByRole("button", { name: "Skapa nytt dokument" }).click();
-  await page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" }).check();
+  // No agenda in the folder: a new Doc in the förening's format, chosen without a click.
+  await expect(page.locator("p").filter({ hasText: /^Nytt dokument i / })).toBeVisible();
+  // The tick, retried until it sticks: a click before hydration does nothing.
+  const consent = page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" });
+  await expect(async () => {
+    await consent.check({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await page.getByRole("button", { name: "Starta mötet" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toBeVisible({ timeout: 30_000 });
   const meetingId = page.url().split("/").at(-1)!;
