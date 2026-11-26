@@ -20,6 +20,7 @@ vi.mock("@/lib/env", async (importOriginal) => {
 const { ensurePrivatSpace } = await import("@/lib/privat/space");
 const { sendMeetingSummaries, sendPendingSummaries } = await import("@/lib/summaries/send");
 const { saveMyEmailPrefs } = await import("@/lib/email/prefs");
+const { createOrg } = await import("@/lib/db/orgs");
 
 const answer = (over: Partial<PrivatSummaryAnswer> = {}): PrivatSummaryAnswer => ({
   summary: "Vi gick igenom labb 2.",
@@ -208,5 +209,77 @@ describe.skipIf(!hasLocalSupabase)("Privat summary (0045)", () => {
     const { data } = await db().from("private_summaries").select("mailed").eq("meeting_id", meetingId).single();
     expect(data?.mailed).toBe(false);
     await saveMyEmailPrefs(user.db, { allOff: false, off: [] });
+  });
+
+  it("a refused e-mail is retried by the cron (the claim is freed), at most 3 sends, then failed", async () => {
+    const meetingId = await doneMeeting(1.5);
+    const claude = fakeClaude(() => answer());
+    let tries = 0;
+    const refusing = { send: async () => (tries++, false) };
+    const deps = { mailer: refusing, now: () => new Date(), summarize: claude.summarize };
+    expect((await sendMeetingSummaries(meetingId, deps))?.state).toBe("sending");
+    const row = async () => (await db().from("private_summaries").select("mail_claimed_at, mail_attempts, mailed").eq("meeting_id", meetingId).single()).data;
+    expect(await row()).toEqual({ mail_claimed_at: null, mail_attempts: 1, mailed: null });
+    // The cron's retry works once the provider takes it: one call to Claude in all.
+    const mail = fakeMailer();
+    await sendPendingSummaries({ ...deps, mailer: mail.mailer }, { orgId: space });
+    expect(mail.sent).toHaveLength(1);
+    expect((await row())?.mailed).toBe(true);
+    expect(claude.calls).toHaveLength(1);
+
+    // Refused every time: three sends, then failed.
+    const other = await doneMeeting(1.2);
+    expect((await sendMeetingSummaries(other, deps))?.state).toBe("sending");
+    await sendPendingSummaries(deps, { orgId: space });
+    await sendPendingSummaries(deps, { orgId: space });
+    await sendPendingSummaries(deps, { orgId: space });
+    const { data } = await db().from("meetings").select("summary_state").eq("id", other).single();
+    expect(data?.summary_state).toBe("failed");
+    expect(tries).toBe(4); // 1 for the first meeting, 3 for this one
+  });
+
+  it("a spend stop inside the call is not one of the 3 attempts", async () => {
+    const meetingId = await doneMeeting(1.1);
+    const spend: SummarizeFn = async () => ({ ok: false, reason: "spend", detail: "cap", usage: null });
+    expect((await sendMeetingSummaries(meetingId, { mailer: fakeMailer().mailer, now: () => new Date(), summarize: spend }))?.state).toBe("sending");
+    const { data } = await db().from("meetings").select("summary_state, summary_attempts, summary_lease_until").eq("id", meetingId).single();
+    expect(data).toEqual({ summary_state: "sending", summary_attempts: 0, summary_lease_until: null });
+    await sendPendingSummaries({ mailer: fakeMailer().mailer, now: () => new Date(), summarize: fakeClaude(() => answer()).summarize }, { orgId: space });
+  });
+
+  it("Sedan sist only looks at recordings started before this one", async () => {
+    const { data: c } = await user.db.from("contexts").insert({ org_id: space, name: "Ordning" }).select("id").single();
+    const insert = async (minutesAgo: number) =>
+      (
+        await db()
+          .from("meetings")
+          .insert({ org_id: space, started_by: user.id, status: "done", context_id: c!.id, started_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(), ended_at: new Date().toISOString() })
+          .select("id")
+          .single()
+      ).data!.id as string;
+    const earlier = await insert(30);
+    const late = await insert(10);
+    const later = await insert(5);
+    for (const [mid, text] of [
+      [earlier, "Från förr"],
+      [later, "Från sen"],
+    ]) {
+      await db().from("note_items").insert({ meeting_id: mid, id: "n1", section: "decision", text: "x" });
+      await db().from("private_summaries").insert({ meeting_id: mid, context_id: c!.id, summary: "s", decisions: [`Beslut ${text}`], mail_claimed_at: new Date().toISOString() });
+      await db().from("context_tasks").insert({ context_id: c!.id, meeting_id: mid, text });
+      await db().from("meetings").update({ summary_state: "sent" }).eq("id", mid);
+    }
+    await db().from("note_items").insert({ meeting_id: late, id: "n1", section: "decision", text: "x" });
+    const claude = fakeClaude(() => answer());
+    await sendMeetingSummaries(late, { mailer: fakeMailer().mailer, now: () => new Date(), summarize: claude.summarize });
+    expect(claude.calls[0].openTasks.map((t) => t.text)).toEqual(["Från förr"]);
+    expect(claude.calls[0].recentDecisions).toEqual(["Beslut Från förr"]);
+  });
+
+  it("contexts only exist in a Privat space", async () => {
+    const r = await createOrg(user.db, "En förening");
+    if (!r.ok) throw new Error("org");
+    const { error } = await user.db.from("contexts").insert({ org_id: r.id, name: "Nej" });
+    expect(error).not.toBeNull();
   });
 });

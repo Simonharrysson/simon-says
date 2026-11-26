@@ -185,8 +185,12 @@ grant update (name, last_used_at) on table public.contexts to authenticated;
 
 create policy contexts_select on public.contexts for select to authenticated
   using (public.is_org_member(org_id));
+-- Only in a Privat space: a förening has no contexts.
 create policy contexts_insert on public.contexts for insert to authenticated
-  with check (public.is_org_member(org_id));
+  with check (
+    public.is_org_member(org_id)
+    and exists (select 1 from public.orgs o where o.id = contexts.org_id and o.kind = 'privat')
+  );
 create policy contexts_update on public.contexts for update to authenticated
   using (public.is_org_member(org_id)) with check (public.is_org_member(org_id));
 
@@ -228,6 +232,8 @@ create table public.private_summaries (
   locale text not null default 'sv' check (locale in ('sv', 'en')),
   created_at timestamptz not null default now(),
   mail_claimed_at timestamptz,
+  -- Sends tried; a definite non-send frees the claim for the cron, at most 3 times.
+  mail_attempts int not null default 0,
   mailed boolean
 );
 create index private_summaries_context_idx on public.private_summaries (context_id, created_at desc);
