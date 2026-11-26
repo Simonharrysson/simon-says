@@ -229,6 +229,22 @@ describe("formatLine", () => {
     expect(formatLine({ id: "n4", section: "note", text: "Budgeten håller" }, ctx)).toBe("Budgeten håller.");
   });
 
+  it("concrete tasks (0047): placeholders for what is missing, Klart när when known, overdue on carried tasks", () => {
+    const t: NotesItem = { id: "n1", section: "action", text: "Boka lokal", owner: "Anna Berg" };
+    expect(formatLine({ ...t, placeholders: true }, ctx)).toBe("Kassör: Boka lokal (deadline?) – (klart när?).");
+    expect(formatLine({ ...t, owner: undefined, placeholders: true }, ctx)).toBe("(vem?): Boka lokal (deadline?) – (klart när?).");
+    expect(formatLine({ ...t, due: "fredag", doneWhen: "kontraktet är påskrivet.", placeholders: true }, ctx)).toBe(
+      "Kassör: Boka lokal (fredag) – klart när: kontraktet är påskrivet.",
+    );
+    expect(formatLine({ ...t, doneWhen: "kontraktet är påskrivet" }, ctx)).toBe("Kassör: Boka lokal – klart när: kontraktet är påskrivet.");
+    // Done or carried: never asks.
+    expect(formatLine({ ...t, done: true, placeholders: true }, ctx)).toBe("Kassör: Boka lokal. ✓ klart");
+    const carried: NotesItem = { ...t, carried: true, due: "fredag", dueDate: "2026-11-27", placeholders: true };
+    expect(formatLine(carried, { ...ctx, today: "2026-12-01" })).toBe("Kassör: Boka lokal (fredag, försenad).");
+    expect(formatLine(carried, { ...ctx, today: "2026-11-27" })).toBe("Kassör: Boka lokal (fredag).");
+    expect(formatLine(carried, ctx)).toBe("Kassör: Boka lokal (fredag).");
+  });
+
   it("writes info cells and attendees as is (F1: no final period)", () => {
     expect(formatLine({ id: "info-tid", section: "note", text: "18:05–19:10", anchor: "info.tid" }, ctx)).toBe("18:05–19:10");
     expect(formatLine({ id: "info-narvarande", section: "attendees", text: "Anna Berg, Erik Lund", anchor: "info.narvarande" }, ctx)).toBe("Anna Berg, Erik Lund");
@@ -371,7 +387,7 @@ describe("planFormatRender under agenda items", () => {
     const p = plan(doc, rows, [old, note("n2", "ag-6", "Ny punkt"), note("n3", "ag-9", "Okänt ankare")]);
     expect(p.requests).toEqual([]);
     expect(p.applied).toEqual(new Set(["n1"]));
-    expect(renderedRows("m1", rows, [old], p)).toEqual([{ ...rows[0], kind: "note", done: false }]);
+    expect(renderedRows("m1", rows, [old], p)).toEqual([{ ...rows[0], kind: "note", done: false, done_when: null }]);
   });
 
   it("newAnchors → createNamedRange ss-m1-<key>, and items under them are placed in the same batch", () => {

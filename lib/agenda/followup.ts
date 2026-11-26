@@ -28,7 +28,7 @@ export function openTasks(rows: NoteItemRow[]): NoteItemRow[] {
         !r.deleted_by_human &&
         !r.id.endsWith("-t"),
     )
-    .map((r) => (r.locked ? { ...r, owner: null, due: null } : r))
+    .map((r) => (r.locked ? { ...r, owner: null, due: null, done_when: null, due_date: null } : r))
     .sort(
       (a, b) => cmp(a.owner ?? "", b.owner ?? "") || a.position - b.position,
     );
@@ -62,6 +62,8 @@ export function carriedItems(
     text: row.text,
     owner: row.owner,
     due: row.due,
+    done_when: row.done_when ?? null,
+    due_date: row.due_date ?? null,
     owner_person_id: person?.id ?? null,
     locked: false,
     deleted_by_human: false,

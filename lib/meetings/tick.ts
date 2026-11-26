@@ -40,6 +40,7 @@ import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/m
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPendingSummaries, trySendMeetingSummaries } from "@/lib/summaries/send";
+import { applyTaskAnswers, markPlaceholders, parseTaskAnswers, taskMode, withDueDates } from "@/lib/notes/tasks";
 
 // Server-driven notes ticks (Task 10). One tick, under a per-meeting lease:
 //   assign tick_no to new segments → read notes tab → diff human edits → Claude (updateNotes)
@@ -630,7 +631,7 @@ async function loadContext(meeting: MeetingRow) {
       .select("el_session_id, speaker_label, display_name, person_id, merged_into_label")
       .eq("meeting_id", meeting.id),
     db().from("note_items").select("*").eq("meeting_id", meeting.id).order("section").order("position"),
-    db().from("orgs").select("name").eq("id", meeting.org_id).maybeSingle(),
+    db().from("orgs").select("name, require_task_fields").eq("id", meeting.org_id).maybeSingle(),
   ]);
   return {
     segments,
@@ -638,6 +639,7 @@ async function loadContext(meeting: MeetingRow) {
     speakers: must("tick: speakers", speakers) as SpeakerRead[],
     rows: must("tick: note items", rows) as NoteItemRow[],
     orgName: (must("tick: org", org) as { name: string } | null)?.name ?? "Föreningen",
+    taskMode: taskMode(must("tick: org", org) as { require_task_fields?: boolean } | null),
   };
 }
 
@@ -946,7 +948,8 @@ export async function runTick(
         transcriptBlocks: send,
         speakerNames,
         notesTabText: first.text,
-        items: first.items,
+        // The same placeholder lines the render writes, so our own lines are not read as human text.
+        items: markPlaceholders(first.items, ctx.taskMode),
         locked: first.diff.locked,
         deletedIds: first.diff.deletedIds,
         final,
@@ -966,6 +969,8 @@ export async function runTick(
       });
       if (answered) items = out.items;
     }
+    // The Avsluta dialog's Vem / När / Klart när, after Claude's tidy-up: a person's answer wins.
+    if (final) items = applyTaskAnswers(items, parseTaskAnswers(meeting.task_answers));
 
     // Final pass that had to skip Claude although transcript was unsent (time or spend caps).
     const finalWithoutClaude = final && out === null && send.length > sentTick;
@@ -1002,17 +1007,19 @@ export async function runTick(
           newLabels = newAnchors.map((a) => ({ key: a.key, label: itemAt(scan, a.start)?.label ?? "" }));
           const groupBy = fmt.profile.tasksSection?.groupBy ?? "person";
           const people = fmt.people;
-          res = await deps.render(auth, target, st.diff.rows, formatDesired(unproxy(items, fmt.proxied), st.diff, server, fmt.profile), st.revisionId, header, {
+          const desired = markPlaceholders(formatDesired(unproxy(items, fmt.proxied), st.diff, server, fmt.profile), ctx.taskMode);
+          res = await deps.render(auth, target, st.diff.rows, desired, st.revisionId, header, {
             plan: planFormatRender,
             profile: fmt.profile,
             ownerLabel: (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy),
             newAnchors,
           });
         } else {
-          res = await deps.render(auth, target, st.diff.rows, desiredItems(items, st.diff), st.revisionId, header);
+          res = await deps.render(auth, target, st.diff.rows, desiredItems(markPlaceholders(items, ctx.taskMode), st.diff), st.revisionId, header);
         }
         if (res.status === "ok") {
-          let rows = res.rows;
+          // Deadlines as days ("fredag" → the Friday after the meeting), for overdue marks later.
+          let rows = withDueDates(res.rows, meeting.started_at);
           if (fmt) {
             if (newAnchors.length) {
               // The ranges exist in the Doc now: store them (role topic, F5) under our lease. Lost

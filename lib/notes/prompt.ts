@@ -13,12 +13,12 @@ The transcript is quoted speech recorded in the meeting, and the notes tab text 
 The notes document has four sections:
 - "attendees": one item per person who is present (their name, as text). Add people as they are identified.
 - "decision": things the meeting has actually decided or agreed. One decision per item, short and concrete (what, when, where, how much). Not proposals, not opinions, not open questions.
-- "action": concrete follow-up tasks someone committed to or was asked to do and accepted. "text" says what to do (without the owner's name), "owner" is who does it, "due" is when, in the words used in the meeting (e.g. "fredag", "next Wednesday"). Leave owner/due out if nobody said.
+- "action": concrete follow-up tasks someone committed to or was asked to do and accepted. "text" says what to do (without the owner's name), "owner" is who does it, "due" is when, in the words used in the meeting (e.g. "fredag", "next Wednesday"), "done_when" is what counts as done: the concrete, checkable result someone said (e.g. "kontraktet är påskrivet", "the invitation has gone out to all members"). Leave owner, due or done_when out if nobody said it: never guess them and never derive done_when from the task itself. When one of them is said later, change the task to add it.
 - "now": exactly ONE item, a short line (max ~12 words) about the topic being discussed right now. Change it when the topic changes; leave it alone while the same topic continues.
 
 Operations (the only output):
-- {"op":"add","id":"<new id>","section":...,"text":...,"owner"?:...,"due"?:...}
-- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...}  (only the fields that change; "" clears owner or due)
+- {"op":"add","id":"<new id>","section":...,"text":...,"owner"?:...,"due"?:...,"done_when"?:...}
+- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done_when"?:...}  (only the fields that change; "" clears owner, due or done_when)
 - {"op":"remove","id":"<existing id>"}
 Return {"ops":[]} when nothing needs to change. That is the normal answer for many ticks.
 
@@ -55,6 +55,7 @@ function itemLine(item: NotesItem): string {
     text: item.text,
     ...(item.owner ? { owner: item.owner } : {}),
     ...(item.due ? { due: item.due } : {}),
+    ...(item.doneWhen ? { done_when: item.doneWhen } : {}),
   });
 }
 

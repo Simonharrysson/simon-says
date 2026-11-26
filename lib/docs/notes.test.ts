@@ -746,3 +746,62 @@ describe("planRender", () => {
     expect(planRender(meeting, tab, rows(), desiredFrom(rows())).requests).toEqual([]);
   });
 });
+
+describe("concrete tasks: placeholders (0047)", () => {
+  it("formatItem writes the missing fields visibly only when asked, and Klart när when known", () => {
+    expect(formatItem({ section: "action", text: "boka lokal", owner: "Kassör", placeholders: true })).toBe(
+      "☐ Kassör: boka lokal (deadline?) – (klart när?)",
+    );
+    expect(formatItem({ section: "action", text: "boka lokal", placeholders: true })).toBe("☐ (vem?): boka lokal (deadline?) – (klart när?)");
+    expect(formatItem({ section: "action", text: "boka lokal", owner: "Kassör", due: "fre", doneWhen: "kontraktet är påskrivet", placeholders: true })).toBe(
+      "☐ Kassör: boka lokal (fre) – klart när: kontraktet är påskrivet",
+    );
+    expect(formatItem({ section: "action", text: "boka lokal", doneWhen: "bokat" })).toBe("☐ boka lokal – klart när: bokat");
+    // Not asked: exactly the line before concrete tasks.
+    expect(formatItem({ section: "action", text: "boka lokal", owner: "Simon", due: "fre" })).toBe("☐ Simon: boka lokal (fre)");
+  });
+
+  const placeholderRows = (): NoteItemRow[] => [
+    row("n3", "action", "budget", {
+      owner: "Anna",
+      last_rendered_text: formatItem({ section: "action", text: "budget", owner: "Anna", placeholders: true }),
+    }),
+  ];
+  const placeholderTab = (line: string) =>
+    [H, SEC("attendees", "Närvarande"), SEC("decision", "Beslut"), SEC("action", "Att göra"), R("n3", line), SEC("now", "Pågår nu")].join("\n");
+
+  it("a field said later replaces its placeholder in place (one replace of our own range)", async () => {
+    const { requests } = await tick(
+      placeholderTab("☐ Anna: budget (deadline?) – (klart när?)"),
+      (rs) => desiredFrom(rs).map((d) => ({ ...d, due: "fredag", doneWhen: "budgeten är mejlad till styrelsen", placeholders: true })),
+      undefined,
+      { rows: placeholderRows() },
+    );
+    expect(requests).toEqual([
+      {
+        replaceNamedRangeContent: {
+          namedRangeName: "ss-m1-n3",
+          text: "☐ Anna: budget (fredag) – klart när: budgeten är mejlad till styrelsen",
+          tabsCriteria: { tabIds: [TAB] },
+        },
+      },
+    ]);
+  });
+
+  it("a person who filled a placeholder in the Doc wins: the line is theirs, never rewritten", async () => {
+    const { result } = await tick(
+      placeholderTab("☐ Anna: budget (fredag) – (klart när?)"),
+      (rs) => desiredFrom(rs).map((d) => ({ ...d, due: "måndag", doneWhen: "x", placeholders: true })),
+      undefined,
+      { rows: placeholderRows() },
+    );
+    expect(result).toBe("ok");
+    expect(api.batchUpdate).not.toHaveBeenCalled();
+  });
+
+  it("renderedRows stores done_when and the placeholder line as last_rendered_text", () => {
+    const rs = placeholderRows();
+    const out = renderedRows(M, rs, [{ ...toNotesItem(rs[0]), doneWhen: "klart", placeholders: true }], { applied: new Set(["n3"]), removed: new Set() });
+    expect(out[0]).toMatchObject({ done_when: "klart", last_rendered_text: "☐ Anna: budget (deadline?) – klart när: klart" });
+  });
+});

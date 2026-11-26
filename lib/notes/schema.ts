@@ -12,6 +12,8 @@ export interface NotesItem {
   text: string;
   owner?: string;
   due?: string;
+  /** "Klart när": the measurable result that makes the task done (0047). Set only when said. */
+  doneWhen?: string;
   // Format layout (meeting formats A6). Set only when present, so v1 items keep their shape.
   /** Where the item lives: `ag-<n>`, `tasks`, `notes`, `info.<slug>`. */
   anchor?: string;
@@ -21,6 +23,10 @@ export interface NotesItem {
   copyOf?: string;
   /** Carried from the previous meeting's open tasks (Från förra veckan). */
   carried?: boolean;
+  /** The deadline as a day (YYYY-MM-DD), from the row's due_date (0047); marks a carried task overdue. */
+  dueDate?: string;
+  /** Render missing Vem/När/Klart när as visible placeholders (the space requires them, lib/notes/tasks.ts). Never stored. */
+  placeholders?: boolean;
 }
 
 export type NotesOp =
@@ -31,6 +37,7 @@ export type NotesOp =
       text?: string;
       owner?: string;
       due?: string;
+      doneWhen?: string;
       /** Agenda mode: a task reported done (Från förra veckan). Not a rewrite. */
       done?: boolean;
       /** Agenda mode: present only so validation can reject a move; an anchor change is always dropped. */
@@ -52,6 +59,7 @@ export const RawOpSchema = z.object({
   text: z.string().optional(),
   owner: z.string().optional(),
   due: z.string().optional(),
+  done_when: z.string().optional(),
 });
 export type RawOp = z.infer<typeof RawOpSchema>;
 
@@ -72,6 +80,7 @@ export const OPS_JSON_SCHEMA = {
           text: { type: "string" },
           owner: { type: "string" },
           due: { type: "string" },
+          done_when: { type: "string" },
         },
         required: ["op", "id"],
         additionalProperties: false,
@@ -82,7 +91,7 @@ export const OPS_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-/** RawOp → NotesOp, or null when a field the op needs is missing. Empty owner/due on `change` clears them. */
+/** RawOp → NotesOp, or null when a field the op needs is missing. Empty owner/due/done_when on `change` clears them. */
 export function toNotesOp(raw: RawOp): NotesOp | null {
   const id = raw.id.trim();
   if (raw.op === "remove") return { op: "remove", id };
@@ -97,6 +106,7 @@ export function toNotesOp(raw: RawOp): NotesOp | null {
         text,
         ...(raw.owner?.trim() ? { owner: raw.owner.trim() } : {}),
         ...(raw.due?.trim() ? { due: raw.due.trim() } : {}),
+        ...(raw.done_when?.trim() ? { doneWhen: raw.done_when.trim() } : {}),
       },
     };
   }
@@ -107,7 +117,8 @@ export function toNotesOp(raw: RawOp): NotesOp | null {
   }
   if (raw.owner !== undefined) change.owner = raw.owner.trim();
   if (raw.due !== undefined) change.due = raw.due.trim();
-  if (change.text === undefined && change.owner === undefined && change.due === undefined) return null;
+  if (raw.done_when !== undefined) change.doneWhen = raw.done_when.trim();
+  if ([change.text, change.owner, change.due, change.doneWhen].every((v) => v === undefined)) return null;
   return change;
 }
 
@@ -125,6 +136,7 @@ export const RawAgendaOpSchema = z.object({
   text: z.string().optional(),
   owner: z.string().optional(),
   due: z.string().optional(),
+  done_when: z.string().optional(),
   done: z.boolean().optional(),
 });
 export type RawAgendaOp = z.infer<typeof RawAgendaOpSchema>;
@@ -147,6 +159,7 @@ export const AGENDA_OPS_JSON_SCHEMA = {
           text: { type: "string" },
           owner: { type: "string" },
           due: { type: "string" },
+          done_when: { type: "string" },
           done: { type: "boolean" },
         },
         required: ["op", "id"],
@@ -162,7 +175,7 @@ export const AGENDA_OPS_JSON_SCHEMA = {
  * RawAgendaOp → NotesOp, or null when a field the op needs is missing. `add` needs kind and text
  * (kind → section via `sectionOfKind`; the anchor is copied onto the item and checked by
  * `applyOps`). `change` keeps `done` and `anchor` so `applyOps` can accept a done report and reject
- * a move. Empty owner/due on `change` clears them.
+ * a move. Empty owner/due/done_when on `change` clears them.
  */
 export function toAgendaOp(raw: RawAgendaOp): NotesOp | null {
   const id = raw.id.trim();
@@ -179,6 +192,7 @@ export function toAgendaOp(raw: RawAgendaOp): NotesOp | null {
         text,
         ...(raw.owner?.trim() ? { owner: raw.owner.trim() } : {}),
         ...(raw.due?.trim() ? { due: raw.due.trim() } : {}),
+        ...(raw.done_when?.trim() ? { doneWhen: raw.done_when.trim() } : {}),
         ...(anchor ? { anchor } : {}),
       },
     };
@@ -190,8 +204,9 @@ export function toAgendaOp(raw: RawAgendaOp): NotesOp | null {
   }
   if (raw.owner !== undefined) change.owner = raw.owner.trim();
   if (raw.due !== undefined) change.due = raw.due.trim();
+  if (raw.done_when !== undefined) change.doneWhen = raw.done_when.trim();
   if (raw.done !== undefined) change.done = raw.done;
   if (anchor) change.anchor = anchor;
-  const changes = [change.text, change.owner, change.due, change.done, change.anchor].some((v) => v !== undefined);
+  const changes = [change.text, change.owner, change.due, change.doneWhen, change.done, change.anchor].some((v) => v !== undefined);
   return changes ? change : null;
 }
