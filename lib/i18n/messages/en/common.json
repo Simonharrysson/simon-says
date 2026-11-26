@@ -37,5 +37,9 @@
     "folderTitle": "Choose the meeting folder",
     "folderSaveFailed": "The meeting folder couldn't be saved. Try again.",
     "folderSaved": "The meeting folder is saved."
-  }
+  },
+  "metaPrepare": "Prepare meeting",
+  "metaNewMeeting": "New meeting",
+  "metaMeeting": "Meeting",
+  "metaKomIgang": "Get started"
 }

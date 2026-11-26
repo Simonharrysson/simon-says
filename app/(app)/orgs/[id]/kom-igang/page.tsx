@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { Onboarding } from "@/components/onboarding/Onboarding";
 import { isUuid } from "@/lib/db/ids";
@@ -18,7 +19,9 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Kom igång", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("common"))("metaKomIgang"), robots: { index: false, follow: false } };
+}
 
 const EMPTY: OnboardingState = { done: [], skipped: [], completedAt: null, dismissedAt: null };
 

@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import type { AgendaFormatOption } from "@/components/live/AgendaStep";
 import { LiveMeetingController } from "@/components/live/LiveMeetingController";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import { getEnv, pickerEnabled } from "@/lib/env";
-import { FORMAT_NAMES, formatLabel } from "@/lib/formats/standard";
+import { formatLabel, formatName } from "@/lib/formats/standard";
+import type { Locale } from "@/lib/i18n/config";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Nytt möte", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("common"))("metaNewMeeting"), robots: { index: false, follow: false } };
+}
 
 /**
  * Start a meeting: the consent step of the live page. Start asks for the mic, then creates the
@@ -26,16 +30,17 @@ const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "arsmote", "enkel"] as
 function startFormats(
   def: Awaited<ReturnType<typeof orgDefaultFormat>>,
   rows: Awaited<ReturnType<typeof listOrgFormats>>,
+  locale: Locale,
 ): AgendaFormatOption[] {
   const defRow = rows.find((r) => r.id === def.id);
-  const defName = defRow?.custom ? formatLabel(defRow) : FORMAT_NAMES[def.profile.kind];
+  const defName = defRow?.custom ? formatLabel(defRow, locale) : formatName(def.profile.kind, locale);
   const out: AgendaFormatOption[] = [{ id: def.id, kind: def.profile.kind, name: defName, isDefault: true }];
   for (const kind of STANDARD_KINDS) {
     // A custom default (e.g. Styrelseprotokoll with stadgar) still leaves the bare standard choosable.
-    if (kind !== def.profile.kind || defRow?.custom) out.push({ id: null, kind, name: FORMAT_NAMES[kind], isDefault: false });
+    if (kind !== def.profile.kind || defRow?.custom) out.push({ id: null, kind, name: formatName(kind, locale), isDefault: false });
   }
   for (const r of rows) {
-    if (r.custom && r.id !== def.id) out.push({ id: r.id, kind: r.kind, name: formatLabel(r), isDefault: false });
+    if (r.custom && r.id !== def.id) out.push({ id: r.id, kind: r.kind, name: formatLabel(r, locale), isDefault: false });
   }
   return out;
 }
@@ -71,7 +76,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
         orgHref={`/orgs/${org.id}`}
         shareTranscript={org.share_transcript}
         meeting={null}
-        formats={startFormats(def, rows)}
+        formats={startFormats(def, rows, await getLocale())}
         pickerEnabled={pickerEnabled(getEnv())}
       />
     </main>
