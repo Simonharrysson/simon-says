@@ -196,7 +196,7 @@ describe("feature: transcription (the paid fixture owner-styles, replayed for $0
     expect(calls[0].text).toContain("Leo Martin");
     const s = score(r.items, expected, ticksOf(r));
     expect(s.recall.filter((l) => !l.startsWith("FOUND"))).toEqual([]);
-    expect([s.found, s.total, s.placement, s.roles]).toEqual([9, 9, { ok: 8, total: 8 }, { ok: 6, total: 6 }]);
+    expect([s.found, s.total, s.placement, s.roles]).toEqual([9, 9, { ok: 7, total: 7 }, { ok: 6, total: 6 }]);
     expect(scorePasses(s)).toBe(true);
   });
 });

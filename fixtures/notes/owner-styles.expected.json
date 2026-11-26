@@ -75,7 +75,8 @@
     "'Ordföranden, det vill säga jag' is Karin Dahl's task, shown as 'Ordförande'.",
     "Per Olsson is a neighbour, not in the people list: the task is his by name, with no role.",
     "Leo speaks English: his Instagram task is his (PR-ansvarig), the notes stay in tidy sentences.",
-    "Raising the membership fee is asked and rejected: the decision is that it stays at 300 kr."
+    "Raising the membership fee is asked and rejected: the decision is that it stays at 300 kr.",
+    "The budget task is asked for just before 'Då ekonomin': it may sit under Sommarpaddlingen or Ekonomi, so it has no expected anchor."
   ],
   "must_not": [
     {
@@ -102,6 +103,17 @@
           "höj*",
           "raise*",
           "higher"
+        ]
+      ],
+      "unless": [
+        [
+          "inte",
+          "stannar",
+          "kvar",
+          "oförändr*",
+          "behålls",
+          "samma",
+          "not"
         ]
       ]
     }
@@ -201,7 +213,6 @@
       "key": "A5",
       "owner": "Johan Ek",
       "ownerLabel": "Kassör",
-      "anchor": "ag-3",
       "text": "Ta fram en budget för paddlingen",
       "due": "till nästa möte",
       "match": [
