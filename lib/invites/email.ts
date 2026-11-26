@@ -30,10 +30,36 @@ export function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+/**
+ * Does a name look like a link or an address (`bank-login.se`, `www.…`, `https://…`, `a@b`)?
+ * Mail clients turn those into links, and a mail from our domain must not carry someone else's
+ * link: invites are refused until the förening (or the admin) is renamed.
+ */
+export function looksLikeLink(s: string): boolean {
+  const t = oneLine(s);
+  return /:\/\/|www\.|@/i.test(t) || /[\p{L}\p{N}_-]\.[a-z]{2,}/iu.test(t);
+}
+
+/** Which name stops the invite, if any. */
+export function linkLikeName(inviterName: string, orgName: string): "org" | "inviter" | null {
+  if (looksLikeLink(orgName)) return "org";
+  if (looksLikeLink(inviterName)) return "inviter";
+  return null;
+}
+
+/** Defence in depth: a zero-width non-joiner after every dot, so no name can auto-link. */
+export function defang(s: string): string {
+  return s.replace(/\.(?!\u200c)/g, ".\u200c");
+}
+
+/** Subjects are cut at this many characters (with "…"). */
+export const SUBJECT_MAX = 80;
+
 export const INVITE_PREHEADER = "Gå med så kan du starta möten och läsa föreningens mötesanteckningar.";
 
 export function inviteSubject(inviterName: string, orgName: string): string {
-  return `${oneLine(inviterName)} bjuder in dig till ${oneLine(orgName)} på Simon Says`;
+  const subject = `${defang(oneLine(inviterName))} bjuder in dig till ${defang(oneLine(orgName))} på Simon Says`;
+  return subject.length > SUBJECT_MAX ? `${subject.slice(0, SUBJECT_MAX - 1).trimEnd()}…` : subject;
 }
 
 /** The link as shown under the button: without the scheme. */
@@ -43,8 +69,8 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-s
 const SPACER = "&#847;&zwnj;&nbsp;".repeat(24);
 
 export function inviteEmail(input: InviteEmailInput): InviteEmail {
-  const inviter = oneLine(input.inviterName);
-  const org = oneLine(input.orgName);
+  const inviter = defang(oneLine(input.inviterName));
+  const org = defang(oneLine(input.orgName));
   const url = oneLine(input.inviteUrl);
   if (!/^https?:\/\//.test(url)) throw new Error("inviteEmail: the invite URL must be http(s)");
   const subject = inviteSubject(inviter, org);
