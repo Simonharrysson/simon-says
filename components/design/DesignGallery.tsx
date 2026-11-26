@@ -30,11 +30,12 @@ import { OrgsView } from "@/components/views/OrgsView";
 import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import type { DraftItem, MeetingType } from "@/lib/prepare/types";
-import { OverviewView, type GoalsPhase } from "@/components/views/OverviewView";
+import { OverviewView, type GoalsPhase, type OverviewGoal } from "@/components/views/OverviewView";
+import type { Overview } from "@/lib/dashboard/overview";
 import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
-import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
+import { demoGoals, demoOverview, demoOverviewHistoryOnly, demoOverviewWithHistory, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
 import { designViews, type DesignGroup } from "./registry";
 import { onboardingRender } from "./onboarding-demo";
@@ -128,7 +129,7 @@ const demoImportFiles = {
 };
 
 /** The förening page on its Översikt tab (fictional data, overview-demo.ts). */
-function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
+function OverviewDemo({ goalsPhase, overview = demoOverview, goals = demoGoals, historyCount }: { goalsPhase?: GoalsPhase; overview?: Overview; goals?: OverviewGoal[]; historyCount?: number }) {
   return (
     <AppChrome>
       <OrgDetailView
@@ -143,7 +144,7 @@ function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
         tabs={{
           active: "oversikt",
           href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin"),
-          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, email: "kassor@rutan.example", meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
+          overview: <OverviewView orgId={ORG_ID} isAdmin overview={overview} goals={goals} historyCount={historyCount} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, email: "kassor@rutan.example", meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
         }}
         actions={actions}
       />
@@ -534,6 +535,8 @@ const render: Record<string, () => ReactNode> = {
   "org-overview-limit": () => (
     <OverviewDemo goalsPhase={{ phase: "error", tone: "warning", message: "Du har bett om förslag tre gånger i dag. Försök igen i morgon." }} />
   ),
+  "org-overview-history": () => <OverviewDemo overview={demoOverviewWithHistory} historyCount={48} />,
+  "org-overview-history-only": () => <OverviewDemo overview={demoOverviewHistoryOnly} goals={[]} historyCount={48} />,
   "org-overview-empty": () => (
     <AppChrome>
       <OrgDetailView

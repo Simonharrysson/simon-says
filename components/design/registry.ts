@@ -63,6 +63,8 @@ export const designViews: DesignView[] = [
   { id: "org-overview-import-batch-done", title: "Förening · läs in protokoll, klart med förslag", group: "Sidor" },
   { id: "org-overview-limit", title: "Förening · översikt, tre förslag i dag", group: "Sidor" },
   { id: "org-overview-empty", title: "Förening · översikt, ny medlem, tomt", group: "Sidor" },
+  { id: "org-overview-history", title: "Förening · översikt, med importerade protokoll", group: "Sidor" },
+  { id: "org-overview-history-only", title: "Förening · översikt, bara importerade protokoll", group: "Sidor" },
   { id: "join-out", title: "Inbjudan · utloggad", group: "Sidor" },
   { id: "join-ready", title: "Inbjudan · gå med", group: "Sidor" },
   { id: "join-invalid", title: "Inbjudan · ogiltig länk", group: "Sidor" },

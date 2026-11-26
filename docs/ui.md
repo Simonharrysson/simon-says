@@ -190,7 +190,7 @@ buttons keep `title` + a visually hidden label instead of a tooltip.
 **Förening tabs.** The förening page has two tabs, "Möten" and "Översikt" (`?flik=oversikt`): server
 links with `aria-current` (`OrgDetailView` `tabs` prop). Översikt is `OverviewView` (goals with
 propose → approve, open tasks, decisions with search, recurring topics, attendance); data from
-`lib/dashboard`. Gallery: `org-overview`, `org-overview-goals`, `org-overview-empty`.
+`lib/dashboard`. Gallery: `org-overview`, `org-overview-goals`, `org-overview-empty`, `org-overview-history`, `org-overview-history-only`.
 
 Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) renders a
 presentational view in `components/views/` (`LandingView`, `LoginView`, `OrgsView`,

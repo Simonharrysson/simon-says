@@ -104,3 +104,36 @@ export const emptyOverview: Overview = {
   attendance: { meetings: 0, people: [] },
   imported: { count: 0, first: null, last: null, tasks: 0 },
 };
+
+// Imported old protocols (lib/history): the förening read in two years of protocols. Names were
+// scrubbed when they were stored; tasks only counted, no attendance.
+const importedDecisions = [
+  { key: "i1", text: "Spelkaféet hålls varannan fredag i biblioteket.", date: "2026-06-09T12:00:00Z", item: "Spelkafé", imported: true },
+  { key: "i2", text: "Föreningen byter till en bank utan årsavgift.", date: "2026-03-17T12:00:00Z", item: "Ekonomi", imported: true },
+  { key: "i3", text: "Vårens turnering får högst 1 500 kr.", date: "2025-11-25T12:00:00Z", item: "Kommande event", imported: true },
+  { key: "i4", text: "Medlemsavgiften blir 80 kr per termin.", date: "2025-02-11T12:00:00Z", item: "Ekonomi", imported: true },
+  { key: "i5", text: "Nyckeln till förrådet lämnas hos kassören.", date: "2024-10-08T12:00:00Z", item: null, imported: true },
+];
+
+/** Own meetings plus 48 imported protocols. */
+export const demoOverviewWithHistory: Overview = {
+  ...demoOverview,
+  decisions: [...demoOverview.decisions, ...importedDecisions],
+  topics: [
+    { ...demoOverview.topics[0], meetings: 52, months: [...demoOverview.topics[0].months, { month: "2026-03", decisions: ["Föreningen byter till en bank utan årsavgift."] }] },
+    { label: "Spelkafé", meetings: 14, lastSeen: "2026-06-09T12:00:00Z", months: [{ month: "2026-06", decisions: ["Spelkaféet hålls varannan fredag i biblioteket."] }] },
+    ...demoOverview.topics.slice(1),
+  ],
+  imported: { count: 48, first: "2024-10-08", last: "2026-06-09", tasks: 96 },
+};
+
+/** Only imported protocols, no meeting with Simon Says yet. */
+export const demoOverviewHistoryOnly: Overview = {
+  ...emptyOverview,
+  decisions: importedDecisions,
+  topics: [
+    { label: "Ekonomi", meetings: 41, lastSeen: "2026-06-09T12:00:00Z", months: [{ month: "2026-03", decisions: ["Föreningen byter till en bank utan årsavgift."] }, { month: "2025-02", decisions: ["Medlemsavgiften blir 80 kr per termin."] }] },
+    { label: "Spelkafé", meetings: 14, lastSeen: "2026-06-09T12:00:00Z", months: [{ month: "2026-06", decisions: ["Spelkaféet hålls varannan fredag i biblioteket."] }] },
+  ],
+  imported: { count: 48, first: "2024-10-08", last: "2026-06-09", tasks: 96 },
+};
