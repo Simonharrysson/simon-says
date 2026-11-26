@@ -355,4 +355,3 @@ export function splitProtocols(docTitle: string, tabs: DocTab[], opts: { referen
   };
 }
 
-export const MANY_MEETINGS_MESSAGE = "Dokumentet verkar innehålla flera möten — välj ett protokoll per dokument eller dela upp det.";

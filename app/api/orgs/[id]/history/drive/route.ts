@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
@@ -25,7 +26,6 @@ export const maxDuration = 60;
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) => NextResponse.json({ error, message }, { status, headers: noStore });
 
-const NEEDS_ACCESS_MESSAGE = "Simon Says behöver läsrättighet till din Google Drive för att visa mötena i dina mappar.";
 
 type Body =
   | { action: "folders"; place?: unknown; id?: unknown; driveId?: unknown; query?: unknown; pageToken?: unknown }
@@ -62,16 +62,17 @@ function place(b: Extract<Body, { action: "folders" }>): FolderPlace | null {
  *   own meeting Docs → "own").
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.historyAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as Body | null;
   let at: FolderPlace | null = null;
@@ -79,34 +80,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (body?.action === "folders") {
     at = place(body);
     if (!at || (body.pageToken !== undefined && (typeof body.pageToken !== "string" || body.pageToken.length > 500))) {
-      return fail("bad_request", 400, "Välj en mapp.");
+      return fail("bad_request", 400, t("api.pickFolder"));
     }
   } else if (body?.action === "files") {
     const raw = Array.isArray(body.folders) ? body.folders : [];
     picked = [...new Set(raw.map((f) => (f as { id?: unknown })?.id))].filter((x): x is string => typeof x === "string" && DRIVE_ID.test(x)).map((x) => ({ id: x }));
     if (!picked.length || picked.length !== raw.length || picked.length > MAX_PICKED_FOLDERS) {
-      return fail("bad_request", 400, `Välj mellan 1 och ${MAX_PICKED_FOLDERS} mappar.`);
+      return fail("bad_request", 400, t("api.pickFolders", { max: MAX_PICKED_FOLDERS }));
     }
   } else {
-    return fail("bad_request", 400, "Välj en mapp.");
+    return fail("bad_request", 400, t("api.pickFolder"));
   }
 
   try {
-    if (!(await hasImportAccess(user.id))) return fail("needs_drive_access", 403, NEEDS_ACCESS_MESSAGE);
+    if (!(await hasImportAccess(user.id))) return fail("needs_drive_access", 403, t("api.needsDriveAccess"));
   } catch (err) {
     console.error(`history/drive: access: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
 
   // One claim per folder listed: the browser's one, or each ticked folder now and the
   // subfolders found below them after the walk.
   const { data: allowed, error: claimError } = await db.rpc("claim_drive_listing", { p_org_id: id, p_count: at ? 1 : picked.length });
   if (claimError) {
-    if (claimError.code === "42501") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
+    if (claimError.code === "42501") return fail("forbidden", 403, t("api.historyAdminsOnly"));
     console.error(`history/drive: claim: ${claimError.message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
-  if (allowed !== true) return fail("rate_limited", 429, "Du har bläddrat väldigt mycket på kort tid. Vänta några minuter och försök igen.");
+  if (allowed !== true) return fail("rate_limited", 429, t("api.browseRateLimited"));
 
   try {
     const auth = await getImportGoogleAuth(user.id);
@@ -135,29 +136,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.info(`history/drive: files: ${files.length} in ${r.folders} folders${r.truncated ? " (truncated)" : ""}`);
     return NextResponse.json({ files, truncated: r.truncated, folders: r.folders }, { headers: noStore });
   } catch (err) {
-    if (err instanceof DriveAccessMissingError || isInsufficientScope(err)) return fail("needs_drive_access", 403, NEEDS_ACCESS_MESSAGE);
+    if (err instanceof DriveAccessMissingError || isInsufficientScope(err)) return fail("needs_drive_access", 403, t("api.needsDriveAccess"));
     const status = googleStatus(err);
-    if (status === 403 || status === 404) return fail("folder_unreadable", 404, "Mappen finns inte längre, eller så har du inte åtkomst till den.");
-    if (status === 429) return fail("google_busy", 503, "Google bad oss vänta en stund. Försök igen om en minut.");
+    if (status === 403 || status === 404) return fail("folder_unreadable", 404, t("api.folderUnreadable"));
+    if (status === 429) return fail("google_busy", 503, t("api.googleBusy"));
     console.error(`history/drive: ${(err as Error).message}`.slice(0, 200));
-    return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+    return fail("google_unavailable", 502, t("api.googleUnavailable"));
   }
 }
 
 /** "Ta bort läsåtkomst": deletes our copy of the admin's import grant (not revoked at Google: that would end the sign-in grant too). */
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   try {
     await deleteImportToken(user.id);
   } catch (err) {
     console.error(`history/drive: delete: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
   return NextResponse.json({ ok: true }, { headers: noStore });
 }

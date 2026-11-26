@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { PublicShell } from "@/components/views/PublicShell";
 import { SignedInAgain } from "@/components/live/SignedInAgain";
 
-export const metadata: Metadata = { title: "Inloggad igen", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("login"))("signedInAgainMetaTitle"), robots: { index: false, follow: false } };
+}
 
 /**
  * Where "Logga in igen" on the live page lands (U8): a sign-in in a new tab, so the meeting tab

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
 import { arsmoteProfile } from "@/lib/formats/arsmote-profile";
@@ -9,7 +10,6 @@ export const dynamic = "force-dynamic";
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) => NextResponse.json({ error, message }, { status, headers: noStore });
-const FORBIDDEN = "Bara administratörer kan byta mötesformat.";
 
 const strings = (v: unknown): string[] | null => (Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : null);
 
@@ -25,20 +25,21 @@ const strings = (v: unknown): string[] | null => (Array.isArray(v) && v.every((x
  * Admins only (the DB functions check again). Items come back from the browser: cleaned again.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, FORBIDDEN);
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.formatAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as { weekly?: unknown; arsmote?: unknown } | null;
   const arsmote = body?.arsmote === undefined ? null : strings(body.arsmote);
-  if (body?.arsmote !== undefined && !arsmote) return fail("bad_request", 400, "Punkterna är inte giltiga.");
+  if (body?.arsmote !== undefined && !arsmote) return fail("bad_request", 400, t("api.invalidItems"));
 
   try {
     if (body?.weekly === true) {
@@ -53,9 +54,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (error) throw Object.assign(new Error(error.message), { code: error.code });
     }
   } catch (err) {
-    if ((err as { code?: string }).code === "42501") return fail("forbidden", 403, FORBIDDEN);
+    if ((err as { code?: string }).code === "42501") return fail("forbidden", 403, t("api.formatAdminsOnly"));
     console.error(`onboarding/formats: ${(err as Error).message}`.slice(0, 200));
-    return fail("save_failed", 500, "Formaten kunde inte sparas. Försök igen.");
+    return fail("save_failed", 500, t("api.formatsSaveFailed"));
   }
   return NextResponse.json({ ok: true }, { headers: noStore });
 }

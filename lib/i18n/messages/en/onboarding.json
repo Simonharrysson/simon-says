@@ -1,0 +1,221 @@
+{
+  "steps": {
+    "namn": {
+      "title": "Name and logo",
+      "short": "Logo"
+    },
+    "styrelsen": {
+      "title": "The board",
+      "short": "Board"
+    },
+    "mapp": {
+      "title": "Meeting folder",
+      "short": "Folder"
+    },
+    "format": {
+      "title": "How you usually meet",
+      "short": "Meetings"
+    },
+    "protokoll": {
+      "title": "Your earlier meetings",
+      "short": "Earlier meetings"
+    },
+    "roster": {
+      "title": "Voices",
+      "short": "Voices"
+    }
+  },
+  "titles": {
+    "namn": {
+      "title": "Welcome! What do you look like?",
+      "lead": "Check the name and feel free to add your logo, so everyone recognises the association."
+    },
+    "styrelsen": {
+      "title": "Who is on the board?",
+      "lead": "One list for everyone: name and role for the notes, e-mail for anyone who should be able to start meetings."
+    },
+    "mapp": {
+      "title": "Where should the meeting documents go?",
+      "lead": "Simon Says writes each meeting in a Google Doc. Choose a folder in Drive that the board shares."
+    },
+    "format": {
+      "title": "How you usually meet",
+      "lead": "Simon Says writes the minutes in your format. You can change it at any time."
+    },
+    "protokoll": {
+      "title": "Your earlier meetings",
+      "lead": "Import old minutes, so Simon Says knows what you've decided and what's going on – already for the first meeting."
+    },
+    "roster": {
+      "title": "Voices (optional)",
+      "lead": "Simon Says can learn who's speaking, so you don't need the name round every time."
+    },
+    "klart": {
+      "title": "You're ready",
+      "lead": "Now you can prepare the first meeting. Anything you skipped can be done at any time."
+    }
+  },
+  "card": {
+    "title": "Get started",
+    "next": "Next: {title}",
+    "progress": "{n} of {total} steps",
+    "text": "Logo, the board, meeting folder, how you usually meet, your old minutes and voices. Everything is optional and takes a few minutes.",
+    "start": "Start",
+    "continue": "Continue",
+    "hide": "Hide"
+  },
+  "shell": {
+    "later": "Continue later",
+    "stepOf": "Step {n} of {total}",
+    "label": "Get started",
+    "stateNow": "now",
+    "stateDone": "done",
+    "stateSkipped": "skipped",
+    "stateTodo": "not done yet",
+    "stepState": "Step {n}, {title}: {state}",
+    "next": "Continue",
+    "skip": "Skip",
+    "back": "Back",
+    "finish": "Done"
+  },
+  "logo": {
+    "saveFailed": "The logo couldn't be saved. Try again.",
+    "saved": "Logo saved.",
+    "offline": "We couldn't reach the server. Check the network and try again.",
+    "removed": "Logo removed.",
+    "removeFailed": "The logo couldn't be removed. Try again.",
+    "wrongType": "Choose a PNG, JPEG or WebP image.",
+    "tooBigInput": "The image is too large (max 15 MB).",
+    "cantOpen": "The image couldn't be opened. Try another one.",
+    "cantShrink": "The image couldn't be scaled down in this browser.",
+    "tooBig": "The image is too large (max 1 MB).",
+    "orgName": "The association's name",
+    "label": "Logo (optional)",
+    "drop": "Drop an image here",
+    "change": "Change logo",
+    "upload": "Upload logo",
+    "changeImage": "Change image",
+    "remove": "Remove",
+    "hint": "PNG, JPEG or WebP. Simon Says crops it to a square. It only shows here in Simon Says – on the association page and in the list – never in the meeting documents."
+  },
+  "pickerFailed": "The Google picker couldn't be opened. Try again.",
+  "offline": "We couldn't reach the server. Check the network and try again.",
+  "offlineShort": "We couldn't reach the server. Try again.",
+  "weeklyFailed": "The weekly meeting couldn't be saved. Try again.",
+  "pickerOffWeekly": "The Google picker isn't set up yet. Choose Weekly meeting for now.",
+  "board": {
+    "roles": [
+      "Chair",
+      "Vice chair",
+      "Treasurer",
+      "Secretary",
+      "Board member",
+      "Deputy member",
+      "PR officer"
+    ],
+    "emptyTitle": "Who is on the board?",
+    "emptyText": "Start with yourself. The names help Simon Says recognise who is speaking, and the roles end up in the minutes: “Treasurer: book a room”. An e-mail address is only needed for anyone who should be able to start meetings and get the documents.",
+    "listLabel": "The board",
+    "save": "Save",
+    "add": "Add",
+    "addSomeone": "Add someone",
+    "inviteByEmail": "Invite by e-mail",
+    "inviteText": "Simon Says sends an e-mail with the association's link to the addresses. Whoever signs in with the address you typed is linked to their name here.",
+    "orShare": "Or share the link yourself",
+    "shareText": "Share the link with them, e.g. in the board's chat. Whoever signs in with the address you typed is linked to their name here.",
+    "inviteLink": "Invite link",
+    "hasAccount": "Has an account",
+    "you": " · you",
+    "admin": " · admin",
+    "invite": " · Invitation: {status}",
+    "noInvite": " · no invitation sent yet",
+    "nameOnly": "Name only – add an e-mail address if they should be able to start meetings",
+    "unknown": "Unknown",
+    "noName": "Name missing",
+    "addName": "Add name",
+    "edit": "Edit {name}",
+    "remove": "Remove {name} from the list",
+    "nameRequired": "Type a name, e.g. Anna Berg.",
+    "name": "Name",
+    "namePlaceholder": "Anna Berg",
+    "role": "Role",
+    "rolePlaceholder": "Treasurer",
+    "email": "E-mail",
+    "emailOptional": "(optional – sends an invitation)",
+    "editExisting": "Edit {name}"
+  },
+  "folder": {
+    "fallbackName": "The meeting folder",
+    "chosen": "Chosen – new meeting documents go here",
+    "change": "Change",
+    "noneTitle": "No meeting folder yet",
+    "pick": "Choose a folder in Google Drive",
+    "noneText": "Choose the folder where you already keep your minutes, or create a new one in Drive first (e.g. “Board 2026–2027”). Share it with the board, so everyone can reach the documents.",
+    "pickerOff": "The Google picker isn't set up yet. Without a meeting folder, the documents go in the Drive of whoever starts the meeting."
+  },
+  "format": {
+    "preview": [
+      "Godkänn dagordning",
+      "Må-runda",
+      "Från förra veckan",
+      "Era punkter",
+      "Övrigt"
+    ],
+    "keep": "Keep {name}",
+    "keepHint": "The format you have already chosen.",
+    "weekly": "Weekly meeting",
+    "weeklyHint": "The usual meeting: {items}. Tasks are followed up next time. (Meeting documents are written in Swedish.)",
+    "learn": "Like our old minutes",
+    "learnHint": "Simon Says reads the structure of a couple of old minutes (only the headings and the order) and writes the same way.",
+    "legend": "Your usual meetings",
+    "default": " (default)",
+    "statutes": "Statutes",
+    "optional": "(optional)"
+  },
+  "history": {
+    "pick": "Choose minutes",
+    "pickText": "Select your old minutes in Google Drive – ideally a whole year of activity.",
+    "cost": "See what it costs",
+    "costText": "Before anything is read, you see how many meetings it is and what it costs.",
+    "order": "Simon Says reads in order",
+    "orderText": "Decisions, tasks and what you've worked on end up in Overview, and become proposed goals.",
+    "soFar": "{count, plural, one {# set of minutes} other {# sets of minutes}} imported so far.",
+    "more": "Import more minutes",
+    "choose": "Choose old minutes",
+    "hint": "Opens Overview. Come back here with “Get started” on the association page."
+  },
+  "voices": {
+    "soon": "Soon: Simon Says learns the voices from the name round in your first meeting — nobody needs to record anything.",
+    "idea": "The idea: everyone says their name in the name round, as usual, and that sentence becomes the voice Simon Says recognises – once, never again. Then the names are there right from the second meeting.",
+    "notYet": "It doesn't work yet: the feature is being tested and will be switched on later. Until then no voice is stored, and the name round works as it does today. A voice is sensitive information: when the feature comes, it's only stored for those who have said yes, can be removed at any time and is removed when someone leaves the association (then your yes is removed too).",
+    "noBoardTitle": "Nobody on the board yet",
+    "addBoard": "Add the board",
+    "noBoardText": "Add the board first, then you can tick who has said yes.",
+    "legend": "Who has said yes to Simon Says learning their voice?",
+    "saidYes": "Has said yes. They'll be asked again before anything is stored.",
+    "askEach": "Ask each person. Only tick those who have said yes themselves."
+  },
+  "done": {
+    "isDone": ": done",
+    "isSkipped": ": skipped",
+    "doNow": "Do it now",
+    "open": "Open",
+    "prepare": "Prepare the first meeting →",
+    "toOrg": "Go to the association"
+  },
+  "actions": {
+    "adminOnly": "Only admins can change this.",
+    "unknownStep": "Unknown step.",
+    "nameRequired": "Type a name, e.g. Anna Berg.",
+    "roleInvalid": "The role can be at most four words, e.g. Treasurer.",
+    "emailInvalid": "That doesn't look like an e-mail address.",
+    "emailTaken": "Someone else on the list already has that e-mail address.",
+    "addFailed": "The person couldn't be added. Try again.",
+    "duplicateMember": "{name} is already on the list. Edit {name} and type in the account's e-mail address, and they'll be linked.",
+    "duplicate": "{name} is already on the list.",
+    "checkFields": "Check the name, role and e-mail and try again.",
+    "gone": "The person no longer exists. Reload the page.",
+    "roleFailed": "The role couldn't be saved. Try again.",
+    "orgName": "Enter a name of at most 100 characters."
+  }
+}

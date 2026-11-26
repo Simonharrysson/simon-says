@@ -1,0 +1,19 @@
+{
+  "metaTitle": "Sign in",
+  "title": "Sign in",
+  "titleRetry": "Try once more",
+  "introJoining": "Sign in to join the association. You'll come straight back to the invitation afterwards.",
+  "intro": "You sign in with your Google account. The meeting notes are saved in your own Google Drive.",
+  "google": "Sign in with Google",
+  "googleRetry": "Try again with Google",
+  "onlyOwnDocs": "We may only create and edit <strong>the documents Simon Says creates itself</strong>. We don't see the rest of your Drive.",
+  "onlyStarter": "Only the person who starts the meeting needs an account. Everyone else in the room is just a name on a list.",
+  "privacy": "Read how we handle audio, text and accounts in the <link>privacy information</link>.",
+  "scopeCaption": "When Google asks, tick this box:",
+  "scopeRow": "See, edit, create and delete <em>only the specific Google Drive files that you use with this app</em>",
+  "scopeRowSr": "The box says: See, edit, create and delete only the specific Google Drive files that you use with this app.",
+  "signedInAgainMetaTitle": "Signed in again",
+  "signedInAgainTitle": "You're signed in again",
+  "signedInAgainText": "Close this tab. The meeting continues in the other tab, and what was waiting is being sent now.",
+  "sendingToGoogle": "Sending you to Google…"
+}

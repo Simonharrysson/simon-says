@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Button } from "@/components/ui/button";
@@ -7,7 +9,9 @@ import { Check } from "@/components/ui/Field";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { FormatKind } from "@/lib/formats/schema";
-import { meetingTypeName, type PreparedSuggestion } from "@/lib/prepare/types";
+import type { PreparedSuggestion } from "@/lib/prepare/types";
+import { defaultLocale, intlTag, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 
 // The start screen's agenda step (A11): which Doc the meeting runs in. Doc names are the
 // förening's own text: shown, never logged. Start stays disabled until the choice is confirmed
@@ -55,9 +59,9 @@ export type AgendaViewState =
  * The start's `warnings` (C2): required items (stadgar) the agenda Doc lacks, as the page says
  * them. Null when nothing is missing. Simon Says never adds the items to a human's agenda.
  */
-export function missingItemsText(warnings: string[] | null | undefined): string | null {
+export function missingItemsText(warnings: string[] | null | undefined, locale: Locale = defaultLocale): string | null {
   const items = (warnings ?? []).map((w) => w.trim()).filter(Boolean);
-  return items.length ? `Dagordningen saknar: ${items.join(", ")}. Simon Says lägger inte till punkter i ert dokument.` : null;
+  return items.length ? translator(locale)("live.agenda.missing", { items: items.join(", ") }) : null;
 }
 
 const optionValue = (f: AgendaFormatOption) => (f.id ? `id:${f.id}` : `kind:${f.kind}`);
@@ -117,31 +121,36 @@ export interface AgendaStepViewProps {
 }
 
 /** What the polite live region says for a state (the visible line may be richer). */
-function announcement(p: AgendaStepViewProps, formatName: string): string {
+function announcement(p: AgendaStepViewProps, formatName: string, locale: Locale): string {
+  const t = translator(locale);
   if (p.message) return p.message;
-  if (p.chosen?.kind === "agenda") return `Dagordning vald: ${p.chosen.name}.`;
-  if (p.chosen?.kind === "new") return `Nytt dokument i formatet ${formatName}.`;
+  if (p.chosen?.kind === "agenda") return t("live.agenda.chosenAnnounce", { name: p.chosen.name });
+  if (p.chosen?.kind === "new") return t("live.agenda.newAnnounce", { format: formatName });
   switch (p.view.state) {
     case "suggestion":
-      return `Förslag: ${p.view.suggestion.name}.`;
+      return t("live.agenda.suggestionAnnounce", { name: p.view.suggestion.name });
     case "prepared":
-      return `Förberedd dagordning för ${preparedDay(p.view.prepared.date)}.`;
+      return t("live.agenda.preparedAnnounce", { date: preparedDay(p.view.prepared.date, locale) });
     case "none":
-      return "Ingen dagordning hittades.";
+      return t("live.agenda.noneAnnounce");
     case "folder-unreachable":
       return p.view.folderName
-        ? `Ditt Google-konto har inte öppnat mötesmappen ${p.view.folderName} än.`
-        : "Ditt Google-konto har inte öppnat mötesmappen än.";
+        ? t("live.agenda.folderNamedAnnounce", { folder: p.view.folderName })
+        : t("live.agenda.folderAnnounce");
     default:
       return "";
   }
 }
 
-const preparedDay = (date: string) =>
-  new Intl.DateTimeFormat("sv-SE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`));
+const preparedDay = (date: string, locale: Locale) =>
+  new Intl.DateTimeFormat(intlTag(locale), { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`));
 
 /** Presentational: no fetching (the /design page renders every state with fake data). */
 export function AgendaStepView(p: AgendaStepViewProps) {
+  const t = useTranslations("live.agenda");
+  const types = useTranslations("formats.meetingTypes");
+  const locale = useLocale();
+  const strong = (chunks: ReactNode) => <strong className="wrap-anywhere">{chunks}</strong>;
   const id = useId();
   const formatName = p.formats.find((f) => optionValue(f) === p.formatValue)?.name ?? "";
   const formatKind = p.formats.find((f) => optionValue(f) === p.formatValue)?.kind;
@@ -166,24 +175,21 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="flex items-baseline gap-2" ref={choiceRef} tabIndex={-1}>
-          <span>
-            Dagordning: <strong className="wrap-anywhere">{p.chosen.name}</strong>
-          </span>
+          <span>{t.rich("chosen", { name: p.chosen.name, strong })}</span>
         </p>
         {p.chosen.prepared && (
           <p className="-mt-2 text-xs text-ink-3">
-            Förberedd för {preparedDay(p.chosen.prepared.date)} · {meetingTypeName(p.chosen.prepared.kind)}. Förra veckans uppgifter står redan under
-            Från förra veckan.
+            {t("preparedFor", { date: preparedDay(p.chosen.prepared.date, locale), type: types(`${p.chosen.prepared.kind}.name`) })}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-3">
           {!off && (
             <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
-              Välj annan
+              {t("pickOther")}
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
-            Skapa nytt dokument
+            {t("newDoc")}
           </Button>
         </div>
       </>
@@ -192,52 +198,53 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="flex items-baseline gap-2" ref={choiceRef} tabIndex={-1}>
-          <span>
-            Nytt dokument i formatet <strong>{formatName}</strong>
-          </span>
+          <span>{t.rich("newIn", { format: formatName, strong: (chunks) => <strong>{chunks}</strong> })}</span>
         </p>
         {off ? (
-          <p className="text-xs text-ink-3">Google-väljaren är inte inställd än.</p>
+          <p className="text-xs text-ink-3">{t("pickerOff")}</p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
-              Välj dagordning
+              {t("pick")}
             </Button>
           </div>
         )}
       </>
     );
   } else if (p.view.state === "loading") {
-    body = <p className="flex items-baseline gap-2 text-ink-2">Letar efter dagens dagordning…</p>;
+    body = <p className="flex items-baseline gap-2 text-ink-2">{t("loading")}</p>;
   } else if (p.view.state === "prepared") {
     const prep = p.view.prepared;
     body = (
       <>
         <p className="flex flex-col gap-1">
           <span>
-            Starta med dagordningen från <strong className="font-medium">{preparedDay(prep.date)}</strong>
-            {prep.time ? ` kl. ${prep.time.replace(":", ".")}` : ""}
+            {t.rich("startWith", {
+              date: preparedDay(prep.date, locale),
+              time: prep.time ? t("atTime", { time: locale === "en" ? prep.time : prep.time.replace(":", ".") }) : "",
+              strong: (chunks) => <strong className="font-medium">{chunks}</strong>,
+            })}
           </span>
           <span className="text-xs text-ink-3 wrap-anywhere">
-            {meetingTypeName(prep.kind)} · {prep.name}
+            {types(`${prep.kind}.name`)} · {prep.name}
           </span>
         </p>
         {!prep.accessible && (
           <p className="text-xs text-ink-3">
-            Den förbereddes med ett annat Google-konto. Öppna den en gång i Google-väljaren, så kan Simon Says skriva i den.
+            {t("otherAccount")}
           </p>
         )}
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={prep.accessible ? p.onUsePrepared : p.onPickDoc} disabled={lock}>
-            {prep.accessible ? "Använd" : "Öppna i Google-väljaren"}
+            {prep.accessible ? t("use") : t("openInPicker")}
           </Button>
           {prep.accessible && (
             <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock || off}>
-              Välj annan
+              {t("pickOther")}
             </Button>
           )}
           <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
-            Skapa nytt dokument
+            {t("newDoc")}
           </Button>
         </div>
       </>
@@ -246,19 +253,17 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="flex items-baseline gap-2">
-          <span>
-            Förslag: <strong className="wrap-anywhere">{p.view.suggestion.name}</strong>
-          </span>
+          <span>{t.rich("suggestion", { name: p.view.suggestion.name, strong })}</span>
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onUseSuggestion} disabled={lock}>
-            Använd
+            {t("use")}
           </Button>
           <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
-            Välj annan
+            {t("pickOther")}
           </Button>
           <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
-            Skapa nytt dokument
+            {t("newDoc")}
           </Button>
         </div>
       </>
@@ -268,26 +273,20 @@ export function AgendaStepView(p: AgendaStepViewProps) {
       <>
         <p className="flex items-baseline gap-2">
           {p.view.folderName ? (
-            <span>
-              Föreningens mötesmapp heter <strong className="font-medium">{p.view.folderName}</strong>. Ditt Google-konto har inte
-              öppnat den än. Välj den en gång i Google-väljaren, så hamnar mötesdokumentet där.
-            </span>
+            <span>{t.rich("folderNamed", { folder: p.view.folderName, strong: (chunks) => <strong className="font-medium">{chunks}</strong> })}</span>
           ) : (
-            <span>
-              Föreningen har en mötesmapp, men ditt Google-konto har inte öppnat den än. Välj den en gång i Google-väljaren, så
-              hamnar mötesdokumentet där.
-            </span>
+            <span>{t("folder")}</span>
           )}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onUseFolder} disabled={lock}>
-            Använd mötesmappen
+            {t("useFolder")}
           </Button>
           <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
-            Välj dagordning
+            {t("pick")}
           </Button>
           <Button size="sm" variant="ghost" onClick={p.onNewDoc} disabled={lock}>
-            Skapa nytt dokument
+            {t("newDoc")}
           </Button>
         </div>
       </>
@@ -296,14 +295,14 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     // "none" (and picker-off before the fallback is set, which the container never shows)
     body = (
       <>
-        <p className="flex items-baseline gap-2">Ingen dagordning – skapa nytt dokument i formatet {formatName}</p>
+        <p className="flex items-baseline gap-2">{t("none", { format: formatName })}</p>
         <div className="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="secondary" onClick={p.onNewDoc} disabled={lock}>
-            Skapa nytt dokument
+            {t("newDoc")}
           </Button>
           {!off && (
             <Button size="sm" variant="ghost" onClick={p.onPickDoc} disabled={lock}>
-              Välj dagordning
+              {t("pick")}
             </Button>
           )}
         </div>
@@ -314,18 +313,18 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-line p-4" aria-labelledby={`${id}-title`} aria-busy={p.busy || undefined}>
       <h2 id={`${id}-title`} className="text-lg">
-        Dagordning
+        {t("title")}
       </h2>
       <div className="flex flex-col gap-3">{body}</div>
       {p.message && <p className="text-xs text-ink-3">{p.message}</p>}
       <span className="sr-only" aria-live="polite">
-        {announcement(p, formatName)}
+        {announcement(p, formatName, locale)}
       </span>
 
       {p.chosen?.kind === "agenda" && p.offerTranscript && (
         <Check
           id={`${id}-transcript`}
-          title="Lägg transkriptet i dokumentet?"
+          title={t("transcript")}
           checked={p.transcriptInDoc}
           onCheckedChange={(on) => p.onTranscriptChange(on === true)}
           disabled={p.disabled}
@@ -334,7 +333,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
 
       {p.chosen?.kind === "new" && formatKind !== "enkel" && (p.goals?.length ?? 0) > 0 && (
         <fieldset className="flex flex-col gap-3">
-          <legend className="mb-1 font-medium">Mål att ta upp</legend>
+          <legend className="mb-1 font-medium">{t("goalsTitle")}</legend>
           {p.goals!.map((g) => (
             <Check
               key={g.id}
@@ -352,7 +351,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
 
       {p.formats.length > 1 && !(p.chosen?.kind === "agenda" && p.chosen.prepared) && !(p.chosen === null && p.view.state === "prepared") && (
         <div className="flex max-w-[22rem] flex-col gap-1">
-          <Label htmlFor={`${id}-format`}>Format</Label>
+          <Label htmlFor={`${id}-format`}>{t("format")}</Label>
           <NativeSelect
             id={`${id}-format`}
             value={p.formatValue}
@@ -362,7 +361,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
             {p.formats.map((f) => (
               <option key={optionValue(f)} value={optionValue(f)}>
                 {f.name}
-                {f.isDefault ? " (förvalt)" : ""}
+                {f.isDefault ? t("default") : ""}
               </option>
             ))}
           </NativeSelect>
@@ -481,6 +480,7 @@ function AgendaStepOn({
   disabled,
   goals,
 }: AgendaStepProps) {
+  const t = useTranslations("live.agenda");
   const picker = usePicker();
   const { goalIds, onGoalChange } = useGoalTicks();
   const [view, setView] = useState<AgendaViewState>({ state: "loading" });
@@ -505,7 +505,7 @@ function AgendaStepOn({
       if (seq !== loadSeq.current) return;
       if (!res.ok || !json) {
         setView({ state: "none" });
-        setMessage(json?.message ?? "Vi kunde inte läsa mötesmappen just nu.");
+        setMessage(json?.message ?? t("folderReadFailed"));
         return;
       }
       setFolderId(json.folderId);
@@ -519,9 +519,9 @@ function AgendaStepOn({
     } catch {
       if (seq !== loadSeq.current) return;
       setView({ state: "none" });
-      setMessage("Vi kunde inte läsa mötesmappen just nu.");
+      setMessage(t("folderReadFailed"));
     }
-  }, [orgId]);
+  }, [orgId, t]);
 
   useEffect(() => {
     void load();
@@ -542,18 +542,18 @@ function AgendaStepOn({
   const chooseDoc = (doc: { id: string; name: string }) => {
     setAgendaDocId(doc.id);
     const prep = prepared && prepared.docId === doc.id ? { date: prepared.date, kind: prepared.kind } : undefined;
-    setChosen({ kind: "agenda", name: doc.name || prepared?.name || "Valt dokument", ...(prep ? { prepared: prep } : {}) });
+    setChosen({ kind: "agenda", name: doc.name || prepared?.name || t("chosenFallback"), ...(prep ? { prepared: prep } : {}) });
     setMessage(null);
   };
 
   const pickerFailed = (err: unknown) =>
-    setMessage(err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen.");
+    setMessage(err instanceof PickerError ? err.message : t("pickerFailed"));
 
   const onPickDoc = async () => {
     setBusy(true);
     setMessage(null);
     try {
-      const picked = await picker.open({ mode: "doc", parentId: folderId ?? undefined, title: "Välj dagordning" });
+      const picked = await picker.open({ mode: "doc", parentId: folderId ?? undefined, title: t("pick") });
       if (picked?.[0]) chooseDoc(picked[0]);
     } catch (err) {
       pickerFailed(err);
@@ -566,7 +566,7 @@ function AgendaStepOn({
     setBusy(true);
     setMessage(null);
     try {
-      const picked = await picker.open({ mode: "folder", title: folderName ? `Välj mötesmappen ”${folderName}”` : "Välj mötesmappen" });
+      const picked = await picker.open({ mode: "folder", title: folderName ? t("pickFolderNamed", { folder: folderName }) : t("pickFolder") });
       if (!picked?.[0]) return;
       const res = await fetch(`/api/orgs/${orgId}/meeting-folder`, {
         method: "POST",
@@ -576,7 +576,7 @@ function AgendaStepOn({
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string } | null;
-        setMessage(json?.message ?? "Mötesmappen kunde inte sparas. Försök igen.");
+        setMessage(json?.message ?? t("folderSaveFailed"));
         return;
       }
       await load();

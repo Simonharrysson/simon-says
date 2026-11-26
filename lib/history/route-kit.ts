@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
 import { getEnv } from "@/lib/env";
+import { translator, type Translator } from "@/lib/i18n/translator";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { BatchClient } from "./batch";
 
@@ -15,16 +16,16 @@ export const fail = (error: string, status: number, message: string) => NextResp
 type ServerDb = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 /** The signed-in admin of org `id`, or the reply to send. */
-export async function requireAdmin(id: string): Promise<{ ok: true; db: ServerDb; userId: string } | { ok: false; reply: NextResponse }> {
+export async function requireAdmin(id: string, t: Translator = translator()): Promise<{ ok: true; db: ServerDb; userId: string } | { ok: false; reply: NextResponse }> {
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return { ok: false, reply: fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.") };
-  if (!isUuid(id)) return { ok: false, reply: fail("not_found", 404, "Föreningen finns inte.") };
+  if (!user) return { ok: false, reply: fail("unauthenticated", 401, t("api.unauthenticated")) };
+  if (!isUuid(id)) return { ok: false, reply: fail("not_found", 404, t("api.orgNotFound")) };
   const role = await myRole(db, id);
-  if (!role) return { ok: false, reply: fail("not_found", 404, "Föreningen finns inte.") };
-  if (role !== "admin") return { ok: false, reply: fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.") };
+  if (!role) return { ok: false, reply: fail("not_found", 404, t("api.orgNotFound")) };
+  if (role !== "admin") return { ok: false, reply: fail("forbidden", 403, t("api.historyAdminsOnly")) };
   return { ok: true, db, userId: user.id };
 }
 

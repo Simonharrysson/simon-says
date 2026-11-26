@@ -16,12 +16,7 @@ export function meetingDeleteState(
   return "forbidden";
 }
 
-export const meetingStatusLabel: Record<MeetingStatus, string> = {
-  live: "Pågår",
-  ending: "Avslutas",
-  done: "Klart",
-  abandoned: "Avbrutet",
-};
+// Status labels are UI copy: org.status.* in lib/i18n/messages.
 
 export function docUrl(docId: string): string {
   return `https://docs.google.com/document/d/${encodeURIComponent(docId)}/edit`;

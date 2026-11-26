@@ -1,0 +1,15 @@
+{
+  "metaTitle": "Inbjudan",
+  "invitedTitle": "Du är inbjuden",
+  "signedOutText": "Logga in med Google för att se vilken förening som bjudit in dig och gå med. Det tar en halv minut.",
+  "invalidTitle": "Länken fungerar inte längre",
+  "invalidBannerTitle": "Inbjudningslänken gäller inte",
+  "invalidBannerText": "En admin har troligen skapat en ny länk. Be den som bjöd in dig att skicka den nya.",
+  "toOrgs": "Till dina föreningar",
+  "invitedTo": "Du är inbjuden till",
+  "memberText": "Som medlem kan du starta möten och får tillgång till föreningens mötesdokument.",
+  "joining": "Går med…",
+  "join": "Gå med i {org}",
+  "joiningAs": "Du går med som <strong>{email}</strong>.",
+  "switchAccount": "Byt konto"
+}

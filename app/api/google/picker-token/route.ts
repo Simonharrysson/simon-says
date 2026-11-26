@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { getEnv, pickerEnabled } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -15,15 +16,16 @@ const fail = (error: string, status: number, message: string) =>
  * drive.file grants). Returns `{ accessToken, expiresAt, developerKey, appId }` only: never the
  * refresh token. 503 `picker_off` when the Picker is not configured.
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
+  const t = apiT(request);
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
 
   const env = getEnv();
-  if (!pickerEnabled(env)) return fail("picker_off", 503, "Google-väljaren är inte inställd än.");
+  if (!pickerEnabled(env)) return fail("picker_off", 503, t("api.pickerOff"));
 
   let accessToken: string | null | undefined;
   let expiresAt: number | null | undefined;
@@ -34,12 +36,12 @@ export async function POST(_request: NextRequest) {
     expiresAt = credentials.expiry_date;
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {
-      return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
+      return fail("google_auth_lost", 401, t("api.googleAuthLost"));
     }
     console.error(`picker-token: google auth: ${(err as Error).message}`);
-    return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+    return fail("google_unavailable", 502, t("api.googleUnavailable"));
   }
-  if (!accessToken) return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+  if (!accessToken) return fail("google_unavailable", 502, t("api.googleUnavailable"));
 
   return NextResponse.json(
     {

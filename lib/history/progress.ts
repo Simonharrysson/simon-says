@@ -1,3 +1,5 @@
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 import type { GoalSuggestion } from "./digest-input";
 
 // The protocol import's progress (0036 jobs), shared by the server (the job view) and the
@@ -26,32 +28,34 @@ export type ItemState = "waiting" | "reading" | "done" | "skipped" | "failed";
 export type JobStatus = "running" | "canceling" | "digesting" | "done" | "canceled" | "failed";
 
 /** Why a meeting was skipped or failed, in the admin's words. Unknown codes get a general line. */
-export const REASON_MESSAGES: Record<string, string> = {
-  own_doc: "Det här är ett av Simon Says egna mötesdokument; det mötet finns redan med.",
-  empty: "Dokumentet är tomt.",
-  too_long: "Ett av mötena i dokumentet är för långt för att vara ett protokoll.",
-  "many-meetings": "Dokumentet verkar innehålla flera möten — välj ett protokoll per dokument eller dela upp det.",
-  "too-many": "Dokumentet innehåller fler än 60 möten.",
-  doc_changed: "Dokumentet har ändrats sedan du valde det.",
-  doc_unreadable: "Simon Says kan inte läsa dokumentet längre.",
-  google_auth_lost: "Åtkomsten till Google Drive har gått ut. Ge åtkomst igen och försök på nytt.",
-  no_date: "Inget datum hittades i protokollet.",
-  refusal: "Claude ville inte läsa just det här protokollet.",
-  malformed: "Svaret från Claude gick inte att använda.",
-  error: "Något gick fel när protokollet lästes.",
-  expired: "Claude hann inte läsa det inom ett dygn.",
-  canceled: "Avbruten.",
-  replaced: "Ersatt av en ny inläsning.",
-  spend: "Simon Says kan inte läsa protokoll just nu.",
-  rate_limited: "Dagens gräns för föreningen är nådd.",
-  save_failed: "Kunde inte sparas.",
-  unreachable: "Vi nådde inte servern.",
-  stale: "Sidan stängdes medan det lästes.",
-  not_creator: "Bara den admin som startade inläsningen kan läsa de här dokumenten (det är hens läsåtkomst).",
-};
+/** Why a meeting was skipped or failed, in the admin's words (history.reasons.* in the catalogs). */
+export const REASON_CODES = [
+  "own_doc",
+  "empty",
+  "too_long",
+  "many-meetings",
+  "too-many",
+  "doc_changed",
+  "doc_unreadable",
+  "google_auth_lost",
+  "no_date",
+  "refusal",
+  "malformed",
+  "error",
+  "expired",
+  "canceled",
+  "replaced",
+  "spend",
+  "rate_limited",
+  "save_failed",
+  "unreachable",
+  "stale",
+  "not_creator",
+] as const;
 
-export const reasonMessage = (code: string | null | undefined): string | null =>
-  code ? (REASON_MESSAGES[code] ?? REASON_MESSAGES.error) : null;
+/** Unknown codes get the general line. */
+export const reasonMessage = (code: string | null | undefined, locale: Locale = defaultLocale): string | null =>
+  code ? translator(locale)(`history.reasons.${(REASON_CODES as readonly string[]).includes(code) ? (code as (typeof REASON_CODES)[number]) : "error"}`) : null;
 
 /** Can "Försök igen" help? (Not for an own Doc, an empty one or a cancelled import.) */
 export const retryable = (state: ItemState, reason: string | null): boolean =>
@@ -168,12 +172,13 @@ export function jobProgress(job: Pick<JobView, "mode" | "status" | "createdAt" |
 }
 
 /** "ca 4 min kvar", "under en minut kvar", "ca 1 h 20 min kvar". */
-export function formatMinutesLeft(minutes: number): string {
-  if (minutes <= 1) return "ca en minut kvar";
-  if (minutes < 60) return `ca ${minutes} min kvar`;
+export function formatMinutesLeft(minutes: number, locale: Locale = defaultLocale): string {
+  const t = translator(locale);
+  if (minutes <= 1) return t("history.left.minute");
+  if (minutes < 60) return t("history.left.minutes", { minutes });
   const h = Math.floor(minutes / 60);
   const m = Math.round((minutes % 60) / 5) * 5;
-  return m && m < 60 ? `ca ${h} h ${m} min kvar` : `ca ${m === 60 ? h + 1 : h} h kvar`;
+  return m && m < 60 ? t("history.left.hoursMinutes", { h, m }) : t("history.left.hours", { h: m === 60 ? h + 1 : h });
 }
 
 export const isOpen = (status: JobStatus) => status === "running" || status === "canceling" || status === "digesting";
@@ -183,9 +188,9 @@ export const isOpen = (status: JobStatus) => status === "running" || status === 
  * names are never stored on the server: /integritet), else the neutral stored label, with the
  * meeting's date once it is known.
  */
-export function itemLabel(i: Pick<ItemView, "label" | "docId" | "section" | "sections" | "date">, names: Record<string, string>): string {
+export function itemLabel(i: Pick<ItemView, "label" | "docId" | "section" | "sections" | "date">, names: Record<string, string>, locale: Locale = defaultLocale): string {
   const name = names[i.docId];
-  if (name) return i.sections > 1 ? `${name}, möte ${i.section + 1} av ${i.sections}` : name;
+  if (name) return i.sections > 1 ? translator(locale)("history.section", { name, n: i.section + 1, of: i.sections }) : name;
   return i.date ? `${i.label} · ${i.date}` : i.label;
 }
 

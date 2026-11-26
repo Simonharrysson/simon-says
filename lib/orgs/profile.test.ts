@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ABOUT_MAX,
-  PROFILE_ERRORS,
+  profileErrors,
   hasProfile,
   normalizeAbout,
   normalizeFacebook,
@@ -129,6 +129,7 @@ describe("the whole profile", () => {
 
   it("gives a sentence for each wrong field", () => {
     const r = parseProfile({ about: "x".repeat(ABOUT_MAX + 1), website: "http://x.se", facebook: "", instagram: "https://evil.com/x" });
+    const PROFILE_ERRORS = profileErrors();
     expect(r).toEqual({ ok: false, errors: { about: PROFILE_ERRORS.about, website: PROFILE_ERRORS.website, instagram: PROFILE_ERRORS.instagram } });
   });
 

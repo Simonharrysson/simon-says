@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { Wordmark } from "./Wordmark";
 
@@ -7,12 +8,13 @@ export const navLinkClass =
 
 /** Sticky top rail. `nav` holds page links; the wordmark leads home (or `homeHref`). */
 export function SiteHeader({ nav, homeHref = "/" }: { nav?: ReactNode; homeHref?: string }) {
+  const t = useTranslations("common");
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-[color-mix(in_srgb,var(--board)_92%,transparent)] backdrop-blur-[10px] backdrop-saturate-[1.4]">
       <div className="mx-auto flex min-h-16 w-full max-w-page items-center gap-4 px-gutter">
         <Wordmark href={homeHref} />
         {nav && (
-          <nav aria-label="Huvudmeny" className="ml-auto flex items-center gap-1">
+          <nav aria-label={t("mainNav")} className="ml-auto flex items-center gap-1">
             {nav}
           </nav>
         )}

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT, requestLocale } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
@@ -23,16 +24,17 @@ const fail = (error: string, status: number, message: string) => NextResponse.js
  * → `{ protocolId, date, dateFrom, decisions, tasks, reports }`.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.historyAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as { docId?: unknown; section?: unknown; sections?: unknown; ticket?: unknown } | null;
   const docId = body?.docId;
@@ -47,15 +49,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     (section as number) >= (sections as number) ||
     (sections as number) > 60
   ) {
-    return fail("bad_request", 400, "Välj ett protokoll.");
+    return fail("bad_request", 400, t("api.pickProtocol"));
   }
   // A ticket (from the folder browser's listing) means: read with the import's read access. It
   // must be valid for exactly this file; without one, the sign-in grant (drive.file, the Picker).
   const viaListing = body?.ticket !== undefined;
   if (viaListing && !checkTicket(body?.ticket, user.id, id, docId)) {
-    return fail("stale_list", 400, "Listan är för gammal. Gå tillbaka och visa mötena i mapparna igen.");
+    return fail("stale_list", 400, t("api.staleList"));
   }
-  const res = await importOneSection(db, { userId: user.id, orgId: id, docId, section: section as number, sections: sections as number, viaListing });
+  const res = await importOneSection(db, { userId: user.id, orgId: id, docId, section: section as number, sections: sections as number, viaListing }, { locale: requestLocale(request) });
   if (!res.ok) return fail(res.error, res.status, res.message);
   const { ok: _ok, ...out } = res;
   return NextResponse.json(out, { headers: noStore });

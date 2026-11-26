@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { IconArrowLeft, IconArrowRight } from "@/components/ui/icons";
@@ -33,6 +34,7 @@ export interface OnboardingShellProps {
 }
 
 export function OnboardingShell(p: OnboardingShellProps) {
+  const t = useTranslations("onboarding");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
   // A new step moves focus to its heading (the pressed button is gone); not on first load.
@@ -54,7 +56,7 @@ export function OnboardingShell(p: OnboardingShellProps) {
             <span className="wrap-anywhere">{p.orgName}</span>
           </a>
           <a className="inline-flex min-h-11 items-center text-sm text-ink-3 no-underline hover:text-ink md:min-h-0" href={p.orgHref}>
-            Fortsätt senare
+            {t("shell.later")}
           </a>
         </div>
         <Progress step={p.step} done={p.done} skipped={p.skipped} onGo={p.onGo} />
@@ -64,7 +66,7 @@ export function OnboardingShell(p: OnboardingShellProps) {
         <div className="flex flex-col gap-2">
           {p.step !== "klart" && (
             <p className="text-sm text-ink-3" aria-hidden="true">
-              {`Steg ${index + 1} av ${STEPS.length}`}
+              {t("shell.stepOf", { n: index + 1, total: STEPS.length })}
             </p>
           )}
           <h1 ref={headingRef} tabIndex={-1} className="text-2xl focus:outline-none">
@@ -80,13 +82,14 @@ export function OnboardingShell(p: OnboardingShellProps) {
 }
 
 function Progress({ step, done, skipped, onGo }: { step: ShellStep; done: StepId[]; skipped: StepId[]; onGo?: (s: StepId) => void }) {
+  const t = useTranslations("onboarding");
   return (
-    <ol className="grid grid-cols-6 gap-1.5" aria-label="Kom igång">
+    <ol className="grid grid-cols-6 gap-1.5" aria-label={t("shell.label")}>
       {STEPS.map((s, i) => {
         const here = s.id === step;
         const isDone = done.includes(s.id);
         const isSkipped = !isDone && skipped.includes(s.id);
-        const state = here ? "nu" : isDone ? "klart" : isSkipped ? "hoppades över" : "inte gjort än";
+        const state = t(here ? "shell.stateNow" : isDone ? "shell.stateDone" : isSkipped ? "shell.stateSkipped" : "shell.stateTodo");
         const bar = (
           <>
             <span
@@ -97,10 +100,10 @@ function Progress({ step, done, skipped, onGo }: { step: ShellStep; done: StepId
               )}
             />
             <span className={cn("mt-2 block truncate text-left text-2xs max-[30rem]:sr-only", here ? "font-medium text-ink" : "text-ink-3")}>
-              {s.short}
+              {t(`steps.${s.id}.short`)}
             </span>
             <span className="sr-only">
-              {`Steg ${i + 1}, ${s.title}: ${state}`}
+              {t("shell.stepState", { n: i + 1, title: t(`steps.${s.id}.title`), state })}
             </span>
           </>
         );
@@ -125,8 +128,8 @@ export function StepFooter({
   onBack,
   onSkip,
   onNext,
-  nextLabel = "Fortsätt",
-  skipLabel = "Hoppa över",
+  nextLabel,
+  skipLabel,
   busy,
   nextDisabled,
 }: {
@@ -138,25 +141,26 @@ export function StepFooter({
   busy?: boolean;
   nextDisabled?: boolean;
 }) {
+  const t = useTranslations("onboarding");
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6 max-[30rem]:flex-col-reverse max-[30rem]:items-stretch">
       <div>
         {onBack && (
           <Button variant="ghost" icon={<IconArrowLeft size={18} />} onClick={onBack} disabled={busy} className="max-[30rem]:w-full">
-            Tillbaka
+            {t("shell.back")}
           </Button>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2 max-[30rem]:flex-col-reverse max-[30rem]:items-stretch">
         {onSkip && (
           <Button variant="ghost" onClick={onSkip} disabled={busy}>
-            {skipLabel}
+            {skipLabel ?? t("shell.skip")}
           </Button>
         )}
         {onNext && (
           <Button variant="primary" onClick={onNext} loading={busy} disabled={nextDisabled}>
             <span className="inline-flex items-center gap-2 whitespace-nowrap">
-              {nextLabel}
+              {nextLabel ?? t("shell.next")}
               <IconArrowRight size={18} />
             </span>
           </Button>

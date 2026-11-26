@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getLocale, getTranslations } from "next-intl/server";
 import { isUuid } from "@/lib/db/ids";
 import { deletePerson, listPeople, myRole, renamePerson, setPersonRole, updateOrgSettings } from "@/lib/db/orgs";
 import { validName } from "@/lib/names/validate";
@@ -12,13 +13,14 @@ import { validRole } from "@/lib/people/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Kom igång (todo #5): actions the wizard calls directly. All run as the signed-in user; RLS and
-// the 0035 functions decide; the checks here only turn refusals into Swedish sentences.
+// the 0035 functions decide; the checks here only turn refusals into sentences (UI language).
 
 /** `editPersonId`: the name is already on the list; the form offers to edit that person instead. */
 export type ActionResult = { ok: true } | { ok: false; message: string; editPersonId?: string };
 const fail = (message: string): ActionResult => ({ ok: false, message });
 const OK: ActionResult = { ok: true };
-const ADMIN_ONLY = "Bara administratörer kan ändra det här.";
+const copy = () => getTranslations("onboarding.actions");
+type Copy = Awaited<ReturnType<typeof copy>>;
 
 async function adminDb(orgId: string) {
   if (!isUuid(orgId)) return null;
@@ -32,9 +34,10 @@ const refresh = (orgId: string) => {
 };
 
 export async function stepAction(orgId: string, step: string, how: "done" | "skipped"): Promise<ActionResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return fail(ADMIN_ONLY);
-  if (!isStepId(step) || (how !== "done" && how !== "skipped")) return fail("Okänt steg.");
+  if (!db) return fail(t("adminOnly"));
+  if (!isStepId(step) || (how !== "done" && how !== "skipped")) return fail(t("unknownStep"));
   // A missing row (förening from before onboarding, opened from Inställningar) is fine: nothing to save.
   await recordStep(db, orgId, step, how);
   refresh(orgId);
@@ -42,8 +45,9 @@ export async function stepAction(orgId: string, step: string, how: "done" | "ski
 }
 
 export async function dismissAction(orgId: string, dismissed: boolean): Promise<ActionResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return fail(ADMIN_ONLY);
+  if (!db) return fail(t("adminOnly"));
   await setDismissed(db, orgId, dismissed);
   refresh(orgId);
   return OK;
@@ -55,22 +59,22 @@ export interface BoardInput {
   email: string;
 }
 
-function checkInput(input: BoardInput): { name: string; role: string | null; email: string | null } | string {
+function checkInput(input: BoardInput, t: Copy): { name: string; role: string | null; email: string | null } | string {
   const name = validName(input.name);
-  if (!name) return "Skriv ett namn, t.ex. Anna Berg.";
+  if (!name) return t("nameRequired");
   const role = input.role.trim() ? validRole(input.role) : null;
-  if (input.role.trim() && !role) return "Rollen kan vara högst fyra ord, t.ex. Kassör.";
+  if (input.role.trim() && !role) return t("roleInvalid");
   const email = input.email.trim() ? cleanEmail(input.email) : null;
-  if (input.email.trim() && !email) return "Det ser inte ut som en e-postadress.";
+  if (input.email.trim() && !email) return t("emailInvalid");
   return { name, role, email };
 }
 
-async function setEmail(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, personId: string, email: string | null): Promise<string | null> {
+async function setEmail(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, personId: string, email: string | null, t: Copy): Promise<string | null> {
   const { data, error } = await db.rpc("set_person_email", { p_person_id: personId, p_email: email ?? "" });
   if (error) throw new Error(`set_person_email: ${error.message}`);
-  if (data === "taken") return "Någon annan i listan har redan den e-postadressen.";
-  if (data === "invalid") return "Det ser inte ut som en e-postadress.";
-  if (data !== "ok") return ADMIN_ONLY;
+  if (data === "taken") return t("emailTaken");
+  if (data === "invalid") return t("emailInvalid");
+  if (data !== "ok") return t("adminOnly");
   return null;
 }
 
@@ -79,9 +83,10 @@ async function setEmail(db: Awaited<ReturnType<typeof createSupabaseServerClient
  * them to their account when they join. `memberUserId`: names a member who has no person yet.
  */
 export async function addBoardPersonAction(orgId: string, input: BoardInput, memberUserId?: string): Promise<ActionResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return fail(ADMIN_ONLY);
-  const v = checkInput(input);
+  if (!db) return fail(t("adminOnly"));
+  const v = checkInput(input, t);
   if (typeof v === "string") return fail(v);
   // One transaction (add_board_person, 0035): the person, role and e-mail are saved together or not at all.
   const { data, error } = await db.rpc("add_board_person", {
@@ -93,37 +98,36 @@ export async function addBoardPersonAction(orgId: string, input: BoardInput, mem
   });
   if (error) {
     console.error(`add_board_person: ${error.message}`.slice(0, 200));
-    return fail("Personen kunde inte läggas till. Försök igen.");
+    return fail(t("addFailed"));
   }
   const res = data as { result: string; id?: string };
   if (res.result === "duplicate" && res.id) {
     return {
       ok: false,
-      message: memberUserId
-        ? `${v.name} finns redan i listan. Ändra ${v.name} och skriv in kontots e-postadress, så kopplas de ihop.`
-        : `${v.name} finns redan i listan.`,
+      message: memberUserId ? t("duplicateMember", { name: v.name }) : t("duplicate", { name: v.name }),
       editPersonId: res.id,
     };
   }
-  if (res.result === "taken") return fail("Någon annan i listan har redan den e-postadressen.");
-  if (res.result === "invalid") return fail("Kontrollera namn, roll och e-post och försök igen.");
-  if (res.result !== "ok") return fail(ADMIN_ONLY);
+  if (res.result === "taken") return fail(t("emailTaken"));
+  if (res.result === "invalid") return fail(t("checkFields"));
+  if (res.result !== "ok") return fail(t("adminOnly"));
   refresh(orgId);
   return OK;
 }
 
 export async function updateBoardPersonAction(orgId: string, personId: string, input: BoardInput): Promise<ActionResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return fail(ADMIN_ONLY);
-  const v = checkInput(input);
+  if (!db) return fail(t("adminOnly"));
+  const v = checkInput(input, t);
   if (typeof v === "string") return fail(v);
   const people = isUuid(personId) ? await listPeople(db, orgId) : [];
   const current = people.find((p) => p.id === personId);
-  if (!current) return fail("Personen finns inte längre. Ladda om sidan.");
-  if (current.name !== v.name && !(await renamePerson(db, personId, v.name))) return fail(`${v.name} finns redan i listan.`);
-  if ((current.role ?? null) !== v.role && !(await setPersonRole(db, personId, v.role))) return fail("Rollen kunde inte sparas. Försök igen.");
+  if (!current) return fail(t("gone"));
+  if (current.name !== v.name && !(await renamePerson(db, personId, v.name))) return fail(t("duplicate", { name: v.name }));
+  if ((current.role ?? null) !== v.role && !(await setPersonRole(db, personId, v.role))) return fail(t("roleFailed"));
   if ((current.email ?? null) !== v.email) {
-    const msg = await setEmail(db, personId, v.email);
+    const msg = await setEmail(db, personId, v.email, t);
     if (msg) return fail(msg);
   }
   refresh(orgId);
@@ -131,10 +135,11 @@ export async function updateBoardPersonAction(orgId: string, personId: string, i
 }
 
 export async function removeBoardPersonAction(orgId: string, personId: string): Promise<ActionResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return fail(ADMIN_ONLY);
+  if (!db) return fail(t("adminOnly"));
   const people = isUuid(personId) ? await listPeople(db, orgId) : [];
-  if (!people.some((p) => p.id === personId)) return fail("Personen finns inte längre. Ladda om sidan.");
+  if (!people.some((p) => p.id === personId)) return fail(t("gone"));
   await deletePerson(db, personId);
   refresh(orgId);
   return OK;
@@ -142,23 +147,25 @@ export async function removeBoardPersonAction(orgId: string, personId: string): 
 
 /** Step 6: records (or withdraws) that a person has said yes to having their voice learned later. */
 export async function voiceConsentAction(orgId: string, personId: string, consent: boolean): Promise<ActionResult> {
-  if (!isUuid(orgId) || !isUuid(personId)) return fail("Personen finns inte längre. Ladda om sidan.");
+  const t = await copy();
+  if (!isUuid(orgId) || !isUuid(personId)) return fail(t("gone"));
   const db = await createSupabaseServerClient();
   const people = await listPeople(db, orgId);
-  if (!people.some((p) => p.id === personId)) return fail("Personen finns inte längre. Ladda om sidan.");
+  if (!people.some((p) => p.id === personId)) return fail(t("gone"));
   const { data, error } = await db.rpc("set_voice_consent", { p_person_id: personId, p_consent: consent });
-  if (error || data !== true) return fail(ADMIN_ONLY);
+  if (error || data !== true) return fail(t("adminOnly"));
   refresh(orgId);
   return OK;
 }
 
 /** Step 1: the förening's name (the same rule as Inställningar). */
 export async function renameOrgAction(orgId: string, name: string): Promise<ActionResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return fail(ADMIN_ONLY);
+  if (!db) return fail(t("adminOnly"));
   const clean = name.trim();
-  if (clean.length < 1 || clean.length > 100) return fail("Ange ett namn på högst 100 tecken.");
-  if (!(await updateOrgSettings(db, orgId, { name: clean }))) return fail(ADMIN_ONLY);
+  if (clean.length < 1 || clean.length > 100) return fail(t("orgName"));
+  if (!(await updateOrgSettings(db, orgId, { name: clean }))) return fail(t("adminOnly"));
   refresh(orgId);
   return OK;
 }
@@ -170,12 +177,13 @@ export type ProfileResult = { ok: true; profile: OrgProfile } | { ok: false; mes
  * parser gives the canonical form the database checks accept; RLS and the column grant decide.
  */
 export async function saveProfileAction(orgId: string, input: ProfileInput): Promise<ProfileResult> {
+  const t = await copy();
   const db = await adminDb(orgId);
-  if (!db) return { ok: false, message: ADMIN_ONLY };
+  if (!db) return { ok: false, message: t("adminOnly") };
   const str = (v: unknown) => (typeof v === "string" ? v : "");
-  const parsed = parseProfile({ about: str(input?.about), website: str(input?.website), facebook: str(input?.facebook), instagram: str(input?.instagram) });
-  if (!parsed.ok) return { ok: false, message: "Kontrollera fälten och försök igen.", errors: parsed.errors };
-  if (!(await updateOrgSettings(db, orgId, parsed.profile))) return { ok: false, message: ADMIN_ONLY };
+  const parsed = parseProfile({ about: str(input?.about), website: str(input?.website), facebook: str(input?.facebook), instagram: str(input?.instagram) }, await getLocale());
+  if (!parsed.ok) return { ok: false, message: (await getTranslations("profile"))("checkFields"), errors: parsed.errors };
+  if (!(await updateOrgSettings(db, orgId, parsed.profile))) return { ok: false, message: t("adminOnly") };
   refresh(orgId);
   return { ok: true, profile: parsed.profile };
 }

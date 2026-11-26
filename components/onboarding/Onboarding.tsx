@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
@@ -49,19 +50,13 @@ export interface OnboardingProps {
   historyCount: number;
 }
 
-const TITLES: Record<ShellStep, { title: string; lead?: string }> = {
-  namn: { title: "Välkommen! Hur ser ni ut?", lead: "Kontrollera namnet och lägg gärna till er logga, så känner alla igen föreningen." },
-  styrelsen: { title: "Vilka sitter i styrelsen?", lead: "En lista för alla: namn och roll för anteckningarna, e-post för den som ska kunna starta möten." },
-  mapp: { title: "Var ska mötesdokumenten ligga?", lead: "Simon Says skriver varje möte i ett Google-dokument. Välj en mapp i Drive som styrelsen delar." },
-  format: { title: "Så brukar ni ha möten", lead: "Simon Says skriver protokollet i er form. Det går att ändra när som helst." },
-  protokoll: { title: "Era tidigare möten", lead: "Läs in gamla protokoll, så vet Simon Says vad ni har beslutat och vad som är på gång – redan till första mötet." },
-  roster: { title: "Röster (valfritt)", lead: "Simon Says kan lära sig vem som pratar, så att ni slipper namnrundan varje gång." },
-  klart: { title: "Nu är ni redo", lead: "Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst." },
-};
+// Each step's heading and lead: onboarding.titles.<step> in the catalogs.
 
 const msg = (r: ActionResult) => (r.ok ? null : r.message);
 
 export function Onboarding(p: OnboardingProps) {
+  const t = useTranslations("onboarding");
+  const locale = useLocale();
   const router = useRouter();
   const orgId = p.org.id;
   const orgHref = `/orgs/${orgId}`;
@@ -118,7 +113,7 @@ export function Onboarding(p: OnboardingProps) {
   const uploadLogo = async (file: File) => {
     setLogoBusy(true);
     setLogoMsg(null);
-    const sq = await squareLogo(file);
+    const sq = await squareLogo(file, locale);
     if (!sq.ok) {
       setLogoMsg({ text: sq.message, tone: "danger" });
       setLogoBusy(false);
@@ -129,14 +124,14 @@ export function Onboarding(p: OnboardingProps) {
     try {
       const res = await fetch(`/api/orgs/${orgId}/logo`, { method: "POST", body: form });
       const json = (await res.json().catch(() => null)) as { updatedAt?: string; message?: string } | null;
-      if (!res.ok || !json?.updatedAt) setLogoMsg({ text: json?.message ?? "Loggan kunde inte sparas. Försök igen.", tone: "danger" });
+      if (!res.ok || !json?.updatedAt) setLogoMsg({ text: json?.message ?? t("logo.saveFailed"), tone: "danger" });
       else {
         setLogoAt(json.updatedAt);
-        setLogoMsg({ text: "Loggan är sparad.", tone: "success" });
+        setLogoMsg({ text: t("logo.saved"), tone: "success" });
         router.refresh();
       }
     } catch {
-      setLogoMsg({ text: "Vi nådde inte servern. Kontrollera nätet och försök igen.", tone: "danger" });
+      setLogoMsg({ text: t("logo.offline"), tone: "danger" });
     }
     setLogoBusy(false);
   };
@@ -146,9 +141,9 @@ export function Onboarding(p: OnboardingProps) {
     const res = await fetch(`/api/orgs/${orgId}/logo`, { method: "DELETE" }).catch(() => null);
     if (res?.ok) {
       setLogoAt(null);
-      setLogoMsg({ text: "Loggan är borttagen.", tone: "neutral" });
+      setLogoMsg({ text: t("logo.removed"), tone: "neutral" });
       router.refresh();
-    } else setLogoMsg({ text: "Loggan kunde inte tas bort. Försök igen.", tone: "danger" });
+    } else setLogoMsg({ text: t("logo.removeFailed"), tone: "danger" });
     setLogoBusy(false);
   };
 
@@ -159,14 +154,14 @@ export function Onboarding(p: OnboardingProps) {
     router.refresh();
   };
 
-  const board = (r: Promise<ActionResult>) => r.then((x) => { router.refresh(); return msg(x); }, () => "Vi nådde inte servern. Försök igen.");
+  const board = (r: Promise<ActionResult>) => r.then((x) => { router.refresh(); return msg(x); }, () => t("offlineShort"));
   const boardAdd = (r: Promise<ActionResult>) =>
     r.then(
       (x) => {
         router.refresh();
         return x.ok ? null : x.editPersonId ? { message: x.message, editPersonId: x.editPersonId } : x.message;
       },
-      () => "Vi nådde inte servern. Försök igen.",
+      () => t("offlineShort"),
     );
 
   const logoUrl = versionedLogoUrl(orgId, logoAt);
@@ -179,7 +174,8 @@ export function Onboarding(p: OnboardingProps) {
     skipped: state.skipped,
     onGo,
     direction,
-    ...TITLES[step],
+    title: t(`titles.${step}.title`),
+    lead: t(`titles.${step}.lead`),
   };
   const back = step !== "klart" && prevOf(step) ? () => go(prevOf(step as StepId)!, "back") : undefined;
 
@@ -197,10 +193,10 @@ export function Onboarding(p: OnboardingProps) {
                   if (!r.ok) return setNameError(r.message);
                 }
                 // Om oss (optional): saved only when something changed; empty fields are fine.
-                const parsed = parseProfile(profile);
+                const parsed = parseProfile(profile, locale);
                 if (!parsed.ok) return setProfileErrors(parsed.errors);
                 if (!sameProfile(parsed.profile, savedProfile)) {
-                  const r = await saveProfileAction(orgId, profile).catch(() => ({ ok: false as const, message: "Vi nådde inte servern. Försök igen.", errors: undefined }));
+                  const r = await saveProfileAction(orgId, profile).catch(() => ({ ok: false as const, message: t("offlineShort"), errors: undefined }));
                   if (!r.ok) return setProfileErrors(r.errors ?? { about: r.message });
                   setSavedProfile(r.profile);
                 }
@@ -274,7 +270,7 @@ export function Onboarding(p: OnboardingProps) {
                   if (!res?.ok) {
                     setBusy(false);
                     const json = (await res?.json().catch(() => null)) as { message?: string } | null;
-                    return setFormatError(json?.message ?? "Veckomötet kunde inte sparas. Försök igen.");
+                    return setFormatError(json?.message ?? t("weeklyFailed"));
                   }
                 }
                 // "Som våra gamla protokoll" without approving a learned format: nothing chosen yet.
@@ -301,7 +297,7 @@ export function Onboarding(p: OnboardingProps) {
                   }}
                 />
               ) : (
-                <p className="text-sm text-ink-3">Google-väljaren är inte inställd än. Välj Veckomöte så länge.</p>
+                <p className="text-sm text-ink-3">{t("pickerOffWeekly")}</p>
               )
             }
             pickerEnabled={p.pickerEnabled}
@@ -332,7 +328,7 @@ export function Onboarding(p: OnboardingProps) {
       return (
         <OnboardingShell
           {...shell}
-          footer={<StepFooter busy={busy} onBack={back} onSkip={() => finish("roster", "skipped")} onNext={() => finish("roster", "done")} nextLabel="Klar" />}
+          footer={<StepFooter busy={busy} onBack={back} onSkip={() => finish("roster", "skipped")} onNext={() => finish("roster", "done")} nextLabel={t("shell.finish")} />}
         >
           <VoicesStep
             people={p.board.filter((r) => r.personId && r.name).map((r) => ({ personId: r.personId!, name: r.name!, role: r.role, consent: r.voiceConsent }))}

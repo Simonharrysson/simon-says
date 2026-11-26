@@ -1,0 +1,100 @@
+{
+  "metaTitle": "Privacy",
+  "updated": "26 November 2026",
+  "draft": "Draft · updated {date} · legal review pending",
+  "title": "Privacy",
+  "lead": "Simon Says listens to your meetings. Here is what that means: what is sent where, what is stored, and how you remove it.",
+  "tocLabel": "Contents",
+  "toc": {
+    "kort": "In short",
+    "rummet": "In the room",
+    "sparas": "What is stored",
+    "mejl": "E-mail",
+    "vem": "Who processes data",
+    "grund": "Legal basis",
+    "rattigheter": "Your rights",
+    "radera": "Deleting",
+    "kontakt": "Contact"
+  },
+  "short": {
+    "audio": "We don't store any audio recording. The audio goes straight from the laptop to the transcription and becomes text while you talk.",
+    "doc": "The notes end up in a Google Doc in the Drive of the person who started the meeting. All of the association's members get edit access to the document (but can't share it further).",
+    "kept": "The transcript and the notes are also stored with us until you delete the meeting or the association.",
+    "accounts": "Members of the association who sign in have an account. Everyone else taking part in the meeting is just a name on the association's people list.",
+    "controller": "The data controller is <strong>Harrysson & Company AB</strong>."
+  },
+  "room": {
+    "consent": "Before a meeting can start, the person running it confirms that everyone in the room knows the meeting is transcribed and can ask for a pause. The confirmation is stored with the meeting. The Pause button stops the audio at once; nothing is sent until someone presses Resume.",
+    "transcript": "The association's admin chooses whether the full transcript is shared in the document (in a tab of its own) or only the notes."
+  },
+  "stored": {
+    "signedInTitle": "For those who sign in",
+    "nameEmail": "Name and e-mail address from Google.",
+    "key": "An encrypted key that lets us write in the documents Simon Says itself has created.",
+    "orgTitle": "For each association",
+    "orgBasics": "Name, members, invite link and the people list (names only).",
+    "invites": "E-mail addresses an admin types in to invite someone are only used to send the invitation. They are stored with when it was sent and whether the person has joined, until the association is deleted. The invitation shows the admin's name, and replies to the e-mail go to the admin's sign-in address (Reply-To), so the invited person sees that address.",
+    "meetings": "Meetings: times, transcript with speaker names, notes and a log of when the notes were updated. The transcript and notes are stored until the meeting or the association is deleted.",
+    "usage": "Usage records: how many seconds of audio, how much text to Claude and what it cost, per association and day. They are used for the limit of 20 hours a month and to stop abuse.",
+    "createdLog": "A log of which account created which associations (for the limit of two per person).",
+    "summary": "Summary after the meeting: when a meeting is over, Simon Says e-mails the decisions and tasks to people on the association's people list who have an e-mail address, by default only to those who weren't there (the admin can choose everyone, selected people or no one). Never to anyone outside the people list, never after test meetings. Every e-mail has a link to unsubscribe. We store who received the summary for which meeting (not the content); it disappears with the meeting, the person or the association.",
+    "privat": "Personal: what you record in Personal is visible only to you. The transcript, notes, the summary (written by Claude after the recording) and the tasks are stored with us the same way as an association's meetings, until you delete the recording or the context. The summary is e-mailed only to you. A Google Doc is created only if you tick it.",
+    "overview": "For the Overview tab: the headings of the agenda items (without names) and the goals the association's admin has approved. The headings disappear with the meeting, the goals with the association.",
+    "history": "Old minutes the admin chooses to import: the text is sent to Anthropic (Claude), which picks out dates, decisions, tasks (with role, not name) and short status lines. Only those lines are stored, never the document's text; the admin can remove them at any time and they disappear with the association.",
+    "drive": "Optional, only for admins and only to import old minutes: the admin can give Simon Says read access to their Google Drive. It is used to show the admin's folders and the names of the documents in the folders the admin chooses; only the minutes the admin ticks are opened. Folders and document names are not stored. The key for the read access is stored encrypted and separately from the sign-in key, is used only for the import and is deleted automatically after 24 hours; the admin can also remove it right away.",
+    "kept": "<strong>The usage records and the log of created associations remain even when the association is deleted.</strong> They contain no meeting content, only numbers and ids. The usage records are kept as long as the service runs, to prevent abuse of the free service and to follow the cost over time. When an association is deleted, only its id remains in the records, not its name. The log of created associations is kept to enforce the limit of two associations per person.",
+    "notTitle": "What is not stored",
+    "notAudio": "The audio from the meeting.",
+    "notDrive": "Nothing else in your Google Drive, and not the names of folders and documents shown when an admin imports old minutes.",
+    "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first."
+  },
+  "mail": "You decide which e-mails Simon Says sends you. Under Account you can turn off each kind of e-mail separately, or choose No e-mail at all. At the bottom of every e-mail there is a link to the same choices that works without signing in, even if you don't have an account. We only store your choices (and, if you have no account, the address they apply to) as long as the service runs, so that a no keeps applying. E-mail us if you want us to delete them.",
+  "processors": {
+    "service": "Service",
+    "does": "Does",
+    "goodToKnow": "Good to know",
+    "elevenlabs": {
+      "what": "Turns the audio into text during the meeting.",
+      "note": "Logs requests by default; zero retention may require a separate agreement. Processing may take place outside the EU. The audio is sent straight from the laptop."
+    },
+    "anthropic": {
+      "what": "Writes the notes from the transcript.",
+      "note": "Gets the text, not the audio. Processing may take place outside the EU."
+    },
+    "google": {
+      "what": "Sign-in, and the document in the Drive of the person who starts the meeting.",
+      "note": "We may only touch files Simon Says itself created or that you have chosen. Exception: an admin importing old minutes can give read access to their Drive (see What is stored). Processing may take place outside the EU."
+    },
+    "supabase": {
+      "what": "The database: accounts, associations, people lists, transcripts and notes.",
+      "note": "Stored within the EU."
+    },
+    "vercel": {
+      "what": "Runs the website and the server.",
+      "note": "The functions run in Stockholm. Vercel logs ordinary requests (for example IP address and URL) in its server logs."
+    },
+    "resend": {
+      "what": "Sends e-mail: operational alerts and daily summaries to us, invitations an admin sends to the addresses they type in, meeting summaries to people on an association's people list, and the summary of a recording in Personal to the person who recorded it.",
+      "note": "A meeting summary contains the meeting's decisions, tasks and short other items, never the transcript."
+    }
+  },
+  "legal": {
+    "intro": "This is our current assessment. A legal review is still pending.",
+    "account": "<strong>You, with an account:</strong> contract (GDPR art. 6.1 b). We need your details to run the service for you.",
+    "room": "<strong>Everyone in the room who is transcribed:</strong> legitimate interest (art. 6.1 f). The association has an interest in documenting its meetings. We weigh that against your privacy through the announcement in the room and the Pause button. You can object to the person running the meeting, or to us."
+  },
+  "rights": "You can request access to data about you, rectification, erasure, restriction of processing and data portability where it applies, and you can object to the processing. E-mail <mail>simon@harrysson.co</mail>. You can also complain to the Swedish Authority for Privacy Protection (IMY), <imy>imy.se</imy>.",
+  "transferTitle": "Transfers outside the EU",
+  "transfer": "When data is processed outside the EU, it relies, where relevant, on the providers' standard contractual clauses or the EU–US Data Privacy Framework.",
+  "delete": {
+    "meeting": "<strong>A meeting:</strong> the person who started it, or an admin, deletes it under the association. Transcript, notes and log disappear from our side.",
+    "privat": "<strong>A recording or a context in Personal:</strong> you delete them on the recording's or the context's page. Transcript, notes, summary and tasks disappear from our side.",
+    "org": "<strong>An association:</strong> an admin deletes it at the bottom of the association's page. Everything under it disappears, except the usage records described above.",
+    "account": "<strong>Your account, name, e-mail address and the encrypted Google key:</strong> there is no function for that in the service yet. E-mail <mail>simon@harrysson.co</mail> and we will delete them.",
+    "google": "<strong>Disconnect Simon Says in Google:</strong> remove the access at <link>myaccount.google.com/connections</link>. The key then stops working.",
+    "docs": "<strong>The Google Docs</strong> stay in Drive. They are yours, and you delete them in Drive as usual. Each member gets edit access to the documents of meetings started while they are a member. If a member is removed from the association, or leaves it, documents already shared stay shared with them until the owner removes the sharing in Drive."
+  },
+  "statusTitle": "The status page",
+  "status": "The public status page shows the number of meetings in progress, the number of meetings and minutes transcribed in the last week, and whether the service works. An association is shown by name only if an admin has ticked that in the settings.",
+  "contact": "Questions, or want to know what we have stored about you? Write to Harrysson & Company AB at <mail>simon@harrysson.co</mail>."
+}

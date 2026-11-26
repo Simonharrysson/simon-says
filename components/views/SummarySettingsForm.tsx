@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,12 +19,7 @@ export interface SummaryPersonOption {
   selected: boolean;
 }
 
-const MODES: { mode: SummaryMode; title: string; hint: string }[] = [
-  { mode: "missed", title: "Till de som missade mötet", hint: "Alla i personlistan med e-post som inte var med. Förvalt." },
-  { mode: "all", title: "Till alla", hint: "Alla i personlistan med e-post, också de som var med." },
-  { mode: "selected", title: "Till utvalda personer", hint: "Bara de du kryssar i nedan." },
-  { mode: "off", title: "Av", hint: "Inga sammanfattningar skickas." },
-];
+const MODES: SummaryMode[] = ["missed", "all", "selected", "off"];
 
 /**
  * Inställningar → "Sammanfattning efter mötet" (0037, admins). After a meeting Simon Says mails
@@ -40,6 +36,8 @@ export function SummarySettingsForm({
   people: SummaryPersonOption[];
   action: FormAction;
 }) {
+  const t = useTranslations("summary");
+  const common = useTranslations("common");
   const [mode, setMode] = useState<SummaryMode>(savedMode);
   const [saved, setSaved] = useState(false);
   useEffect(() => setMode(savedMode), [savedMode]);
@@ -62,12 +60,10 @@ export function SummarySettingsForm({
     >
       <input type="hidden" name="orgId" value={orgId} />
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 font-medium">Sammanfattning efter mötet</legend>
-        <p className="mb-2 text-sm text-ink-2">
-          När ett möte är klart mejlar Simon Says besluten och uppgifterna. Var och en ser sina egna uppgifter först och kan
-          tacka nej i mejlet eller under Konto. Testmöten skickas aldrig.
-        </p>
-        {MODES.map((o) => {
+        <legend className="mb-1 font-medium">{t("legend")}</legend>
+        <p className="mb-2 text-sm text-ink-2">{t("intro")}</p>
+        {MODES.map((m) => {
+          const o = { mode: m, title: t(`modes.${m}.title`), hint: t(`modes.${m}.hint`) };
           const checked = mode === o.mode;
           return (
             <label
@@ -96,14 +92,14 @@ export function SummarySettingsForm({
 
       {mode === "selected" ? (
         <fieldset className="flex flex-col">
-          <legend className="mb-2 text-sm font-medium">Vilka ska få sammanfattningen?</legend>
+          <legend className="mb-2 text-sm font-medium">{t("whoLegend")}</legend>
           {people.length === 0 ? (
-            <p className="text-sm text-ink-3">Personlistan är tom. Lägg till personer under Personer.</p>
+            <p className="text-sm text-ink-3">{t("emptyList")}</p>
           ) : (
             <ul className="flex flex-col rounded-lg border border-line bg-surface">
               {people.map((p) => {
                 const id = `summary-person-${p.id}`;
-                const note = !p.hasEmail ? "Ingen e-postadress" : null;
+                const note = !p.hasEmail ? t("noEmail") : null;
                 return (
                   <li key={p.id} className="border-t border-line first:border-t-0">
                     <label htmlFor={id} className={cn("flex min-h-11 items-center gap-3 px-4 py-2", p.hasEmail ? "cursor-pointer" : "cursor-not-allowed")}>
@@ -134,21 +130,19 @@ export function SummarySettingsForm({
       ) : (
         mode !== "off" && (
           <p className="text-sm text-ink-3">
-            {withEmail === 0
-              ? "Ingen i personlistan har en e-postadress än. Lägg till adresser i Kom igång → Styrelsen."
-              : `${withEmail} ${withEmail === 1 ? "person" : "personer"} i personlistan har en e-postadress.`}
+            {withEmail === 0 ? t("noneWithEmail") : t("withEmail", { count: withEmail })}
           </p>
         )
       )}
 
       <div className="flex flex-wrap items-center gap-3">
-        <SubmitButton variant="primary" pendingLabel="Sparar…">
-          Spara
+        <SubmitButton variant="primary" pendingLabel={common("saving")}>
+          {common("save")}
         </SubmitButton>
         <span className="inline-flex items-center gap-1 text-sm font-semibold text-green" role="status" aria-live="polite">
           {saved && (
             <>
-              <IconCheck size={18} /> Sparat
+              <IconCheck size={18} /> {t("saved")}
             </>
           )}
         </span>

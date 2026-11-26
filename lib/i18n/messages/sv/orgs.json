@@ -1,0 +1,16 @@
+{
+  "metaTitle": "Föreningar",
+  "title": "Föreningar",
+  "intro": "Varje förening har sin egen personlista, sina möten och sin inbjudningslänk.",
+  "emptyTitle": "Du är inte med i någon förening än",
+  "emptyText": "Har någon skickat en inbjudningslänk? Öppna den så hamnar du rätt. Annars skapar du föreningen här nedanför — du blir admin och kan bjuda in resten.",
+  "yours": "Dina föreningar",
+  "admin": "Admin",
+  "createTitle": "Skapa en förening",
+  "name": "Namn",
+  "namePlaceholder": "t.ex. LiU AI Society",
+  "creating": "Skapar…",
+  "create": "Skapa",
+  "limit": "Du kan skapa högst två föreningar. Att gå med i andras räknas inte.",
+  "toYours": "Till dina föreningar"
+}

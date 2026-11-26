@@ -1,4 +1,5 @@
 import { isEmailCategory } from "@/lib/email/categories";
+import { apiT } from "@/lib/i18n/api";
 import { unsubscribeCategory } from "@/lib/email/prefs";
 import { checkEmailPrefsToken } from "@/lib/email/token";
 import { appOrigin } from "@/lib/origin";
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
  * URL in a browser, and link scanners prefetch it) changes nothing: it shows the /mejl page.
  */
 export async function GET(request: Request) {
+  const t = apiT(request);
   const from = new URL(request.url);
   const to = new URL("/mejl", appOrigin());
   for (const key of ["t", "k"]) {
@@ -22,10 +24,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const t = apiT(request);
   const url = new URL(request.url);
   const email = checkEmailPrefsToken(url.searchParams.get("t"));
   const category = url.searchParams.get("k");
-  if (!email || !isEmailCategory(category)) return new Response("Ogiltig länk", { status: 400 });
+  if (!email || !isEmailCategory(category)) return new Response(t("api.invalidLink"), { status: 400 });
   const ok = await unsubscribeCategory(email, category);
-  return new Response(ok ? "Avslutat" : "Försök igen", { status: ok ? 200 : 503 });
+  return new Response(ok ? "Avslutat" : t("api.tryAgain"), { status: ok ? 200 : 503 });
 }

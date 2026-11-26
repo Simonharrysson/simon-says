@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useId, useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
@@ -7,16 +8,15 @@ import { hintClass } from "@/components/ui/Field";
 import { IconChevronDown, IconChevronRight, IconRefresh } from "@/components/ui/icons";
 import { controlClass } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDateTime, plural } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
+import { defaultLocale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 import { inviteBody, inviteFooter, inviteSubject, linkLikeName } from "@/lib/invites/email";
 import {
   canResend,
   INVITE_LIMITS,
-  LINK_NAME_MESSAGE,
   parseEmails,
-  RESULT_LABEL,
   RETRYABLE,
-  STATUS_LABEL,
   type InviteResult,
   type InviteRow,
 } from "@/lib/invites/rules";
@@ -57,7 +57,7 @@ export interface InviteByEmailProps {
   send?: SendInvites;
 }
 
-async function postInvites(orgId: string, emails: string[], resend: boolean): Promise<SendResponse> {
+async function postInvites(orgId: string, emails: string[], resend: boolean, copy: { failed: string; offline: string }): Promise<SendResponse> {
   try {
     const res = await fetch(`/api/orgs/${orgId}/invites`, {
       method: "POST",
@@ -65,18 +65,20 @@ async function postInvites(orgId: string, emails: string[], resend: boolean): Pr
       body: JSON.stringify({ emails, resend }),
     });
     const body = (await res.json().catch(() => null)) as { results?: AddressOutcome[]; invites?: InviteRow[]; message?: string } | null;
-    if (!res.ok || !body?.results) return { ok: false, message: body?.message ?? "Inbjudningarna kunde inte skickas. Försök igen." };
+    if (!res.ok || !body?.results) return { ok: false, message: body?.message ?? copy.failed };
     return { ok: true, results: body.results, invites: body.invites ?? [] };
   } catch {
-    return { ok: false, message: "Ingen kontakt med servern. Kontrollera nätet och försök igen." };
+    return { ok: false, message: copy.offline };
   }
 }
 
 const tone = (r: InviteResult) => (r === "sent" ? "text-green" : r === "failed" || r === "invalid" ? "text-red" : "text-ink-3");
 
 export function InviteByEmail(p: InviteByEmailProps) {
+  const t = useTranslations("invites");
+  const locale = useLocale();
   const id = useId();
-  const send: SendInvites = p.send ?? ((emails, resend) => postInvites(p.orgId, emails, resend));
+  const send: SendInvites = p.send ?? ((emails, resend) => postInvites(p.orgId, emails, resend, { failed: t("sendFailed"), offline: t("offline") }));
   const [text, setText] = useState(p.initialText ?? "");
   const [preview, setPreview] = useState(Boolean(p.initialPreview));
   const [sending, setSending] = useState(false);
@@ -137,7 +139,7 @@ export function InviteByEmail(p: InviteByEmailProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-emails`}>E-postadresser</Label>
+        <Label htmlFor={`${id}-emails`}>{t("emailsLabel")}</Label>
         <textarea
           id={`${id}-emails`}
           className={cn(controlClass, "min-h-24 py-2 leading-relaxed")}
@@ -151,13 +153,13 @@ export function InviteByEmail(p: InviteByEmailProps) {
         />
         <p id={`${id}-hint`} className={hintClass} aria-live="polite">
           {text.trim() === "" ? (
-            "En eller flera, med komma eller ny rad emellan. Vi skickar ett mejl med föreningens länk."
+            t("hint")
           ) : (
             <>
-              {plural(toSend.length, "adress", "adresser")}
-              {already.length > 0 && ` · ${plural(already.length, "är redan medlem", "är redan medlemmar")}`}
-              {parsed.invalid.length > 0 && <span className="text-red"> · inte e-post: {parsed.invalid.join(", ")}</span>}
-              {tooMany && <span className="text-red"> · högst {INVITE_LIMITS.perForm} åt gången</span>}
+              {t("addresses", { count: toSend.length })}
+              {already.length > 0 && t("alreadyMembers", { count: already.length })}
+              {parsed.invalid.length > 0 && <span className="text-red">{t("notEmail", { list: parsed.invalid.join(", ") })}</span>}
+              {tooMany && <span className="text-red">{t("tooMany", { max: INVITE_LIMITS.perForm })}</span>}
             </>
           )}
         </p>
@@ -166,19 +168,25 @@ export function InviteByEmail(p: InviteByEmailProps) {
       {offer.length > 0 && (
         <div>
           <Button size="sm" variant="secondary" onClick={() => setText((t) => [t.trim(), ...offer].filter(Boolean).join("\n"))}>
-            {`Lägg till ${plural(offer.length, "adress", "adresser")} från listan`}
+            {t("addFromList", { count: offer.length })}
           </Button>
         </div>
       )}
 
-      {linkName && <Banner tone="warning">{LINK_NAME_MESSAGE[linkName]}</Banner>}
+      {linkName && <Banner tone="warning">{t(`linkName.${linkName}`)}</Banner>}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="primary" loading={sending} disabled={toSend.length === 0 || tooMany || busyEmail !== null || linkName !== null} onClick={() => run(toSend, false)}>
-          {sending ? (progress && progress.total > INVITE_LIMITS.perRequest ? `Skickar ${progress.done + 1}–${Math.min(progress.done + INVITE_LIMITS.perRequest, progress.total)} av ${progress.total}…` : "Skickar…") : toSend.length > 0 ? `Skicka ${plural(toSend.length, "inbjudan", "inbjudningar")}` : "Skicka inbjudan"}
+          {sending
+            ? progress && progress.total > INVITE_LIMITS.perRequest
+              ? t("sendingRange", { from: progress.done + 1, to: Math.min(progress.done + INVITE_LIMITS.perRequest, progress.total), total: progress.total })
+              : t("sending")
+            : toSend.length > 0
+              ? t("sendCount", { count: toSend.length })
+              : t("sendOne")}
         </Button>
         <Button variant="ghost" icon={preview ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />} aria-expanded={preview} aria-controls={`${id}-preview`} onClick={() => setPreview(!preview)}>
-          {preview ? "Dölj mejlet" : "Visa mejlet"}
+          {preview ? t("hideEmail") : t("showEmail")}
         </Button>
       </div>
 
@@ -187,17 +195,17 @@ export function InviteByEmail(p: InviteByEmailProps) {
       {error && <Banner tone="danger">{error}</Banner>}
 
       {results && results.length > 0 && (
-        <ul className="flex flex-col rounded-md border border-line" aria-label="Resultat">
+        <ul className="flex flex-col rounded-md border border-line" aria-label={t("results")}>
           {results.map((r) => (
             <li key={r.email} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-sm first:border-t-0">
               <span className="min-w-0 flex-1 wrap-anywhere">{r.email}</span>
               <span className={cn("flex-none", tone(r.result))}>
-                {RESULT_LABEL[r.result]}
-                {r.result === "resend_limit" && r.nextAt && ` · igen ${formatDateTime(r.nextAt)}`}
+                {t(`result.${r.result}`)}
+                {r.result === "resend_limit" && r.nextAt && t("againAt", { date: formatDateTime(r.nextAt, locale) })}
               </span>
               {RETRYABLE.has(r.result) && (
                 <Button size="sm" variant="secondary" icon={<IconRefresh size={14} />} loading={busyEmail === r.email} disabled={sending} onClick={() => run([r.email], true, r.email)}>
-                  Försök igen
+                  {t("tryAgain")}
                 </Button>
               )}
             </li>
@@ -208,14 +216,14 @@ export function InviteByEmail(p: InviteByEmailProps) {
       {invites.length > 0 && (
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium" id={`${id}-sent`}>
-            Skickade inbjudningar
+            {t("sentInvites")}
           </span>
           <ul className="flex flex-col rounded-md border border-line" aria-labelledby={`${id}-sent`}>
             {invites.map((inv) => (
               <InviteListRow key={inv.email} invite={inv} busy={busyEmail === inv.email} disabled={sending || (busyEmail !== null && busyEmail !== inv.email)} onResend={() => run([inv.email], true, inv.email)} />
             ))}
           </ul>
-          <p className={hintClass}>”Skicka igen” går en gång per dygn och adress.</p>
+          <p className={hintClass}>{t("resendRule")}</p>
         </div>
       )}
     </div>
@@ -224,51 +232,69 @@ export function InviteByEmail(p: InviteByEmailProps) {
 
 function InviteListRow({ invite: inv, busy, disabled, onResend }: { invite: InviteRow; busy: boolean; disabled: boolean; onResend: () => void }) {
   const when = inv.status === "accepted" && inv.acceptedAt ? inv.acceptedAt : inv.lastSentAt;
+  const t = useTranslations("invites");
+  const locale = useLocale();
   const resendable = canResend(inv);
   return (
     <li className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-sm first:border-t-0">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="wrap-anywhere">{inv.email}</span>
         <span className={cn("text-xs", inv.status === "accepted" ? "text-green" : inv.status === "failed" ? "text-red" : "text-ink-3")}>
-          {STATUS_LABEL[inv.status]}
-          {when && ` · ${formatDateTime(when)}`}
+          {t(`status.${inv.status}`)}
+          {when && ` · ${formatDateTime(when, locale)}`}
         </span>
       </span>
       {inv.status !== "accepted" &&
         (resendable ? (
           <Button size="sm" variant="secondary" icon={<IconRefresh size={14} />} loading={busy} disabled={disabled} onClick={onResend}>
-            {inv.status === "sent" ? "Skicka igen" : "Försök igen"}
+            {inv.status === "sent" ? t("resend") : t("tryAgain")}
           </Button>
         ) : (
-          inv.nextResendAt && <span className="text-xs text-ink-3">Igen {formatDateTime(inv.nextResendAt)}</span>
+          inv.nextResendAt && <span className="text-xs text-ink-3">{t("againShort", { date: formatDateTime(inv.nextResendAt, locale) })}</span>
         ))}
     </li>
   );
 }
 
+/** The preview shows the mail most invitees get: in Swedish (the default for an unknown address). */
+const MAIL_LOCALE = defaultLocale;
+
 /** The e-mail as the invitee sees it (design A), drawn with React: every value is text, never HTML. */
 export function EmailPreview({ id, orgName, inviterName, inviteUrl }: { id?: string; orgName: string; inviterName: string; inviteUrl: string }) {
+  const t = useTranslations("invites");
+  const locale = useLocale();
+  // The mail itself is in the recipient's language: Swedish unless their account chose English.
+  const mail = translator(MAIL_LOCALE);
   return (
-    <figure id={id} className="m-0 flex flex-col gap-2" aria-label="Förhandsvisning av mejlet">
+    <figure id={id} className="m-0 flex flex-col gap-2" aria-label={t("previewLabel")}>
       <figcaption className="flex flex-col text-xs text-ink-3">
         <span>
-          <span className="font-medium text-ink-2">Ämne:</span> {inviteSubject(inviterName, orgName)}
+          <span className="font-medium text-ink-2">{t("subject")}</span> {inviteSubject(inviterName, orgName, MAIL_LOCALE)}
         </span>
-        <span>Från Simon Says · svar går till dig</span>
+        <span>{t("from")}</span>
+        {locale !== MAIL_LOCALE && <span>{t("previewLanguage")}</span>}
       </figcaption>
       <div className="rounded-md bg-[#fafafa] p-4 text-[#171717] max-md:p-2">
         <div className="mb-3 px-1 font-serif text-xl">Simon Says</div>
         <div className="rounded-lg border border-[#ebebeb] bg-white p-6 max-md:p-4">
-          <p className="m-0 mb-3 text-xl font-semibold tracking-tight wrap-anywhere">Gå med i {orgName}</p>
-          <p className="m-0 mb-5 text-sm leading-relaxed text-[#4d4d4d]">{inviteBody(inviterName)}</p>
-          <span className="inline-block rounded-md bg-[#171717] px-4 py-2.5 text-sm font-medium text-white">Gå med i {orgName}</span>
-          <p className="m-0 mt-4 text-xs text-[#666]">
-            Fungerar inte knappen? Öppna länken:
+          <p className="m-0 mb-3 text-xl font-semibold tracking-tight wrap-anywhere" lang={MAIL_LOCALE}>
+            {mail("emails.invite.heading", { org: orgName })}
+          </p>
+          <p className="m-0 mb-5 text-sm leading-relaxed text-[#4d4d4d]" lang={MAIL_LOCALE}>
+            {inviteBody(inviterName, MAIL_LOCALE)}
+          </p>
+          <span className="inline-block rounded-md bg-[#171717] px-4 py-2.5 text-sm font-medium text-white" lang={MAIL_LOCALE}>
+            {mail("emails.invite.button", { org: orgName })}
+          </span>
+          <p className="m-0 mt-4 text-xs text-[#666]" lang={MAIL_LOCALE}>
+            {mail("emails.invite.fallback")}
             <br />
             <span className="font-mono break-all text-[#0068d6]">{inviteUrl.replace(/^https?:\/\//, "")}</span>
           </p>
         </div>
-        <p className="m-0 mt-3 px-1 text-xs leading-relaxed text-[#666]">{inviteFooter(inviterName, orgName)}</p>
+        <p className="m-0 mt-3 px-1 text-xs leading-relaxed text-[#666]" lang={MAIL_LOCALE}>
+          {inviteFooter(inviterName, orgName, MAIL_LOCALE)}
+        </p>
       </div>
     </figure>
   );

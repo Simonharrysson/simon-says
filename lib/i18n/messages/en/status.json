@@ -1,0 +1,22 @@
+{
+  "metaTitle": "Status",
+  "title": "Status",
+  "intro": "Simon Says writes meeting notes live in Google Docs for associations in Linköping. This shows what is happening right now. Associations are shown by name only if they have chosen to be.",
+  "unavailableTitle": "The numbers can't be loaded right now",
+  "unavailableText": "Try again in a while. It doesn't affect meetings in progress.",
+  "health": {
+    "ok": { "title": "Everything works", "text": "Transcription and notes are running as they should." },
+    "degraded": { "title": "Notes are slow", "text": "Transcription works, but it takes longer than usual before the notes show up in the documents." },
+    "paused": { "title": "The service is paused", "text": "New meetings can't start right now. Meetings in progress end and their notes are finished." }
+  },
+  "liveNow": "Meetings right now",
+  "meetingsThisWeek": "Meetings this week",
+  "minutesThisWeek": "Minutes this week",
+  "inProgress": "In progress right now",
+  "noneLive": "No meetings in progress right now.",
+  "liveHidden": "{count, plural, one {One meeting is in progress} other {# meetings are in progress}}. The associations haven't chosen to be shown.",
+  "started": "Started {time}",
+  "live": "Live",
+  "moreHidden": "And {count} more not shown by name.",
+  "updated": "Updated {time}."
+}

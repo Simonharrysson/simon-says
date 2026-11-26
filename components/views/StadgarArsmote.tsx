@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Banner } from "@/components/ui/Banner";
@@ -8,18 +9,13 @@ import { hintClass } from "@/components/ui/Field";
 import { IconCheck, IconPlus, IconTrash } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { plural } from "@/lib/format";
 
 // The stadgar → the årsmöte's agenda (todo #15), shared by onboarding step 4 and Mötesformat's
 // "Lägg in årsmötet från stadgarna": pick the stadgar (Doc or PDF), Simon Says reads them (one
 // Claude call), the admin checks the list, and it is saved as the förening's own Årsmöte format.
 // The stadgar feed only the årsmöte: no items are added to board or weekly meetings.
 
-export const STADGAR_COPY = {
-  start: "Lägg in årsmötet från stadgarna",
-  lead: "Ladda upp era stadgar så gör Simon Says årsmötets dagordning.",
-  hint: "Google-dokument eller PDF, högst 10 MB. Simon Says sparar bara punkterna, aldrig stadgarna.",
-} as const;
+// Copy: stadgar.* in lib/i18n/messages.
 
 const ARSMOTE_MAX = 18;
 
@@ -33,15 +29,16 @@ export type StadgarPhase =
 
 /** The flow's state and actions. `pick` calls the Picker right away, so the click's activation reaches it. */
 export function useStadgarArsmote(orgId: string, onSaved?: () => void) {
+  const t = useTranslations("stadgar");
   const picker = usePicker();
   const [stadgar, setStadgar] = useState<StadgarPhase>({ phase: "idle" });
 
   const pick = async () => {
     let picked;
     try {
-      picked = await picker.open({ mode: "doc-or-pdf", title: "Välj föreningens stadgar" });
+      picked = await picker.open({ mode: "doc-or-pdf", title: t("pickTitle") });
     } catch (err) {
-      setStadgar({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen." });
+      setStadgar({ phase: "error", message: err instanceof PickerError ? err.message : t("pickerFailed") });
       return;
     }
     if (!picked?.[0]) return;
@@ -54,12 +51,12 @@ export function useStadgarArsmote(orgId: string, onSaved?: () => void) {
       });
       const json = (await res.json().catch(() => null)) as { arsmote?: string[]; message?: string } | null;
       if (!res.ok || !Array.isArray(json?.arsmote)) {
-        setStadgar({ phase: "error", message: json?.message ?? "Simon Says kunde inte läsa stadgarna. Försök igen." });
+        setStadgar({ phase: "error", message: json?.message ?? t("readFailed") });
         return;
       }
       setStadgar({ phase: "review", arsmote: json.arsmote });
     } catch {
-      setStadgar({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
+      setStadgar({ phase: "error", message: t("offline") });
     }
   };
 
@@ -77,7 +74,7 @@ export function useStadgarArsmote(orgId: string, onSaved?: () => void) {
       onSaved?.();
     } else {
       const json = (await res?.json().catch(() => null)) as { message?: string } | null;
-      setStadgar({ phase: "error", message: json?.message ?? "Årsmötet kunde inte sparas. Försök igen." });
+      setStadgar({ phase: "error", message: json?.message ?? t("saveFailed") });
     }
   };
 
@@ -104,11 +101,13 @@ export interface StadgarArsmoteProps {
 
 /** Presentational: the flow in each phase (used by onboarding, Mötesformat and /design). */
 export function StadgarArsmote(p: StadgarArsmoteProps) {
+  const t = useTranslations("stadgar");
+  const common = useTranslations("common");
   const s = p.stadgar;
   if (s.phase === "reading") {
     return (
       <p className="flex items-center gap-2 text-sm text-ink-2" role="status" aria-live="polite">
-        <Spinner /> Simon Says läser stadgarna … det tar ungefär en halv minut.
+        <Spinner /> {t("reading")}
       </p>
     );
   }
@@ -117,18 +116,18 @@ export function StadgarArsmote(p: StadgarArsmoteProps) {
       <div className="mt-2 flex flex-col gap-6 animate-notice-in">
         <ItemList
           uid={`${p.uid}-ars`}
-          title="Årsmötets dagordning"
-          empty="Stadgarna listar ingen dagordning för årsmötet. Årsmötet följer standarddagordningen."
+          title={t("agendaTitle")}
+          empty={t("empty")}
           items={s.arsmote}
           max={ARSMOTE_MAX}
           onChange={p.onChange}
         />
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" onClick={p.onSave} loading={s.phase === "saving"}>
-            Spara för årsmötet
+            {t("save")}
           </Button>
           <Button variant="ghost" onClick={p.onCancel} disabled={s.phase === "saving"}>
-            Avbryt
+            {common("cancel")}
           </Button>
         </div>
       </div>
@@ -142,14 +141,14 @@ export function StadgarArsmote(p: StadgarArsmoteProps) {
           <span>
             {s.phase === "saved"
               ? s.arsmote
-                ? `Sparat: årsmötets ${plural(s.arsmote, "punkt", "punkter")}.`
-                : "Årsmötet följer standarddagordningen."
-              : "Årsmötet följer era stadgar."}
+                ? t("saved", { count: s.arsmote })
+                : t("standard")
+              : t("follows")}
           </span>
         </p>
         {p.pickerEnabled && (
           <Button variant="ghost" size="sm" onClick={p.onPick}>
-            Läs in stadgarna igen
+            {t("readAgain")}
           </Button>
         )}
       </div>
@@ -164,17 +163,18 @@ export function StadgarArsmote(p: StadgarArsmoteProps) {
       )}
       {p.pickerEnabled ? (
         <Button variant="secondary" onClick={p.onPick}>
-          {s.phase === "error" ? "Försök igen" : "Välj stadgarna i Google Drive"}
+          {s.phase === "error" ? t("tryAgain") : t("pick")}
         </Button>
       ) : (
-        <p className="text-sm text-ink-3">Google-väljaren är inte inställd än, så stadgarna kan läsas in senare.</p>
+        <p className="text-sm text-ink-3">{t("pickerOff")}</p>
       )}
-      <p className={hintClass}>{STADGAR_COPY.hint}</p>
+      <p className={hintClass}>{t("hint")}</p>
     </div>
   );
 }
 
 function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; title: string; empty: string; items: string[]; max: number; onChange: (items: string[]) => void }) {
+  const t = useTranslations("stadgar");
   const [draft, setDraft] = useState("");
   const add = (e: FormEvent) => {
     e.preventDefault();
@@ -186,7 +186,7 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-base font-semibold">
-        {title} <span className="font-normal text-ink-3">· {plural(items.length, "punkt", "punkter")}</span>
+        {title} <span className="font-normal text-ink-3">· {t("items", { count: items.length })}</span>
       </h3>
       {items.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
@@ -197,7 +197,7 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
               <span className="w-6 flex-none font-mono text-xs text-ink-3">{i + 1}.</span>
               <span className="min-w-0 flex-1 text-sm wrap-anywhere">{item}</span>
               <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={16} />} onClick={() => onChange(items.filter((_, j) => j !== i))}>
-                {`Ta bort ${item}`}
+                {t("removeItem", { item })}
               </Button>
             </li>
           ))}
@@ -206,11 +206,11 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
       {items.length < max && (
         <form onSubmit={add} className="flex gap-2">
           <Label htmlFor={`${uid}-add`} className="sr-only">
-            Ny punkt under {title}
+            {t("newItem", { title })}
           </Label>
-          <Input id={`${uid}-add`} value={draft} maxLength={80} placeholder="Lägg till punkt" onChange={(e) => setDraft(e.target.value)} />
+          <Input id={`${uid}-add`} value={draft} maxLength={80} placeholder={t("addPlaceholder")} onChange={(e) => setDraft(e.target.value)} />
           <Button type="submit" variant="ghost" icon={<IconPlus size={18} />} disabled={!draft.trim()}>
-            Lägg till
+            {t("add")}
           </Button>
         </form>
       )}

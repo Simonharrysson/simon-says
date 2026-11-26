@@ -1,12 +1,14 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { IconChevronDown, IconExternal, IconMic } from "@/components/ui/icons";
-import { meetingTypeName, type MeetingType } from "@/lib/prepare/types";
+import { intlTag, type Locale } from "@/lib/i18n/config";
+import type { MeetingType } from "@/lib/prepare/types";
 
 /**
  * "Starta möte" on the org page: no explanations, just the choices. Starting leads to the live
@@ -24,12 +26,13 @@ export interface PreparedLink {
   docUrl: string;
 }
 
-/** "ons 2 dec" (+ " 12.00"). */
-export function nextMeetingWhen(date: string, time: string | null): string {
-  const d = new Intl.DateTimeFormat("sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Stockholm" })
+/** "ons 2 dec" (+ " 12.00"); English "Wed 2 Dec" (+ " 12:00"). */
+export function nextMeetingWhen(date: string, time: string | null, locale: Locale = "sv"): string {
+  const d = new Intl.DateTimeFormat(intlTag(locale), { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Stockholm" })
     .format(new Date(`${date}T12:00:00Z`))
-    .replace(/\./g, "");
-  return `${d}${time ? ` ${time.replace(":", ".")}` : ""}`;
+    .replace(/\./g, "")
+    .replace(/,/g, "");
+  return `${d}${time ? ` ${locale === "en" ? time : time.replace(":", ".")}` : ""}`;
 }
 
 export function StartMeetingForm({
@@ -43,6 +46,9 @@ export function StartMeetingForm({
   /** Upcoming prepared agendas, soonest first; the row shows the next one. */
   prepared?: PreparedLink[];
 }) {
+  const t = useTranslations("start");
+  const types = useTranslations("formats.meetingTypes");
+  const locale = useLocale();
   const router = useRouter();
   const [starting, setStarting] = useState<null | "new" | "agenda">(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +68,9 @@ export function StartMeetingForm({
         return;
       }
       const json = (await res.json().catch(() => null)) as { message?: string } | null;
-      setError(json?.message ?? "Mötet kunde inte starta. Försök igen om en liten stund.");
+      setError(json?.message ?? t("startFailed"));
     } catch {
-      setError("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+      setError(t("offline"));
     }
     setStarting(null);
   }
@@ -73,48 +79,48 @@ export function StartMeetingForm({
     <div className="flex flex-col gap-4">
       {next && (
         <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-          <span className="text-ink-3">Nästa möte</span>
+          <span className="text-ink-3">{t("next")}</span>
           <span>
-            <span className="font-medium">{meetingTypeName(next.kind)}</span> · {nextMeetingWhen(next.date, next.time)}
+            <span className="font-medium">{types(`${next.kind}.name`)}</span> · {nextMeetingWhen(next.date, next.time, locale)}
           </span>
           <span className="flex items-baseline gap-3">
             <a href={next.docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1">
-              Dagordning
+              {t("agenda")}
               <IconExternal size={14} />
             </a>
             <a href={`/orgs/${orgId}/forbered?datum=${next.date}`} className="text-ink-3">
-              Ändra
+              {t("change")}
             </a>
           </span>
         </p>
       )}
       {error && (
-        <Banner tone="danger" title="Mötet kunde inte starta">
+        <Banner tone="danger" title={t("startFailedTitle")}>
           {error}
         </Banner>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <ButtonLink href={`/meetings/ny/${orgId}`} variant="primary" size="lg" icon={<IconMic />} className="max-sm:w-full">
-          Starta möte
+          {t("start")}
         </ButtonLink>
         <ButtonLink href={`/orgs/${orgId}/forbered`} variant="secondary" size="lg" className="max-sm:w-full">
-          Förbered möte
+          {t("prepare")}
         </ButtonLink>
         {showTestMeeting && (
           <div className="max-sm:-ml-2 sm:ml-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" loading={starting !== null} disabled={starting !== null}>
-                  {starting ? "Startar testmöte …" : "Testmöte"}
+                  {starting ? t("startingTest") : t("test")}
                   {!starting && <IconChevronDown size={16} className="ml-1 inline-block align-[-0.2em] text-ink-2" />}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem hint="Ett påhittat möte spelas upp, ca 3–8 min." onSelect={() => void startTest("new")}>
-                  Utan dagordning
+                <DropdownMenuItem hint={t("testNewHint")} onSelect={() => void startTest("new")}>
+                  {t("testNew")}
                 </DropdownMenuItem>
-                <DropdownMenuItem hint="Ett påhittat veckomöte i ett nytt dagordningsdokument." onSelect={() => void startTest("agenda")}>
-                  Med dagordning
+                <DropdownMenuItem hint={t("testAgendaHint")} onSelect={() => void startTest("agenda")}>
+                  {t("testAgenda")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

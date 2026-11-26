@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { useEffect, useId, useState } from "react";
 import { Field, fieldErrorClass, hintClass } from "@/components/ui/Field";
 import { IconAlert, IconCheck } from "@/components/ui/icons";
@@ -27,13 +29,14 @@ export function OrgProfileFields({
   onChange: (field: keyof ProfileInput, text: string) => void;
   errors?: ProfileErrors;
 }) {
+  const t = useTranslations("profile");
   const id = useId();
   const count = [...value.about.replace(/\r\n?/g, "\n")].length;
   const over = count > ABOUT_MAX;
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-about`}>Om oss</Label>
+        <Label htmlFor={`${id}-about`}>{t("about")}</Label>
         <Textarea
           id={`${id}-about`}
           name="about"
@@ -44,7 +47,7 @@ export function OrgProfileFields({
           aria-describedby={`${id}-about-hint${errors?.about ? ` ${id}-about-error` : ""}`}
         />
         <p id={`${id}-about-hint`} className={cn(hintClass, "flex justify-between gap-4")}>
-          <span>Några meningar om föreningen. Alla medlemmar ser texten på föreningssidan.</span>
+          <span>{t("aboutHint")}</span>
           <span className={cn("font-mono tabular-nums", over && "text-red")}>
             {count}/{ABOUT_MAX}
           </span>
@@ -59,7 +62,7 @@ export function OrgProfileFields({
       <Field
         id={`${id}-website`}
         name="website"
-        label="Webbplats"
+        label={t("websiteLabel")}
         value={value.website}
         inputMode="url"
         autoComplete="url"
@@ -94,6 +97,7 @@ export function OrgProfileFields({
 
 /** Inställningar → "Om oss". Saves through `save` (saveProfileAction) and shows the stored form back. */
 export function OrgProfileForm({ orgId, profile, save }: { orgId: string; profile: Partial<OrgProfile>; save: SaveProfile }) {
+  const t = useTranslations("profile");
   const [value, setValue] = useState(() => profileInput(profile));
   const [errors, setErrors] = useState<ProfileErrors | undefined>();
   const [message, setMessage] = useState<string | null>(null);
@@ -110,7 +114,7 @@ export function OrgProfileForm({ orgId, profile, save }: { orgId: string; profil
       action={async () => {
         setSaved(false);
         setMessage(null);
-        const r = await save(orgId, value).catch(() => ({ ok: false as const, message: "Vi nådde inte servern. Försök igen.", errors: undefined }));
+        const r = await save(orgId, value).catch(() => ({ ok: false as const, message: t("offline"), errors: undefined }));
         if (r.ok) {
           setValue(profileInput(r.profile));
           setErrors(undefined);
@@ -122,8 +126,8 @@ export function OrgProfileForm({ orgId, profile, save }: { orgId: string; profil
       }}
     >
       <fieldset className="flex flex-col gap-5">
-        <legend className="mb-1 font-medium">Om föreningen</legend>
-        <p className="-mt-3 text-sm text-ink-2">Texten och länkarna visas överst på föreningssidan. Allt är valfritt.</p>
+        <legend className="mb-1 font-medium">{t("legend")}</legend>
+        <p className="-mt-3 text-sm text-ink-2">{t("intro")}</p>
         <OrgProfileFields
           value={value}
           errors={errors}
@@ -135,13 +139,13 @@ export function OrgProfileForm({ orgId, profile, save }: { orgId: string; profil
         />
       </fieldset>
       <div className="flex flex-wrap items-center gap-3">
-        <SubmitButton variant="primary" pendingLabel="Sparar…">
-          Spara Om oss
+        <SubmitButton variant="primary" pendingLabel={t("saving")}>
+          {t("save")}
         </SubmitButton>
         <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", saved ? "text-green" : "text-red")} role="status" aria-live="polite">
           {saved ? (
             <>
-              <IconCheck size={18} /> Sparat
+              <IconCheck size={18} /> {t("saved")}
             </>
           ) : (
             message

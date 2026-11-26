@@ -1,0 +1,26 @@
+{
+  "names": {
+    "veckomote": "Veckomöte",
+    "styrelseprotokoll": "Styrelseprotokoll",
+    "enkel": "Enkel",
+    "learned": "Eget",
+    "arsmote": "Årsmöte"
+  },
+  "labelLearned": "{name} ({date})",
+  "labelStatutes": "{name} med stadgarnas punkter ({date})",
+  "labelCustom": "{name}, anpassat ({date})",
+  "meetingTypes": {
+    "veckomote": {
+      "name": "Veckomöte",
+      "hint": "Det vanliga mötet. Följer upp förra veckans uppgifter."
+    },
+    "styrelsemote": {
+      "name": "Styrelsemöte",
+      "hint": "Med paragrafer, justerare och underskrifter."
+    },
+    "arsmote": {
+      "name": "Årsmöte",
+      "hint": "Föreningens årsmöte, med dagordningen från era stadgar eller standarden."
+    }
+  }
+}

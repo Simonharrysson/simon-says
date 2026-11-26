@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { IconExternal } from "@/components/ui/icons";
@@ -25,6 +26,8 @@ export function DocAccessButton({
   /** The förening's own Doc: Simon Says never shares it, so only the line naming who to ask. */
   askOnly?: boolean;
 }) {
+  const t = useTranslations("org");
+  const common = useTranslations("common");
   const [state, setState] = useState<"idle" | "busy" | "open" | "ask">(askOnly ? "ask" : "idle");
 
   const ask = async () => {
@@ -42,13 +45,13 @@ export function DocAccessButton({
       <span className="flex flex-wrap items-center gap-2">
         {email && (
           <span role="status" className="text-sm text-ink-3">
-            Delat till {email}
+            {t("sharedTo", { email })}
           </span>
         )}
         <a className={buttonVariants({ size: "sm" })} href={docHref} target="_blank" rel="noopener noreferrer">
-          Dokument
+          {t("document")}
           <IconExternal size={16} />
-          <span className="sr-only">(öppnas i ny flik)</span>
+          <span className="sr-only">{common("opensInNewTab")}</span>
         </a>
       </span>
     );
@@ -56,13 +59,13 @@ export function DocAccessButton({
   if (state === "ask") {
     return (
       <span role="status" className="text-sm text-ink-3">
-        Be {starter} dela dokumentet med dig.
+        {t("askStarter", { starter })}
       </span>
     );
   }
   return (
     <Button size="sm" variant="secondary" loading={state === "busy"} onClick={() => void ask()}>
-      Få åtkomst
+      {t("getAccess")}
     </Button>
   );
 }

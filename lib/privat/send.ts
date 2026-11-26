@@ -1,5 +1,6 @@
 import "server-only";
 import { logEvent } from "@/lib/db/events";
+import { localeForUser } from "@/lib/i18n/user-locale";
 import type { NoteItemRow, SummaryState } from "@/lib/db/types";
 import { sendUserMail } from "@/lib/email/prefs";
 import { emailPrefsUrl, listUnsubscribeHeaders } from "@/lib/email/token";
@@ -63,13 +64,6 @@ export function notesLines(rows: Pick<NoteItemRow, "section" | "text" | "owner" 
   return rows
     .filter((r) => !r.deleted_by_human && r.text.trim())
     .map((r) => `${label[r.section] ?? r.section}${r.owner ? ` (${r.owner})` : ""}: ${r.text}${r.due ? ` (${r.due})` : ""}`);
-}
-
-/** The user's language for e-mail: user_settings (0043) when there, else Swedish. */
-async function userLocale(userId: string): Promise<PrivatLocale> {
-  const { data, error } = await supabaseAdmin().from("user_settings").select("locale").eq("user_id", userId).maybeSingle();
-  if (error) return "sv"; // no table yet (before 0043) or not readable: the default
-  return (data as { locale?: string } | null)?.locale === "en" ? "en" : "sv";
 }
 
 async function transcriptFor(meetingId: string): Promise<string[]> {
@@ -161,7 +155,7 @@ export async function sendPrivatSummary(
   }
 
   const stored = must("stored", await db.from("private_summaries").select("meeting_id").eq("meeting_id", m.id).maybeSingle()) as unknown;
-  const locale = await userLocale(m.started_by);
+  const locale: PrivatLocale = await localeForUser(m.started_by, db);
 
   if (!stored) {
     const [contextRes, notesRes, openRes, recentRes, previousRes] = await Promise.all([

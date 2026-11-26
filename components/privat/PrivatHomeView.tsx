@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from "next-intl";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconArrowRight, IconMic } from "@/components/ui/icons";
@@ -33,21 +34,19 @@ export function PrivatHomeView({
   running: { href: string; label: string } | null;
   notice: Notice | null;
 }) {
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const t = useTranslations("privat.home");
+  const locale = useLocale() === "en" ? "en" : "sv";
   return (
     <div className="mx-auto flex w-full max-w-[40rem] flex-col gap-8 px-gutter">
       <PageHeader
-        title="Privat"
+        title={t("title")}
         meta={
-          <p className="max-w-[34rem] text-ink-2">
-            Spela in möten, föreläsningar och samtal. Efter varje inspelning får du en sammanfattning på mejlen, och här samlas
-            uppgifter och beslut per sammanhang. Bara du ser det.
-          </p>
+          <p className="max-w-[34rem] text-ink-2">{t("intro")}</p>
         }
         actions={
           !running && (
             <ButtonLink href={startHref} variant="primary" size="lg" icon={<IconMic />} className="max-sm:w-full">
-              Spela in
+              {t("start")}
             </ButtonLink>
           )
         }
@@ -55,25 +54,22 @@ export function PrivatHomeView({
       <NoticeBanner notice={notice} />
 
       {running && (
-        <Panel title="Pågår" titleId="running-title">
+        <Panel title={t("runningTitle")} titleId="running-title">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-ink-2">{running.label}</p>
             <ButtonLink href={running.href} variant="primary">
-              Till inspelningen
+              {t("toRecording")}
             </ButtonLink>
           </div>
         </Panel>
       )}
 
       {contexts.length === 0 ? (
-        <EmptyState title="Inga inspelningar än">
-          <p>
-            Tryck Spela in och välj vad det gäller, till exempel en kurskod eller ett projekt. Sammanfattningen kommer på mejlen
-            ungefär en minut efter att du avslutat.
-          </p>
+        <EmptyState title={t("emptyTitle")}>
+          <p>{t("emptyText")}</p>
         </EmptyState>
       ) : (
-        <Panel flush title="Sammanhang" titleId="contexts-title">
+        <Panel flush title={t("contextsTitle")} titleId="contexts-title">
           <ul aria-labelledby="contexts-title">
             {contexts.map((c) => (
               <ListRow
@@ -82,12 +78,14 @@ export function PrivatHomeView({
                 title={c.name}
                 meta={
                   c.recordings
-                    ? `${plural(c.recordings, "inspelning", "inspelningar")}${c.lastAt ? ` · senast ${shortWhen(c.lastAt)}` : ""}`
-                    : "Inga inspelningar än"
+                    ? c.lastAt
+                      ? t("recordingsLast", { count: c.recordings, when: shortWhen(c.lastAt, locale) })
+                      : t("recordings", { count: c.recordings })
+                    : t("noRecordings")
                 }
                 actions={
                   <>
-                    {c.openTasks > 0 && <Badge tone="info">{plural(c.openTasks, "öppen uppgift", "öppna uppgifter")}</Badge>}
+                    {c.openTasks > 0 && <Badge tone="info">{t("openTasks", { count: c.openTasks })}</Badge>}
                     <IconArrowRight size={18} className="text-ink-3 transition-transform duration-120 ease-out group-hover/row:translate-x-[3px] group-hover/row:text-ink" />
                   </>
                 }

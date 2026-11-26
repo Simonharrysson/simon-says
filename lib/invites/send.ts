@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MailMessage, Mailer } from "@/lib/mail";
 import { checkEmailGate, sendUserMailDetailed } from "@/lib/email/prefs";
+import { localeForEmail } from "@/lib/i18n/user-locale";
 import { inviteEmail, linkLikeName } from "./email";
 import { INVITE_LIMITS, type InviteResult, type InviteRow, type InviteStatus } from "./rules";
 
@@ -79,7 +80,9 @@ export async function sendInvites(input: SendInvitesInput, deps: SendInvitesDeps
     if (claim.result !== "ok" || claim.send_id === undefined) {
       return { email, result: claim.result as InviteResult, ...(claim.next_at ? { nextAt: claim.next_at } : {}) };
     }
-    const message = inviteEmail({ ...base, ...(deps.links ? { prefsUrl: deps.links.prefsUrl(email) } : {}) });
+    // In the recipient's language when their account has chosen one (Swedish otherwise).
+    const locale = await localeForEmail(email, deps.db);
+    const message = inviteEmail({ ...base, locale, ...(deps.links ? { prefsUrl: deps.links.prefsUrl(email) } : {}) });
     const mail: Omit<MailMessage, "to"> = {
       subject: message.subject,
       text: message.text,

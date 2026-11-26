@@ -1,0 +1,26 @@
+{
+  "names": {
+    "veckomote": "Weekly meeting",
+    "styrelseprotokoll": "Board minutes",
+    "enkel": "Simple",
+    "learned": "Your own",
+    "arsmote": "Annual meeting"
+  },
+  "labelLearned": "{name} ({date})",
+  "labelStatutes": "{name} with the statutes' items ({date})",
+  "labelCustom": "{name}, customised ({date})",
+  "meetingTypes": {
+    "veckomote": {
+      "name": "Weekly meeting",
+      "hint": "The usual meeting. Follows up last week's tasks."
+    },
+    "styrelsemote": {
+      "name": "Board meeting",
+      "hint": "With numbered sections, minute checkers and signatures."
+    },
+    "arsmote": {
+      "name": "Annual meeting",
+      "hint": "The association's annual meeting, with the agenda from your statutes or the standard one."
+    }
+  }
+}

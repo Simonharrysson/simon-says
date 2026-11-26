@@ -1,10 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { IconPause, IconPlay, IconStop } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import { LiveDialog, stopCopy, type LiveDialogHandle } from "./LiveDialog";
+import { LiveDialog, type LiveDialogHandle } from "./LiveDialog";
 
 /**
  * Paus / Fortsätt and Avsluta. Paus is the big, always-reachable button (people ask for it
@@ -29,6 +31,7 @@ export function MeetingControls({
   canPause?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("live");
   const dialog = useRef<LiveDialogHandle>(null);
   const ending = status === "ending";
   return (
@@ -36,7 +39,7 @@ export function MeetingControls({
       {canPause &&
         (status === "paused" ? (
           <Button variant="primary" size="lg" icon={<IconPlay size={18} />} onClick={onResume} loading={busy} className="min-w-36">
-            Fortsätt
+            {t("controls.resume")}
           </Button>
         ) : (
           <Button
@@ -47,7 +50,7 @@ export function MeetingControls({
             disabled={ending}
             className="min-w-36 border-[1.5px] border-ink"
           >
-            Paus
+            {t("controls.pause")}
           </Button>
         ))}
       <Button
@@ -58,19 +61,19 @@ export function MeetingControls({
         disabled={ending}
         loading={ending}
       >
-        {ending ? "Avslutar…" : "Avsluta"}
+        {ending ? t("controls.ending") : t("controls.end")}
       </Button>
 
       <LiveDialog
         ref={dialog}
         id="stop"
-        title="Avsluta mötet?"
-        stayLabel="Fortsätt mötet"
-        confirmLabel="Avsluta mötet"
+        title={t("controls.endTitle")}
+        stayLabel={t("controls.stay")}
+        confirmLabel={t("controls.confirmEnd")}
         confirmIcon={<IconStop size={16} />}
         onConfirm={onStop}
       >
-        {stopCopy}
+        {t("stopCopy")}
       </LiveDialog>
     </div>
   );

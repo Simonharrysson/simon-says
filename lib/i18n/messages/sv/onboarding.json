@@ -1,0 +1,221 @@
+{
+  "steps": {
+    "namn": {
+      "title": "Namn och logga",
+      "short": "Logga"
+    },
+    "styrelsen": {
+      "title": "Styrelsen",
+      "short": "Styrelsen"
+    },
+    "mapp": {
+      "title": "Mötesmapp",
+      "short": "Mötesmapp"
+    },
+    "format": {
+      "title": "Så brukar ni ha möten",
+      "short": "Möten"
+    },
+    "protokoll": {
+      "title": "Era tidigare möten",
+      "short": "Tidigare möten"
+    },
+    "roster": {
+      "title": "Röster",
+      "short": "Röster"
+    }
+  },
+  "titles": {
+    "namn": {
+      "title": "Välkommen! Hur ser ni ut?",
+      "lead": "Kontrollera namnet och lägg gärna till er logga, så känner alla igen föreningen."
+    },
+    "styrelsen": {
+      "title": "Vilka sitter i styrelsen?",
+      "lead": "En lista för alla: namn och roll för anteckningarna, e-post för den som ska kunna starta möten."
+    },
+    "mapp": {
+      "title": "Var ska mötesdokumenten ligga?",
+      "lead": "Simon Says skriver varje möte i ett Google-dokument. Välj en mapp i Drive som styrelsen delar."
+    },
+    "format": {
+      "title": "Så brukar ni ha möten",
+      "lead": "Simon Says skriver protokollet i er form. Det går att ändra när som helst."
+    },
+    "protokoll": {
+      "title": "Era tidigare möten",
+      "lead": "Läs in gamla protokoll, så vet Simon Says vad ni har beslutat och vad som är på gång – redan till första mötet."
+    },
+    "roster": {
+      "title": "Röster (valfritt)",
+      "lead": "Simon Says kan lära sig vem som pratar, så att ni slipper namnrundan varje gång."
+    },
+    "klart": {
+      "title": "Nu är ni redo",
+      "lead": "Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst."
+    }
+  },
+  "card": {
+    "title": "Kom igång",
+    "next": "Nästa: {title}",
+    "progress": "{n} av {total} steg",
+    "text": "Logga, styrelsen, mötesmapp, hur ni brukar ha möten, era gamla protokoll och röster. Allt är valfritt och tar några minuter.",
+    "start": "Börja",
+    "continue": "Fortsätt",
+    "hide": "Dölj"
+  },
+  "shell": {
+    "later": "Fortsätt senare",
+    "stepOf": "Steg {n} av {total}",
+    "label": "Kom igång",
+    "stateNow": "nu",
+    "stateDone": "klart",
+    "stateSkipped": "hoppades över",
+    "stateTodo": "inte gjort än",
+    "stepState": "Steg {n}, {title}: {state}",
+    "next": "Fortsätt",
+    "skip": "Hoppa över",
+    "back": "Tillbaka",
+    "finish": "Klar"
+  },
+  "logo": {
+    "saveFailed": "Loggan kunde inte sparas. Försök igen.",
+    "saved": "Loggan är sparad.",
+    "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen.",
+    "removed": "Loggan är borttagen.",
+    "removeFailed": "Loggan kunde inte tas bort. Försök igen.",
+    "wrongType": "Välj en PNG-, JPEG- eller WebP-bild.",
+    "tooBigInput": "Bilden är för stor (max 15 MB).",
+    "cantOpen": "Bilden gick inte att öppna. Prova en annan.",
+    "cantShrink": "Bilden gick inte att förminska i den här webbläsaren.",
+    "tooBig": "Bilden är för stor (max 1 MB).",
+    "orgName": "Föreningens namn",
+    "label": "Logga (valfritt)",
+    "drop": "Släpp en bild här",
+    "change": "Byt logga",
+    "upload": "Ladda upp logga",
+    "changeImage": "Byt bild",
+    "remove": "Ta bort",
+    "hint": "PNG, JPEG eller WebP. Simon Says beskär den till en kvadrat. Den syns bara här i Simon Says – på föreningssidan och i listan – aldrig i mötesdokumenten."
+  },
+  "pickerFailed": "Google-väljaren kunde inte öppnas. Försök igen.",
+  "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen.",
+  "offlineShort": "Vi nådde inte servern. Försök igen.",
+  "weeklyFailed": "Veckomötet kunde inte sparas. Försök igen.",
+  "pickerOffWeekly": "Google-väljaren är inte inställd än. Välj Veckomöte så länge.",
+  "board": {
+    "roles": [
+      "Ordförande",
+      "Vice ordförande",
+      "Kassör",
+      "Sekreterare",
+      "Ledamot",
+      "Suppleant",
+      "PR-ansvarig"
+    ],
+    "emptyTitle": "Vilka sitter i styrelsen?",
+    "emptyText": "Börja med dig själv. Namnen hjälper Simon Says att känna igen vem som talar, och rollerna hamnar i protokollet: ”Kassör: boka lokal”. E-post behövs bara för den som ska kunna starta möten och få dokumenten.",
+    "listLabel": "Styrelsen",
+    "save": "Spara",
+    "add": "Lägg till",
+    "addSomeone": "Lägg till någon",
+    "inviteByEmail": "Bjud in via mejl",
+    "inviteText": "Simon Says skickar ett mejl med föreningens länk till adresserna. Den som loggar in med adressen ni skrev kopplas till sitt namn här.",
+    "orShare": "Eller dela länken själv",
+    "shareText": "Dela länken med dem, t.ex. i styrelsens chatt. Den som loggar in med adressen ni skrev kopplas till sitt namn här.",
+    "inviteLink": "Inbjudningslänk",
+    "hasAccount": "Har konto",
+    "you": " · du",
+    "admin": " · admin",
+    "invite": " · Inbjudan: {status}",
+    "noInvite": " · ingen inbjudan skickad än",
+    "nameOnly": "Bara namn – lägg till e-post om hen ska kunna starta möten",
+    "unknown": "Okänd",
+    "noName": "Namn saknas",
+    "addName": "Lägg till namn",
+    "edit": "Ändra {name}",
+    "remove": "Ta bort {name} ur listan",
+    "nameRequired": "Skriv ett namn, t.ex. Anna Berg.",
+    "name": "Namn",
+    "namePlaceholder": "Anna Berg",
+    "role": "Roll",
+    "rolePlaceholder": "Kassör",
+    "email": "E-post",
+    "emailOptional": "(valfritt – bjuder in)",
+    "editExisting": "Ändra {name}"
+  },
+  "folder": {
+    "fallbackName": "Mötesmappen",
+    "chosen": "Vald – nya mötesdokument hamnar här",
+    "change": "Byt",
+    "noneTitle": "Ingen mötesmapp än",
+    "pick": "Välj mapp i Google Drive",
+    "noneText": "Välj mappen där ni redan har era protokoll, eller skapa en ny i Drive först (t.ex. ”Styrelsen 2026–2027”). Dela den med styrelsen, så kommer alla åt dokumenten.",
+    "pickerOff": "Google-väljaren är inte inställd än. Utan mötesmapp hamnar dokumenten i den som startar mötets egen Drive."
+  },
+  "format": {
+    "preview": [
+      "Godkänn dagordning",
+      "Må-runda",
+      "Från förra veckan",
+      "Era punkter",
+      "Övrigt"
+    ],
+    "keep": "Behåll {name}",
+    "keepHint": "Formatet ni redan har valt.",
+    "weekly": "Veckomöte",
+    "weeklyHint": "Det vanliga mötet: {items}. Uppgifterna följs upp nästa gång.",
+    "learn": "Som våra gamla protokoll",
+    "learnHint": "Simon Says läser strukturen i ett par gamla protokoll (bara rubrikerna och ordningen) och skriver likadant.",
+    "legend": "Era vanliga möten",
+    "default": " (förvalt)",
+    "statutes": "Stadgar",
+    "optional": "(valfritt)"
+  },
+  "history": {
+    "pick": "Välj protokoll",
+    "pickText": "Markera era gamla protokoll i Google Drive – gärna ett helt verksamhetsår.",
+    "cost": "Se vad det kostar",
+    "costText": "Innan något läses ser du hur många möten det blir och vad det kostar.",
+    "order": "Simon Says läser i tidsordning",
+    "orderText": "Beslut, uppgifter och det ni jobbat med hamnar i Översikt, och blir förslag på mål.",
+    "soFar": "{count} protokoll inlästa hittills.",
+    "more": "Läs in fler protokoll",
+    "choose": "Välj gamla protokoll",
+    "hint": "Öppnar Översikt. Kom tillbaka hit med ”Kom igång” på föreningssidan."
+  },
+  "voices": {
+    "soon": "Snart: Simon Says lär sig rösterna från namnrundan i ert första möte — ingen behöver spela in något.",
+    "idea": "Tanken: alla säger sitt namn i namnrundan, som vanligt, och den meningen blir rösten Simon Says känner igen – en gång, aldrig mer. Då står namnen där direkt från andra mötet.",
+    "notYet": "Det fungerar inte än: funktionen testas och slås på senare. Fram till dess sparas ingen röst, och namnrundan fungerar som i dag. En röst är känslig information: när funktionen kommer sparas den bara för den som har sagt ja, kan tas bort när som helst och tas bort när någon lämnar föreningen (då tas också ert ja bort).",
+    "noBoardTitle": "Ingen i styrelsen än",
+    "addBoard": "Lägg till styrelsen",
+    "noBoardText": "Lägg till styrelsen först, så kan du bocka för vilka som har sagt ja.",
+    "legend": "Vilka har sagt ja till att Simon Says lär sig deras röst?",
+    "saidYes": "Har sagt ja. Hen tillfrågas igen innan något sparas.",
+    "askEach": "Fråga var och en. Bocka bara för den som själv har sagt ja."
+  },
+  "done": {
+    "isDone": ": klart",
+    "isSkipped": ": hoppades över",
+    "doNow": "Gör nu",
+    "open": "Öppna",
+    "prepare": "Förbered första mötet →",
+    "toOrg": "Till föreningen"
+  },
+  "actions": {
+    "adminOnly": "Bara administratörer kan ändra det här.",
+    "unknownStep": "Okänt steg.",
+    "nameRequired": "Skriv ett namn, t.ex. Anna Berg.",
+    "roleInvalid": "Rollen kan vara högst fyra ord, t.ex. Kassör.",
+    "emailInvalid": "Det ser inte ut som en e-postadress.",
+    "emailTaken": "Någon annan i listan har redan den e-postadressen.",
+    "addFailed": "Personen kunde inte läggas till. Försök igen.",
+    "duplicateMember": "{name} finns redan i listan. Ändra {name} och skriv in kontots e-postadress, så kopplas de ihop.",
+    "duplicate": "{name} finns redan i listan.",
+    "checkFields": "Kontrollera namn, roll och e-post och försök igen.",
+    "gone": "Personen finns inte längre. Ladda om sidan.",
+    "roleFailed": "Rollen kunde inte sparas. Försök igen.",
+    "orgName": "Ange ett namn på högst 100 tecken."
+  }
+}

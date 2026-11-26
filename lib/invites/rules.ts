@@ -16,11 +16,7 @@ export const INVITE_LIMITS = {
   perForm: 50,
 } as const;
 
-/** Why an invite is refused when a name looks like a link (see looksLikeLink). */
-export const LINK_NAME_MESSAGE = {
-  org: "Föreningens namn ser ut som en webb- eller e-postadress, och sådant skickar vi inte i mejl. Byt namn på föreningen under Inställningar och försök igen.",
-  inviter: "Ditt namn (i föreningens personlista eller på ditt Google-konto) ser ut som en webb- eller e-postadress, och sådant skickar vi inte i mejl. Ändra namnet och försök igen.",
-} as const;
+// Labels and messages for invites are UI copy: invites.* in lib/i18n/messages.
 
 export interface ParsedEmails {
   /** Valid, lowercased, first occurrence kept. */
@@ -73,21 +69,6 @@ export type InviteResult =
   | "user_limit"
   | "busy"; // another send to this address is in flight
 
-export const RESULT_LABEL: Record<InviteResult, string> = {
-  sent: "Skickat",
-  member: "Redan medlem",
-  invalid: "Ogiltig adress",
-  failed: "Misslyckades",
-  uncertain: "Osäkert – kan ha skickats",
-  not_sent: "Hann inte skickas",
-  opted_out: "Vill inte ha mejl",
-  already_invited: "Redan inbjuden",
-  resend_limit: "Skickat två gånger i dag",
-  org_limit: "Dagens gräns för föreningen nådd",
-  user_limit: "Din gräns för i dag nådd",
-  busy: "Skickas redan",
-};
-
 /** Results worth a "Försök igen" (nothing was delivered, and trying again may work). */
 export const RETRYABLE: ReadonlySet<InviteResult> = new Set<InviteResult>(["failed", "uncertain", "not_sent", "busy"]);
 
@@ -110,14 +91,6 @@ export interface InviteRow {
 
 /** A send left `sending` this long is treated as dead (the cron marks it `uncertain`). */
 export const STALE_SENDING_MS = 5 * 60_000;
-
-export const STATUS_LABEL: Record<InviteStatus, string> = {
-  sending: "Skickas",
-  sent: "Skickad",
-  failed: "Misslyckades",
-  uncertain: "Osäkert om det kom fram",
-  accepted: "Har gått med",
-};
 
 /** May "Skicka igen" be pressed now? Accepted invites need no resend. */
 export function canResend(row: InviteRow, now: Date = new Date()): boolean {

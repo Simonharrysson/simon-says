@@ -1,0 +1,110 @@
+{
+  "metaTitle": "Personal",
+  "meetingMetaTitle": "Recording",
+  "home": {
+    "title": "Personal",
+    "intro": "Record meetings, lectures and calls. After each recording you get a summary by e-mail, and tasks and decisions are collected here per context. Only you can see it.",
+    "start": "Record",
+    "runningTitle": "In progress",
+    "toRecording": "Go to the recording",
+    "runningFallback": "Recording",
+    "emptyTitle": "No recordings yet",
+    "emptyText": "Press Record and choose what it's about, for example a course code or a project. The summary arrives by e-mail about a minute after you finish.",
+    "contextsTitle": "Contexts",
+    "recordings": "{count, plural, one {# recording} other {# recordings}}",
+    "recordingsLast": "{count, plural, one {# recording} other {# recordings}} · latest {when}",
+    "noRecordings": "No recordings yet",
+    "openTasks": "{count, plural, one {# open task} other {# open tasks}}"
+  },
+  "context": {
+    "back": "Personal",
+    "start": "Record",
+    "openTitle": "Open tasks",
+    "openEmptyAfter": "No open tasks. New ones come from the next recording.",
+    "openEmptyBefore": "Tasks from your recordings end up here.",
+    "doneRecently": "Recently done ({count})",
+    "doneLabel": "Recently done",
+    "taskFrom": "from {when}",
+    "logTitle": "Decisions and good to know",
+    "decision": "Decision",
+    "fact": "Fact",
+    "recurringTitle": "Comes up often",
+    "people": "People",
+    "topics": "Topics",
+    "meetingsTitle": "Recordings",
+    "meetingsEmptyTitle": "No recordings yet",
+    "meetingsEmptyText": "Press Record. The summary arrives by e-mail and ends up here.",
+    "delete": "Delete context",
+    "deleteTitle": "Delete {name}?",
+    "deleteText": "{count, plural, =0 {The context is deleted.} one {The recording in the context is deleted: notes, transcript, summary and tasks.} other {All # recordings in the context are deleted: notes, transcripts, summaries and tasks.}} This can't be undone. Google Docs you created stay in Drive.",
+    "deleting": "Deleting…",
+    "line": {
+      "live": "In progress",
+      "ending": "Ending",
+      "abandoned": "Stopped",
+      "noNotes": "Nothing was heard",
+      "failed": "No summary",
+      "pending": "The summary is on its way"
+    }
+  },
+  "meeting": {
+    "googleDoc": "Google Doc",
+    "pendingTitle": "The summary is on its way",
+    "pendingText": "It's written about a minute after the recording ends and also arrives by e-mail. Reload the page in a moment.",
+    "noneTitle": "Nothing to summarise",
+    "noneText": "The recording had no speech that could be written down.",
+    "failedTitle": "The summary couldn't be written",
+    "failedText": "The recording was saved, but the summary didn't happen. You can delete the recording if you don't need it.",
+    "summaryTitle": "Summary",
+    "tasksTitle": "Tasks",
+    "tasksLabel": "Tasks from the recording",
+    "decisionsTitle": "Decisions",
+    "questionsTitle": "Open questions",
+    "sinceTitle": "Since last time",
+    "factsTitle": "Worth remembering",
+    "status": {
+      "done": "done",
+      "open": "open",
+      "not_mentioned": "not mentioned"
+    },
+    "delete": "Delete recording",
+    "deleteTitle": "Delete the recording?",
+    "deleteText": "The recording's notes, transcript, summary and tasks are deleted. This can't be undone.",
+    "deleteDocKept": "The Google Doc stays in Drive.",
+    "deleting": "Deleting…"
+  },
+  "tasks": {
+    "saveFailed": "The tick couldn't be saved. Check your connection and try again."
+  },
+  "picker": {
+    "label": "What is the recording about?",
+    "newOption": "New context…",
+    "newLabel": "New context",
+    "placeholder": "e.g. TDDE15 or Thesis",
+    "add": "Add",
+    "defaultName": "Other",
+    "hint": "A course, a project or {fallback}. Tasks and decisions are collected per context.",
+    "withDoc": "Also write in a Google Doc",
+    "withDocText": "The notes are then also written live in a new Doc in your Drive. Otherwise they stay in Simon Says.",
+    "invalid": "Type a name, for example a course code.",
+    "failed": "It couldn't be saved. Try again.",
+    "offline": "It couldn't be saved. Check your connection and try again."
+  },
+  "live": {
+    "consentFact": "The notes are kept only for you in Personal. After the recording you get a summary by e-mail.",
+    "contextFirst": "Choose what the recording is about first.",
+    "endedFinalizing": "The recording lasted {duration}. The notes are getting a final pass. The summary arrives by e-mail in about a minute.",
+    "endedDone": "The recording lasted {duration}. The notes are done. The summary arrives by e-mail in about a minute.",
+    "toSummary": "Go to the summary",
+    "back": "Back to {name}",
+    "backHome": "Back to Personal"
+  },
+  "notices": {
+    "raderad": "The recording is deleted: notes, transcript and summary. A Google Doc stays in Drive.",
+    "raderat": "The context and all its recordings are deleted.",
+    "aktiv": "A recording is in progress. End it first, then you can delete.",
+    "active": "The recording is in progress. End it first, then you can delete it.",
+    "forbidden": "The recording couldn't be deleted. Reload the page and try again.",
+    "not_found": "The recording no longer exists."
+  }
+}

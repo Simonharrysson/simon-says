@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
@@ -26,21 +27,22 @@ function folderNameOf(raw: unknown): string | null {
  * access to it), else 403. The start screen never changes the folder.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
 
   const body = (await request.json().catch(() => null)) as { folderId?: unknown; folderName?: unknown; grantOnly?: unknown } | null;
   const folderId = typeof body?.folderId === "string" ? body.folderId : "";
   const folderName = folderNameOf(body?.folderName);
-  if (!DRIVE_ID.test(folderId)) return fail("bad_request", 400, "Mappen saknas. Välj den i Google-väljaren igen.");
+  if (!DRIVE_ID.test(folderId)) return fail("bad_request", 400, t("api.folderMissing"));
 
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
 
   if (role === "admin" && body?.grantOnly !== true) {
     let { data, error } = await db
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (error || (data ?? []).length === 0) {
       if (error) console.error(`meeting-folder: update: ${error.message}`);
-      return fail("save_failed", 500, "Mötesmappen kunde inte sparas. Försök igen.");
+      return fail("save_failed", 500, t("api.folderSaveFailed"));
     }
     return new NextResponse(null, { status: 204, headers: noStore });
   }
@@ -66,6 +68,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return fail(
     "not_meeting_folder",
     403,
-    "Det är inte föreningens mötesmapp. Välj mappen som administratören har valt, eller be en administratör byta den.",
+    t("api.notOrgFolder"),
   );
 }

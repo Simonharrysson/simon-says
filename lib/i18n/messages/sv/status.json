@@ -1,0 +1,22 @@
+{
+  "metaTitle": "Status",
+  "title": "Status",
+  "intro": "Simon Says skriver mötesanteckningar live i Google Docs åt föreningar i Linköping. Här syns vad som händer just nu. Föreningar visas med namn bara om de själva valt det.",
+  "unavailableTitle": "Siffrorna kan inte hämtas just nu",
+  "unavailableText": "Försök igen om en stund. Det påverkar inte pågående möten.",
+  "health": {
+    "ok": { "title": "Allt fungerar", "text": "Transkribering och anteckningar går som de ska." },
+    "degraded": { "title": "Anteckningarna går långsamt", "text": "Transkriberingen fungerar, men det tar längre tid än vanligt innan anteckningarna syns i dokumenten." },
+    "paused": { "title": "Tjänsten är pausad", "text": "Nya möten kan inte starta just nu. Pågående möten avslutas och anteckningarna blir klara." }
+  },
+  "liveNow": "Möten just nu",
+  "meetingsThisWeek": "Möten i veckan",
+  "minutesThisWeek": "Minuter i veckan",
+  "inProgress": "Pågår just nu",
+  "noneLive": "Inga möten pågår just nu.",
+  "liveHidden": "{count, plural, one {Ett möte pågår} other {# möten pågår}}. Föreningarna har inte valt att visas.",
+  "started": "Startade {time}",
+  "live": "Pågår",
+  "moreHidden": "Och {count} till som inte visas med namn.",
+  "updated": "Uppdaterad {time}."
+}

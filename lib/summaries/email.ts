@@ -1,6 +1,9 @@
+import { defaultLocale, intlTag, type Locale } from "@/lib/i18n/config";
+import { translator, type Translator } from "@/lib/i18n/translator";
 import type { SummaryContent, SummaryTask } from "./content";
 
-// The summary e-mail, Swedish, in the invite e-mail's design A ("Calm Geist", branch
+// The summary e-mail, in the recipient's language (Swedish unless their account chose English;
+// the meeting's own decisions and tasks stay as written in the Doc), in the invite e-mail's design A ("Calm Geist", branch
 // invite-email, emails/invite/a.html): one white card on #fafafa, the serif wordmark, one black
 // button, footer in grey. Inline styles carry the light design; the <style> block only adds dark
 // mode and phone padding (clients that drop it still get a working e-mail). Pure: the sender, the
@@ -22,6 +25,8 @@ export interface SummaryEmailInput {
   settingsHref: string | null;
   /** "Avsluta prenumeration": the address's /mejl page (0039), meeting_summary preselected. */
   unsubscribeHref: string;
+  /** The recipient's language; Swedish when unknown. */
+  locale?: Locale;
 }
 
 export interface RenderedEmail {
@@ -35,13 +40,13 @@ export interface RenderedEmail {
 const TZ = "Europe/Stockholm";
 
 /** "24 november" (Stockholm). */
-export function dayMonth(iso: string): string {
-  return new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "long", timeZone: TZ }).format(new Date(iso));
+export function dayMonth(iso: string, locale: Locale = defaultLocale): string {
+  return new Intl.DateTimeFormat(intlTag(locale), { day: "numeric", month: "long", timeZone: TZ }).format(new Date(iso));
 }
 
 /** "tisdag 24 november" (Stockholm). */
-export function weekdayDayMonth(iso: string): string {
-  return new Intl.DateTimeFormat("sv-SE", { weekday: "long", day: "numeric", month: "long", timeZone: TZ }).format(new Date(iso));
+export function weekdayDayMonth(iso: string, locale: Locale = defaultLocale): string {
+  return new Intl.DateTimeFormat(intlTag(locale), { weekday: "long", day: "numeric", month: "long", timeZone: TZ }).format(new Date(iso));
 }
 
 export function escapeHtml(s: string): string {
@@ -51,11 +56,13 @@ export function escapeHtml(s: string): string {
 /** Subject and header lines: no line breaks. */
 const oneLine = (s: string) => s.replace(/[\r\n]+/g, " ").trim();
 
-const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-
-export function summarySubject(orgName: string, startedAt: string): string {
-  return oneLine(`Sammanfattning: ${orgName} ${dayMonth(startedAt)}`);
+export function summarySubject(orgName: string, startedAt: string, locale: Locale = defaultLocale): string {
+  return oneLine(translator(locale)("emails.summary.subject", { org: orgName, date: dayMonth(startedAt, locale) }));
 }
+
+const tr = (i: SummaryEmailInput): Translator => translator(i.locale ?? defaultLocale);
+/** "Exempelföreningens möte" in Swedish, "the Exempelföreningen meeting" in English. */
+const orgOf = (i: SummaryEmailInput) => ((i.locale ?? defaultLocale) === "sv" ? genitive(i.orgName) : i.orgName);
 
 function taskLine(t: SummaryTask, withOwner: boolean): string {
   const owner = withOwner && t.owner ? `${t.owner}: ` : "";
@@ -64,13 +71,14 @@ function taskLine(t: SummaryTask, withOwner: boolean): string {
 }
 
 function previewText(i: SummaryEmailInput): string {
+  const t = tr(i);
   const c = i.content;
   const parts: string[] = [];
-  if (c.decisions.length) parts.push(n(c.decisions.length + c.more.decisions, "beslut", "beslut"));
-  const mine = c.tasks.filter((t) => t.mine).length;
-  if (mine) parts.push(n(mine, "uppgift till dig", "uppgifter till dig"));
-  else if (c.tasks.length) parts.push(n(c.tasks.length + c.more.tasks, "uppgift", "uppgifter"));
-  return parts.length ? `${parts.join(" och ")} från mötet.` : "Det viktigaste från mötet.";
+  if (c.decisions.length) parts.push(t("emails.summary.previewDecisions", { count: c.decisions.length + c.more.decisions }));
+  const mine = c.tasks.filter((x) => x.mine).length;
+  if (mine) parts.push(t("emails.summary.previewMine", { count: mine }));
+  else if (c.tasks.length) parts.push(t("emails.summary.previewTasks", { count: c.tasks.length + c.more.tasks }));
+  return parts.length ? t("emails.summary.previewFrom", { parts: parts.join(t("emails.summary.previewJoin")) }) : t("emails.summary.previewNone");
 }
 
 /** Swedish genitive: "Exempelföreningen" → "Exempelföreningens"; a name ending in s, x or z stays as it is. */
@@ -80,40 +88,39 @@ export function genitive(name: string): string {
 }
 
 function heading(i: SummaryEmailInput): { title: string; lead: string } {
-  const day = weekdayDayMonth(i.startedAt);
+  const t = tr(i);
+  const locale = i.locale ?? defaultLocale;
+  const day = weekdayDayMonth(i.startedAt, locale);
+  const date = dayMonth(i.startedAt, locale);
   const first = i.recipientName.trim().split(/\s+/)[0] || i.recipientName;
   return i.missed
-    ? {
-        title: `Du missade mötet ${dayMonth(i.startedAt)}`,
-        lead: `Hej ${first}! Du var inte med på ${genitive(i.orgName)} möte ${day}. Här är vad som beslutades och vem som gör vad.`,
-      }
-    : {
-        title: `Mötet ${dayMonth(i.startedAt)}`,
-        lead: `Hej ${first}! Här är det viktigaste från ${genitive(i.orgName)} möte ${day}: vad som beslutades och vem som gör vad.`,
-      };
+    ? { title: t("emails.summary.missedTitle", { date }), lead: t("emails.summary.missedLead", { first, orgOf: orgOf(i), day }) }
+    : { title: t("emails.summary.title", { date }), lead: t("emails.summary.lead", { first, orgOf: orgOf(i), day }) };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Plain text
 
 export function renderSummaryText(i: SummaryEmailInput): string {
+  const t = tr(i);
+  const upper = (s: string) => s.toLocaleUpperCase(i.locale ?? defaultLocale);
   const { title, lead } = heading(i);
   const c = i.content;
   const out: string[] = [title, "", lead, ""];
-  const more = (count: number) => (count > 0 ? [`- … och ${count} till i protokollet`] : []);
-  if (c.decisions.length) out.push("BESLUT", ...c.decisions.map((d) => `- ${d}`), ...more(c.more.decisions), "");
-  const mine = c.tasks.filter((t) => t.mine);
-  const rest = c.tasks.filter((t) => !t.mine);
-  if (mine.length) out.push("DINA UPPGIFTER", ...mine.map((t) => `- ${taskLine(t, false)}`), "");
+  const more = (count: number) => (count > 0 ? [`- ${t("emails.summary.more", { count })}`] : []);
+  if (c.decisions.length) out.push(upper(t("emails.summary.decisions")), ...c.decisions.map((d) => `- ${d}`), ...more(c.more.decisions), "");
+  const mine = c.tasks.filter((x) => x.mine);
+  const rest = c.tasks.filter((x) => !x.mine);
+  if (mine.length) out.push(upper(t("emails.summary.yourTasks")), ...mine.map((x) => `- ${taskLine(x, false)}`), "");
   if (rest.length || (c.more.tasks > 0 && !mine.length)) {
-    out.push(mine.length ? "ÖVRIGA UPPGIFTER" : "UPPGIFTER", ...rest.map((t) => `- ${taskLine(t, true)}`), ...more(c.more.tasks), "");
+    out.push(upper(t(mine.length ? "emails.summary.otherTasks" : "emails.summary.tasks")), ...rest.map((x) => `- ${taskLine(x, true)}`), ...more(c.more.tasks), "");
   } else if (c.more.tasks > 0) out.push(...more(c.more.tasks), "");
-  if (c.other.length) out.push("ÖVRIGT", ...c.other.map((o) => `- ${o}`), ...more(c.more.other), "");
-  out.push(`Öppna protokollet: ${i.buttonHref}`);
+  if (c.other.length) out.push(upper(t("emails.summary.other")), ...c.other.map((o) => `- ${o}`), ...more(c.more.other), "");
+  out.push(t("emails.summary.openText", { url: i.buttonHref }));
   if (i.accessNote) out.push(i.accessNote);
-  out.push("", "--", "Simon Says", `Du får det här mejlet för att du finns i ${genitive(i.orgName)} personlista på Simon Says.`);
-  if (i.settingsHref) out.push(`Ändra vilka som får sammanfattningar: ${i.settingsHref}`);
-  out.push(`Avsluta prenumeration: ${i.unsubscribeHref}`);
+  out.push("", "--", "Simon Says", t("emails.summary.why", { orgOf: orgOf(i) }));
+  if (i.settingsHref) out.push(t("emails.summary.settingsText", { url: i.settingsHref }));
+  out.push(t("emails.summary.unsubscribeText", { url: i.unsubscribeHref }));
   return out.join("\n");
 }
 
@@ -122,7 +129,7 @@ export function renderSummaryText(i: SummaryEmailInput): string {
 
 const SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
 
-function list(items: string[], more: number, cls = "ink", color = "#171717"): string {
+function list(t: Translator, items: string[], more: number, cls = "ink", color = "#171717"): string {
   const rows = items.map(
     (t) =>
       `<tr><td valign="top" class="ink-3" style="width:18px; padding:0 0 8px 0; font-family:${SANS}; font-size:16px; line-height:24px; color:#666666;">&ndash;</td>` +
@@ -130,7 +137,7 @@ function list(items: string[], more: number, cls = "ink", color = "#171717"): st
   );
   if (more > 0) {
     rows.push(
-      `<tr><td></td><td class="ink-3" style="padding:0 0 8px 0; font-family:${SANS}; font-size:14px; line-height:22px; color:#666666;">… och ${more} till i protokollet</td></tr>`,
+      `<tr><td></td><td class="ink-3" style="padding:0 0 8px 0; font-family:${SANS}; font-size:14px; line-height:22px; color:#666666;">${escapeHtml(t("emails.summary.more", { count: more }))}</td></tr>`,
     );
   }
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows.join("")}</table>`;
@@ -147,29 +154,31 @@ function taskHtml(t: SummaryTask, withOwner: boolean): string {
 }
 
 export function renderSummaryHtml(i: SummaryEmailInput): string {
+  const t = tr(i);
   const { title, lead } = heading(i);
   const c = i.content;
-  const subject = summarySubject(i.orgName, i.startedAt);
-  const mine = c.tasks.filter((t) => t.mine);
-  const rest = c.tasks.filter((t) => !t.mine);
+  const subject = summarySubject(i.orgName, i.startedAt, i.locale);
+  const mine = c.tasks.filter((x) => x.mine);
+  const rest = c.tasks.filter((x) => !x.mine);
   const blocks: string[] = [];
 
   if (mine.length) {
     blocks.push(
       `<tr><td style="padding:0 0 28px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>` +
         `<td class="bg-sunk" style="background-color:#f2f2f2; border-radius:8px; padding:20px 20px 12px 20px;">` +
-        sectionTitle("Dina uppgifter") +
-        list(mine.map((t) => taskHtml(t, false)), 0) +
+        sectionTitle(escapeHtml(t("emails.summary.yourTasks"))) +
+        list(t, mine.map((x) => taskHtml(x, false)), 0) +
         `</td></tr></table></td></tr>`,
     );
   }
   if (c.decisions.length) {
-    blocks.push(`<tr><td style="padding:0 0 20px 0;">${sectionTitle("Beslut")}${list(c.decisions.map(escapeHtml), c.more.decisions)}</td></tr>`);
+    blocks.push(`<tr><td style="padding:0 0 20px 0;">${sectionTitle(escapeHtml(t("emails.summary.decisions")))}${list(t, c.decisions.map(escapeHtml), c.more.decisions)}</td></tr>`);
   }
   if (rest.length || c.more.tasks > 0) {
     blocks.push(
-      `<tr><td style="padding:0 0 20px 0;">${sectionTitle(mine.length ? "Övriga uppgifter" : "Uppgifter")}${list(
-        rest.map((t) => taskHtml(t, true)),
+      `<tr><td style="padding:0 0 20px 0;">${sectionTitle(escapeHtml(t(mine.length ? "emails.summary.otherTasks" : "emails.summary.tasks")))}${list(
+        t,
+        rest.map((x) => taskHtml(x, true)),
         c.more.tasks,
         "ink-2",
         "#4d4d4d",
@@ -177,19 +186,19 @@ export function renderSummaryHtml(i: SummaryEmailInput): string {
     );
   }
   if (c.other.length) {
-    blocks.push(`<tr><td style="padding:0 0 20px 0;">${sectionTitle("Övrigt")}${list(c.other.map(escapeHtml), c.more.other, "ink-2", "#4d4d4d")}</td></tr>`);
+    blocks.push(`<tr><td style="padding:0 0 20px 0;">${sectionTitle(escapeHtml(t("emails.summary.other")))}${list(t, c.other.map(escapeHtml), c.more.other, "ink-2", "#4d4d4d")}</td></tr>`);
   }
 
   const footer = [
-    `Du får det här mejlet för att du finns i ${escapeHtml(genitive(i.orgName))} personlista på Simon Says.`,
+    escapeHtml(t("emails.summary.why", { orgOf: orgOf(i) })),
     i.settingsHref
-      ? `<a class="link" href="${escapeHtml(i.settingsHref)}" target="_blank" style="color:#0068d6; text-decoration:none;">Ändra vilka som får sammanfattningar</a> &middot; `
+      ? `<a class="link" href="${escapeHtml(i.settingsHref)}" target="_blank" style="color:#0068d6; text-decoration:none;">${escapeHtml(t("emails.summary.settings"))}</a> &middot; `
       : "",
-    `<a class="link" href="${escapeHtml(i.unsubscribeHref)}" target="_blank" style="color:#0068d6; text-decoration:none;">Avsluta prenumeration</a>`,
+    `<a class="link" href="${escapeHtml(i.unsubscribeHref)}" target="_blank" style="color:#0068d6; text-decoration:none;">${escapeHtml(t("emails.summary.unsubscribe"))}</a>`,
   ];
 
   return `<!doctype html>
-<html lang="sv" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<html lang="${i.locale ?? defaultLocale}" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -267,7 +276,7 @@ export function renderSummaryHtml(i: SummaryEmailInput): string {
                     <table role="presentation" class="btn-full" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td class="btn-td" bgcolor="#171717" style="background-color:#171717; border-radius:6px;">
-                          <a class="btn-a" href="${escapeHtml(i.buttonHref)}" target="_blank" style="display:inline-block; padding:14px 24px; font-family:${SANS}; font-size:16px; line-height:20px; font-weight:500; color:#ffffff; text-decoration:none; border-radius:6px;">Öppna protokollet</a>
+                          <a class="btn-a" href="${escapeHtml(i.buttonHref)}" target="_blank" style="display:inline-block; padding:14px 24px; font-family:${SANS}; font-size:16px; line-height:20px; font-weight:500; color:#ffffff; text-decoration:none; border-radius:6px;">${escapeHtml(t("emails.summary.open"))}</a>
                         </td>
                       </tr>
                     </table>
@@ -302,5 +311,5 @@ export function renderSummaryHtml(i: SummaryEmailInput): string {
 
 /** Subject, preview, HTML and text for one recipient. */
 export function renderSummaryEmail(i: SummaryEmailInput): RenderedEmail {
-  return { subject: summarySubject(i.orgName, i.startedAt), preview: previewText(i), html: renderSummaryHtml(i), text: renderSummaryText(i) };
+  return { subject: summarySubject(i.orgName, i.startedAt, i.locale), preview: previewText(i), html: renderSummaryHtml(i), text: renderSummaryText(i) };
 }

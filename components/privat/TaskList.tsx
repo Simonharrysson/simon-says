@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ export function TaskList({
   label: string;
   empty?: string;
 }) {
+  const t = useTranslations("privat.tasks");
   const id = useId();
   const [done, setDone] = useState<Record<string, boolean>>(() => Object.fromEntries(tasks.map((t) => [t.id, t.done])));
   const [failed, setFailed] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function TaskList({
       </ul>
       {failed && (
         <p role="alert" className="text-sm font-medium text-red">
-          Det gick inte att spara bocken. Kontrollera nätet och försök igen.
+          {t("saveFailed")}
         </p>
       )}
     </div>

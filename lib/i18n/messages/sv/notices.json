@@ -1,0 +1,131 @@
+{
+  "login": {
+    "drive": {
+      "title": "Kryssa i rutan för Google Drive",
+      "text": "Rutan för Google Drive var inte ikryssad. Utan den kan vi inte skapa mötesdokumentet i din Drive. Vi ser bara de filer Simon Says själv skapar. Din inbjudan ligger kvar."
+    },
+    "refresh": {
+      "title": "Google skickade ingen nyckel",
+      "text": "Vi fick inte behörighet att skriva i dina dokument när du inte är vid datorn. Logga in igen så brukar det lösa sig."
+    },
+    "avbrutet": {
+      "title": "Inloggningen avbröts",
+      "text": "Inget hände. Du kan försöka igen när du vill."
+    },
+    "start": {
+      "title": "Inloggningen kunde inte starta",
+      "text": "Något gick fel hos oss eller hos Google. Försök igen om en liten stund."
+    },
+    "kod": {
+      "title": "Inloggningen blev inte klar",
+      "text": "Google och vi kom inte överens den här gången. Försök igen."
+    }
+  },
+  "orgs": {
+    "limit": {
+      "text": "Du kan ha högst tio föreningar som du har skapat. Radera en du inte använder, eller be någon annan skapa den."
+    },
+    "cap": {
+      "text": "Du har skapat många föreningar på kort tid. Mejla simon@harrysson.co om du behöver fler."
+    },
+    "invalid": {
+      "text": "Ange ett namn (högst 100 tecken)."
+    },
+    "inbjudan": {
+      "title": "Inbjudningslänken gäller inte längre",
+      "text": "Be den som bjöd in dig om en ny länk."
+    },
+    "raderad": {
+      "text": "Föreningen är raderad. Google-dokumenten ligger kvar i Drive."
+    },
+    "lamnat": {
+      "text": "Du har lämnat föreningen. Dokument som redan delats med dig ligger kvar i din Drive."
+    }
+  },
+  "org": {
+    "namn": {
+      "text": "Ange ett namn (högst 100 tecken)."
+    },
+    "personnamn": {
+      "text": "Det namnet går inte att använda. Ett personnamn får bara ha bokstäver, mellanslag, bindestreck, punkt och apostrof, högst fyra ord och 60 tecken."
+    },
+    "rollnamn": {
+      "text": "Den rollen går inte att använda. En roll får bara ha bokstäver, siffror, mellanslag och tecknen & / - . ', högst fyra ord och 40 tecken."
+    },
+    "roll-admin": {
+      "text": "Bara en admin kan ändra roller."
+    },
+    "sammanfattning": {
+      "text": "Inställningen för sammanfattningar kunde inte sparas. Bara en admin kan ändra den."
+    },
+    "mote-forbidden": {
+      "text": "Bara den som startade mötet eller en admin kan radera det."
+    },
+    "mote-not_found": {
+      "text": "Mötet finns inte längre."
+    },
+    "mote-active": {
+      "text": "Avsluta mötet innan du raderar det."
+    },
+    "org-active": {
+      "text": "Ett möte pågår. Avsluta det innan du raderar föreningen."
+    },
+    "org-name_mismatch": {
+      "text": "Namnet stämde inte. Skriv föreningens namn exakt för att radera den."
+    },
+    "org-forbidden": {
+      "text": "Bara admins kan radera föreningen."
+    },
+    "org-not_found": {
+      "text": "Föreningen finns inte längre."
+    },
+    "avslutat": {
+      "text": "Mötet avslutas. Anteckningarna görs klara i dokumentet om en liten stund."
+    },
+    "avsluta-forbidden": {
+      "text": "Bara en admin eller den som startade mötet kan avsluta det här."
+    },
+    "avsluta-not_found": {
+      "text": "Mötet finns inte längre."
+    },
+    "mote": {
+      "text": "Mötet är raderat. Google-dokumentet ligger kvar i Drive."
+    },
+    "medlem": {
+      "text": "Medlemmen är borttagen. Mötesdokument som redan delats med hen är fortfarande delade."
+    },
+    "medlem-last_admin": {
+      "text": "Föreningen måste ha minst en admin. Gör någon annan till admin först – eller radera föreningen om den inte ska användas längre."
+    },
+    "medlem-not_member": {
+      "text": "Personen är inte medlem längre."
+    },
+    "medlem-forbidden": {
+      "text": "Bara admins kan ta bort medlemmar."
+    },
+    "medlem-not_found": {
+      "text": "Föreningen finns inte längre."
+    },
+    "admin-ny": {
+      "text": "Medlemmen är nu admin."
+    },
+    "admin-bort": {
+      "text": "Adminrollen är borttagen. Personen är kvar som medlem."
+    },
+    "admin-last_admin": {
+      "text": "Föreningen måste ha minst en admin. Gör någon annan till admin först."
+    },
+    "admin-forbidden": {
+      "text": "Bara admins kan ändra vem som är admin."
+    },
+    "admin-not_member": {
+      "text": "Personen är inte medlem längre."
+    },
+    "admin-not_found": {
+      "text": "Föreningen finns inte längre."
+    },
+    "admin-invalid": {
+      "text": "Rollen gick inte att ändra. Ladda om sidan och försök igen."
+    }
+  }
+}

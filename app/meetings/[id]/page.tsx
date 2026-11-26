@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { LiveMeetingController } from "@/components/live/LiveMeetingController";
 import { isUuid } from "@/lib/db/ids";
@@ -13,7 +14,9 @@ import { isPrivat, privatHref } from "@/lib/privat/space";
 import { canResume, docUrl } from "@/lib/ui/meetings";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Möte", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("common"))("metaMeeting"), robots: { index: false, follow: false } };
+}
 
 /**
  * The live meeting page (full-screen focus mode: outside the (app) layout). Any member of the
@@ -60,9 +63,10 @@ export default async function MeetingPage({
   const shareFailed = typeof shareFailedRaw === "number" ? shareFailedRaw : null;
   const missedMeetingFolder = (started?.[0]?.detail as { missedMeetingFolder?: unknown } | undefined)?.missedMeetingFolder === true;
   // Privat (0045): back to the context; the summary has its own page; there may be no Doc.
+  const tp = await getTranslations("privat.live");
   const context = isPrivat(org) && m.context_id ? ((await db.from("contexts").select("id, name").eq("id", m.context_id).maybeSingle()).data as { id: string; name: string } | null) : null;
   const privat = isPrivat(org)
-    ? { summaryHref: `/privat/mote/${m.id}`, backLabel: context ? `Tillbaka till ${context.name}` : "Tillbaka till Privat" }
+    ? { summaryHref: `/privat/mote/${m.id}`, backLabel: context ? tp("back", { name: context.name }) : tp("backHome") }
     : undefined;
   return (
     <main id="innehall">

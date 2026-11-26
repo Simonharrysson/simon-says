@@ -3,11 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { inviterNameFor, sendInvites } from "./send";
 
 // sendInvites with a scripted database and a fake mailer (the DB rules run in tests/api/invites.test.ts).
-function fakeDb(claims: Record<string, { result: string; send_id?: number; next_at?: string }>, optedOut: string[] = []) {
+function fakeDb(claims: Record<string, { result: string; send_id?: number; next_at?: string }>, optedOut: string[] = [], english: string[] = []) {
   const finished: [number, string][] = [];
   const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
     if (fn === "may_email") return { data: !optedOut.includes(args.p_email as string), error: null };
     if (fn === "claim_invite_send") return { data: claims[args.p_email as string], error: null };
+    if (fn === "locale_for_email") return { data: english.includes(args.p_email as string) ? "en" : null, error: null };
     if (fn === "finish_invite_send") {
       finished.push([args.p_send_id as number, args.p_outcome as string]);
       return { data: null, error: null };
@@ -42,6 +43,16 @@ describe("sendInvites", () => {
     // No address in the log line.
     expect(log.mock.calls.flat().join(" ")).not.toMatch(/@/);
     log.mockRestore();
+  });
+
+  it("writes to an address in its account's chosen language (English), Swedish otherwise", async () => {
+    const { db } = fakeDb({ "a@example.com": { result: "ok", send_id: 1 }, "b@example.com": { result: "ok", send_id: 2 } }, [], ["a@example.com"]);
+    const mailer = { send: vi.fn(async () => true) };
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    await sendInvites({ ...input, emails: ["a@example.com", "b@example.com"] }, { db, mailer, gapMs: 0 });
+    const subjects = Object.fromEntries(mailer.send.mock.calls.map((c) => [(c as unknown as [{ to: string; subject: string }])[0].to, (c as unknown as [{ subject: string }])[0].subject]));
+    expect(subjects["a@example.com"]).toBe("Anna Berg invites you to Föreningen on Simon Says");
+    expect(subjects["b@example.com"]).toBe("Anna Berg bjuder in dig till Föreningen på Simon Says");
   });
 
   it("a refused claim (not an admin) stops everything", async () => {

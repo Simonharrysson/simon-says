@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Banner } from "@/components/ui/Banner";
 import { Button, Spinner } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { docHeadingClass, docLineClass, docPaperClass, docTitleClass } from "./doc-paper";
 import { Check } from "@/components/ui/Field";
 import type { ItemRole } from "@/lib/db/types";
-import { editorToProfile, profileToEditor, ROLE_NAMES, type EditorItem, type EditorState } from "@/lib/formats/editor";
+import { editorToProfile, profileToEditor, type EditorItem, type EditorState } from "@/lib/formats/editor";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
@@ -34,10 +35,11 @@ const MAX_DOCS = 5;
 
 /** The skeleton of a profile on Doc paper. */
 export function FormatPreview({ profile }: { profile: FormatProfile }) {
+  const t = useTranslations("formatEditor");
   const blocks = skeletonBlocks(profile);
   let n = 0;
   return (
-    <div className={cn(docPaperClass, "min-[60rem]:sticky min-[60rem]:top-4")} aria-label="Förhandsvisning av dokumentet">
+    <div className={cn(docPaperClass, "min-[60rem]:sticky min-[60rem]:top-4")} aria-label={t("previewLabel")}>
       {blocks.map((b: SkeletonBlock, i) => {
         if (b.type === "table") {
           return (
@@ -90,6 +92,7 @@ function TextList({
   addLabel: string;
   hint?: string;
 }) {
+  const t = useTranslations("formatEditor");
   return (
     <fieldset className="grid gap-2">
       <legend className="text-sm font-medium text-ink">{label}</legend>
@@ -98,7 +101,7 @@ function TextList({
         <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
           <Input
             id={`${id}-${i}`}
-            aria-label={`${label} ${i + 1}`}
+            aria-label={t("listItem", { label, n: i + 1 })}
             value={v}
             maxLength={80}
             onChange={(e) => onChange(values.map((x, j) => (j === i ? e.target.value : x)))}
@@ -106,14 +109,14 @@ function TextList({
           <Button
             variant="danger-ghost"
             size="sm"
-            aria-label={`Ta bort ${label.toLowerCase()} ${i + 1}`}
+            aria-label={t("listRemove", { label: label.toLowerCase(), n: i + 1 })}
             onClick={() => {
               onChange(values.filter((_, j) => j !== i));
               // Focus stays in the list: the next row, else the previous one, else "add".
               focusSoon(values.length> 1 ? `${id}-${Math.min(i, values.length - 2)}` : `${id}-add`);
             }}
 >
-            Ta bort
+            {t("remove")}
           </Button>
         </div>
       ))}
@@ -138,13 +141,16 @@ export interface FormatEditorProps {
 }
 
 export function FormatEditor({ orgId, proposal, approveKind = "learned", showRequired = false, onCancel, onApproved }: FormatEditorProps) {
+  const t = useTranslations("formatEditor");
+  const common = useTranslations("common");
+  const locale = useLocale();
   const router = useRouter();
   const uid = useId();
   const itemId = (i: number, part: "label" | "up" | "down") => `${uid}-item-${i}-${part}`;
   const [state, setState] = useState<EditorState>(() => profileToEditor(proposal.profile));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const result = useMemo(() => editorToProfile(state), [state]);
+  const result = useMemo(() => editorToProfile(state, locale), [state, locale]);
   const [lastValid, setLastValid] = useState<FormatProfile>(proposal.profile);
   // Derived state: while a field is invalid the preview keeps showing the last valid profile.
   if (result.ok && JSON.stringify(result.profile) !== JSON.stringify(lastValid)) setLastValid(result.profile);
@@ -186,13 +192,13 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string } | null;
-        setMessage(json?.message ?? "Formatet kunde inte sparas. Försök igen.");
+        setMessage(json?.message ?? t("saveFailed"));
         return;
       }
       router.refresh();
       onApproved?.();
     } catch {
-      setMessage("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+      setMessage(t("offline"));
     } finally {
       setBusy(false);
     }
@@ -202,30 +208,26 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
     <div className="flex flex-col gap-4">
       {proposal.explanation && <p>{proposal.explanation}</p>}
       {proposal.qualityNote && (
-        <Banner tone="neutral" title="Om era gamla protokoll" live={false}>
+        <Banner tone="neutral" title={t("qualityTitle")} live={false}>
           {proposal.qualityNote}
         </Banner>
       )}
       <div className="grid grid-cols-1 items-start gap-6 min-[60rem]:grid-cols-2">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="fe-title">
-              Titel
-            </Label>
+            <Label htmlFor="fe-title">{t("title")}</Label>
             <Input id="fe-title" value={state.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} />
           </div>
           <TextList
             id="fe-info"
-            label="Fält i tabellen överst"
+            label={t("infoTable")}
             values={state.infoTable}
             onChange={(infoTable) => set({ infoTable })}
-            addLabel="Lägg till fält"
-            hint="Inga fält = ingen tabell."
+            addLabel={t("addField")}
+            hint={t("infoTableHint")}
           />
           <div className="flex flex-col gap-2">
-            <Label htmlFor="fe-agenda">
-              Rubrik för dagordningen
-            </Label>
+            <Label htmlFor="fe-agenda">{t("agendaHeading")}</Label>
             <Input
               id="fe-agenda"
               value={state.agendaHeading}
@@ -236,85 +238,83 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
             />
             {/* The skeleton always writes one (the scan finds heading items only below it). */}
             <p id="fe-agenda-hint" className="text-xs text-ink-3">
-              Tomt fält ger rubriken ”Agenda”.
+              {t("agendaHint")}
             </p>
           </div>
           <fieldset className="grid gap-2">
-            <legend className="text-sm font-medium text-ink">Punkter varje möte</legend>
-            {hasCheckin && <p className="text-xs text-ink-3">Har ni ingen Må-runda? Ta bort den punkten.</p>}
+            <legend className="text-sm font-medium text-ink">{t("itemsLegend")}</legend>
+            {hasCheckin && <p className="text-xs text-ink-3">{t("noCheckin")}</p>}
             {state.items.map((item, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,11rem)] items-center gap-2 border-b border-line pb-2">
                 <Input
                   id={itemId(i, "label")}
-                  aria-label={`Punkt ${i + 1}`}
+                  aria-label={t("item", { n: i + 1 })}
                   value={item.label}
                   maxLength={80}
                   onChange={(e) => setItem(i, { label: e.target.value })}
                 />
                 <NativeSelect
-                  aria-label={`Typ av punkt ${i + 1}`}
+                  aria-label={t("itemType", { n: i + 1 })}
                   value={item.role}
                   onChange={(e) => setItem(i, { role: e.target.value as ItemRole })}
 >
                   {ROLES.map((r) => (
                     <option key={r} value={r}>
-                      {ROLE_NAMES[r]}
+                      {t(`roles.${r}`)}
                     </option>
                   ))}
                 </NativeSelect>
                 <label className="inline-flex cursor-pointer items-center gap-1">
-                  <Checkbox checked={item.last} onCheckedChange={(on) => setItem(i, { last: on === true })} /> Sist
+                  <Checkbox checked={item.last} onCheckedChange={(on) => setItem(i, { last: on === true })} /> {t("last")}
                 </label>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button id={itemId(i, "up")} variant="ghost" size="sm" aria-label={`Flytta upp punkt ${i + 1}`} disabled={i === 0} onClick={() => moveItem(i, -1)}>
+                  <Button id={itemId(i, "up")} variant="ghost" size="sm" aria-label={t("moveUp", { n: i + 1 })} disabled={i === 0} onClick={() => moveItem(i, -1)}>
                     ↑
                   </Button>
                   <Button
                     id={itemId(i, "down")}
                     variant="ghost"
                     size="sm"
-                    aria-label={`Flytta ner punkt ${i + 1}`}
+                    aria-label={t("moveDown", { n: i + 1 })}
                     disabled={i === state.items.length - 1}
                     onClick={() => moveItem(i, 1)}
 >
                     ↓
                   </Button>
-                  <Button variant="danger-ghost" size="sm" aria-label={`Ta bort punkt ${i + 1}`} onClick={() => removeItem(i)}>
-                    Ta bort
+                  <Button variant="danger-ghost" size="sm" aria-label={t("removeItem", { n: i + 1 })} onClick={() => removeItem(i)}>
+                    {t("remove")}
                   </Button>
                 </div>
               </div>
             ))}
             <div>
               <Button id={`${uid}-add-item`} variant="ghost" size="sm" onClick={() => set({ items: [...state.items, { label: "", role: "topic", last: false }] })}>
-                Lägg till punkt
+                {t("addItem")}
               </Button>
             </div>
           </fieldset>
           {hasCheckin && (
             <Check
               id="fe-hide-checkin"
-              title="Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)"
+              title={t("hideCheckin")}
               checked={state.hideCheckin}
               onCheckedChange={(on) => set({ hideCheckin: on === true })}
             >
-              Utan bocken antecknas må-rundan som de andra punkterna.
+              {t("hideCheckinText")}
             </Check>
           )}
           {(showRequired || proposal.profile.requiredItems.length> 0) && (
             <TextList
               id="fe-required"
-              label="Punkter som stadgarna kräver"
+              label={t("requiredItems")}
               values={state.requiredItems}
               onChange={(requiredItems) => set({ requiredItems })}
-              addLabel="Lägg till punkt"
-              hint="Kommer med på dagordningen varje möte."
+              addLabel={t("addItem")}
+              hint={t("requiredHint")}
             />
           )}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="fe-numbering">
-              Numrering
-            </Label>
+            <Label htmlFor="fe-numbering">{t("numbering")}</Label>
             <NativeSelect
               id="fe-numbering"
               value={state.numbering}
@@ -322,37 +322,37 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
 >
               <option value="numbered">1. 2. 3.</option>
               <option value="paragraph">§1 §2 §3</option>
-              <option value="none">Ingen</option>
+              <option value="none">{t("numberingNone")}</option>
             </NativeSelect>
           </div>
           <fieldset className="grid gap-2">
-            <legend className="text-sm font-medium text-ink">Uppgifter</legend>
-            <Check id="fe-tasks-on" title="Egen rubrik för uppgifter" checked={state.tasks.on} onCheckedChange={(on) => set({ tasks: { ...state.tasks, on: on === true } })} />
+            <legend className="text-sm font-medium text-ink">{t("tasksLegend")}</legend>
+            <Check id="fe-tasks-on" title={t("tasksOn")} checked={state.tasks.on} onCheckedChange={(on) => set({ tasks: { ...state.tasks, on: on === true } })} />
             {state.tasks.on && (
               <>
                 <Input
-                  aria-label="Rubrik för uppgifter"
+                  aria-label={t("tasksLabel")}
                   value={state.tasks.label}
                   maxLength={80}
                   onChange={(e) => set({ tasks: { ...state.tasks, label: e.target.value } })}
                 />
                 <NativeSelect
-                  aria-label="Gruppera uppgifter"
+                  aria-label={t("tasksGroup")}
                   value={state.tasks.groupBy}
                   onChange={(e) => set({ tasks: { ...state.tasks, groupBy: e.target.value as "role" | "person" } })}
 >
-                  <option value="role">Gruppera per roll</option>
-                  <option value="person">Gruppera per person</option>
+                  <option value="role">{t("groupRole")}</option>
+                  <option value="person">{t("groupPerson")}</option>
                 </NativeSelect>
               </>
             )}
           </fieldset>
           <fieldset className="grid gap-2">
-            <legend className="text-sm font-medium text-ink">Anteckningar</legend>
-            <Check id="fe-notes-on" title="Egen rubrik för anteckningar" checked={state.notes.on} onCheckedChange={(on) => set({ notes: { ...state.notes, on: on === true } })} />
+            <legend className="text-sm font-medium text-ink">{t("notesLegend")}</legend>
+            <Check id="fe-notes-on" title={t("notesOn")} checked={state.notes.on} onCheckedChange={(on) => set({ notes: { ...state.notes, on: on === true } })} />
             {state.notes.on && (
               <Input
-                aria-label="Rubrik för anteckningar"
+                aria-label={t("notesLabel")}
                 value={state.notes.label}
                 maxLength={80}
                 onChange={(e) => set({ notes: { ...state.notes, label: e.target.value } })}
@@ -361,11 +361,11 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
           </fieldset>
           <TextList
             id="fe-signatures"
-            label="Underskrifter"
+            label={t("signatures")}
             values={state.signatures}
             onChange={(signatures) => set({ signatures })}
-            addLabel="Lägg till underskrift"
-            hint="Inga = inga underskrifter."
+            addLabel={t("addSignature")}
+            hint={t("signaturesHint")}
           />
         </div>
         <FormatPreview profile={preview} />
@@ -382,10 +382,10 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
       {message && <Banner tone="danger">{message}</Banner>}
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" loading={busy} disabled={!result.ok} onClick={() => void approve()}>
-          Godkänn och använd
+          {t("approve")}
         </Button>
         <Button variant="ghost" disabled={busy} onClick={onCancel}>
-          Avbryt
+          {common("cancel")}
         </Button>
       </div>
     </div>
@@ -398,20 +398,10 @@ export type LearnPhase =
   | { phase: "error"; message: string }
   | { phase: "editor"; proposal: Proposal };
 
-export const COPY = {
-  learn: {
-    start: "Lär Simon Says ert format",
-    busy: "Simon Says läser strukturen …",
-    hint: "En mall eller 1–5 gamla protokoll. Bara strukturen läses, aldrig innehållet.",
-  },
-  customize: {
-    start: "Anpassa format",
-    busy: "",
-    hint: "Ta bort eller lägg till punkter, t.ex. Må-runda.",
-  },
-} as const;
+/** The ways to change a format; their copy is formatEditor.flows.<variant> in the catalogs. */
+export const FLOW_VARIANTS = ["learn", "customize"] as const;
 
-export type FlowVariant = keyof typeof COPY;
+export type FlowVariant = (typeof FLOW_VARIANTS)[number];
 
 /** Presentational: the learn-a-format part of FormatCard in each phase (used by /design). */
 export function LearnFormatView({
@@ -429,7 +419,9 @@ export function LearnFormatView({
   onCancel: () => void;
   onApproved?: () => void;
 }) {
-  const copy = COPY[variant];
+  const t = useTranslations("formatEditor");
+  const common = useTranslations("common");
+  const copy = { start: t(`flows.${variant}.start`), busy: t(`flows.${variant}.busy`), hint: t(`flows.${variant}.hint`) };
   const startRef = useRef<HTMLButtonElement>(null);
   const wasEditor = useRef(false);
   // Back from the editor (approved or cancelled): focus returns to the button that opened it.
@@ -465,11 +457,11 @@ export function LearnFormatView({
       {view.phase === "error" && <Banner tone="danger">{view.message}</Banner>}
       <div className="flex flex-wrap gap-2">
         <Button ref={startRef} variant="secondary" onClick={onStart}>
-          {view.phase === "error" ? "Försök igen" : copy.start}
+          {view.phase === "error" ? t("tryAgain") : copy.start}
         </Button>
         {view.phase === "error" && (
           <Button variant="ghost" onClick={onCancel}>
-            Avbryt
+            {common("cancel")}
           </Button>
         )}
       </div>
@@ -488,24 +480,25 @@ export function LearnFormatView({
  * `start*` call `picker.open` right away, so the click's user activation reaches the Picker.
  */
 export function useFormatFlow(orgId: string, current?: FormatProfile) {
+  const t = useTranslations("formatEditor");
   const picker = usePicker();
   const [variant, setVariant] = useState<FlowVariant>("learn");
   const [view, setView] = useState<LearnPhase>({ phase: "idle" });
   const fail = (err: unknown) =>
-    setView({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen." });
+    setView({ phase: "error", message: err instanceof PickerError ? err.message : t("pickerFailed") });
 
   const startLearn = async () => {
     setVariant("learn");
     let picked;
     try {
-      picked = await picker.open({ mode: "docs-multi", title: "Välj en mall eller 1–5 gamla protokoll" });
+      picked = await picker.open({ mode: "docs-multi", title: t("pickLearnTitle") });
     } catch (err) {
       fail(err);
       return;
     }
     if (!picked?.length) return;
     if (picked.length> MAX_DOCS) {
-      setView({ phase: "error", message: `Välj högst ${MAX_DOCS} dokument.` });
+      setView({ phase: "error", message: t("tooManyDocs", { max: MAX_DOCS }) });
       return;
     }
     setView({ phase: "proposing" });
@@ -517,12 +510,12 @@ export function useFormatFlow(orgId: string, current?: FormatProfile) {
       });
       const json = (await res.json().catch(() => null)) as (Proposal & { message?: string }) | null;
       if (!res.ok || !json?.profile) {
-        setView({ phase: "error", message: json?.message ?? "Simon Says kunde inte föreslå ett format. Försök igen." });
+        setView({ phase: "error", message: json?.message ?? t("proposeFailed") });
         return;
       }
       setView({ phase: "editor", proposal: json });
     } catch {
-      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
+      setView({ phase: "error", message: t("offline") });
     }
   };
 

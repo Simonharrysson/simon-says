@@ -1,6 +1,8 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
+import type { Locale } from "@/lib/i18n/config";
 import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState, type GoalOption } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
 import type { Speaker } from "@/components/live/types";
@@ -36,7 +38,7 @@ import { OverviewView, type GoalsPhase, type OverviewGoal } from "@/components/v
 import type { Overview } from "@/lib/dashboard/overview";
 import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
-import { STADGAR_COPY, StadgarArsmote } from "@/components/views/StadgarArsmote";
+import { StadgarArsmote } from "@/components/views/StadgarArsmote";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { demoGoals, demoOverview, demoOverviewHistoryOnly, demoOverviewWithHistory, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
@@ -44,6 +46,15 @@ import { designViews, type DesignGroup } from "./registry";
 import { onboardingRender } from "./onboarding-demo";
 import { SummarySettingsDemo, summaryRender } from "./summary-demo";
 import { inviteRender } from "./invite-demo";
+
+function StadgarLead() {
+  return <p className="text-sm text-ink-2">{useTranslations("stadgar")("lead")}</p>;
+}
+
+/** Gives a gallery view the UI language (the notices are copy, not gallery chrome). */
+function WithLocale({ render }: { render: (locale: Locale) => ReactNode }) {
+  return <>{render(useLocale())}</>;
+}
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
 
@@ -471,50 +482,58 @@ const render: Record<string, () => ReactNode> = {
   ),
   orgs: () => (
     <AppChrome>
-      <OrgsView
-        orgs={[
-          { id: ORG_ID, name: "Exempelföreningen", role: "admin" },
-          { id: "o2", name: "Golfklubbens styrelse", role: "member" },
-        ]}
-        notice={orgsNotice("limit")}
-        createOrg={noopAction}
+      <WithLocale
+        render={(locale) => (
+          <OrgsView
+            orgs={[
+              { id: ORG_ID, name: "Exempelföreningen", role: "admin" },
+              { id: "o2", name: "Golfklubbens styrelse", role: "member" },
+            ]}
+            notice={orgsNotice("limit", undefined, locale)}
+            createOrg={noopAction}
+          />
+        )}
       />
     </AppChrome>
   ),
   "org-admin": () => (
     <AppChrome>
-      <OrgDetailView
-        org={org}
-        isAdmin
-        userId={ME}
-        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={[
-          { userId: ME, email: "anna.berg@example.com", role: "admin" },
-          { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "member" },
-          { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
-        ]}
-        people={people}
-        meetings={meetings}
-        notice={orgNotice("mote-active")}
-        profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async (_id, input) => {
-          const r = parseProfile(input);
-          return r.ok ? { ok: true, profile: r.profile } : { ok: false, message: "Kontrollera fälten och försök igen.", errors: r.errors };
-        }} />}
-        summarySettings={<SummarySettingsDemo />}
-        startMeetingHref="#"
-        formatCard={
-          <FormatCard
-            orgId={ORG_ID}
-            current={{ kind: "veckomote", name: "Veckomöte" }}
+      <WithLocale
+        render={(locale) => (
+          <OrgDetailView
+            org={org}
             isAdmin
-            meetingFolder={{ id: null }}
-            formats={[]}
-            changeFormat={noopAction}
+            userId={ME}
+            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+            members={[
+              { userId: ME, email: "anna.berg@example.com", role: "admin" },
+              { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "member" },
+              { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
+            ]}
+            people={people}
+            meetings={meetings}
+            notice={orgNotice("mote-active", undefined, locale)}
+            profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async (_id, input) => {
+              const r = parseProfile(input);
+              return r.ok ? { ok: true, profile: r.profile } : { ok: false, message: "Kontrollera fälten och försök igen.", errors: r.errors };
+            }} />}
+            summarySettings={<SummarySettingsDemo />}
+            startMeetingHref="#"
+            formatCard={
+              <FormatCard
+                orgId={ORG_ID}
+                current={{ kind: "veckomote", name: "Veckomöte" }}
+                isAdmin
+                meetingFolder={{ id: null }}
+                formats={[]}
+                changeFormat={noopAction}
+              />
+            }
+            liveMeetingHref={() => "/design?vy=live"}
+            tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin") }}
+            actions={actions}
           />
-        }
-        liveMeetingHref={() => "/design?vy=live"}
-        tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin") }}
-        actions={actions}
+        )}
       />
     </AppChrome>
   ),
@@ -539,21 +558,25 @@ const render: Record<string, () => ReactNode> = {
   ),
   "org-admins": () => (
     <AppChrome>
-      <OrgDetailView
-        org={org}
-        isAdmin
-        userId={ME}
-        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={[
-          { userId: ME, email: "anna.berg@example.com", role: "admin" },
-          { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "admin" },
-          { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
-        ]}
-        people={people}
-        meetings={[]}
-        notice={orgNotice(undefined, "admin-ny")}
-        startMeetingHref="#"
-        actions={actions}
+      <WithLocale
+        render={(locale) => (
+          <OrgDetailView
+            org={org}
+            isAdmin
+            userId={ME}
+            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+            members={[
+              { userId: ME, email: "anna.berg@example.com", role: "admin" },
+              { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "admin" },
+              { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
+            ]}
+            people={people}
+            meetings={[]}
+            notice={orgNotice(undefined, "admin-ny", locale)}
+            startMeetingHref="#"
+            actions={actions}
+          />
+        )}
       />
     </AppChrome>
   ),
@@ -655,7 +678,7 @@ const render: Record<string, () => ReactNode> = {
       <div className="mx-auto w-full max-w-page px-gutter">
         <Panel title="Mötesformat" titleId="format-title-demo">
           <div className="flex flex-col gap-3">
-            <p className="text-sm text-ink-2">{STADGAR_COPY.lead}</p>
+            <StadgarLead />
             <StadgarArsmoteDemo />
           </div>
         </Panel>
@@ -820,6 +843,7 @@ const render: Record<string, () => ReactNode> = {
         signOut={noopAction}
         emailPrefs={{ allOff: false, off: ["invite"] }}
         saveEmailPrefs={fakeSave}
+        saveLocale={noopAction}
       />
     </AppChrome>
   ),
@@ -831,12 +855,13 @@ const render: Record<string, () => ReactNode> = {
         signOut={noopAction}
         emailPrefs={{ allOff: true, off: ["invite"] }}
         saveEmailPrefs={fakeSave}
+        saveLocale={noopAction}
       />
     </AppChrome>
   ),
   "account-mail-error": () => (
     <AppChrome>
-      <AccountView email="anna.berg@example.com" userId={ME} signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} />
+      <AccountView email="anna.berg@example.com" userId={ME} signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} saveLocale={noopAction} />
     </AppChrome>
   ),
   "account-mail-save-fails": () => (
@@ -847,6 +872,7 @@ const render: Record<string, () => ReactNode> = {
         signOut={noopAction}
         emailPrefs={{ allOff: false, off: [] }}
         saveEmailPrefs={async () => false}
+        saveLocale={noopAction}
       />
     </AppChrome>
   ),

@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+
 import { useEffect, useRef } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -49,6 +51,9 @@ export function MeetingEnded({
   /** A Privat recording (0045): where its summary is shown, and the back link's words. */
   privat?: { summaryHref: string | null; backLabel: string } | null;
 }) {
+  const t = useTranslations("live.ended");
+  const tp = useTranslations("privat.live");
+  const locale = useLocale();
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (focusOnMount) heading.current?.focus();
@@ -56,94 +61,89 @@ export function MeetingEnded({
   const waiting = (pendingRuns ?? 0) > 0;
   const shared =
     shareFailed && shareFailed > 0
-      ? ` ${shareFailed === 1 ? "En medlem" : `${shareFailed} medlemmar`} fick inte åtkomst – dela dokumentet manuellt.`
+      ? t("membersFailed", { count: shareFailed })
       : shareFailed === 0
-        ? " och delade med föreningens medlemmar"
+        ? t("sharedWith")
         : "";
   return (
     <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="ended-title" aria-live="polite">
       <h1 id="ended-title" className="text-2xl" ref={heading} tabIndex={-1}>
-        {finalizing ? "Gör anteckningarna klara…" : "Mötet är avslutat"}
+        {finalizing ? t("finalizing") : t("ended")}
       </h1>
       {waiting && (
-        <Banner tone="warning" title={`${pendingRuns} ${pendingRuns === 1 ? "rad väntar" : "rader väntar"} på nätet – stäng inte fliken`}>
-          Det som sades sist har inte nått servern än. Vi försöker igen hela tiden; låt fliken vara öppen tills det här försvinner.
+        <Banner tone="warning" title={t("waitingTitle", { count: pendingRuns ?? 0 })}>
+          {t("waitingText")}
         </Banner>
       )}
       {signedOutUnsent != null && (
         <Banner
           tone="danger"
           title={
-            signedOutUnsent > 0
-              ? `Du är utloggad – ${signedOutUnsent} ${signedOutUnsent === 1 ? "rad är" : "rader är"} inte sparade`
-              : "Du är utloggad – mötet kunde inte avslutas"
+            signedOutUnsent > 0 ? t("signedOutUnsent", { count: signedOutUnsent }) : t("signedOutEnd")
           }
           action={
             <span className="flex flex-wrap items-center gap-3">
               {onReLogin && (
                 <Button variant="primary" onClick={onReLogin}>
-                  Logga in igen
+                  {t("reLogin")}
                 </Button>
               )}
               {onRetryEnd && (
                 <Button icon={<IconRefresh size={18} />} onClick={onRetryEnd}>
-                  Försök igen
+                  {t("tryAgain")}
                 </Button>
               )}
               {onEndWithoutUnsent && signedOutUnsent > 0 && (
                 <Button variant="ghost" onClick={onEndWithoutUnsent}>
-                  Avsluta utan dem
+                  {t("endWithout")}
                 </Button>
               )}
             </span>
           }
         >
-          Logga in igen (öppnas i en ny flik) och tryck sedan Försök igen, så sparas resten och mötet avslutas. Stänger du
-          fliken nu avslutas mötet ändå inom en kvart, men utan de raderna.
+          {t("signedOutText")}
         </Banner>
       )}
       {endFailed && (
         <Banner
           tone="danger"
-          title="Mötet kunde inte avslutas"
+          title={t("endFailedTitle")}
           action={
             onRetryEnd && (
               <Button variant="primary" icon={<IconRefresh size={18} />} onClick={onRetryEnd}>
-                Försök igen
+                {t("tryAgain")}
               </Button>
             )
           }
         >
-          Vi nådde inte servern. Kontrollera nätet och försök igen. Stänger du fliken avslutas mötet ändå inom en kvart.
+          {t("endFailedText")}
         </Banner>
       )}
       <p className="text-ink-2">
-        {autoStopped && `${autoStopText(stopReason)} `}
+        {autoStopped && `${autoStopText(stopReason, locale)} `}
         {privat
-          ? `Inspelningen var ${formatDuration(durationSeconds)}. ${
-              finalizing ? "Anteckningarna får en sista genomgång." : "Anteckningarna är färdiga."
-            } Sammanfattningen kommer på mejlen om ungefär en minut.`
+          ? tp(finalizing ? "endedFinalizing" : "endedDone", { duration: formatDuration(durationSeconds, locale) })
           : finalizing
-          ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna får en sista genomgång, det tar ungefär en minut.${
-              waiting || endFailed || signedOutUnsent != null ? "" : " Du kan stänga fliken, det blir klart ändå."
+          ? `${t("finalizingText", { duration: formatDuration(durationSeconds, locale) })}${
+              waiting || endFailed || signedOutUnsent != null ? "" : t("canClose")
             }`
           : shareFailed && shareFailed > 0
-            ? `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna är färdiga.${shared}`
-            : `Ni pratade i ${formatDuration(durationSeconds)}. Anteckningarna är färdiga${shared}.`}
+            ? t("doneShared", { duration: formatDuration(durationSeconds, locale), shared })
+            : t("done", { duration: formatDuration(durationSeconds, locale), shared })}
       </p>
       <div className="flex flex-wrap items-center gap-3">
         {docUrl && (
           <ButtonLink href={docUrl} target="_blank" rel="noopener noreferrer" variant="primary" size="lg" icon={<IconExternal size={18} />}>
-            Öppna dokumentet
+            {t("openDoc")}
           </ButtonLink>
         )}
         {privat?.summaryHref && !finalizing && (
           <ButtonLink href={privat.summaryHref} variant={docUrl ? "secondary" : "primary"} size="lg">
-            Till sammanfattningen
+            {tp("toSummary")}
           </ButtonLink>
         )}
         <ButtonLink href={orgHref} variant="ghost" size="lg">
-          {privat ? privat.backLabel : "Tillbaka till föreningen"}
+          {privat ? privat.backLabel : t("backToOrg")}
         </ButtonLink>
       </div>
     </section>

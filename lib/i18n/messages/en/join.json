@@ -1,0 +1,15 @@
+{
+  "metaTitle": "Invitation",
+  "invitedTitle": "You're invited",
+  "signedOutText": "Sign in with Google to see which association invited you and join. It takes half a minute.",
+  "invalidTitle": "The link no longer works",
+  "invalidBannerTitle": "The invite link isn't valid",
+  "invalidBannerText": "An admin has probably created a new link. Ask the person who invited you to send the new one.",
+  "toOrgs": "Go to your associations",
+  "invitedTo": "You're invited to",
+  "memberText": "As a member you can start meetings and get access to the association's meeting documents.",
+  "joining": "Joining…",
+  "join": "Join {org}",
+  "joiningAs": "You're joining as <strong>{email}</strong>.",
+  "switchAccount": "Switch account"
+}

@@ -1,0 +1,16 @@
+{
+  "startFailed": "Mötet kunde inte starta. Försök igen om en liten stund.",
+  "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen.",
+  "next": "Nästa möte",
+  "agenda": "Dagordning",
+  "change": "Ändra",
+  "startFailedTitle": "Mötet kunde inte starta",
+  "start": "Starta möte",
+  "prepare": "Förbered möte",
+  "startingTest": "Startar testmöte …",
+  "test": "Testmöte",
+  "testNewHint": "Ett påhittat möte spelas upp, ca 3–8 min.",
+  "testNew": "Utan dagordning",
+  "testAgendaHint": "Ett påhittat veckomöte i ett nytt dagordningsdokument.",
+  "testAgenda": "Med dagordning"
+}

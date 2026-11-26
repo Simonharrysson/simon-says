@@ -1,0 +1,23 @@
+{
+  "metaTitle": "Ditt konto",
+  "title": "Ditt konto",
+  "signedInAs": "Inloggad som",
+  "googleAccount": "Google-konto",
+  "userId": "Användar-id",
+  "userIdHint": "Bra att ha om du behöver hjälp med något.",
+  "mailTitle": "Mejl från Simon Says",
+  "mailIntro": "Välj vilka mejl du vill få. Ändringen gäller direkt, och samma val finns bakom länken längst ner i varje mejl.",
+  "mailLoadErrorTitle": "Dina mejlval gick inte att hämta",
+  "mailLoadErrorText": "Ladda om sidan om en stund. Valen du gjort tidigare gäller fortfarande.",
+  "languageTitle": "Språk / Language",
+  "languageIntro": "Språket på sidorna och i mejlen till dig. Mötesdokumenten i Google Docs skrivs fortfarande på svenska.",
+  "languageLabel": "Språk",
+  "languageSave": "Spara språk",
+  "languageSaving": "Sparar…",
+  "languageSaveFailed": "Språket gick inte att spara på kontot. Det gäller i den här webbläsaren, försök spara igen senare.",
+  "orgsTitle": "Föreningar och möten",
+  "orgsText": "Personlistor, inbjudningslänkar och inställningar för transkriptionen finns under varje förening.",
+  "orgsLink": "Dina föreningar",
+  "privacyTitle": "Integritet",
+  "privacyText": "Mötesdokumenten ligger i din egen Google Drive och raderas aldrig av oss. Transkriptioner och anteckningar hos oss raderas när du raderar mötet eller föreningen. Läs mer i <link>integritetsinformationen</link>."
+}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,8 @@ export function PersonRow({
   setPersonRole?: FormAction;
   deletePerson: FormAction;
 }) {
+  const t = useTranslations("org");
+  const common = useTranslations("common");
   const [editing, setEditing] = useState(false);
   const [editingRole, setEditingRole] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,24 +57,24 @@ export function PersonRow({
           <input type="hidden" name="orgId" value={orgId} />
           <input type="hidden" name="personId" value={person.id} />
           <Label className="sr-only" htmlFor={`role-${person.id}`}>
-            Roll för {person.name}
+            {t("roleFor", { name: person.name })}
           </Label>
           <Input
             id={`role-${person.id}`}
             className="min-w-0 flex-1"
             name="role"
             defaultValue={person.role ?? ""}
-            placeholder="Roll (t.ex. Kassör)"
+            placeholder={t("rolePlaceholder")}
             maxLength={40}
             autoComplete="off"
             autoFocus
           />
           <span className="flex flex-none items-center gap-1 max-[30rem]:w-full max-[30rem]:justify-end">
-            <SubmitButton variant="primary" size="sm" pendingLabel="Sparar…">
-              Spara
+            <SubmitButton variant="primary" size="sm" pendingLabel={common("saving")}>
+              {common("save")}
             </SubmitButton>
             <Button variant="ghost" size="sm" onClick={() => setEditingRole(false)}>
-              Avbryt
+              {common("cancel")}
             </Button>
           </span>
         </form>
@@ -95,7 +98,7 @@ export function PersonRow({
           <input type="hidden" name="orgId" value={orgId} />
           <input type="hidden" name="personId" value={person.id} />
           <Label className="sr-only" htmlFor={`person-${person.id}`}>
-            Nytt namn för {person.name}
+            {t("newNameFor", { name: person.name })}
           </Label>
           <Input
             ref={inputRef}
@@ -108,11 +111,11 @@ export function PersonRow({
             autoComplete="off"
           />
           <span className="flex flex-none items-center gap-1 max-[30rem]:w-full max-[30rem]:justify-end">
-            <SubmitButton variant="primary" size="sm" pendingLabel="Sparar…">
-              Spara
+            <SubmitButton variant="primary" size="sm" pendingLabel={common("saving")}>
+              {common("save")}
             </SubmitButton>
             <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
-              Avbryt
+              {common("cancel")}
             </Button>
           </span>
         </form>
@@ -136,7 +139,7 @@ export function PersonRow({
         <span className="flex flex-none items-center gap-1">
           {setPersonRole && (
             <Button variant="ghost" size="sm" onClick={() => setEditingRole(true)}>
-              {person.role ? "Ändra roll" : "Lägg till roll"}
+              {person.role ? t("changeRole") : t("addRole")}
             </Button>
           )}
           <button
@@ -144,22 +147,22 @@ export function PersonRow({
             type="button"
             className={buttonVariants({ variant: "ghost", size: "sm", iconOnly: true })}
             onClick={() => setEditing(true)}
-            title="Byt namn"
+            title={t("rename")}
 >
             <IconPencil size={18} />
-            <span className="sr-only">Byt namn på {person.name}</span>
+            <span className="sr-only">{t("renameFor", { name: person.name })}</span>
           </button>
           <ConfirmAction
             action={deletePerson}
             hidden={{ orgId, personId: person.id }}
-            trigger={`Ta bort ${person.name}`}
+            trigger={t("removePerson", { name: person.name })}
             triggerIcon={<IconTrash size={18} />}
             triggerIconOnly
             triggerVariant="danger-ghost"
-            title={`Ta bort ${person.name}?`}
-            description="Namnet försvinner ur personlistan. Det som redan står i mötesdokumenten ändras inte."
-            confirmLabel="Ta bort"
-            pendingLabel="Tar bort…"
+            title={t("removePersonTitle", { name: person.name })}
+            description={t("removePersonText")}
+            confirmLabel={t("remove")}
+            pendingLabel={t("removing")}
           />
         </span>
       </div>

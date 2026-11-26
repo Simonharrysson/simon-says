@@ -1,0 +1,16 @@
+{
+  "modes": {
+    "missed": { "title": "To those who missed the meeting", "hint": "Everyone on the people list with an e-mail address who wasn't there. Default." },
+    "all": { "title": "To everyone", "hint": "Everyone on the people list with an e-mail address, including those who were there." },
+    "selected": { "title": "To selected people", "hint": "Only the people you tick below." },
+    "off": { "title": "Off", "hint": "No summaries are sent." }
+  },
+  "legend": "Summary after the meeting",
+  "intro": "When a meeting is over, Simon Says e-mails its decisions and tasks. Everyone sees their own tasks first and can opt out in the e-mail or under Account. Test meetings are never sent.",
+  "whoLegend": "Who should get the summary?",
+  "emptyList": "The people list is empty. Add people under People.",
+  "noEmail": "No e-mail address",
+  "noneWithEmail": "Nobody on the people list has an e-mail address yet. Add addresses in Get started → The board.",
+  "withEmail": "{count, plural, one {# person} other {# people}} on the people list {count, plural, one {has} other {have}} an e-mail address.",
+  "saved": "Saved"
+}

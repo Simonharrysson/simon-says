@@ -1,83 +1,75 @@
-// Every `?fel=` / `?klart=` code the server actions and callback redirect with, mapped to
-// Swedish copy. Codes are produced in app/login/actions.ts, app/auth/callback/route.ts and
-// app/(app)/orgs/actions.ts; keep them in sync.
+// Every `?fel=` / `?klart=` code the server actions and callback redirect with, mapped to copy
+// (lib/i18n/messages/*/notices.json). Codes are produced in app/login/actions.ts,
+// app/auth/callback/route.ts and app/(app)/orgs/actions.ts; keep them in sync.
 
-export type Notice = { tone: "danger" | "success"; title?: string; text: string };
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { messages } from "@/lib/i18n/messages";
 
-export const loginErrors: Record<string, { title: string; text: string }> = {
-  drive: {
-    title: "Kryssa i rutan för Google Drive",
-    text: "Rutan för Google Drive var inte ikryssad. Utan den kan vi inte skapa mötesdokumentet i din Drive. Vi ser bara de filer Simon Says själv skapar. Din inbjudan ligger kvar.",
-  },
-  refresh: {
-    title: "Google skickade ingen nyckel",
-    text: "Vi fick inte behörighet att skriva i dina dokument när du inte är vid datorn. Logga in igen så brukar det lösa sig.",
-  },
-  avbrutet: { title: "Inloggningen avbröts", text: "Inget hände. Du kan försöka igen när du vill." },
-  start: { title: "Inloggningen kunde inte starta", text: "Något gick fel hos oss eller hos Google. Försök igen om en liten stund." },
-  kod: { title: "Inloggningen blev inte klar", text: "Google och vi kom inte överens den här gången. Försök igen." },
-};
+/** `code` is the `?fel=` / `?klart=` code it came from (views match on it, never on the text). */
+export type Notice = { tone: "danger" | "success"; title?: string; text: string; code?: string };
 
-export function loginError(code: string | undefined) {
+type Copy = { title?: string; text: string };
+
+const copy = (locale: Locale) => messages[locale].notices;
+
+export function loginErrors(locale: Locale = defaultLocale): Record<string, { title: string; text: string }> {
+  return copy(locale).login;
+}
+
+export function loginError(code: string | undefined, locale: Locale = defaultLocale) {
   if (!code) return null;
-  return loginErrors[code] ?? loginErrors.kod;
+  const errors = loginErrors(locale);
+  return errors[code] ?? errors.kod;
 }
 
-const orgsNotices: Record<string, Notice> = {
-  limit: { tone: "danger", text: "Du kan ha högst tio föreningar som du har skapat. Radera en du inte använder, eller be någon annan skapa den." },
-  cap: { tone: "danger", text: "Du har skapat många föreningar på kort tid. Mejla simon@harrysson.co om du behöver fler." },
-  invalid: { tone: "danger", text: "Ange ett namn (högst 100 tecken)." },
-  inbjudan: { tone: "danger", title: "Inbjudningslänken gäller inte längre", text: "Be den som bjöd in dig om en ny länk." },
-  raderad: { tone: "success", text: "Föreningen är raderad. Google-dokumenten ligger kvar i Drive." },
-  lamnat: { tone: "success", text: "Du har lämnat föreningen. Dokument som redan delats med dig ligger kvar i din Drive." },
+const orgsTones: Record<string, Notice["tone"]> = {
+  limit: "danger",
+  cap: "danger",
+  invalid: "danger",
+  inbjudan: "danger",
+  raderad: "success",
+  lamnat: "success",
 };
 
-const orgNotices: Record<string, Notice> = {
-  namn: { tone: "danger", text: "Ange ett namn (högst 100 tecken)." },
-  personnamn: {
-    tone: "danger",
-    text: "Det namnet går inte att använda. Ett personnamn får bara ha bokstäver, mellanslag, bindestreck, punkt och apostrof, högst fyra ord och 60 tecken.",
-  },
-  rollnamn: {
-    tone: "danger",
-    text: "Den rollen går inte att använda. En roll får bara ha bokstäver, siffror, mellanslag och tecknen & / - . ', högst fyra ord och 40 tecken.",
-  },
-  "roll-admin": { tone: "danger", text: "Bara en admin kan ändra roller." },
-  sammanfattning: { tone: "danger", text: "Inställningen för sammanfattningar kunde inte sparas. Bara en admin kan ändra den." },
-  "mote-forbidden": { tone: "danger", text: "Bara den som startade mötet eller en admin kan radera det." },
-  "mote-not_found": { tone: "danger", text: "Mötet finns inte längre." },
-  "mote-active": { tone: "danger", text: "Avsluta mötet innan du raderar det." },
-  "org-active": { tone: "danger", text: "Ett möte pågår. Avsluta det innan du raderar föreningen." },
-  "org-name_mismatch": {
-    tone: "danger",
-    text: "Namnet stämde inte. Skriv föreningens namn exakt för att radera den.",
-  },
-  "org-forbidden": { tone: "danger", text: "Bara admins kan radera föreningen." },
-  "org-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
-  avslutat: { tone: "success", text: "Mötet avslutas. Anteckningarna görs klara i dokumentet om en liten stund." },
-  "avsluta-forbidden": { tone: "danger", text: "Bara en admin eller den som startade mötet kan avsluta det här." },
-  "avsluta-not_found": { tone: "danger", text: "Mötet finns inte längre." },
-  mote: { tone: "success", text: "Mötet är raderat. Google-dokumentet ligger kvar i Drive." },
-  medlem: { tone: "success", text: "Medlemmen är borttagen. Mötesdokument som redan delats med hen är fortfarande delade." },
-  "medlem-last_admin": {
-    tone: "danger",
-    text: "Föreningen måste ha minst en admin. Gör någon annan till admin först – eller radera föreningen om den inte ska användas längre.",
-  },
-  "medlem-not_member": { tone: "danger", text: "Personen är inte medlem längre." },
-  "medlem-forbidden": { tone: "danger", text: "Bara admins kan ta bort medlemmar." },
-  "medlem-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
-  "admin-ny": { tone: "success", text: "Medlemmen är nu admin." },
-  "admin-bort": { tone: "success", text: "Adminrollen är borttagen. Personen är kvar som medlem." },
-  "admin-last_admin": { tone: "danger", text: "Föreningen måste ha minst en admin. Gör någon annan till admin först." },
-  "admin-forbidden": { tone: "danger", text: "Bara admins kan ändra vem som är admin." },
-  "admin-not_member": { tone: "danger", text: "Personen är inte medlem längre." },
-  "admin-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
-  "admin-invalid": { tone: "danger", text: "Rollen gick inte att ändra. Ladda om sidan och försök igen." },
+const orgTones: Record<string, Notice["tone"]> = {
+  namn: "danger",
+  personnamn: "danger",
+  rollnamn: "danger",
+  "roll-admin": "danger",
+  sammanfattning: "danger",
+  "mote-forbidden": "danger",
+  "mote-not_found": "danger",
+  "mote-active": "danger",
+  "org-active": "danger",
+  "org-name_mismatch": "danger",
+  "org-forbidden": "danger",
+  "org-not_found": "danger",
+  avslutat: "success",
+  "avsluta-forbidden": "danger",
+  "avsluta-not_found": "danger",
+  mote: "success",
+  medlem: "success",
+  "medlem-last_admin": "danger",
+  "medlem-not_member": "danger",
+  "medlem-forbidden": "danger",
+  "medlem-not_found": "danger",
+  "admin-ny": "success",
+  "admin-bort": "success",
+  "admin-last_admin": "danger",
+  "admin-forbidden": "danger",
+  "admin-not_member": "danger",
+  "admin-not_found": "danger",
+  "admin-invalid": "danger",
 };
 
-function pick(map: Record<string, Notice>, fel?: string, klart?: string): Notice | null {
-  return (fel && map[fel]) || (klart && map[klart]) || null;
+function pick(tones: Record<string, Notice["tone"]>, texts: Record<string, Copy>, fel?: string, klart?: string): Notice | null {
+  const code = (fel && Object.hasOwn(tones, fel) && fel) || (klart && Object.hasOwn(tones, klart) && klart) || null;
+  if (!code) return null;
+  const text = texts[code];
+  return { tone: tones[code], ...(text.title ? { title: text.title } : {}), text: text.text, code };
 }
 
-export const orgsNotice = (fel?: string, klart?: string) => pick(orgsNotices, fel, klart);
-export const orgNotice = (fel?: string, klart?: string) => pick(orgNotices, fel, klart);
+export const orgsNotice = (fel?: string, klart?: string, locale: Locale = defaultLocale) =>
+  pick(orgsTones, copy(locale).orgs, fel, klart);
+export const orgNotice = (fel?: string, klart?: string, locale: Locale = defaultLocale) =>
+  pick(orgTones, copy(locale).org, fel, klart);

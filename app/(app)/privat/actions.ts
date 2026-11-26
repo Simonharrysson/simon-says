@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
 import { deleteMeeting } from "@/lib/db/orgs";
@@ -30,7 +31,8 @@ export async function createContextAction(name: string): Promise<{ ok: true; con
     revalidatePath("/privat");
     return res;
   }
-  return { ok: false, message: res.reason === "invalid" ? "Skriv ett namn, till exempel en kurskod." : "Det gick inte att spara. Försök igen." };
+  const t = await getTranslations("privat.picker");
+  return { ok: false, message: res.reason === "invalid" ? t("invalid") : t("failed") };
 }
 
 /** Tick a task done (or undo it) on the context or recording page. */

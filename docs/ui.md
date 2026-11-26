@@ -1,6 +1,7 @@
 # Simon Says — UI
 
-The design system, page structure and live-meeting components. Swedish UI, English code.
+The design system, page structure and live-meeting components. Swedish UI by default (English
+optional, see "Language" below), English code.
 Built with **shadcn/ui on Tailwind CSS v4**, styled in Simon Says' own Geist-based look (below).
 Preview everything with fake data at **`/design`** (dev only; production needs `DESIGN_PREVIEW=1`).
 Screenshots: `docs/ui/` (`<state>-<width>-<scheme>.png`, fake data, Next dev badge hidden) show the
@@ -134,6 +135,51 @@ action ("Starta mötet", "Radera mötet", "Skapa ny länk"). Errors say what hap
 do ("Mikrofonen är blockerad — klicka på hänglåset… välj Tillåt"). Reassure when nothing is
 needed ("Vi försöker igen automatiskt, du behöver inte göra något"). Always say the Google Doc
 stays in Drive when deleting.
+
+## Language (sv default, en optional)
+
+Todo #10: the web app is Swedish by default and can be switched to English. Built on **next-intl
+4.15.1** (pinned), cookie-based, **no URL prefixes** (routes are unchanged).
+
+- **Catalogs:** `lib/i18n/messages/{sv,en}/<area>.json`, registered in `lib/i18n/messages/index.ts`.
+  Swedish is the source of truth (the copy as it always was); English must have the same keys,
+  placeholders and rich-text tags (`lib/i18n/messages.test.ts`, also checks every message parses as
+  ICU). ICU plurals: `{count, plural, one {# möte} other {# möten}}`; links/emphasis via `t.rich`
+  tags (`<link>…</link>`, `<strong>…</strong>`).
+- **Using them:** components (server or client, also the views `/design` renders) call
+  `useTranslations("area")`; async server pages/actions use `getTranslations` / `getLocale` from
+  `next-intl/server`; route handlers use `apiT(request)` (`lib/i18n/api.ts`, reads the cookie from
+  the Request so tests calling handlers directly get Swedish); pure lib code and e-mails use
+  `translator(locale)` (`lib/i18n/translator.ts`). Messages lib code returns in Swedish
+  (`lib/meetings/start.ts`, `lib/formats/stadgar-file.ts`) are translated at the route boundary by
+  `localizeMessage` (looked up by their Swedish text; a test keeps them in the catalog).
+- **Choosing:** Konto → "Språk / Language" (Svenska / English) saves the account's choice
+  (`user_settings.locale`, migration 0043, `set_my_locale`) and the `lang` cookie. Signed-out pages
+  have "English / Svenska" in the footer (`/sprak?till=en&tillbaka=…`, same-origin paths only; also
+  saves the account's choice when signed in). Sign-in copies the saved choice into the cookie; an
+  English choice made while signed out becomes the account's if it has none. `<html lang>` follows
+  the cookie. Reading it in the root layout makes every route render per request; the status page
+  caches its numbers instead (`unstable_cache`, 60 s).
+- **Dates and numbers:** sv-SE / en-GB (24-hour clock in both), Europe/Stockholm; `lib/format.ts`
+  and friends take a `locale`.
+- **E-mails** (invite, meeting summary) use the recipient's saved language: the account's
+  `user_settings`, or for an address the confirmed account that signs in with it
+  (`locale_for_email`); Swedish otherwise. The invite form's preview shows the Swedish mail.
+- **Not translated, on purpose:** everything written into Google Docs (meeting notes, agenda Docs,
+  headings, agenda items such as "Godkänn dagordning", "Må-runda", "Från förra veckan", task lines,
+  speaker labels "Talare 1") follows the förening's meeting language, which is Swedish for now; the
+  Claude prompts; stored labels ("Dokument 1, möte 2 av 3"); the landing page's Doc mock; the
+  `/design` gallery's chrome and fake data; role names people type.
+- **Lint-ish guard:** `lib/i18n/no-swedish-literals.test.ts` fails on å/ä/ö in string literals or
+  JSX text in `components/**` and `app/**` (comments ignored; `components/design/` allowed).
+
+**Glossary (sv → en).** förening → association · Föreningar → Associations · Konto → Account ·
+Veckomöte → Weekly meeting · Styrelsemöte → Board meeting · Styrelseprotokoll → Board minutes ·
+Årsmöte → Annual meeting · Må-runda → Check-in round · namnrunda → name round · protokoll → minutes ·
+dagordning → agenda · mötesmapp → meeting folder · stadgar → statutes · personlista → people list ·
+Kom igång → Get started · Översikt → Overview · Förbered möte → Prepare meeting · Pausa/Fortsätt →
+Pause/Resume · Avsluta mötet → End the meeting · Integritet → Privacy · mejl → e-mail.
+Voice in English: the same as Swedish (short, warm, concrete, "you"), British spelling.
 
 ## Components (`components/ui/`)
 

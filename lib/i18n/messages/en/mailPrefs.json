@@ -1,0 +1,32 @@
+{
+  "metaTitle": "E-mail",
+  "categories": {
+    "meeting_summary": {
+      "label": "Summaries after meetings",
+      "description": "The notes from a meeting you missed, or from every meeting if the association has chosen that."
+    },
+    "invite": {
+      "label": "Invitations",
+      "description": "When an association invites you to Simon Says, and reminders about the invitation."
+    },
+    "private_summary": {
+      "label": "Summaries of my recordings",
+      "description": "The summary after something you recorded in Personal: decisions, tasks and what has happened since last time."
+    }
+  },
+  "allOff": "No e-mail at all",
+  "allOffOn": "Simon Says sends you no e-mail. The choices above are kept for when you turn this off.",
+  "allOffOff": "Turns off everything above at once.",
+  "saved": "Saved",
+  "saveFailed": "Couldn't save. Try again.",
+  "title": "E-mail from Simon Says",
+  "chooseFor": "Choose which e-mails go to <strong>{email}</strong>.",
+  "highlight": " If you'd rather not get {category}, turn off the top one.",
+  "appliesAtOnce": "Changes apply at once.",
+  "accountHint": "If you have an account, the same choices are under Account. Read more in the <link>privacy information</link>.",
+  "invalidTitle": "The link doesn't work",
+  "invalidBannerTitle": "We don't recognise the link",
+  "invalidBannerText": "It may have been cut off in the e-mail. Open the link at the bottom of the e-mail again, or sign in and choose under Account.",
+  "errorBannerTitle": "Your choices couldn't be loaded right now",
+  "errorBannerText": "Reload the page in a while. The choices you made earlier still apply."
+}

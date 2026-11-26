@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 // The Google Picker (drive.file): the user picks a Doc or a folder in Google's own dialog, which
@@ -108,31 +109,35 @@ function loadPicker(): Promise<PickerNs> {
   return loading;
 }
 
-async function pickerToken(): Promise<{ accessToken: string; developerKey: string; appId: string }> {
+type PickerCopy = { offline: string; failed: string };
+
+async function pickerToken(copy: PickerCopy): Promise<{ accessToken: string; developerKey: string; appId: string }> {
   let res: Response;
   try {
     res = await fetch("/api/google/picker-token", { method: "POST", cache: "no-store" });
   } catch {
-    throw new PickerError("network", "Vi nådde inte servern. Kontrollera nätet och försök igen.");
+    throw new PickerError("network", copy.offline);
   }
   const json = (await res.json().catch(() => null)) as
     | { accessToken?: string; developerKey?: string; appId?: string; error?: string; message?: string }
     | null;
   if (!res.ok || !json?.accessToken || !json.developerKey || !json.appId) {
-    throw new PickerError(json?.error ?? "picker_failed", json?.message ?? "Google-väljaren kunde inte öppnas. Försök igen.");
+    throw new PickerError(json?.error ?? "picker_failed", json?.message ?? copy.failed);
   }
   return { accessToken: json.accessToken, developerKey: json.developerKey, appId: json.appId };
 }
 
 /**
  * `open()` resolves with the picked files, or null when the user cancelled. It throws a
- * `PickerError` (Swedish message) when the token or Google's script is unavailable. `ready`
+ * `PickerError` (message in the UI language) when the token or Google's script is unavailable. `ready`
  * turns true once Google's script has loaded (it starts loading on mount).
  */
 export function usePicker(): {
   ready: boolean;
   open(opts: PickerOptions): Promise<PickedFile[] | null>;
 } {
+  const t = useTranslations("common.picker");
+  const locale = useLocale();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -149,9 +154,9 @@ export function usePicker(): {
   const open = useCallback(async (opts: PickerOptions): Promise<PickedFile[] | null> => {
     const [picker, token] = await Promise.all([
       loadPicker().catch(() => {
-        throw new PickerError("picker_load", "Google-väljaren kunde inte laddas. Kontrollera nätet och försök igen.");
+        throw new PickerError("picker_load", t("loadFailed"));
       }),
-      pickerToken(),
+      pickerToken({ offline: t("offline"), failed: t("failed") }),
     ]);
     setReady(true);
 
@@ -172,7 +177,7 @@ export function usePicker(): {
         .setOAuthToken(token.accessToken)
         .setDeveloperKey(token.developerKey)
         .setAppId(token.appId)
-        .setLocale("sv")
+        .setLocale(locale)
         .setTitle(opts.title);
       if (opts.mode === "docs-multi") builder = builder.enableFeature(picker.Feature.MULTISELECT_ENABLED);
       const dialog = builder
@@ -195,7 +200,7 @@ export function usePicker(): {
         .build();
       dialog.setVisible(true);
     });
-  }, []);
+  }, [t, locale]);
 
   return { ready, open };
 }

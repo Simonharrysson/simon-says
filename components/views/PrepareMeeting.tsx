@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -11,7 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addBack, addItem, bodyItems, withPending } from "@/lib/prepare/edit";
-import { isGoalItem, MEETING_TYPES, meetingTypeName, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
+import { isGoalItem, MEETING_TYPES, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
+import { defaultLocale, intlTag, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 import { cn } from "@/lib/utils";
 
 // "Förbered möte" (todo #6): the ordförande prepares the next meeting. Step 1 chooses the kind
@@ -20,15 +23,16 @@ import { cn } from "@/lib/utils";
 // "Skapa dagordning" writes the agenda Doc in the förening's meeting folder. Calm and quiet: one
 // primary action per step, no status dots, phone width first. The förening's text is shown, never logged.
 
-/** Swedish long date: "torsdag 3 december". */
-export function longDate(date: string): string {
-  return new Intl.DateTimeFormat("sv-SE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`));
+/** Long date: "torsdag 3 december" (en: "Thursday 3 December"). */
+export function longDate(date: string, locale: Locale = defaultLocale): string {
+  return new Intl.DateTimeFormat(intlTag(locale), { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`));
 }
-/** Swedish short date: "3 dec". */
-export function shortDate(date: string): string {
-  return new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`)).replace(".", "");
+/** Short date: "3 dec" (en: "3 Dec"). */
+export function shortDate(date: string, locale: Locale = defaultLocale): string {
+  return new Intl.DateTimeFormat(intlTag(locale), { day: "numeric", month: "short", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`)).replace(".", "");
 }
-const when = (date: string, time: string | null) => `${longDate(date)}${time ? ` kl. ${time.replace(":", ".")}` : ""}`;
+const when = (date: string, time: string | null, locale: Locale) =>
+  time ? translator(locale)("prepare.at", { date: longDate(date, locale), time: locale === "en" ? time : time.replace(":", ".") }) : longDate(date, locale);
 
 // ---------------------------------------------------------------------------------------------
 // Editing the draft (pure; the gallery uses them too)
@@ -65,19 +69,21 @@ export function renameItem(items: DraftItem[], id: string, label: string): Draft
 }
 
 /** Under "Från förra veckan" when there is nothing to carry: why. */
-export function followupNote(origin: FollowupOrigin | undefined): string {
-  if (!origin) return "Inga öppna uppgifter från förra mötet.";
-  if (origin.kind === "none") return "Inget tidigare möte än. Testmöten räknas inte.";
-  if (origin.kind === "too_old") return `Senaste protokollet är från ${shortDate(origin.date)} — för gammalt för att ta med uppgifter.`;
-  if (origin.kind === "import") return `Inga öppna uppgifter i protokollet från ${shortDate(origin.date)}.`;
-  return `Inga öppna uppgifter från mötet ${shortDate(origin.date)}. Testmöten räknas inte.`;
+export function followupNote(origin: FollowupOrigin | undefined, locale: Locale = defaultLocale): string {
+  const t = translator(locale);
+  if (!origin) return t("prepare.noteNone");
+  if (origin.kind === "none") return t("prepare.noteNoMeeting");
+  if (origin.kind === "too_old") return t("prepare.noteTooOld", { date: shortDate(origin.date, locale) });
+  if (origin.kind === "import") return t("prepare.noteImport", { date: shortDate(origin.date, locale) });
+  return t("prepare.noteMeeting", { date: shortDate(origin.date, locale) });
 }
 
 /** Above the carried tasks: where they come from. */
-export function followupFrom(origin: FollowupOrigin | undefined): string {
-  if (origin?.kind === "meeting") return `Öppna uppgifter från mötet ${shortDate(origin.date)}.`;
-  if (origin?.kind === "import") return `Öppna uppgifter från protokollet ${shortDate(origin.date)} (inläst).`;
-  return "Öppna uppgifter från förra mötet.";
+export function followupFrom(origin: FollowupOrigin | undefined, locale: Locale = defaultLocale): string {
+  const t = translator(locale);
+  if (origin?.kind === "meeting") return t("prepare.fromMeeting", { date: shortDate(origin.date, locale) });
+  if (origin?.kind === "import") return t("prepare.fromImport", { date: shortDate(origin.date, locale) });
+  return t("prepare.fromLast");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -116,6 +122,7 @@ export interface PrepareMeetingViewProps {
 }
 
 export function PrepareMeetingView(p: PrepareMeetingViewProps) {
+  const t = useTranslations("prepare");
   const id = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
@@ -136,7 +143,7 @@ export function PrepareMeetingView(p: PrepareMeetingViewProps) {
           {p.orgName}
         </a>
         <h1 className="text-2xl focus:outline-none" ref={headingRef} tabIndex={-1}>
-          {p.phase.step === "done" ? "Dagordningen är klar" : "Förbered möte"}
+          {p.phase.step === "done" ? t("doneTitle") : t("title")}
         </h1>
         <Steps step={p.phase.step} />
       </header>
@@ -145,7 +152,7 @@ export function PrepareMeetingView(p: PrepareMeetingViewProps) {
       {p.phase.step === "draft" && <DraftStep {...p} phase={p.phase} uid={id} />}
       {p.phase.step === "done" && <DoneStep {...p} phase={p.phase} />}
       {p.phase.step === "failed" && (
-        <Banner tone="danger" title="Det gick inte att ta fram dagordningen" live={false} action={<Button size="sm" onClick={p.onBack}>Försök igen</Button>}>
+        <Banner tone="danger" title={t("failedTitle")} live={false} action={<Button size="sm" onClick={p.onBack}>{t("tryAgain")}</Button>}>
           {p.phase.message}
         </Banner>
       )}
@@ -154,10 +161,11 @@ export function PrepareMeetingView(p: PrepareMeetingViewProps) {
 }
 
 function Steps({ step }: { step: PreparePhase["step"] }) {
+  const t = useTranslations("prepare");
   const n = step === "type" ? 1 : step === "done" ? 3 : 2;
-  const names = ["Möte", "Dagordning", "Klart"];
+  const names = [t("stepNames.meeting"), t("stepNames.agenda"), t("stepNames.done")];
   return (
-    <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3" aria-label="Steg">
+    <ol className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3" aria-label={t("steps")}>
       {names.map((name, i) => (
         <li key={name} className={cn("flex items-center gap-3", i + 1 === n && "font-medium text-ink")} aria-current={i + 1 === n ? "step" : undefined}>
           <span>
@@ -171,6 +179,8 @@ function Steps({ step }: { step: PreparePhase["step"] }) {
 }
 
 function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
+  const t = useTranslations("prepare");
+  const types = useTranslations("formats.meetingTypes");
   const submit = (e: FormEvent) => {
     e.preventDefault();
     p.onContinue();
@@ -178,12 +188,12 @@ function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
   return (
     <form className="flex flex-col gap-6" onSubmit={submit}>
       <fieldset className="flex flex-col gap-3">
-        <legend className="mb-3 text-lg font-semibold">Vilket möte?</legend>
-        {MEETING_TYPES.map((t) => {
-          const checked = p.type === t.type;
+        <legend className="mb-3 text-lg font-semibold">{t("whichMeeting")}</legend>
+        {MEETING_TYPES.map((mt) => {
+          const checked = p.type === mt.type;
           return (
             <label
-              key={t.type}
+              key={mt.type}
               className={cn(
                 "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4 transition-colors duration-120",
                 checked ? "border-ink" : "border-line hover:border-control",
@@ -192,14 +202,14 @@ function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
               <input
                 type="radio"
                 name={`${p.uid}-type`}
-                value={t.type}
+                value={mt.type}
                 checked={checked}
-                onChange={() => p.onType(t.type)}
+                onChange={() => p.onType(mt.type)}
                 className="mt-1 size-4 accent-[var(--ink)]"
               />
               <span className="flex flex-col gap-1">
-                <span className="font-medium">{t.name}</span>
-                <span className={hintClass}>{t.hint}</span>
+                <span className="font-medium">{types(`${mt.type}.name`)}</span>
+                <span className={hintClass}>{types(`${mt.type}.hint`)}</span>
               </span>
             </label>
           );
@@ -207,19 +217,19 @@ function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
       </fieldset>
       <div className="flex flex-wrap gap-4">
         <div className="flex min-w-[12rem] flex-1 flex-col gap-2">
-          <Label htmlFor={`${p.uid}-date`}>Datum</Label>
+          <Label htmlFor={`${p.uid}-date`}>{t("date")}</Label>
           <Input id={`${p.uid}-date`} type="date" required min={p.today} value={p.date} onChange={(e) => p.onDate(e.target.value)} />
         </div>
         <div className="flex w-[9rem] flex-col gap-2">
           <Label htmlFor={`${p.uid}-time`}>
-            Tid <span className="font-normal text-ink-3">(valfritt)</span>
+            {t("time")} <span className="font-normal text-ink-3">{t("optional")}</span>
           </Label>
           <Input id={`${p.uid}-time`} type="time" value={p.time} onChange={(e) => p.onTime(e.target.value)} />
         </div>
       </div>
       <div>
         <Button type="submit" variant="primary" size="lg" disabled={!p.date || p.date < p.today}>
-          Ta fram dagordningen
+          {t("makeAgenda")}
         </Button>
       </div>
     </form>
@@ -227,10 +237,11 @@ function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
 }
 
 function LoadingStep() {
+  const t = useTranslations("prepare");
   return (
     <div className="flex flex-col gap-3" aria-busy>
       <p className="text-ink-2" role="status">
-        Simon Says läser förra mötet och tar fram dagordningen …
+        {t("loading")}
       </p>
       {[70, 55, 80, 45].map((w) => (
         <Skeleton key={w} className="h-11" style={{ width: `${w}%` }} />
@@ -240,6 +251,9 @@ function LoadingStep() {
 }
 
 function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, { step: "draft" }>; uid: string }) {
+  const t = useTranslations("prepare");
+  const types = useTranslations("formats.meetingTypes");
+  const locale = useLocale();
   const [adding, setAdding] = useState("");
   const addRef = useRef<HTMLInputElement>(null);
   const on = p.items.filter((i) => i.on);
@@ -248,7 +262,7 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
   const off = p.items.filter((i) => !i.on && !isGoalItem(i));
   const saving = p.phase.saving === true;
   const held = p.existing?.held === true;
-  const typeName = meetingTypeName(p.type);
+  const typeName = MEETING_TYPES.some((mt) => mt.type === p.type) ? types(`${p.type}.name`) : "";
   const lock = saving || held;
   const newId = p.newId ?? (() => `add:${Math.random().toString(36).slice(2, 10)}`);
 
@@ -275,29 +289,29 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-ink-2">
-          <span className="font-medium text-ink">{typeName}</span> · {when(p.date, p.time || null)}
+          <span className="font-medium text-ink">{typeName}</span> · {when(p.date, p.time || null, locale)}
         </p>
         {!p.existing && (
           <Button variant="ghost" size="sm" onClick={p.onBack} disabled={saving}>
-            Ändra
+            {t("change")}
           </Button>
         )}
       </div>
 
       {p.existing &&
         (held ? (
-          <Banner tone="neutral" title="Mötet har redan hållits" live={false}>
-            Dagordningen för {shortDate(p.date)} har redan använts. Välj ett annat datum för nästa möte.
+          <Banner tone="neutral" title={t("heldTitle")} live={false}>
+            {t("heldText", { date: shortDate(p.date, locale) })}
           </Banner>
         ) : (
-          <Banner tone="info" title="Du ändrar en förberedd dagordning" live={false}>
-            Simon Says ändrar bara sina egna rader i dokumentet. Det någon har skrivit eller ändrat där får stå kvar.
+          <Banner tone="info" title={t("editingTitle")} live={false}>
+            {t("editingText")}
           </Banner>
         ))}
 
-      <Panel title="Dagordning" titleId={`${p.uid}-agenda`} flush>
+      <Panel title={t("agenda")} titleId={`${p.uid}-agenda`} flush>
         <p className={cn("-mt-2 px-6 pb-4", hintClass)}>
-          Simon Says har fyllt i det vi vet. Lägg till det bara ni vet — en fest på universitetet, ett besök, en fråga någon vill ta upp.
+          {t("agendaHint")}
         </p>
         <ol className="flex flex-col border-t border-line" aria-labelledby={`${p.uid}-agenda`}>
           {on.map((item, i) => (
@@ -317,19 +331,19 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
         </ol>
         <form className="flex flex-wrap items-end gap-3 border-t border-line px-6 py-4" onSubmit={add}>
           <div className="flex min-w-[12rem] flex-1 flex-col gap-2">
-            <Label htmlFor={`${p.uid}-add`}>Lägg till punkt</Label>
+            <Label htmlFor={`${p.uid}-add`}>{t("addItem")}</Label>
             <Input
               id={`${p.uid}-add`}
               ref={addRef}
               value={adding}
               maxLength={120}
-              placeholder="T.ex. Fest på universitetet"
+              placeholder={t("addPlaceholder")}
               onChange={(e) => setAdding(e.target.value)}
               disabled={lock}
             />
           </div>
           <Button type="submit" icon={<IconPlus />} disabled={lock || !adding.trim()}>
-            Lägg till
+            {t("add")}
           </Button>
         </form>
       </Panel>
@@ -338,19 +352,19 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
         <section className="flex flex-col gap-3" aria-labelledby={`${p.uid}-goals`}>
           <div className="flex flex-col gap-1">
             <h2 id={`${p.uid}-goals`} className="text-lg">
-              Mål att ta upp
+              {t("goalsTitle")}
             </h2>
-            <p className={hintClass}>Föreningens mål som kan behöva en stund på mötet.</p>
+            <p className={hintClass}>{t("goalsHint")}</p>
           </div>
           <ul className="flex flex-col gap-2">
             {offGoals.map((item) => (
               <li key={item.id} className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-rail px-4 py-2">
                 <span className="flex flex-col">
                   <span className="wrap-anywhere">{item.label}</span>
-                  <span className={hintClass}>{item.reason ?? "Ett av föreningens mål"}</span>
+                  <span className={hintClass}>{item.reason ?? t("goalFallback")}</span>
                 </span>
                 <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
-                  Lägg till
+                  {t("add")}
                 </Button>
               </li>
             ))}
@@ -361,7 +375,7 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
       {off.length > 0 && (
         <section className="flex flex-col gap-3" aria-labelledby={`${p.uid}-more`}>
           <h2 id={`${p.uid}-more`} className="text-lg">
-            Fler punkter
+            {t("moreItems")}
           </h2>
           <ul className="flex flex-col gap-2">
             {off.map((item) => (
@@ -369,11 +383,11 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
                 <span className="flex flex-col">
                   <span className="wrap-anywhere">{item.label}</span>
                   <span className={hintClass}>
-                    {item.source === "suggested" ? `Har tagits upp på ${item.meetings ?? 2} möten` : "Borttagen från dagordningen"}
+                    {item.source === "suggested" ? t("raisedAt", { count: item.meetings ?? 2 }) : t("removed")}
                   </span>
                 </span>
                 <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
-                  Lägg till
+                  {t("add")}
                 </Button>
               </li>
             ))}
@@ -382,24 +396,22 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
       )}
 
       {p.phase.error && (
-        <Banner tone="danger" title="Dagordningen kunde inte sparas">
+        <Banner tone="danger" title={t("saveFailed")}>
           {p.phase.error}
         </Banner>
       )}
 
       <div className="flex flex-col gap-3 border-t border-line pt-6">
         <p className={hintClass}>
-          {p.existing
-            ? "Dokumentet uppdateras där det ligger."
-            : "Simon Says skapar dokumentet i föreningens mötesmapp (eller i din Drive om du inte har öppnat mappen) och delar det med medlemmarna. Ni kan fortsätta skriva i det som vanligt."}
+          {p.existing ? t("updatedInPlace") : t("createNote")}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" size="lg" onClick={save} loading={saving} disabled={held || (on.length === 0 && !pending)}>
-            {saving ? (p.existing ? "Uppdaterar …" : "Skapar dokumentet …") : p.existing ? "Uppdatera dagordningen" : "Skapa dagordning"}
+            {saving ? (p.existing ? t("updating") : t("creating")) : p.existing ? t("update") : t("create")}
           </Button>
           {p.existing && (
             <ButtonLink href={p.existing.docUrl} target="_blank" rel="noreferrer" variant="ghost" icon={<IconExternal />}>
-              Öppna dokumentet
+              {t("openDoc")}
             </ButtonLink>
           )}
         </div>
@@ -419,15 +431,17 @@ function AgendaRow(props: {
   onRemove(): void;
   onTask(source: string, on: boolean): void;
 }) {
+  const t = useTranslations("prepare");
+  const locale = useLocale();
   const { item, n } = props;
   const inputId = `prep-item-${item.id.replace(/[^a-z0-9]/gi, "-")}`;
   const tag: ReactNode =
     item.source === "standing" ? null : isGoalItem(item) ? (
-      <span className={hintClass}>Mål</span>
+      <span className={hintClass}>{t("tagGoal")}</span>
     ) : item.source === "suggested" ? (
-      <span className={hintClass}>Förslag</span>
+      <span className={hintClass}>{t("tagSuggested")}</span>
     ) : (
-      <span className={hintClass}>Tillagd</span>
+      <span className={hintClass}>{t("tagAdded")}</span>
     );
   return (
     <li className="flex flex-col gap-3 border-b border-line px-6 py-4 last:border-b-0">
@@ -436,7 +450,7 @@ function AgendaRow(props: {
           {n}.
         </span>
         <label htmlFor={inputId} className="sr-only">
-          Punkt {n}
+          {t("itemN", { n })}
         </label>
         <Input
           id={inputId}
@@ -450,24 +464,26 @@ function AgendaRow(props: {
         />
         <div className="ml-auto flex items-center gap-1">
           {tag}
-          <Button variant="ghost" size="sm" aria-label={`Flytta upp ${item.label}`} title="Flytta upp" disabled={props.lock || props.first} onClick={() => props.onMove(-1)}>
+          <Button variant="ghost" size="sm" aria-label={t("moveUpItem", { label: item.label })} title={t("moveUp")} disabled={props.lock || props.first} onClick={() => props.onMove(-1)}>
             ↑
           </Button>
-          <Button variant="ghost" size="sm" aria-label={`Flytta ner ${item.label}`} title="Flytta ner" disabled={props.lock || props.last} onClick={() => props.onMove(1)}>
+          <Button variant="ghost" size="sm" aria-label={t("moveDownItem", { label: item.label })} title={t("moveDown")} disabled={props.lock || props.last} onClick={() => props.onMove(1)}>
             ↓
           </Button>
-          <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash />} title={`Ta bort ${item.label}`} disabled={props.lock} onClick={props.onRemove}>
-            Ta bort {item.label}
+          <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash />} title={t("removeItem", { label: item.label })} disabled={props.lock} onClick={props.onRemove}>
+            {t("removeItem", { label: item.label })}
           </Button>
         </div>
       </div>
       {item.tasks && (
         <div className="ml-9 flex flex-col gap-2">
           {item.tasks.length === 0 ? (
-            <p className={hintClass}>{followupNote(item.origin)}</p>
+            <p className={hintClass}>{followupNote(item.origin, locale)}</p>
           ) : (
             <>
-              <p className={hintClass}>{followupFrom(item.origin)} Bocka ur det som inte ska upp.</p>
+              <p className={hintClass}>
+                {followupFrom(item.origin, locale)} {t("untick")}
+              </p>
               <ul className="flex flex-col gap-1">
                 {item.tasks.map((t) => {
                   const tid = `${inputId}-${t.source.replace(/[^a-z0-9]/gi, "-")}`;
@@ -490,24 +506,28 @@ function AgendaRow(props: {
 }
 
 function DoneStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, { step: "done" }> }) {
+  const t = useTranslations("prepare");
+  const locale = useLocale();
   return (
     <div className="flex flex-col gap-6">
-      <Banner tone="success" title={p.phase.created ? "Dokumentet är skapat" : "Dokumentet är uppdaterat"} live={false}>
+      <Banner tone="success" title={p.phase.created ? t("created") : t("updated")} live={false}>
         <span className="wrap-anywhere">{p.phase.docName}</span>
       </Banner>
       <p className="text-ink-2">
-        När ni trycker <strong className="font-medium text-ink">Starta möte</strong> {p.date ? `den ${shortDate(p.date)}` : ""} föreslår Simon Says
-        den här dagordningen direkt. Under mötet skrivs anteckningarna in under rätt punkt, och det som blir klart från förra veckan bockas av.
+        {t.rich("doneText", {
+          when: p.date ? t("onDate", { date: shortDate(p.date, locale) }) : "",
+          strong: (chunks) => <strong className="font-medium text-ink">{chunks}</strong>,
+        })}
       </p>
       {!p.phase.reordered && (
-        <p className={hintClass}>Någon har skrivit i dokumentet, så ordningen där är kvar som den var. Nya punkter är tillagda.</p>
+        <p className={hintClass}>{t("kept")}</p>
       )}
       <div className="flex flex-wrap items-center gap-3">
         <ButtonLink href={p.phase.docUrl} target="_blank" rel="noreferrer" variant="primary" size="lg" icon={<IconExternal />}>
-          Öppna dokumentet
+          {t("openDoc")}
         </ButtonLink>
         <ButtonLink href={p.orgHref} variant="ghost">
-          Till {p.orgName}
+          {t("toOrg", { org: p.orgName })}
         </ButtonLink>
       </div>
     </div>
@@ -528,6 +548,7 @@ interface DraftResponse {
 }
 
 export function PrepareMeeting(props: { orgId: string; orgName: string; today: string; defaultDate: string; defaultTime: string }) {
+  const t = useTranslations("prepare");
   const [phase, setPhase] = useState<PreparePhase>({ step: "type" });
   const [type, setType] = useState<MeetingType>("veckomote");
   const [date, setDate] = useState(props.defaultDate);
@@ -542,7 +563,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
       const res = await fetch(`/api/orgs/${props.orgId}/prepare?typ=${type}&datum=${encodeURIComponent(date)}`, { cache: "no-store" });
       const json = (await res.json().catch(() => null)) as DraftResponse | null;
       if (!res.ok || !json) {
-        setPhase({ step: "failed", message: json?.message ?? "Försök igen om en liten stund." });
+        setPhase({ step: "failed", message: json?.message ?? t("retryLater") });
         return;
       }
       setType(json.type);
@@ -552,7 +573,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
       setExisting(json.existing);
       setPhase({ step: "draft" });
     } catch {
-      setPhase({ step: "failed", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
+      setPhase({ step: "failed", message: t("offline") });
     }
   };
 
@@ -571,12 +592,12 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
       });
       const json = (await res.json().catch(() => null)) as { docUrl: string; docName: string; created: boolean; reordered: boolean; message?: string } | null;
       if (!res.ok || !json) {
-        setPhase({ step: "draft", error: json?.message ?? "Försök igen om en liten stund." });
+        setPhase({ step: "draft", error: json?.message ?? t("retryLater") });
         return;
       }
       setPhase({ step: "done", docUrl: json.docUrl, docName: json.docName, created: json.created, reordered: json.reordered });
     } catch {
-      setPhase({ step: "draft", error: "Vi nådde inte servern. Kontrollera nätet och försök igen." });
+      setPhase({ step: "draft", error: t("offline") });
     }
   };
 

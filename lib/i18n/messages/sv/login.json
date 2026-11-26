@@ -1,0 +1,19 @@
+{
+  "metaTitle": "Logga in",
+  "title": "Logga in",
+  "titleRetry": "Försök en gång till",
+  "introJoining": "Logga in för att gå med i föreningen. Du kommer tillbaka till inbjudan direkt efteråt.",
+  "intro": "Du loggar in med ditt Google-konto. Mötesanteckningarna sparas i din egen Google Drive.",
+  "google": "Logga in med Google",
+  "googleRetry": "Försök igen med Google",
+  "onlyOwnDocs": "Vi får bara skapa och redigera <strong>de dokument Simon Says själv skapar</strong>. Resten av din Drive ser vi inte.",
+  "onlyStarter": "Bara den som startar mötet behöver ett konto. Övriga i rummet är bara namn i en lista.",
+  "privacy": "Läs hur vi hanterar ljud, text och konton i <link>integritetsinformationen</link>.",
+  "scopeCaption": "När Google frågar, kryssa i den här rutan:",
+  "scopeRow": "Visa, redigera, skapa och radera <em>endast de specifika Google Drive-filer som du använder med den här appen</em>",
+  "scopeRowSr": "Rutan heter: Visa, redigera, skapa och radera endast de specifika Google Drive-filer som du använder med den här appen.",
+  "signedInAgainMetaTitle": "Inloggad igen",
+  "signedInAgainTitle": "Du är inloggad igen",
+  "signedInAgainText": "Stäng den här fliken. Mötet fortsätter i den andra fliken, och det som väntade skickas nu.",
+  "sendingToGoogle": "Skickar dig till Google…"
+}

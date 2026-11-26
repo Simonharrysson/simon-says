@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
@@ -24,7 +26,6 @@ const SPEAKERS_POLL_NAME_ROUND_MS = 4000;
 const SPEAKERS_POLL_MS = 15_000;
 /** POST /end must answer within this long, or the page offers a retry (C6). */
 const END_TIMEOUT_MS = 15_000;
-const TITLE_STOPPED = "⚠ Stannat – Simon Says";
 
 /** GET/POST/PATCH /api/meetings/[id]/speakers answer this. */
 interface SpeakerView {
@@ -107,6 +108,9 @@ const RUNNING: LivePhase[] = ["starting", "live", "paused", "name-round", "error
 export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const router = useRouter();
   const [meeting, setMeeting] = useState<LiveMeetingInfo | null>(props.meeting);
+  const t = useTranslations("live.controller");
+  const tPicker = useTranslations("privat.picker");
+  const locale = useLocale();
   const [phase, setPhase] = useState<LivePhase>(() => initialPhase(props.meeting));
   const [startError, setStartError] = useState<StartError>(null);
   const [startErrorText, setStartErrorText] = useState<string | null>(null);
@@ -194,12 +198,13 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   // A stopped page says so in the tab title too: the laptop is often in another tab (C2).
   useEffect(() => {
     if (phase !== "error") return;
+    const stopped = t("tabStopped");
     const before = document.title;
-    document.title = TITLE_STOPPED;
+    document.title = stopped;
     return () => {
-      document.title = before === TITLE_STOPPED ? "Möte – Simon Says" : before;
+      document.title = before === stopped ? t("tabMeeting") : before;
     };
-  }, [phase]);
+  }, [phase, t]);
 
   // While the final pass runs on the server, re-read the meeting until it is done.
   useEffect(() => {
@@ -437,7 +442,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       } catch {
         cap.stop();
         setStartError("start-failed");
-        setStartErrorText("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+        setStartErrorText(t("offline"));
         setPhase("consent");
         return;
       }
@@ -455,7 +460,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       setMeeting(m);
       if (privatStart) privatMeetingId.current = m.id;
       setShareFailed(typeof created.shareFailed === "number" ? created.shareFailed : null);
-      setMissingItems(missingItemsText(Array.isArray(created.warnings) ? created.warnings : null));
+      setMissingItems(missingItemsText(Array.isArray(created.warnings) ? created.warnings : null, locale));
       setMissedFolder(created.missedMeetingFolder === true);
       // The address becomes the meeting's own, so a reload offers "Fortsätt mötet".
       window.history.replaceState(null, "", `/meetings/${m.id}`);
@@ -489,9 +494,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           setStartError("start-failed");
           setStartErrorText(
             json?.error === "org_busy"
-              ? "Ett annat möte pågår i föreningen. Avsluta det först."
+              ? t("orgBusy")
               : json?.error === "too_old"
-                ? "Mötet avbröts för mer än två timmar sedan och kan inte fortsätta. Starta ett nytt möte."
+                ? t("tooOld")
                 : null,
           );
           setBusy(false);
@@ -500,7 +505,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       } catch {
         cap.stop();
         setStartError("start-failed");
-        setStartErrorText("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+        setStartErrorText(t("offline"));
         setBusy(false);
         return;
       }
@@ -663,60 +668,60 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     : refusal === "meeting_gone"
       ? {
           tone: "danger",
-          title: "Mötet finns inte längre",
-          text: "Mötet hittades inte, så inget mer ljud skickas från den här fliken. Gå tillbaka till föreningen.",
+          title: t("goneTitle"),
+          text: t("goneText"),
         }
     : refusal === "not_member"
       ? {
           tone: "danger",
-          title: "Du är inloggad med fel konto",
-          text: "Kontot är inte med i föreningen. Logga in med ditt föreningskonto igen; inget mer ljud skickas från den här fliken.",
-          action: { label: "Logga in igen", onClick: reLogin },
+          title: t("wrongAccountTitle"),
+          text: t("wrongAccountText"),
+          action: { label: t("reLogin"), onClick: reLogin },
         }
       : health.authLost
       ? {
           tone: "danger",
-          title: "Du är utloggad — logga in igen",
-          text: "Det som sägs hålls kvar i webbläsaren och skickas när du loggat in. Stäng inte den här fliken.",
-          action: { label: "Logga in igen", onClick: reLogin },
+          title: t("signedOutTitle"),
+          text: t("signedOutText"),
+          action: { label: t("reLogin"), onClick: reLogin },
         }
       : health.audioStalled
         ? {
             tone: "danger",
-            title: "Inget ljud från mikrofonen",
-            text: "Datorn kan ha somnat eller mikrofonen kopplats bort. Vi försöker starta den igen. Hjälper det inte: ladda om sidan och tryck Fortsätt mötet.",
+            title: t("noAudioTitle"),
+            text: t("noAudioText"),
           }
         : health.postsFailing
           ? {
               tone: "warning",
-              title: "Transkriberingen når inte fram just nu",
-              text: "Vi försöker igen automatiskt och inget kastas. Stäng inte den här fliken.",
+              title: t("postsTitle"),
+              text: t("postsText"),
             }
           : health.quiet && phase !== "paused"
             ? {
                 tone: "warning",
-                title: "Hör inget ljud sedan 2 min",
-                text: "Kontrollera att mikrofonen inte är avstängd eller täckt och att laptopen står mitt på bordet. Är det bara tyst i rummet kan du strunta i det här.",
+                title: t("quietTitle"),
+                text: t("quietText"),
               }
             : shareFailed && shareFailed > 0
               ? {
                   tone: "warning",
-                  title: `${shareFailed === 1 ? "En medlem" : `${shareFailed} medlemmar`} fick inte åtkomst – dela dokumentet manuellt`,
-                  text: "Google lät oss inte dela mötesdokumentet med alla i föreningen. Öppna dokumentet och dela det med dem via Dela-knappen.",
+                  title: t("shareTitle", { count: shareFailed }),
+                  text: t("shareText"),
                 }
               : missedFolder
                 ? {
                     tone: "warning",
-                    title: "Dokumentet hamnade i din Drive",
-                    text: `Ditt Google-konto har inte öppnat föreningens mötesmapp, så dokumentet ligger i ”Simon Says – ${props.orgName}”. Medlemmarna har fått det. Nästa gång: tryck ”Använd mötesmappen” före start.`,
-                    action: { label: "Okej", onClick: () => setMissedFolder(false) },
+                    title: t("folderTitle"),
+                    text: t("folderText", { org: props.orgName }),
+                    action: { label: t("ok"), onClick: () => setMissedFolder(false) },
                   }
                 : missingItems
                 ? {
                     tone: "warning",
-                    title: "Punkter som stadgarna kräver saknas",
+                    title: t("missingTitle"),
                     text: missingItems,
-                    action: { label: "Okej", onClick: () => setMissingItems(null) },
+                    action: { label: t("ok"), onClick: () => setMissingItems(null) },
                   }
                 : null;
 
@@ -726,15 +731,15 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="superseded-title">
           <div className="flex flex-col gap-2">
             <h1 id="superseded-title" className="text-2xl">
-              Mötet körs i en annan flik
+              {t("supersededTitle")}
             </h1>
             <p className="text-ink-2">
-              Mötet fortsatte i en annan flik eller på en annan dator, så den här fliken slutade lyssna. Du kan stänga den.
+              {t("supersededText")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <a className={buttonVariants({ size: "lg" })} href={props.orgHref}>
-              Tillbaka till föreningen
+              {t("backToOrg")}
             </a>
           </div>
         </section>
@@ -791,7 +796,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           <ContextPicker
             contexts={props.privat.contexts ?? []}
             initialId={props.privat.initialContextId ?? null}
-            create={props.privat.createContext ?? (async () => ({ ok: false, message: "Det går inte att lägga till här." }))}
+            create={props.privat.createContext ?? (async () => ({ ok: false, message: tPicker("failed") }))}
             onChange={setPrivatChoice}
             disabled={phase === "starting"}
           />

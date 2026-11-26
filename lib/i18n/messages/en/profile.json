@@ -1,0 +1,23 @@
+{
+  "errors": {
+    "about": "About us can be at most {max} characters.",
+    "website": "Enter a web address starting with https://, e.g. https://example.com.",
+    "facebook": "Enter the address of your Facebook page, e.g. facebook.com/example.",
+    "instagram": "Enter your Instagram name, e.g. @example or instagram.com/example."
+  },
+  "checkFields": "Check the fields and try again.",
+  "offline": "We couldn't reach the server. Try again.",
+  "onlineLabel": "The association online",
+  "website": "Website: {site}",
+  "newTab": "{label} (opens in a new tab)",
+  "about": "About us",
+  "aboutHint": "A few sentences about the association. All members see the text on the association page.",
+  "websiteLabel": "Website",
+  "legend": "About the association",
+  "intro": "The text and links show at the top of the association page. Everything is optional.",
+  "saving": "Saving…",
+  "save": "Save About us",
+  "saved": "Saved",
+  "onboardingToggle": "About the association and links (optional)",
+  "onboardingHint": "A short text and links to your website, Facebook and Instagram. Members see them at the top of the association page."
+}

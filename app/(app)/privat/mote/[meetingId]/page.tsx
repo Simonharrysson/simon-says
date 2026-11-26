@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { PrivatMeetingView, type SummaryStatus } from "@/components/privat/PrivatMeetingView";
 import { isUuid } from "@/lib/db/ids";
@@ -9,7 +10,9 @@ import { docUrl } from "@/lib/ui/meetings";
 import { deletePrivatMeetingAction, setTaskDoneAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Inspelning", robots: { index: false, follow: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("privat"))("meetingMetaTitle"), robots: { index: false, follow: false } };
+}
 
 export default async function PrivatMeetingPage({
   params,
@@ -25,6 +28,7 @@ export default async function PrivatMeetingPage({
   const data = await loadMeetingPage(db, meetingId);
   if (!data || !data.context) notFound();
   const m = data.meeting;
+  const tp = await getTranslations("privat");
   // Still recording: the live page.
   if (m.status === "live" || m.status === "ending") redirect(`/meetings/${m.id}`);
   const status: SummaryStatus = data.summary
@@ -51,7 +55,7 @@ export default async function PrivatMeetingPage({
       }
       tasks={data.tasks.map((t) => ({ id: t.id, text: t.text, owner: t.owner, done: t.done }))}
       docUrl={m.doc_id ? docUrl(m.doc_id) : null}
-      notice={privatNotice(fel, klart)}
+      notice={privatNotice((k) => tp(k as never), fel, klart)}
       toggle={setTaskDoneAction}
       deleteMeeting={deletePrivatMeetingAction}
     />

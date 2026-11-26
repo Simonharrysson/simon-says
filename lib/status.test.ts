@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { StatusView } from "@/components/views/StatusView";
+import { withIntl } from "@/test/intl";
 import { loadStatus } from "./status";
 
 const NOW = new Date("2026-11-24T12:00:00Z");
@@ -57,9 +58,12 @@ describe("loadStatus", () => {
 
   it("keeps a non-opted-in org name out of the rendered HTML", async () => {
     const data = await loadStatus(fakeDb(tables), false, NOW);
-    const html = renderToStaticMarkup(createElement(StatusView, { data }));
+    const html = renderToStaticMarkup(withIntl(createElement(StatusView, { data })));
     expect(html).toContain("Synliga Föreningen");
     expect(html).toContain("1 till som inte visas");
     expect(html).not.toContain("Hemliga Klubben");
+    const en = renderToStaticMarkup(withIntl(createElement(StatusView, { data }), "en"));
+    expect(en).toContain("1 more not shown by name");
+    expect(en).not.toContain("Hemliga Klubben");
   });
 });

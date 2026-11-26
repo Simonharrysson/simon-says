@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT, localizeMessage, requestLocale } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
 import { getEnv } from "@/lib/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -55,26 +56,27 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
  * written to the database (or the agenda Doc) when a check fails.
  */
 export async function POST(request: NextRequest) {
+  const t = apiT(request);
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const orgId = typeof body?.orgId === "string" ? body.orgId : "";
-  if (!isUuid(orgId)) return fail("bad_request", 400, "Föreningen saknas. Ladda om sidan och försök igen.");
+  if (!isUuid(orgId)) return fail("bad_request", 400, t("api.orgMissing"));
   if (body?.consent !== true) {
-    return fail("no_consent", 400, "Bekräfta att alla i rummet vet att mötet transkriberas.");
+    return fail("no_consent", 400, t("api.noConsent"));
   }
   const opts = startOptions(body!);
-  if (!opts) return fail("bad_request", 400, "Startuppgifterna är ogiltiga. Ladda om sidan och försök igen.");
+  if (!opts) return fail("bad_request", 400, t("api.badStart"));
   if (getEnv().KILL_SWITCH) {
-    return fail("kill_switch", 503, "Tjänsten är pausad just nu. Försök igen senare.");
+    return fail("kill_switch", 503, t("api.killSwitch"));
   }
 
   const result = await startMeeting(supabase, user, orgId, "started", opts);
-  if (!result.ok) return fail(result.error, result.status, result.message);
+  if (!result.ok) return fail(result.error, result.status, localizeMessage(result.message, requestLocale(request)));
 
   return NextResponse.json(
     // shareFailed: members the Doc could not be shared with (the page asks to share manually).

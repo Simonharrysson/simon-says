@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from "next-intl";
 import { ButtonLink } from "@/components/ui/button";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -55,44 +56,46 @@ export function ContextView({
   /** A recording runs: no new one and no delete. */
   busy: boolean;
 }) {
+  const t = useTranslations("privat.context");
+  const locale = useLocale() === "en" ? "en" : "sv";
   return (
     <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-8 px-gutter">
       <PageHeader
-        back={{ href: "/privat", label: "Privat" }}
+        back={{ href: "/privat", label: t("back") }}
         title={name}
         actions={
           !busy && (
             <ButtonLink href={startHref} variant="primary" size="lg" icon={<IconMic />} className="max-sm:w-full">
-              Spela in
+              {t("start")}
             </ButtonLink>
           )
         }
       />
       <NoticeBanner notice={notice} />
 
-      <Panel title="Öppna uppgifter" titleId="open-title">
+      <Panel title={t("openTitle")} titleId="open-title">
         <TaskList
           tasks={open}
           toggle={toggle}
-          label="Öppna uppgifter"
-          empty={meetings.length ? "Inga öppna uppgifter. Nya kommer från nästa inspelning." : "Uppgifter från dina inspelningar hamnar här."}
+          label={t("openTitle")}
+          empty={meetings.length ? t("openEmptyAfter") : t("openEmptyBefore")}
         />
         {done.length > 0 && (
           <details className="mt-4 text-sm">
-            <summary className="min-h-11 cursor-pointer py-2 text-ink-2">Klara nyligen ({done.length})</summary>
-            <TaskList tasks={done} toggle={toggle} label="Klara nyligen" />
+            <summary className="min-h-11 cursor-pointer py-2 text-ink-2">{t("doneRecently", { count: done.length })}</summary>
+            <TaskList tasks={done} toggle={toggle} label={t("doneLabel")} />
           </details>
         )}
       </Panel>
 
       {log.length > 0 && (
-        <Panel title="Beslut och bra att veta" titleId="log-title">
+        <Panel title={t("logTitle")} titleId="log-title">
           <ul aria-labelledby="log-title" className="flex list-dash flex-col gap-2 pl-[1.1rem] marker:text-ink-3">
             {log.map((e) => (
               <li key={`${e.kind}-${e.meetingId}-${e.text}`}>
                 <span className="wrap-anywhere">{e.text}</span>{" "}
                 <span className="text-xs whitespace-nowrap text-ink-3">
-                  {e.kind === "decision" ? "Beslut" : "Fakta"} · {shortWhen(e.at)}
+                  {e.kind === "decision" ? t("decision") : t("fact")} · {shortWhen(e.at, locale)}
                 </span>
               </li>
             ))}
@@ -101,17 +104,17 @@ export function ContextView({
       )}
 
       {(people.length > 0 || topics.length > 0) && (
-        <Panel title="Återkommer ofta" titleId="recurring-title">
+        <Panel title={t("recurringTitle")} titleId="recurring-title">
           <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm max-[30rem]:grid-cols-1">
             {people.length > 0 && (
               <>
-                <dt className="font-medium">Personer</dt>
+                <dt className="font-medium">{t("people")}</dt>
                 <dd className="text-ink-2">{people.map((p) => `${p.name} (${p.count})`).join(", ")}</dd>
               </>
             )}
             {topics.length > 0 && (
               <>
-                <dt className="font-medium">Ämnen</dt>
+                <dt className="font-medium">{t("topics")}</dt>
                 <dd className="text-ink-2">{topics.map((p) => `${p.name} (${p.count})`).join(", ")}</dd>
               </>
             )}
@@ -119,11 +122,11 @@ export function ContextView({
         </Panel>
       )}
 
-      <Panel flush title="Inspelningar" titleId="meetings-title">
+      <Panel flush title={t("meetingsTitle")} titleId="meetings-title">
         {meetings.length === 0 ? (
           <div className={panelPadClass}>
-            <EmptyState title="Inga inspelningar än">
-              <p>Tryck Spela in. Sammanfattningen kommer på mejlen och hamnar här.</p>
+            <EmptyState title={t("meetingsEmptyTitle")}>
+              <p>{t("meetingsEmptyText")}</p>
             </EmptyState>
           </div>
         ) : (
@@ -132,7 +135,7 @@ export function ContextView({
               <ListRow
                 key={m.id}
                 href={m.live ? `/meetings/${m.id}` : `/privat/mote/${m.id}`}
-                title={shortWhen(m.startedAt)}
+                title={shortWhen(m.startedAt, locale)}
                 meta={m.line}
                 actions={
                   <IconArrowRight size={18} className="text-ink-3 transition-transform duration-120 ease-out group-hover/row:translate-x-[3px] group-hover/row:text-ink" />
@@ -147,31 +150,26 @@ export function ContextView({
         <ConfirmAction
           action={deleteContext}
           hidden={{ contextId }}
-          trigger="Radera sammanhanget"
+          trigger={t("delete")}
           triggerIcon={<IconTrash size={16} />}
           disabled={busy}
-          title={`Radera ${name}?`}
-          description={
-            <p>
-              Alla {meetings.length} inspelningar i sammanhanget raderas: anteckningar, transkript, sammanfattningar och uppgifter.
-              Det går inte att ångra. Google-dokument du skapat ligger kvar i Drive.
-            </p>
-          }
-          confirmLabel="Radera sammanhanget"
-          pendingLabel="Raderar…"
+          title={t("deleteTitle", { name })}
+          description={<p>{t("deleteText", { count: meetings.length })}</p>}
+          confirmLabel={t("delete")}
+          pendingLabel={t("deleting")}
         />
       </div>
     </div>
   );
 }
 
-/** The line under a recording in the list. */
-export function meetingLine(m: { status: string; summary: string | null; summary_state: string | null }): string {
-  if (m.status === "live") return "Pågår";
-  if (m.status === "ending") return "Avslutas";
+/** The line under a recording in the list (`t`: privat.context). */
+export function meetingLine(m: { status: string; summary: string | null; summary_state: string | null }, t: (key: string) => string): string {
+  if (m.status === "live") return t("line.live");
+  if (m.status === "ending") return t("line.ending");
   if (m.summary) return firstSentence(m.summary);
-  if (m.status === "abandoned") return "Avbruten";
-  if (m.summary_state === "no_notes") return "Inget hördes";
-  if (m.summary_state === "failed") return "Ingen sammanfattning";
-  return "Sammanfattningen kommer strax";
+  if (m.status === "abandoned") return t("line.abandoned");
+  if (m.summary_state === "no_notes") return t("line.noNotes");
+  if (m.summary_state === "failed") return t("line.failed");
+  return t("line.pending");
 }

@@ -1,11 +1,13 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { IconPlay, IconStop } from "@/components/ui/icons";
 import { formatClock } from "@/lib/format";
 import { StartErrorBanner, type StartError } from "./ConsentStep";
-import { LiveDialog, stopCopy, type LiveDialogHandle } from "./LiveDialog";
+import { LiveDialog, type LiveDialogHandle } from "./LiveDialog";
 
 /**
  * Shown when the page finds an unfinished meeting (live, or abandoned < 2 h ago). When another
@@ -34,34 +36,32 @@ export function ResumeMeeting({
   error?: StartError;
   errorText?: string | null;
 }) {
+  const t = useTranslations("live");
+  const locale = useLocale();
   const dialog = useRef<LiveDialogHandle>(null);
   return (
     <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="resume-title">
       <div className="flex flex-col gap-2">
         <h1 id="resume-title" className="text-2xl">
-          {connectedElsewhere ? "Mötet spelas in på en annan dator" : "Mötet är inte avslutat"}
+          {connectedElsewhere ? t("resume.elsewhereTitle") : t("resume.notEndedTitle")}
         </h1>
         {connectedElsewhere ? (
-          <p className="text-ink-2">
-            Mötet i {orgName} startade kl. {formatClock(startedAt)} och spelas in i en annan flik just nu. Tar du över här
-            slutar den andra fliken lyssna. Allt som sagts finns kvar.
-          </p>
+          <p className="text-ink-2">{t("resume.elsewhereText", { org: orgName, time: formatClock(startedAt, locale) })}</p>
         ) : (
           <p className="text-ink-2">
-            Mötet i {orgName} startade kl. {formatClock(startedAt)}, men ingen spelar in det just nu. Kanske stängdes fliken
-            eller somnade datorn. Allt som hann transkriberas finns kvar.
-            {live && " Fortsätter ingen inom några minuter avslutas mötet av sig självt och anteckningarna görs klara."}
+            {t("resume.notEndedText", { org: orgName, time: formatClock(startedAt, locale) })}
+            {live && t("resume.autoEnd")}
           </p>
         )}
       </div>
       {error && <StartErrorBanner error={error} text={errorText} />}
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" size="lg" icon={<IconPlay size={18} />} onClick={onResume} loading={resuming}>
-          {connectedElsewhere ? "Ta över här" : "Fortsätt mötet"}
+          {connectedElsewhere ? t("resume.takeOver") : t("resume.resume")}
         </Button>
         {onEnd && (
           <Button variant="ghost" size="lg" onClick={() => dialog.current?.showModal()} disabled={resuming}>
-            Avsluta mötet
+            {t("resume.end")}
           </Button>
         )}
       </div>
@@ -69,13 +69,13 @@ export function ResumeMeeting({
         <LiveDialog
           ref={dialog}
           id="resume-stop"
-          title="Avsluta mötet?"
-          stayLabel="Avbryt"
-          confirmLabel="Avsluta mötet"
+          title={t("controls.endTitle")}
+          stayLabel={t("controls.cancel")}
+          confirmLabel={t("controls.confirmEnd")}
           confirmIcon={<IconStop size={16} />}
           onConfirm={onEnd}
         >
-          {stopCopy}
+          {t("stopCopy")}
         </LiveDialog>
       )}
     </section>

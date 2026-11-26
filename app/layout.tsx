@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import "./globals.css";
 
@@ -11,11 +13,10 @@ const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", dis
 // Instrument Serif (OFL): the wordmark only. Body text stays Geist.
 const display = Instrument_Serif({ subsets: ["latin"], variable: "--font-wordmark", display: "swap", weight: "400" });
 
-export const metadata: Metadata = {
-  title: { default: "Simon Says — mötesanteckningar som skriver sig själva", template: "%s · Simon Says" },
-  description:
-    "Öppna en sida på en laptop vid mötesbordet och tryck Starta. Beslut, att göra och vad ni pratar om skrivs live i ert eget Google-dokument. Gratis för föreningar i Linköping.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("common");
+  return { title: { default: t("metaTitle"), template: "%s · Simon Says" }, description: t("metaDescription") };
+}
 
 export const viewport: Viewport = {
   themeColor: [
@@ -24,14 +25,20 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+// The UI language (lib/i18n): the `lang` cookie, Swedish by default. Reading it makes every
+// route render per request.
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
+  const t = await getTranslations("common");
   return (
-    <html lang="sv" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
+    <html lang={locale} className={`${sans.variable} ${mono.variable} ${display.variable}`}>
       <body>
-        <a className="absolute -top-16 left-4 z-50 rounded-md bg-ink px-4 py-2 text-on-ink no-underline focus:top-3" href="#innehall">
-          Hoppa till innehållet
-        </a>
-        {children}
+        <NextIntlClientProvider>
+          <a className="absolute -top-16 left-4 z-50 rounded-md bg-ink px-4 py-2 text-on-ink no-underline focus:top-3" href="#innehall">
+            {t("skipToContent")}
+          </a>
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

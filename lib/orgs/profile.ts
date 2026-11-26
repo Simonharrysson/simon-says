@@ -1,3 +1,5 @@
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 // The förening's "Om oss" (todo #13, migration 0044): a short plain-text description and links
 // to its website, Facebook and Instagram. One parser for Inställningar and Kom igång; it turns what
 // an admin typed into the one canonical form the database checks accept (https only, the right
@@ -26,12 +28,16 @@ export interface ProfileInput {
 export type ProfileField = keyof ProfileInput;
 export type ProfileErrors = Partial<Record<ProfileField, string>>;
 
-export const PROFILE_ERRORS: Record<ProfileField, string> = {
-  about: `Om oss får vara högst ${ABOUT_MAX} tecken.`,
-  website: "Skriv en webbadress som börjar med https://, t.ex. https://exempel.se.",
-  facebook: "Skriv adressen till er Facebook-sida, t.ex. facebook.com/exempel.",
-  instagram: "Skriv ert Instagram-namn, t.ex. @exempel eller instagram.com/exempel.",
-};
+/** The field errors in the UI language (profile.errors.* in the catalogs). */
+export function profileErrors(locale: Locale = defaultLocale): Record<ProfileField, string> {
+  const t = translator(locale);
+  return {
+    about: t("profile.errors.about", { max: ABOUT_MAX }),
+    website: t("profile.errors.website"),
+    facebook: t("profile.errors.facebook"),
+    instagram: t("profile.errors.instagram"),
+  };
+}
 
 /** Characters as Postgres counts them (code points, not UTF-16 units). */
 const length = (s: string) => [...s].length;
@@ -128,16 +134,17 @@ export function normalizeInstagram(raw: string): string | null | undefined {
 export type ProfileResult = { ok: true; profile: OrgProfile } | { ok: false; errors: ProfileErrors };
 
 /** Every field at once: the canonical profile, or an error sentence for each field that is wrong. */
-export function parseProfile(input: ProfileInput): ProfileResult {
+export function parseProfile(input: ProfileInput, locale: Locale = defaultLocale): ProfileResult {
+  const messages = profileErrors(locale);
   const about = normalizeAbout(input.about);
   const website_url = normalizeWebsite(input.website);
   const facebook_url = normalizeFacebook(input.facebook);
   const instagram_url = normalizeInstagram(input.instagram);
   const errors: ProfileErrors = {};
-  if (about === undefined) errors.about = PROFILE_ERRORS.about;
-  if (website_url === undefined) errors.website = PROFILE_ERRORS.website;
-  if (facebook_url === undefined) errors.facebook = PROFILE_ERRORS.facebook;
-  if (instagram_url === undefined) errors.instagram = PROFILE_ERRORS.instagram;
+  if (about === undefined) errors.about = messages.about;
+  if (website_url === undefined) errors.website = messages.website;
+  if (facebook_url === undefined) errors.facebook = messages.facebook;
+  if (instagram_url === undefined) errors.instagram = messages.instagram;
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, profile: { about: about!, website_url: website_url!, facebook_url: facebook_url!, instagram_url: instagram_url! } };
 }

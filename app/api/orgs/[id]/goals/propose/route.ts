@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { GOALS_RATE_LIMITED, goalsInput, MIN_MEETINGS } from "@/lib/dashboard/goals-input";
+import { apiT } from "@/lib/i18n/api";
+import type { Translator } from "@/lib/i18n/translator";
+import { goalsInput, MIN_MEETINGS } from "@/lib/dashboard/goals-input";
 import { proposeGoals } from "@/lib/dashboard/goals";
 import { loadOverviewInput } from "@/lib/dashboard/load";
 import { digestGoals } from "@/lib/history/digest";
@@ -24,18 +26,19 @@ const fail = (error: string, status: number, message: string) =>
  * förening per 24 h (claim_goal_proposal). Stores no proposal;
  * logs only counts. → `{ goals: [{ title, why }], explanation }`.
  */
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
 
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan ändra föreningens mål.");
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.goalsAdminsOnly"));
 
   let summary;
   let history;
@@ -55,21 +58,21 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     else summary = goalsInput(id, input, new Date());
   } catch (err) {
     console.error(`goals/propose: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
-  if (history) return proposeFromHistory(db, id, history, names);
+  if (history) return proposeFromHistory(db, id, history, names, t);
   if (!summary) {
-    return fail("too_few", 409, `Simon Says behöver minst ${MIN_MEETINGS} avslutade möten för att föreslå mål. Skriv egna mål så länge.`);
+    return fail("too_few", 409, t("api.goalsTooFewMeetings", { min: MIN_MEETINGS }));
   }
   // At most 3 proposals per förening per 24 h (0028): the daily Claude cap is shared by every
   // förening's live notes, so one admin must not be able to use it up.
   const { data: allowed, error: claimError } = await db.rpc("claim_goal_proposal", { p_org_id: id });
   if (claimError) {
-    if (claimError.code === "42501") return fail("forbidden", 403, "Bara administratörer kan ändra föreningens mål.");
+    if (claimError.code === "42501") return fail("forbidden", 403, t("api.goalsAdminsOnly"));
     console.error(`goals/propose: claim: ${claimError.message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
-  if (allowed !== true) return fail("rate_limited", 429, GOALS_RATE_LIMITED);
+  if (allowed !== true) return fail("rate_limited", 429, t("api.goalsRateLimited"));
 
   console.info(
     `goals/propose: ${summary.meetings} meetings, ${summary.topics.length} topics, ${summary.decisions.length} decisions, ${summary.openTasks.length} tasks`,
@@ -77,8 +80,8 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
   const res = await proposeGoals({ orgId: id, summary });
   if (!res.ok) {
-    if (res.error === "spend") return fail("spend", 503, "Simon Says kan inte föreslå mål just nu. Försök igen i morgon eller skriv egna mål.");
-    return fail(res.error, 502, "Simon Says kunde inte föreslå mål. Försök igen eller skriv egna mål.");
+    if (res.error === "spend") return fail("spend", 503, t("api.goalsSpend"));
+    return fail(res.error, 502, t("api.goalsFailed"));
   }
   return NextResponse.json({ goals: res.goals, explanation: res.explanation }, { headers: noStore });
 }
@@ -94,26 +97,27 @@ async function proposeFromHistory(
   id: string,
   history: ReturnType<typeof mergeHistory>,
   names: string[],
+  t: Translator,
 ) {
   if (history.length < MIN_MEETINGS) {
-    return fail("too_few", 409, `Simon Says behöver minst ${MIN_MEETINGS} möten eller protokoll för att föreslå mål. Skriv egna mål så länge.`);
+    return fail("too_few", 409, t("api.goalsTooFew", { min: MIN_MEETINGS }));
   }
   if (JSON.stringify(history).length > MAX_HISTORY_CHARS) {
-    return fail("too_long", 413, "Historiken är för lång för att läsas på en gång. Ta bort några av de äldsta protokollen och försök igen.");
+    return fail("too_long", 413, t("api.historyTooLong"));
   }
   const { data: allowed, error: claimError } = await db.rpc("claim_goal_proposal", { p_org_id: id });
   if (claimError) {
-    if (claimError.code === "42501") return fail("forbidden", 403, "Bara administratörer kan ändra föreningens mål.");
+    if (claimError.code === "42501") return fail("forbidden", 403, t("api.goalsAdminsOnly"));
     console.error(`goals/propose: claim: ${claimError.message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
-  if (allowed !== true) return fail("rate_limited", 429, GOALS_RATE_LIMITED);
+  if (allowed !== true) return fail("rate_limited", 429, t("api.goalsRateLimited"));
 
   console.info(`goals/propose: history of ${history.length} meetings (${history.filter((m) => m.source === "import").length} imported)`);
   const res = await digestGoals({ orgId: id, history, names });
   if (!res.ok) {
-    if (res.error === "spend") return fail("spend", 503, "Simon Says kan inte föreslå mål just nu. Försök igen i morgon eller skriv egna mål.");
-    return fail(res.error, 502, "Simon Says kunde inte föreslå mål. Försök igen eller skriv egna mål.");
+    if (res.error === "spend") return fail("spend", 503, t("api.goalsSpend"));
+    return fail(res.error, 502, t("api.goalsFailed"));
   }
   console.info(`goals/propose: ${res.goals.length} goals, ${res.demoted} demoted to stale, ${res.droppedEvidence} evidence lines dropped`);
   const { approve, others } = splitForApproval(res.goals);
