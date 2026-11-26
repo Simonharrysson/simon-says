@@ -9,6 +9,7 @@ const now = () => Math.floor(Date.now() / 1000);
 const user = { id: "u1", aud: "authenticated", email: "simon@example.com", app_metadata: {}, user_metadata: {}, created_at: "2026-11-24T00:00:00Z" };
 
 let refreshed = 0;
+const KNOWN_ORG = "11111111-1111-4111-8111-111111111111";
 
 beforeAll(() => {
   Object.assign(process.env, testEnv);
@@ -26,6 +27,7 @@ beforeAll(() => {
       });
     }
     if (url.includes("/auth/v1/user")) return Response.json(user);
+    if (url.includes("/rest/v1/orgs")) return Response.json(url.includes(KNOWN_ORG) ? [{ id: KNOWN_ORG }] : []);
     throw new Error(`unexpected fetch ${url}`);
   });
 });
@@ -55,6 +57,27 @@ describe("proxy", () => {
     const session = Buffer.from(value.replace(/^base64-/, ""), "base64url").toString();
     expect(session).toContain("new-refresh");
     expect(response.headers.get("set-cookie")).toMatch(/HttpOnly/i);
+  });
+
+  it("sends a signed-out visitor of the signed-in area to the login, keeping the way back", async () => {
+    const response = await proxy(new NextRequest("https://simonsays.example/orgs/2b6c1c7e-9a4f-4f63-9d59-0c1b2a3d4e5f?flik=oversikt"));
+    expect(response.status).toBe(307);
+    const to = new URL(response.headers.get("location")!);
+    expect(to.pathname).toBe("/login");
+    expect(to.searchParams.get("next")).toBe("/orgs/2b6c1c7e-9a4f-4f63-9d59-0c1b2a3d4e5f");
+    const settings = await proxy(new NextRequest("https://simonsays.example/installningar"));
+    expect(new URL(settings.headers.get("location")!).searchParams.get("next")).toBe("/installningar");
+  });
+
+  it("answers a real 404 for a förening the user can't see (documents only)", async () => {
+    const valid = { access_token: jwt("u1", now() + 3600), refresh_token: "r", token_type: "bearer", expires_in: 3600, expires_at: now() + 3600, user };
+    const headers = { cookie: `sb-example-auth-token=base64-${b64url(valid)}`, "sec-fetch-dest": "document" };
+    const unknown = await proxy(new NextRequest("https://simonsays.example/orgs/22222222-2222-4222-8222-222222222222", { headers }));
+    expect(unknown.status).toBe(404);
+    const notUuid = await proxy(new NextRequest("https://simonsays.example/orgs/finns-inte/forbered", { headers }));
+    expect(notUuid.status).toBe(404);
+    const known = await proxy(new NextRequest(`https://simonsays.example/orgs/${KNOWN_ORG}?flik=oversikt`, { headers }));
+    expect(known.status).toBe(200);
   });
 
   it("passes through without a session", async () => {
