@@ -609,7 +609,6 @@ const render: Record<string, () => ReactNode> = {
         startMeeting={
           <StartMeetingForm
             orgId={ORG_ID}
-            shareTranscript
             showTestMeeting
             prepared={[{ date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }]}
           />
@@ -633,7 +632,6 @@ const render: Record<string, () => ReactNode> = {
         startMeeting={
           <StartMeetingForm
             orgId={ORG_ID}
-            shareTranscript
             showTestMeeting
           />
         }

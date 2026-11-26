@@ -186,7 +186,6 @@ export default async function OrgPage({
       liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}
       startMeeting={<StartMeetingForm
           orgId={org.id}
-          shareTranscript={org.share_transcript}
           showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
           prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
         />}

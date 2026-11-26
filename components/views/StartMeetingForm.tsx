@@ -4,16 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { IconDoc, IconMic } from "@/components/ui/icons";
-import { hintClass } from "@/components/ui/Field";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { IconChevronDown, IconExternal, IconMic } from "@/components/ui/icons";
 import { meetingTypeName, type MeetingType } from "@/lib/prepare/types";
 
 /**
- * "Starta möte" on the org page. Starting leads to the live page's consent step
- * (`/meetings/ny/<orgId>`): the consent checkbox, the mic and the Doc are handled there, so the
- * mic can start from that click. Service admins also get the quiet "Testmöte" and "Testmöte med
- * dagordning", which start a server-side replay here (POST /api/meetings/test, mode "new" or
- * "agenda") and refresh the page.
+ * "Starta möte" on the org page: no explanations, just the choices. Starting leads to the live
+ * page's consent step (`/meetings/ny/<orgId>`: consent, mic and Doc are handled there, so the mic
+ * can start from that click); "Förbered möte" next to it. When an agenda is prepared, one quiet row
+ * above names the next meeting with "Dagordning ↗" and "Ändra". Service admins also get a small
+ * "Testmöte" menu (Utan / Med dagordning) that starts a server-side replay here
+ * (POST /api/meetings/test, mode "new" or "agenda") and refreshes the page.
  */
 /** An upcoming prepared agenda (Förbered möte, 0033), as the förening page lists it. */
 export interface PreparedLink {
@@ -23,25 +24,29 @@ export interface PreparedLink {
   docUrl: string;
 }
 
-const preparedDate = (date: string) =>
-  new Intl.DateTimeFormat("sv-SE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Stockholm" }).format(new Date(`${date}T12:00:00Z`));
+/** "ons 2 dec" (+ " 12.00"). */
+export function nextMeetingWhen(date: string, time: string | null): string {
+  const d = new Intl.DateTimeFormat("sv-SE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Stockholm" })
+    .format(new Date(`${date}T12:00:00Z`))
+    .replace(/\./g, "");
+  return `${d}${time ? ` ${time.replace(":", ".")}` : ""}`;
+}
 
 export function StartMeetingForm({
   orgId,
-  shareTranscript,
   showTestMeeting = false,
   prepared = [],
 }: {
   orgId: string;
-  shareTranscript: boolean;
-  /** Admins of the service only (decided on the server): the quiet Testmöte buttons. */
+  /** Admins of the service only (decided on the server): the quiet Testmöte menu. */
   showTestMeeting?: boolean;
-  /** Upcoming prepared agendas; "Starta möte" suggests the first one. */
+  /** Upcoming prepared agendas, soonest first; the row shows the next one. */
   prepared?: PreparedLink[];
 }) {
   const router = useRouter();
   const [starting, setStarting] = useState<null | "new" | "agenda">(null);
   const [error, setError] = useState<string | null>(null);
+  const next = prepared[0];
 
   async function startTest(mode: "new" | "agenda") {
     setStarting(mode);
@@ -65,60 +70,57 @@ export function StartMeetingForm({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-ink-3">
-        Vi skapar ett nytt Google-dokument i din Drive och delar det med föreningens medlemmar
-        {shareTranscript ? ", med transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
-      </p>
+    <div className="flex flex-col gap-4">
+      {next && (
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+          <span className="text-ink-3">Nästa möte</span>
+          <span>
+            <span className="font-medium">{meetingTypeName(next.kind)}</span> · {nextMeetingWhen(next.date, next.time)}
+          </span>
+          <span className="flex items-baseline gap-3">
+            <a href={next.docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1">
+              Dagordning
+              <IconExternal size={14} />
+            </a>
+            <a href={`/orgs/${orgId}/forbered?datum=${next.date}`} className="text-ink-3">
+              Ändra
+            </a>
+          </span>
+        </p>
+      )}
       {error && (
         <Banner tone="danger" title="Mötet kunde inte starta">
           {error}
         </Banner>
       )}
-      <div className="flex flex-wrap items-center gap-3">
-        <ButtonLink href={`/meetings/ny/${orgId}`} variant="primary" size="lg" icon={<IconMic />}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <ButtonLink href={`/meetings/ny/${orgId}`} variant="primary" size="lg" icon={<IconMic />} className="max-sm:w-full">
           Starta möte
         </ButtonLink>
-        <ButtonLink href={`/orgs/${orgId}/forbered`} variant="secondary" size="lg">
+        <ButtonLink href={`/orgs/${orgId}/forbered`} variant="secondary" size="lg" className="max-sm:w-full">
           Förbered möte
         </ButtonLink>
-      </div>
-      <p className={hintClass}>Förbered möte: Simon Says gör dagordningen med förra veckans uppgifter, du lägger till resten.</p>
-      {prepared.length > 0 && (
-        <ul className="flex flex-col gap-1 text-sm" aria-label="Förberedda möten">
-          {prepared.map((p) => (
-            <li key={p.date} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span>
-                <span className="font-medium">{meetingTypeName(p.kind)}</span> {preparedDate(p.date)}
-                {p.time ? ` kl. ${p.time.replace(":", ".")}` : ""}
-              </span>
-              <a href={p.docUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1">
-                <IconDoc size={14} />
-                Dagordning
-              </a>
-              <a href={`/orgs/${orgId}/forbered?datum=${p.date}`} className="text-ink-3">
-                Ändra
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-      {showTestMeeting && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <Button disabled={starting !== null} loading={starting === "new"} onClick={() => startTest("new")}>
-              Testmöte
-            </Button>
-            <Button disabled={starting !== null} loading={starting === "agenda"} onClick={() => startTest("agenda")}>
-              Testmöte med dagordning
-            </Button>
+        {showTestMeeting && (
+          <div className="max-sm:-ml-2 sm:ml-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" loading={starting !== null} disabled={starting !== null}>
+                  {starting ? "Startar testmöte …" : "Testmöte"}
+                  {!starting && <IconChevronDown size={16} className="ml-1 inline-block align-[-0.2em] text-ink-2" />}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem hint="Ett påhittat möte spelas upp, ca 3–8 min." onSelect={() => void startTest("new")}>
+                  Utan dagordning
+                </DropdownMenuItem>
+                <DropdownMenuItem hint="Ett påhittat veckomöte i ett nytt dagordningsdokument." onSelect={() => void startTest("agenda")}>
+                  Med dagordning
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <p className="text-xs text-ink-3">
-            Spelar upp ett påhittat möte — ca 3–8 min. Du kan stänga fliken. Med dagordning: ett påhittat veckomöte i
-            ett nytt dagordningsdokument; andra gången följer det upp förra testmötets uppgifter.
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
