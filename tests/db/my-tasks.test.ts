@@ -57,6 +57,10 @@ const task = (meetingId: string, id: string, over: Record<string, unknown> = {})
   kind: "task",
   text: `Uppgift ${id}`,
   position: 0,
+  // A bulk insert sends every column any row names: the not-null ones need a value on each.
+  deleted_by_human: false,
+  locked: false,
+  done: false,
   ...over,
 });
 
