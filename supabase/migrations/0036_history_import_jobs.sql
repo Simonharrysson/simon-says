@@ -1,7 +1,7 @@
 -- Protocol import jobs (branch import-batch): the import's progress lives in the database, so
 -- the admin can close the page and come back to the same list, and large imports go to the
 -- Anthropic Message Batches API (half price; results arrive when the whole batch ends).
--- Strictly additive: two new tables and four new functions; nothing existing changes.
+-- Strictly additive: two new tables and five new functions; nothing existing changes.
 --
 -- Two modes, one shape:
 --   'direct' (≤ 20 meetings): the admin's browser reads a few meetings at a time, one request
@@ -41,6 +41,10 @@ create table public.history_import_jobs (
   polled_at timestamptz,
   -- One worker at a time (cron or the status request): saving results and the digest.
   lease_until timestamptz,
+  -- Who holds the lease: only that worker may release it or write the step's result.
+  lease_token uuid,
+  -- Consecutive failed polls of Anthropic; after 12 (about an hour of cron runs) the job fails.
+  poll_errors smallint not null default 0,
   proposal jsonb,
   proposal_error text check (proposal_error is null or length(proposal_error) <= 40),
   failure text check (failure is null or length(failure) <= 40),
@@ -76,6 +80,10 @@ create table public.history_import_items (
   date_from text check (date_from is null or date_from in ('doc', 'file', 'admin')),
   attempts smallint not null default 0,
   usd numeric(10, 4),
+  -- The item's usd is on the org's usage ledger (booked once, even if a run died midway).
+  booked boolean not null default false,
+  input_tokens integer,
+  output_tokens integer,
   started_at timestamptz,
   finished_at timestamptz,
   unique (job_id, position)
@@ -262,20 +270,39 @@ revoke all on function public.save_history_protocol_as(uuid, uuid, text, smallin
 grant execute on function public.save_history_protocol_as(uuid, uuid, text, smallint, smallint, date, text, jsonb) to service_role;
 
 -- Service role only: takes the job's lease for `p_seconds` (saving results, the digest) when
--- nobody holds it. True = this caller may work on the job now.
+-- nobody holds it. Returns the lease token (null = someone else holds it). The holder releases
+-- with release_history_import_job and writes its step's result only while it holds the token.
 create function public.lease_history_import_job(p_job_id uuid, p_seconds integer)
-returns boolean
+returns uuid
 language plpgsql volatile security definer set search_path = ''
 as $$
+declare
+  v_token uuid := gen_random_uuid();
 begin
-  update public.history_import_jobs set lease_until = now() + make_interval(secs => greatest(10, least(p_seconds, 900)))
+  update public.history_import_jobs
+     set lease_until = now() + make_interval(secs => greatest(10, least(p_seconds, 900))), lease_token = v_token
    where id = p_job_id and (lease_until is null or lease_until < now());
-  return found;
+  return case when found then v_token end;
 end;
 $$;
 
 revoke all on function public.lease_history_import_job(uuid, integer) from public, anon, authenticated;
 grant execute on function public.lease_history_import_job(uuid, integer) to service_role;
+
+-- Service role only: gives the lease back, only by its holder. True when it was released.
+create function public.release_history_import_job(p_job_id uuid, p_token uuid)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  update public.history_import_jobs set lease_until = null, lease_token = null
+   where id = p_job_id and lease_token = p_token;
+  return found;
+end;
+$$;
+
+revoke all on function public.release_history_import_job(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.release_history_import_job(uuid, uuid) to service_role;
 
 -- Service role only (the cron): removes finished jobs (and their file names) after 7 days.
 create function public.delete_old_history_import_jobs()
