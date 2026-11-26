@@ -9,6 +9,7 @@ import { MAX_DOC_CHARS, validDate } from "@/lib/history/extract-prompt";
 import { IMPORT_RATE_LIMITED, OWN_DOC_MESSAGE } from "@/lib/history/limits";
 import { fileCreatedDate, googleStatus, readProtocolDoc } from "@/lib/history/read-doc";
 import { ownDocIds, saveImportedProtocol } from "@/lib/history/store";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,8 @@ const fail = (error: string, status: number, message: string) => NextResponse.js
  * Imports ONE meeting of a picked Doc: `{ docId, section, sections }` (a Doc can hold several
  * meetings, see lib/history/doc-text.ts; the browser loops over every section the estimate
  * found, so the admin sees progress and every request is one Claude call). Admins only, at most
- * 60 per förening per 24 h (claim_history_import; the claim is given back when Claude was never
- * called). Simon Says' own Docs are refused. Sends the section's text to Claude (the admin
+ * 60 per förening per 24 h (claim_history_import; the claim is given back only when the spend
+ * gate stopped the call before any request). Simon Says' own Docs are refused. Sends the section's text to Claude (the admin
  * confirmed that), stores only the cleaned items: never the text or the title. Logs only counts.
  * → `{ protocolId, date, dateFrom, decisions, tasks, reports }`.
  */
@@ -100,9 +101,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const res = await extractProtocol({ orgId: id, title: part.title, text: part.text, people: names });
   if (!res.ok) {
-    // No answer and no usage: Claude was never called (spend gate) or the request failed: give the claim back.
-    if (res.usage === null) {
-      const { error } = await db.rpc("release_history_import", { p_org_id: id, p_claim_id: claimId });
+    // Only the spend gate stops BEFORE any request: give that claim back (service role, the
+    // server decides). A failed or timed-out request may have run at Claude: the claim stays.
+    if (res.error === "spend") {
+      const { error } = await supabaseAdmin().rpc("release_history_import", { p_org_id: id, p_claim_id: claimId });
       if (error) console.error(`history/import: release: ${error.message}`.slice(0, 200));
     }
     if (res.error === "spend") return fail("spend", 503, "Simon Says kan inte läsa protokoll just nu. Försök igen i morgon.");

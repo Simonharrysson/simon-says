@@ -15,6 +15,7 @@ const m = vi.hoisted(() => ({
   proposeGoals: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
+vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => adminClient() }));
 vi.mock("@/lib/google/client", () => ({
   getGoogleAuth: async () => ({}),
   GoogleAuthLostError: class extends Error {},
@@ -159,18 +160,20 @@ describe.skipIf(!hasLocalSupabase)("history routes", () => {
     expect(m.extractProtocol.mock.calls.length).toBe(calls);
   });
 
-  it("a Claude call that never happened gives the claim back", async () => {
+  it("only a call the spend gate stopped gives the claim back; a failed or timed-out request keeps it", async () => {
     m.db = admin.db;
     const before = await adminClient().from("history_import_claims").select("id", { count: "exact", head: true }).eq("org_id", orgId);
     m.extractProtocol.mockResolvedValueOnce({ ok: false, error: "spend", usage: null });
     expect((await importOne(req("https://x.test/i", { docId: DOC }), ctx(orgId))).status).toBe(503);
     const after = await adminClient().from("history_import_claims").select("id", { count: "exact", head: true }).eq("org_id", orgId);
     expect(after.count).toBe(before.count);
-    // A call that was billed keeps its claim.
+    // A request that failed or timed out (no usage) may have run at Claude: the claim stays.
+    m.extractProtocol.mockResolvedValueOnce({ ok: false, error: "error", usage: null });
+    expect((await importOne(req("https://x.test/i", { docId: DOC }), ctx(orgId))).status).toBe(502);
     m.extractProtocol.mockResolvedValueOnce({ ok: false, error: "malformed", usage });
     expect((await importOne(req("https://x.test/i", { docId: DOC }), ctx(orgId))).status).toBe(502);
     const billed = await adminClient().from("history_import_claims").select("id", { count: "exact", head: true }).eq("org_id", orgId);
-    expect(billed.count).toBe((before.count ?? 0) + 1);
+    expect(billed.count).toBe((before.count ?? 0) + 2);
   });
 
   it("propose with imported protocols: the whole-history digest, current goals to approve, the rest as suggestions", async () => {

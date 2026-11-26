@@ -86,15 +86,17 @@ describe.skipIf(!hasLocalSupabase)("imported protocols (0032)", () => {
     expect(row.data).toEqual({ meeting_date: "2025-08-20", date_from: "admin" });
   });
 
-  it("claim_history_import: admins only, 60 per 24 h; a claim can be given back by its owner", async () => {
+  it("claim_history_import: admins only, 60 per 24 h; only the service role gives a claim back", async () => {
     expect((await member.db.rpc("claim_history_import", { p_org_id: orgId })).error?.code).toBe("42501");
     const rows = Array.from({ length: 59 }, () => ({ org_id: orgId }));
     await adminClient().from("history_import_claims").insert(rows);
     const last = (await admin.db.rpc("claim_history_import", { p_org_id: orgId })).data;
     expect(typeof last).toBe("number");
     expect((await admin.db.rpc("claim_history_import", { p_org_id: orgId })).data).toBeNull();
-    expect((await member.db.rpc("release_history_import", { p_org_id: orgId, p_claim_id: last })).error?.code).toBe("42501");
-    expect((await admin.db.rpc("release_history_import", { p_org_id: orgId, p_claim_id: last })).data).toBe(true);
+    // Only the server (service role) gives a claim back: an admin's browser cannot lift the cap.
+    expect((await member.db.rpc("release_history_import", { p_org_id: orgId, p_claim_id: last })).error).not.toBeNull();
+    expect((await admin.db.rpc("release_history_import", { p_org_id: orgId, p_claim_id: last })).error).not.toBeNull();
+    expect((await adminClient().rpc("release_history_import", { p_org_id: orgId, p_claim_id: last })).data).toBe(true);
     expect(typeof (await admin.db.rpc("claim_history_import", { p_org_id: orgId })).data).toBe("number");
     expect((await admin.db.from("history_import_claims").select("id")).error).not.toBeNull();
   });

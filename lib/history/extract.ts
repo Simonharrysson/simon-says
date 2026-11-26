@@ -13,6 +13,7 @@ import {
 // One old protocol → structured items (one oneShot call: model, KILL_SWITCH, daily cap, usage on
 // the org). Logs never hold protocol text; the caller stores only the cleaned items.
 
+/** `spend` means the call was never made (KILL_SWITCH or the daily cap, checked before any request). */
 export type ExtractResult =
   | { ok: true; protocol: CleanProtocol; usage: NotesUsage }
   | { ok: false; error: "spend" | "refusal" | "malformed" | "error"; usage: NotesUsage | null };

@@ -205,21 +205,17 @@ $$;
 revoke all on function public.claim_history_import(uuid) from public, anon, authenticated;
 grant execute on function public.claim_history_import(uuid) to authenticated;
 
--- Admins only: gives a claim back when the Claude call never happened (spend gate, request
--- failed before an answer). Only the caller's own claim of this org. True when one was removed.
+-- Service role only (the server decides, never the browser): gives a claim back when the Claude
+-- call was never made (the spend gate stopped it before any request). True when one was removed.
 create function public.release_history_import(p_org_id uuid, p_claim_id bigint)
 returns boolean
 language plpgsql volatile security definer set search_path = ''
 as $$
 begin
-  if not public.is_org_admin(p_org_id) then
-    raise exception 'only org admins can import protocols' using errcode = '42501';
-  end if;
-  delete from public.history_import_claims
-   where id = p_claim_id and org_id = p_org_id and requested_by = auth.uid();
+  delete from public.history_import_claims where id = p_claim_id and org_id = p_org_id;
   return found;
 end;
 $$;
 
 revoke all on function public.release_history_import(uuid, bigint) from public, anon, authenticated;
-grant execute on function public.release_history_import(uuid, bigint) to authenticated;
+grant execute on function public.release_history_import(uuid, bigint) to service_role;
