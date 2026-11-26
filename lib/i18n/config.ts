@@ -10,7 +10,7 @@ export const defaultLocale: Locale = "sv";
 
 /** Cookie with the chosen UI language ("sv" | "en"). Set by Konto and the footer switch. */
 export const LOCALE_COOKIE = "lang";
-/** One year. The DB (user_settings.locale, 0040) is the durable copy for signed-in users. */
+/** One year. The DB (user_settings.locale, 0043) is the durable copy for signed-in users. */
 export const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export const TIME_ZONE = "Europe/Stockholm";

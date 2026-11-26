@@ -154,7 +154,7 @@ Todo #10: the web app is Swedish by default and can be switched to English. Buil
   (`lib/meetings/start.ts`, `lib/formats/stadgar-file.ts`) are translated at the route boundary by
   `localizeMessage` (looked up by their Swedish text; a test keeps them in the catalog).
 - **Choosing:** Konto → "Språk / Language" (Svenska / English) saves the account's choice
-  (`user_settings.locale`, migration 0040, `set_my_locale`) and the `lang` cookie. Signed-out pages
+  (`user_settings.locale`, migration 0043, `set_my_locale`) and the `lang` cookie. Signed-out pages
   have "English / Svenska" in the footer (`/sprak?till=en&tillbaka=…`, same-origin paths only; also
   saves the account's choice when signed in). Sign-in copies the saved choice into the cookie; an
   English choice made while signed out becomes the account's if it has none. `<html lang>` follows

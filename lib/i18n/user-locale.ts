@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { defaultLocale, isLocale, type Locale } from "./config";
 
-// The saved UI language of an account (user_settings, 0040). Rendering reads the `lang` cookie;
+// The saved UI language of an account (user_settings, 0043). Rendering reads the `lang` cookie;
 // this is the durable copy: e-mails use it, and sign-in copies it into the cookie.
 
 /** The signed-in user's saved language (RLS: own row), or null when none is saved / unreadable. */
@@ -50,7 +50,7 @@ export async function localesForUsers(userIds: string[], db: SupabaseClient = su
 
 /**
  * The language to e-mail an address in: the saved choice of the confirmed account that signs in
- * with it (locale_for_email, 0040), Swedish otherwise (no account, no choice, or no answer).
+ * with it (locale_for_email, 0043), Swedish otherwise (no account, no choice, or no answer).
  */
 export async function localeForEmail(email: string, db: SupabaseClient = supabaseAdmin()): Promise<Locale> {
   try {

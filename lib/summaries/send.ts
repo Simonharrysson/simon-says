@@ -222,7 +222,7 @@ export async function sendMeetingSummaries(
     if (!ledger.length) continue;
     if (mailed) await sleep(SEND_GAP_MS);
     mailed = true;
-    // In the recipient's language: their account's choice, else their address's account's (0040).
+    // In the recipient's language: their account's choice, else their address's account's (0043).
     const locale = r.userId ? await localeForUser(r.userId, db) : await localeForEmail(r.email, db);
     const access = accessFor(r, m, shared, origin, starterName, locale);
     const email = renderSummaryEmail({

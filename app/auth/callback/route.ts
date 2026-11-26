@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
   return withSavedLocale(to(safeNextPath(next)));
 
   /**
-   * The account's saved UI language (0040) follows it to this browser via the `lang` cookie. With
+   * The account's saved UI language (0043) follows it to this browser via the `lang` cookie. With
    * none saved, an English choice made while signed out becomes the account's. Best effort.
    */
   async function withSavedLocale(response: NextResponse) {
