@@ -8,12 +8,13 @@ import { Label } from "@/components/ui/label";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { IconArrowRight, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconTrash } from "@/components/ui/icons";
+import { IconArrowRight, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconStop, IconTrash } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { MeetingStatus } from "@/lib/db/types";
 import { formatDateTime, formatDuration, formatMeetingDate, plural } from "@/lib/format";
+import { canEndFromOrgPage } from "@/lib/meetings/access";
 import { canResume, docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
 import type { Notice } from "@/lib/ui/messages";
 import { NoticeBanner } from "./NoticeBanner";
@@ -46,9 +47,8 @@ export interface OrgDetailViewProps {
   /** The meeting-format card (`FormatCard`), shown above the people panel. */
   formatCard?: ReactNode;
   /**
-   * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Shown only to the
-   * person who started it (only they can run it): running meetings and ones abandoned < 2 h ago.
-   * Hidden when absent.
+   * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
+   * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
    */
   liveMeetingHref?: (meetingId: string) => string;
   /**
@@ -64,6 +64,8 @@ export interface OrgDetailViewProps {
     setPersonRole?: FormAction;
     deletePerson: FormAction;
     deleteMeeting: FormAction;
+    /** Admins and the starter: end a live meeting (hidden `orgId`, `meetingId`). */
+    endMeeting?: FormAction;
     updateOrg: FormAction;
     deleteOrg: FormAction;
     /** Admins: remove a member (hidden `orgId`, `userId`). */
@@ -107,7 +109,8 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 export function OrgDetailView(props: OrgDetailViewProps) {
   const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
-  const running = liveMeetingHref && active && userId !== null && active.started_by === userId ? active : null;
+  // Any member may continue the running meeting from their own device (Meet-like presence).
+  const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
 
   return (
@@ -154,6 +157,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
                   mötesdokumentet
                 </a>
                 . Ett nytt möte kan startas när det är avslutat.
+                {active.status === "live" &&
+                  " Är ingen kvar i mötet avslutas det av sig självt efter några minuter, och anteckningarna görs klara."}
               </p>
             </Banner>
           ) : (
@@ -169,6 +174,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             isAdmin={isAdmin}
             userId={userId}
             deleteMeeting={actions.deleteMeeting}
+            endMeeting={actions.endMeeting}
             liveMeetingHref={liveMeetingHref}
           />
           {formatCard}
@@ -305,6 +311,7 @@ function MeetingsPanel({
   isAdmin,
   userId,
   deleteMeeting,
+  endMeeting,
   liveMeetingHref,
 }: {
   meetings: OrgDetailMeeting[];
@@ -312,6 +319,7 @@ function MeetingsPanel({
   isAdmin: boolean;
   userId: string | null;
   deleteMeeting: FormAction;
+  endMeeting?: FormAction;
   liveMeetingHref?: (meetingId: string) => string;
 }) {
   return (
@@ -346,12 +354,25 @@ function MeetingsPanel({
                       </span>
                     </span>
                     <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
-                      {state === "active" && mine && liveMeetingHref && (
+                      {meeting.status === "live" && userId !== null && liveMeetingHref && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
                           Till mötet
                         </ButtonLink>
                       )}
-                      {meeting.status === "abandoned" && mine && liveMeetingHref && canResume(meeting) && (
+                      {meeting.status === "live" && endMeeting && canEndFromOrgPage(isAdmin ? "admin" : "member", mine) && (
+                        <ConfirmAction
+                          action={endMeeting}
+                          hidden={{ orgId, meetingId: meeting.id }}
+                          trigger="Avsluta mötet"
+                          triggerIcon={<IconStop size={16} />}
+                          triggerVariant="ghost"
+                          title="Avsluta mötet?"
+                          description="Inspelningen slutar och anteckningarna görs klara i dokumentet. Det som redan sagts finns kvar."
+                          confirmLabel="Avsluta mötet"
+                          pendingLabel="Avslutar…"
+                        />
+                      )}
+                      {meeting.status === "abandoned" && userId !== null && liveMeetingHref && canResume(meeting) && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} size="sm" icon={<IconPlay size={16} />}>
                           Fortsätt mötet
                         </ButtonLink>

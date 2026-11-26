@@ -52,6 +52,9 @@ const orgNotices: Record<string, Notice> = {
   },
   "org-forbidden": { tone: "danger", text: "Bara admins kan radera föreningen." },
   "org-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
+  avslutat: { tone: "success", text: "Mötet avslutas. Anteckningarna görs klara i dokumentet om en liten stund." },
+  "avsluta-forbidden": { tone: "danger", text: "Bara en admin eller den som startade mötet kan avsluta det här." },
+  "avsluta-not_found": { tone: "danger", text: "Mötet finns inte längre." },
   mote: { tone: "success", text: "Mötet är raderat. Google-dokumentet ligger kvar i Drive." },
   medlem: { tone: "success", text: "Medlemmen är borttagen. Mötesdokument som redan delats med hen är fortfarande delade." },
   "medlem-last_admin": {

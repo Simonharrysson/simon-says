@@ -22,6 +22,7 @@ vi.mock("@/lib/env", async (importOriginal) => {
 const { POST: postResume } = await import("@/app/api/meetings/[id]/resume/route");
 const { POST: postPause } = await import("@/app/api/meetings/[id]/pause/route");
 const { canResume } = await import("@/lib/meetings/resume");
+const { endFromOrgPage } = await import("@/lib/meetings/end-from-org");
 
 const call = (handler: (r: NextRequest, c: { params: Promise<{ id: string }> }) => Promise<Response>, id: string, body?: unknown) =>
   handler(
@@ -111,16 +112,29 @@ describe.skipIf(!hasLocalSupabase)("resume + pause routes", () => {
     expect((await row(old)).status).toBe("abandoned");
   });
 
-  it("refused while another meeting of the org runs; only the starter", async () => {
+  it("refused while another meeting of the org runs; any member may resume, not signed out", async () => {
     await clear();
     const id = await meeting("abandoned", 10);
     await meeting("live", null);
     as(starter);
     expect(await (await call(postResume, id)).json()).toEqual({ error: "org_busy" });
     as(member);
-    expect((await call(postResume, id)).status).toBe(403);
+    expect(await (await call(postResume, id)).json()).toEqual({ error: "org_busy" });
     as(null);
     expect((await call(postResume, id)).status).toBe(401);
+  });
+
+  it("org page Avsluta: a member who didn't start it is refused; an admin claims the end (live → ending)", async () => {
+    await clear();
+    const id = await meeting("live", null);
+    expect(await endFromOrgPage(member.db, member.id, id)).toBe("forbidden");
+    expect((await row(id)).status).toBe("live");
+    // starter is the org's admin (createOrg)
+    expect(await endFromOrgPage(starter.db, starter.id, id)).toBe("ending");
+    expect((await row(id)).status).toBe("ending");
+    expect((await row(id)).end_status).toBe("done");
+    expect(await endFromOrgPage(starter.db, starter.id, id)).toBe("noop");
+    await clear();
   });
 
   it("pause log: paused/unpaused events for a live meeting; 400 without a boolean", async () => {
@@ -132,7 +146,10 @@ describe.skipIf(!hasLocalSupabase)("resume + pause routes", () => {
     expect((await call(postPause, id, {})).status).toBe(400);
     const { data: ev } = await adminClient().from("meeting_events").select("kind").eq("meeting_id", id).order("at");
     expect(ev!.map((e) => e.kind)).toEqual(["paused", "unpaused"]);
+    // Whoever runs the meeting (any member) may pause it.
     as(member);
-    expect((await call(postPause, id, { paused: true })).status).toBe(403);
+    expect((await call(postPause, id, { paused: true })).status).toBe(200);
+    as(null);
+    expect((await call(postPause, id, { paused: true })).status).toBe(401);
   });
 });

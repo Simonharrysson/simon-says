@@ -283,9 +283,10 @@ the digits.
 ## Org page hooks for Task 7
 
 `OrgDetailView` takes `startMeetingHref?` and `liveMeetingHref?: (id) => string`. With the latter,
-the starter's running meeting gets "Till mötet" in the list and the header action becomes "Fortsätt mötet";
-the starter's meetings abandoned < 2 h ago get "Fortsätt mötet" in the list. Other members see no live
-links (only the starter can run a meeting).
+any member may continue the running meeting: it gets "Till mötet" in the list and the header action becomes
+"Fortsätt mötet"; meetings abandoned < 2 h ago get "Fortsätt mötet" in the list. Admins and the starter also get
+a ghost "Avsluta mötet" (`ConfirmAction`, `actions.endMeeting`) on a live row. A live meeting nobody is connected
+to ends by itself after a grace period (`lib/meetings/presence.ts`), like Meet.
 `startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`: a link to the live
 page's consent step `/meetings/ny/<orgId>`, plus the admins' Testmöte); while a meeting is live/ending it is
 replaced by an info banner with the Doc link.
@@ -299,10 +300,12 @@ admin can't leave or be removed (the notice suggests deleting the förening inst
 
 Routes outside the `(app)` layout: `/meetings/ny/<orgId>` (consent step; Start asks for the mic from the click,
 then `POST /api/meetings` creates the Doc, the address becomes `/meetings/<id>` without a reload) and
-`/meetings/<id>` (starter only; live or abandoned < 2 h → "Fortsätt mötet", which `POST /resume`s and starts
+`/meetings/<id>` (any member; live or abandoned < 2 h → "Fortsätt mötet", or "Ta över här" while another tab
+records it, which `POST /resume`s and starts
 the mic from that click; ending → polls until done; done → ended). `LiveMeetingController` maps `LiveStream`
 (`lib/audio/stream.ts`) onto `LiveMeeting`; heartbeat answers feed `minutesLeft`, `docPaused` and
-`lastTickOkAt`.
+`lastTickOkAt`. "Logga in igen" opens `/login?next=/inloggad` in a new tab: that page says "close this tab"
+and pings the meeting tab (BroadcastChannel), so the sign-in never opens a second meeting tab (U8).
 
 Final fix wave: the first connection says "Ansluter…" (no banner); a paused meeting never shows the "Ljudet väntar"
 banner. The mic ring follows the real level (still when the mic hears nothing; opacity only with reduced motion), and
