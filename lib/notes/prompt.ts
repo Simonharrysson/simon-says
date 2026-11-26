@@ -58,6 +58,13 @@ function itemLine(item: NotesItem): string {
   });
 }
 
+/**
+ * The final pass also names the meeting (0048, the förening page's meeting list): asked here in
+ * the tail, so the system prompts and the cached transcript prefix stay as they are.
+ */
+export const FINAL_TITLE =
+  'Also set "title": a short title for the meeting, 2 to 6 words, in the meeting\'s main language, naming its main topics (e.g. "Budget och prova-på-kväll"). No date, no organisation name, no people\'s names, no quotes or full stop.';
+
 export interface TailInput {
   orgName: string;
   speakerNames: Record<string, string>;
@@ -102,7 +109,7 @@ export function tailText(t: TailInput, line: (item: NotesItem) => string = itemL
     `Next new id: ${t.nextId}`,
     "",
     t.final
-      ? "This is the FINAL pass: the meeting has ended. Tidy up the notes as described, then return the operations."
+      ? `This is the FINAL pass: the meeting has ended. Tidy up the notes as described, then return the operations. ${FINAL_TITLE}`
       : "Update the notes for the transcript so far. Return only the operations needed (often none).",
   ].join("\n");
 }

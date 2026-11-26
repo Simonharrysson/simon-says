@@ -53,26 +53,29 @@ const userText = (b: Body) =>
     .map((m) => (typeof m.content === "string" ? m.content : m.content.map((c) => c.text ?? "").join("\n")))
     .join("\n");
 
+/** The final notes pass asks for the meeting's title (0048): the scripted one goes with its ops. */
+const withTitle = (text: string, out: { ops: unknown[] }) => (text.includes('Also set "title"') ? { ...out, title: SCRIPTED.title } : out);
+
 function answer(kind: ClaudeKind, text: string): unknown {
   switch (kind) {
     case "notes":
       // Once per meeting: later ticks see the items in the notes state and add nothing.
-      if (text.includes(SCRIPTED.decision)) return { ops: [] };
-      return {
+      if (text.includes(SCRIPTED.decision)) return withTitle(text, { ops: [] });
+      return withTitle(text, {
         ops: [
           { op: "add", id: "a", section: "decision", text: SCRIPTED.decision },
           { op: "add", id: "b", section: "action", text: SCRIPTED.action },
           { op: "add", id: "c", section: "now", text: SCRIPTED.now },
         ],
-      };
+      });
     case "agenda-notes":
-      if (text.includes(SCRIPTED.decision)) return { ops: [] };
-      return {
+      if (text.includes(SCRIPTED.decision)) return withTitle(text, { ops: [] });
+      return withTitle(text, {
         ops: [
           { op: "add", id: "a", kind: "decision", anchor: "notes", text: SCRIPTED.decision },
           { op: "add", id: "b", kind: "task", anchor: "notes", text: SCRIPTED.action },
         ],
-      };
+      });
     case "names": {
       // By voice: speaker_k is SCRIPTED.names[k]. The fake ElevenLabs merges speaker_3 into speaker_1
       // (one person heard as two voices): speaker_3 gets no name of its own (two labels with one

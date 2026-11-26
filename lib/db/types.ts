@@ -167,6 +167,8 @@ export interface MeetingRow {
   calendar_event?: unknown;
   /** 0045: the Privat context the recording belongs to. */
   context_id?: string | null;
+  /** 0048: the short title the final notes pass gave (lib/meetings/title.ts). */
+  title?: string | null;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

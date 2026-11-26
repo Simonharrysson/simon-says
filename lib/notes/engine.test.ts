@@ -506,9 +506,10 @@ function agendaInput(over: Partial<UpdateNotesInput> = {}): UpdateNotesInput {
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 describe("v1 prompt and schema stay byte-identical", () => {
-  it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as before agenda mode", () => {
+  // Re-pinned for meeting titles (0048): the schema gained a top-level optional "title".
+  it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
     expect(sha(SYSTEM_PROMPT)).toBe("e1655d97ddcffb60fd9ec54f19e932d76c83202bc0a682189284484dfb0d3799");
-    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("4dc1cc2bdd258b174de989dfa889455e36fc8bb31b49a5c50326eea218079096");
+    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("f4e339293342bc93c3df829d5934798d32c369c2879824fb23f774709bcf6e4f");
   });
 
   it("a v1 input still uses them", () => {
@@ -795,5 +796,39 @@ describe("fix round 1: own lines per agenda item, carried done", () => {
     // Our own (non-carried) task may still be un-done.
     const own: NotesItem[] = [{ id: "n5", section: "action", text: "Boka bussen", anchor: "ag-4", done: true }];
     expect(applyOps(own, [{ op: "change", id: "n5", done: false }], { agenda: { anchors } }).ops).toHaveLength(1);
+  });
+});
+
+describe("meeting title (0048)", () => {
+  const answer = JSON.stringify({ ops: [], title: ' "Budget och prova-på-kväll." ' });
+
+  it("the final pass returns Claude's title, cleaned", async () => {
+    const { client } = fakeClient(message({ text: answer }));
+    const out = await updateNotes(input({ final: true }), { client });
+    expect(out.title).toBe("Budget och prova-på-kväll");
+    expect(out.failure).toBeNull();
+  });
+
+  it("agenda mode reads it too", async () => {
+    const { client } = fakeClient(message({ text: answer }));
+    const out = await updateNotes(agendaInput({ final: true }), { client });
+    expect(out.title).toBe("Budget och prova-på-kväll");
+  });
+
+  it("a live tick ignores a stray title; no title is no title", async () => {
+    const live = fakeClient(message({ text: answer }));
+    expect((await updateNotes(input(), { client: live.client })).title).toBeUndefined();
+    const none = fakeClient(message({ text: '{"ops":[]}' }));
+    expect((await updateNotes(input({ final: true }), { client: none.client })).title).toBeUndefined();
+  });
+
+  it("only the final tail asks for it; the system prompts and schemas allow it on every tick", () => {
+    const tail = (final: boolean) => (buildRequest(input({ final })).messages[0].content as { text: string }[]).at(-1)!.text;
+    expect(tail(true)).toContain('Also set "title"');
+    expect(tail(false)).not.toContain('"title"');
+    expect(SYSTEM_PROMPT).not.toContain('"title"');
+    expect(OPS_JSON_SCHEMA.properties.title).toEqual({ type: "string" });
+    expect(AGENDA_OPS_JSON_SCHEMA.properties.title).toEqual({ type: "string" });
+    expect(OPS_JSON_SCHEMA.required).toEqual(["ops"]);
   });
 });
