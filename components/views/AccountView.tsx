@@ -1,11 +1,27 @@
+import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import type { EmailPrefs } from "@/lib/email/categories";
+import { EmailPrefsForm, type SaveEmailPrefs } from "./EmailPrefsForm";
 
-export function AccountView({ email, userId, signOut }: { email: string; userId: string; signOut: FormAction }) {
+export function AccountView({
+  email,
+  userId,
+  signOut,
+  emailPrefs,
+  saveEmailPrefs,
+}: {
+  email: string;
+  userId: string;
+  signOut: FormAction;
+  /** null: the choices could not be loaded (the panel says so instead of guessing). */
+  emailPrefs: EmailPrefs | null;
+  saveEmailPrefs: SaveEmailPrefs;
+}) {
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">
       <PageHeader title="Ditt konto" />
@@ -23,6 +39,20 @@ export function AccountView({ email, userId, signOut }: { email: string; userId:
             </dd>
           </div>
         </dl>
+      </Panel>
+      <Panel title="Mejl från Simon Says" titleId="mail-title">
+        <div className="flex flex-col gap-4">
+          <p className="text-ink-2 max-w-[68ch]">
+            Välj vilka mejl du vill få. Ändringen gäller direkt, och samma val finns bakom länken längst ner i varje mejl.
+          </p>
+          {emailPrefs ? (
+            <EmailPrefsForm initial={emailPrefs} save={saveEmailPrefs} idPrefix="account-mail" />
+          ) : (
+            <Banner tone="warning" title="Dina mejlval gick inte att hämta">
+              Ladda om sidan om en stund. Valen du gjort tidigare gäller fortfarande.
+            </Banner>
+          )}
+        </div>
       </Panel>
       <Panel title="Föreningar och möten" titleId="orgs-link-title">
         <div className="flex flex-col gap-4">
