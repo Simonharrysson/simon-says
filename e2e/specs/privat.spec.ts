@@ -13,8 +13,13 @@ const P = SCRIPTED.privat;
 async function record(page: Page, db: SupabaseClient, pick: (page: Page) => Promise<void>): Promise<string> {
   await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
   await expect(page.getByText("Anteckningarna sparas bara hos dig i Privat.")).toBeVisible();
+  // The consent tick first, retried until it sticks: a click before hydration does nothing, and once
+  // it holds the page is hydrated (a value typed before that would be reset).
+  const consent = page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" });
+  await expect(async () => {
+    await consent.check({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
   await pick(page);
-  await page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" }).check();
   await expectAccessible(page);
   await page.getByRole("button", { name: "Starta mötet" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toBeVisible({ timeout: 30_000 });
@@ -61,12 +66,9 @@ test("Privat: record without a Doc → summary e-mail → the context keeps the 
     const name = p.getByRole("textbox", { name: "Vad gäller inspelningen?" });
     // First time: a text field, prefilled with the catch-all context.
     await expect(name).toHaveValue("Övrigt");
-    // Retried: a click before hydration does nothing.
-    await expect(async () => {
-      await name.fill("TDDE15");
-      await p.getByRole("button", { name: "Lägg till" }).click();
-      await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" })).toHaveValue(/[0-9a-f-]{36}/, { timeout: 3000 });
-    }).toPass({ timeout: 30_000 });
+    await name.fill("TDDE15");
+    await p.getByRole("button", { name: "Lägg till" }).click();
+    await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" })).toHaveValue(/[0-9a-f-]{36}/);
     await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" }).locator("option:checked")).toHaveText("TDDE15");
     await expect(p.getByRole("checkbox", { name: /Skriv även i ett Google-dokument/ })).not.toBeChecked();
   });
