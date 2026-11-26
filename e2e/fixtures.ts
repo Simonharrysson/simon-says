@@ -53,6 +53,11 @@ export async function guardContext(context: BrowserContext, blocked: string[], n
       const email = url.searchParams.get("login_hint") ?? nextLogin.email ?? "";
       return `${APP_URL}/api/e2e/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}&drive=1`;
     }
+    if (redirectTo.searchParams.get("atkomst") === "kalender") {
+      // "Koppla kalender": the calendar.readonly consent, as the signed-in user (login_hint).
+      const email = url.searchParams.get("login_hint") ?? nextLogin.email ?? "";
+      return `${APP_URL}/api/e2e/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}&kalender=1`;
+    }
     if (nextLogin.cancel) {
       redirectTo.searchParams.set("error", "access_denied");
       return redirectTo.toString();
@@ -179,6 +184,11 @@ export const fake = {
   async mail(to?: string) {
     const q = to ? `?to=${encodeURIComponent(to)}` : "";
     return (await (await fetch(`${FAKE_URL}/__e2e/mail${q}`)).json()) as { to: string[]; subject: string; text: string; html?: string; reply_to?: string; headers?: Record<string, string> }[];
+  },
+  /** Give `email` a Google calendar (and events) in the fake Calendar API. */
+  async calendar(email: string, calendar: { id: string; summary: string; primary?: boolean }, events: { id: string; summary: string; start: string; end: string; attendees?: { email?: string; displayName?: string; responseStatus?: string }[] }[] = []) {
+    const res = await fetch(`${FAKE_URL}/__e2e/google/calendar`, { method: "POST", body: JSON.stringify({ email, calendar, events }) });
+    if (!res.ok) throw new Error(`fake calendar: ${res.status}`);
   },
   async problems() {
     return (await (await fetch(`${FAKE_URL}/__e2e/problems`)).json()) as { at: string; what: string }[];

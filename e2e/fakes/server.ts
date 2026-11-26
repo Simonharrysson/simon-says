@@ -6,7 +6,7 @@ import { GoogleFake, readBody, send } from "./google";
 
 // One process for every external service the e2e app talks to (see docs/testing.md "E2E"):
 //
-//   http://127.0.0.1:<port>/…            OAuth /token, Docs /v1, Drive /drive/v3  (E2E_GOOGLE_ROOT)
+//   http://127.0.0.1:<port>/…            OAuth /token, Docs /v1, Drive /drive/v3, Calendar /calendar/v3  (E2E_GOOGLE_ROOT)
 //   http://127.0.0.1:<port>/anthropic/…  Claude messages, streamed         (ANTHROPIC_BASE_URL)
 //   http://127.0.0.1:<port>/__e2e/…      control API for the specs (seed files, read Docs, calls)
 //   http://127.0.0.1:<port>/resend/emails  mail, Resend-shaped          (E2E_MAIL_URL)
@@ -54,6 +54,10 @@ export async function startFakes(port: number, opts: { segmentSeconds?: number; 
       if ((m = path.match(/^google\/docs\/([^/]+)$/))) {
         const view = google.docView(m[1]);
         return view ? send(res, 200, view) : send(res, 404, { error: "no such doc" });
+      }
+      if (path === "google/calendar" && req.method === "POST") {
+        google.calendar.seed(String(body.email), body.calendar, body.events ?? []);
+        return send(res, 200, { ok: true });
       }
       if (path === "google/unshareable" && req.method === "POST") {
         google.unshareable.add(String(body.email).toLowerCase());

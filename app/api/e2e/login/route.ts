@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { e2eMode } from "@/lib/e2e/guard";
-import { storeGoogleToken, storeImportToken } from "@/lib/google/client";
-import { GOOGLE_SCOPES, IMPORT_SCOPES } from "@/lib/google/scopes";
+import { storeCalendarToken, storeGoogleToken, storeImportToken } from "@/lib/google/client";
+import { CALENDAR_SCOPES, GOOGLE_SCOPES, IMPORT_SCOPES } from "@/lib/google/scopes";
 import { safeNextPath } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -21,6 +21,7 @@ const TEST_DOMAIN = "@e2e.test";
  * stores a fake Google refresh token with the sign-in scopes (the fake Google server knows it),
  * and redirects to `next` like the callback does. `&drive=1` stands in for the protocol import's
  * drive.readonly consent instead: it also stores the import token and returns `next?drive=ok`.
+ * `&kalender=1` stands in for "Koppla kalender" the same way (`next?kalender=ok`).
  */
 const failed = (what: string, message: string | undefined) => {
   console.error(`e2e login: ${what}: ${message}`);
@@ -58,6 +59,10 @@ export async function GET(request: NextRequest) {
   if (request.nextUrl.searchParams.get("drive") === "1") {
     await storeImportToken(userId, `e2e-refresh:${email}`, IMPORT_SCOPES.join(" "));
     return NextResponse.redirect(`${appOrigin()}${next}?drive=ok`);
+  }
+  if (request.nextUrl.searchParams.get("kalender") === "1") {
+    await storeCalendarToken(userId, `e2e-refresh:${email}`, CALENDAR_SCOPES.join(" "));
+    return NextResponse.redirect(`${appOrigin()}${next}?kalender=ok`);
   }
   return NextResponse.redirect(`${appOrigin()}${next}`);
 }

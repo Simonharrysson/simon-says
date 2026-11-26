@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { docs_v1 } from "@googleapis/docs";
 import { apply, docOf, paraEl, TAB } from "@/test/docsim";
+import { CalendarFake } from "./calendar";
 
 // The fake Google behind the e2e app (E2E_GOOGLE_ROOT, lib/e2e/guard.ts): the OAuth token
 // endpoint, the Docs API (documents.get / batchUpdate) and the parts of Drive v3 the app calls.
@@ -81,6 +82,8 @@ export class GoogleFake {
   readonly problems: FakeProblem[] = [];
   /** Emails a share (permissions.create) fails for, like an address without a Google account. */
   readonly unshareable = new Set<string>();
+  /** The read-only Calendar API (calendarList, events), per user e-mail. */
+  readonly calendar = new CalendarFake();
 
   // ---------------------------------------------------------------------------------------------
   // Control (tests)
@@ -146,6 +149,8 @@ export class GoogleFake {
       const user = this.user(req);
       const json = () => (body && body.length ? (JSON.parse(body.toString()) as Record<string, unknown>) : {});
 
+      const cal = this.calendar.handle(method, path, url, user);
+      if (cal) return send(res, cal.status, cal.body);
       let m: RegExpMatchArray | null;
       if ((m = path.match(/^v1\/documents\/([^/:]+)$/)) && method === "GET") return send(res, 200, this.getDoc(m[1], url));
       if ((m = path.match(/^v1\/documents\/([^/:]+):batchUpdate$/)) && method === "POST") return send(res, 200, this.batchUpdate(m[1], json()));
