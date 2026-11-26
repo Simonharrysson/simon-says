@@ -449,3 +449,19 @@ delas till <email> – öppna dem i Google med den adressen." Sharing always
 goes through the starter's grant, and only while the starter is still a member. On the live page, "Dokumentet hamnade i din Drive" (warning, dismissable)
 when the förening has a meeting folder but the starter's grant could not add to it.
 
+
+## Läs in gamla protokoll (Översikt → Mål, admins)
+
+`HistoryImport` (`components/views/HistoryImport.tsx`, steps in `DriveSteps.tsx`), no Google
+Picker unless the admin says no to read access:
+
+| Phase | Shows |
+|---|---|
+| `access` (the admin's stored grant lacks `drive.readonly`) | one calm paragraph on why (see the mappar and mötesnamn; opens only what you tick; stores nothing else) · **Ge åtkomst** (server action `requestDriveAccess` → Google's incremental consent → `/orgs/<id>/protokoll` → back here) · Avbryt. Back with `?drive=nej`: neutral banner + **Välj ett och ett i stället** (the old Picker flow). `?drive=fel`: danger banner. |
+| `folders` (step 1 of 2) | the förening's meeting folder pinned at the top and ticked · search box (by name, debounced) · Min enhet / Delade med mig / Delade enheter · breadcrumb · rows = checkbox + open (chevron), "Visa fler mappar" paging · chips of the ticked folders (max 20) · Ta med undermappar (on) |
+| `files` (step 2 of 2) | every Google Doc (and .docx, not selectable) in them, oldest first: title, date ("(gissat)" when not from the title), folder · Välj alla · already imported rows show a green check, "Redan inläst", no checkbox · Simon Says' own Docs disabled with a hint · templates/kallelser/dagordningar unticked with a hint · count line (max 60; amber over) · **Fortsätt med N protokoll** |
+| `confirm` → `importing` → `dates` | as before (cost, `PrivacyNote`, **Läs in N protokoll**), the progress is a list: Väntar · Läser … · Inläst (green) · Gick inte (with the server's reason) |
+
+Server: `POST /api/orgs/<id>/history/drive` (admins, own grant, drive.readonly only, 0034 cap
+120 listings / 10 min per user, metadata only, nothing stored). Gallery: `org-overview-import-access`,
+`-declined`, `-files`, `-progress`.

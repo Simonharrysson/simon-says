@@ -102,6 +102,21 @@ const liveBase: LiveMeetingProps = {
   onRetry: noop,
 };
 
+/** The protocol import's meeting list (fictional förening and titles). */
+const demoImportFiles = {
+  folders: 3,
+  truncated: false,
+  files: [
+    { id: "1DemoDocAAAAAA1", name: "Styrelsemöte 2025-08-19", folderId: "f1", folderName: "Styrelsen", date: "2025-08-19", dateInferred: false, status: "imported" as const },
+    { id: "1DemoDocAAAAAA2", name: "Protokoll styrelsemöte 2 sep 2025", folderId: "f1", folderName: "HT25", date: "2025-09-02", dateInferred: false, status: "ready" as const },
+    { id: "1DemoDocAAAAAA3", name: "Styrelsemöte 250916", folderId: "f1", folderName: "HT25", date: "2025-09-16", dateInferred: false, status: "ready" as const },
+    { id: "1DemoDocAAAAAA4", name: "Möte 7 okt", folderId: "f1", folderName: "HT25", date: "2025-10-07", dateInferred: true, status: "ready" as const },
+    { id: "1DemoDocAAAAAA5", name: "Kallelse årsmöte 2026", folderId: "f1", folderName: "Styrelsen", date: "2025-10-20", dateInferred: true, status: "template" as const },
+    { id: "1DemoDocAAAAAA6", name: "2025-11-04 18.00 Mötesprotokoll – Brädspelsföreningen Rutan", folderId: "f1", folderName: "Styrelsen", date: "2025-11-04", dateInferred: false, status: "own" as const },
+    { id: "1DemoDocAAAAAA7", name: "Extra styrelsemöte 2025-11-18.docx", folderId: "f1", folderName: "HT25", date: "2025-11-18", dateInferred: false, status: "docx" as const },
+  ],
+};
+
 /** The förening page on its Översikt tab (fictional data, overview-demo.ts). */
 function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
   return (
@@ -118,7 +133,7 @@ function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
         tabs={{
           active: "oversikt",
           href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin"),
-          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} now={OVERVIEW_NOW} />,
+          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
         }}
         actions={actions}
       />
@@ -391,6 +406,24 @@ const render: Record<string, () => ReactNode> = {
   ),
   "org-overview": () => <OverviewDemo />,
   "org-overview-goals": () => <OverviewDemo goalsPhase={{ phase: "editor", ...demoProposal }} />,
+  "org-overview-import-access": () => <OverviewDemo goalsPhase={{ phase: "import", initial: { phase: "access" } }} />,
+  "org-overview-import-declined": () => <OverviewDemo goalsPhase={{ phase: "import", initial: { phase: "access", consent: "nej" } }} />,
+  "org-overview-import-files": () => (
+    <OverviewDemo goalsPhase={{ phase: "import", initial: { phase: "files", folders: [{ id: "1DemoFolderAAAA", name: "Styrelsen" }], subfolders: true, initialFiles: demoImportFiles } }} />
+  ),
+  "org-overview-import-progress": () => (
+    <OverviewDemo
+      goalsPhase={{
+        phase: "import",
+        initial: {
+          phase: "importing",
+          jobs: demoImportFiles.files
+            .filter((f) => f.status === "ready")
+            .map((f, i) => ({ docId: f.id, section: 0, sections: 1, label: f.name, state: i < 2 ? "done" : i === 2 ? "reading" : "waiting" })),
+        },
+      }}
+    />
+  ),
   "org-overview-limit": () => (
     <OverviewDemo goalsPhase={{ phase: "error", tone: "warning", message: "Du har bett om förslag tre gånger i dag. Försök igen i morgon." }} />
   ),

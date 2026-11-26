@@ -9,7 +9,7 @@ const UPDATED = "26 november 2026";
 const processors: [string, string, string][] = [
   ["ElevenLabs", "Gör om ljudet till text under mötet.", "Loggar förfrågningar som standard; noll lagring kan kräva särskilt avtal. Behandlingen kan ske utanför EU. Ljudet skickas direkt från laptopen."],
   ["Anthropic", "Skriver anteckningarna utifrån transkriptionen.", "Får texten, inte ljudet. Behandlingen kan ske utanför EU."],
-  ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat. Behandlingen kan ske utanför EU."],
+  ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
   ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."],
   ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss, och bara till oss.", "Innehåller inga transkriptioner."],
@@ -91,6 +91,12 @@ export default function PrivacyPage() {
               beslut, uppgifter (med roll, inte namn) och korta lägesrader. Bara de raderna sparas, aldrig dokumentets text;
               admin kan ta bort dem när som helst och de försvinner med föreningen.
             </li>
+            <li>
+              Frivilligt, bara för admin och bara för att läsa in gamla protokoll: admin kan ge Simon Says läsrättighet till sin
+              Google Drive. Den används för att visa adminens mappar och namnen på dokumenten i de mappar admin väljer; bara de
+              protokoll admin kryssar i öppnas. Mappar och dokumentnamn sparas inte. Läsrättigheten följer med adminens
+              Google-nyckel tills admin tar bort den i sitt Google-konto (eller loggar in igen utan den).
+            </li>
           </ul>
           <p>
             <strong>Användningsposterna och loggen över skapade föreningar finns kvar även när föreningen raderas.</strong>{" "}
@@ -99,7 +105,7 @@ export default function PrivacyPage() {
           <h3>Det som inte sparas</h3>
           <ul>
             <li>Ljudet från mötet.</li>
-            <li>Något annat i din Google Drive.</li>
+            <li>Något annat i din Google Drive, inte heller namnen på mappar och dokument som visas när admin läser in gamla protokoll.</li>
             <li>Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först.</li>
           </ul>
 

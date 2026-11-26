@@ -146,8 +146,20 @@ it is deleted when they leave the org.
 
 ### The Google Doc
 
-- Permission: `drive.file` only (non-sensitive scope; no heavy Google review).
-  It covers documents the app creates or the user picks via Google Picker.
+- Permission: `drive.file` at sign-in, for everyone (non-sensitive scope; no heavy Google
+  review). It covers documents the app creates or the user picks via Google Picker.
+- **One exception, `drive.readonly` (Simon, 2026-11-26, branch import-native):** only for an
+  admin, only when they start "Läs in gamla protokoll", by **incremental authorization**
+  (`include_granted_scopes=true`, `app/(app)/orgs/drive-access.ts`); never at sign-in and never
+  required anywhere else. It lets the import list the admin's folders and the Docs in them
+  (`lib/history/drive-list.ts`, metadata only; a Doc is opened only when ticked) instead of the
+  Picker, because with `drive.file` picking a folder does not grant its children. The stored
+  `google_tokens.scope` says whether the grant has it; a later plain sign-in replaces the token
+  with a drive.file-only one and the import asks again. An admin who says no gets the Picker.
+  **`drive.readonly` is a Google "restricted" scope:** the app must pass Google's verification
+  **and a third-party security assessment (CASA)** before it can be used by more than 100 users;
+  until then Google shows an "unverified app" warning on that consent screen and the 100-user
+  cap applies. Consider this before the service opens wider.
 - Default: the service **creates a new Doc per meeting** in the förening's
   meeting folder when the starter's grant can add to it (they picked the folder
   once in the Picker), else in the starter's own folder "Simon Says – <förening>".
