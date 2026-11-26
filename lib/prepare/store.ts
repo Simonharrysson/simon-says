@@ -96,7 +96,8 @@ export async function acquireLease(id: string, now = new Date(), db: SupabaseCli
     .from("prepared_agendas")
     .update({ busy_until: new Date(now.getTime() + LEASE_MS).toISOString() })
     .eq("id", id)
-    .or(`busy_until.is.null,busy_until.lt.${now.toISOString()}`)
+    // Quoted: the timestamp's "." would split a PostgREST filter.
+    .or(`busy_until.is.null,busy_until.lt."${now.toISOString()}"`)
     .select(COLUMNS);
   if (error) throw new Error(`prepared_agendas: lease: ${error.message}`);
   return ((data ?? []) as PreparedAgenda[])[0] ?? null;
