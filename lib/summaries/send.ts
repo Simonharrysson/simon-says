@@ -3,7 +3,7 @@ import { logEvent } from "@/lib/db/events";
 import { orgMemberList } from "@/lib/db/members";
 import type { ItemRole, SummaryMode, SummaryState } from "@/lib/db/types";
 import type { Mailer } from "@/lib/mail";
-import { sendUserMail } from "@/lib/email/prefs";
+import { checkEmailGate, sendUserMail } from "@/lib/email/prefs";
 import { emailPrefsUrl, listUnsubscribeHeaders } from "@/lib/email/token";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -113,6 +113,7 @@ export async function sendMeetingSummaries(
   let people: SummaryPerson[] = [];
   let items: SummaryItem[] = [];
   let unnamedVoices = 0;
+  let unmatchedNames = 0;
   if (m.is_test) {
     state = "test";
   } else {
@@ -149,6 +150,7 @@ export async function sendMeetingSummaries(
         startedBy: m.started_by,
       });
       unnamedVoices = attendance.unnamedVoices;
+      unmatchedNames = attendance.unmatchedNames;
       recipients = summaryRecipients({ mode, people, members, attendance });
       state = recipients.length ? "sending" : mode === "missed" && !attendance.certain ? "uncertain" : "none";
     }
@@ -164,7 +166,7 @@ export async function sendMeetingSummaries(
       await (m.summary_state === null ? close.is("summary_state", null) : close.eq("summary_state", "sending")).select("id"),
     ) as unknown[];
     if (!closed.length) return null;
-    await logEvent(m.id, "summary", { state: final, mode, recipients: 0, sent: 0, failed: 0, ...(unnamedVoices ? { unnamedVoices } : {}) });
+    await logEvent(m.id, "summary", { state: final, mode, recipients: 0, sent: 0, failed: 0, ...(unnamedVoices ? { unnamedVoices } : {}), ...(unmatchedNames ? { unmatchedNames } : {}) });
     return { state: final, sent: 0, failed: 0 };
   }
 
@@ -181,6 +183,8 @@ export async function sendMeetingSummaries(
   let failed = 0;
   let optedOut = 0;
   let stopped = false;
+  /** Recipients whose preference check could not be answered: retried by the next sweep. */
+  let deferred = 0;
   const shared = new Set(
     (must("summary: shares", await db.from("meeting_doc_shares").select("user_id").eq("meeting_id", m.id)) as { user_id: string }[]).map(
       (s) => s.user_id,
@@ -197,7 +201,12 @@ export async function sendMeetingSummaries(
       stopped = true;
       break;
     }
-    // The ledger row first: a second sender (or a resumed run) never mails this person again.
+    // The gate first: if it can't answer, nothing is claimed and the next sweep tries again.
+    if ((await checkEmailGate({ userId: r.userId, email: r.email }, "meeting_summary", db)) === "unknown") {
+      deferred++;
+      continue;
+    }
+    // The ledger row next: a second sender (or a resumed run) never mails this person again.
     const ledger = must(
       "summary: ledger",
       await db
@@ -233,13 +242,22 @@ export async function sendMeetingSummaries(
     if (ok) sent++;
     else if (result === "opted_out" || result === "invalid") optedOut++;
     else failed++;
-    await db.from("meeting_summary_sends").update({ sent: ok }).eq("meeting_id", m.id).eq("person_id", r.person.id);
+    // Throws on a database error: the meeting stays `sending` and the next sweep resumes it.
+    must("summary: record", await db.from("meeting_summary_sends").update({ sent: ok }).eq("meeting_id", m.id).eq("person_id", r.person.id));
   }
-  const final: SummaryState = stopped ? "sending" : "sent";
-  if (!stopped) {
+  const final: SummaryState = stopped || deferred ? "sending" : "sent";
+  if (final === "sent") {
     must("summary: done", await db.from("meetings").update({ summary_state: "sent", ...stamp }).eq("id", m.id).eq("summary_state", "sending"));
   }
-  await logEvent(m.id, "summary", { state: final, mode, recipients: recipients.length, sent, failed, ...(optedOut ? { optedOut } : {}) });
+  await logEvent(m.id, "summary", {
+    state: final,
+    mode,
+    recipients: recipients.length,
+    sent,
+    failed,
+    ...(optedOut ? { optedOut } : {}),
+    ...(deferred ? { deferred } : {}),
+  });
   return { state: final, sent, failed };
 }
 
@@ -277,10 +295,38 @@ export async function sendPendingSummaries(
     .limit(50);
   if (opts.orgId) query = query.eq("org_id", opts.orgId);
   const rows = must("summary: pending", await query) as { id: string }[];
-  let handled = 0;
+  let handled = await closeStaleSending(deps, opts.orgId, since);
   for (const r of rows) {
     if (opts.left && !opts.left()) break;
     if (await trySendMeetingSummaries(r.id, deps, { deadlineAt: opts.deadlineAt })) handled++;
   }
   return handled;
+}
+
+/**
+ * `sending` meetings that ended before the sweep window: give up on them (state `partial`) so they
+ * don't stay unfinished forever; the event counts who got it and who didn't.
+ */
+async function closeStaleSending(deps: SummaryDeps, orgId: string | undefined, since: string): Promise<number> {
+  const db = supabaseAdmin();
+  let query = db.from("meetings").select("id").eq("summary_state", "sending").lt("ended_at", since).limit(50);
+  if (orgId) query = query.eq("org_id", orgId);
+  const stale = must("summary: stale", await query) as { id: string }[];
+  let closed = 0;
+  for (const { id } of stale) {
+    const done = must(
+      "summary: partial",
+      await db.from("meetings").update({ summary_state: "partial", summary_at: deps.now().toISOString() }).eq("id", id).eq("summary_state", "sending").select("id"),
+    ) as unknown[];
+    if (!done.length) continue;
+    const ledger = must("summary: partial ledger", await db.from("meeting_summary_sends").select("sent").eq("meeting_id", id)) as { sent: boolean | null }[];
+    await logEvent(id, "summary", {
+      state: "partial",
+      sent: ledger.filter((l) => l.sent === true).length,
+      failed: ledger.filter((l) => l.sent !== true).length,
+    });
+    console.warn(`summary ${id}: gave up after ${SUMMARY_SWEEP_WINDOW_MS / 3600_000} h (partial)`);
+    closed++;
+  }
+  return closed;
 }

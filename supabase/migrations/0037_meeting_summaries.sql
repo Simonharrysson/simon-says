@@ -96,13 +96,14 @@ create trigger people_z_mark_removed
 -- meetings: whether the summary was handled. null = not yet (the end hook or the 5-minute cron
 -- picks it up once the meeting is done and its final pass is written); sending = claimed, e-mails
 -- going out (a run that stopped at its deadline or died is resumed by the cron); otherwise why it
--- is done: sent (every recipient was tried), none (nobody to send to), uncertain ("missed" mode but
+-- is done: sent (every recipient was tried), partial (still sending when the 48 h sweep window
+-- closed: given up, the event counts who got it), none (nobody to send to), uncertain ("missed" mode but
 -- we couldn't tell who was there, e.g. unnamed voices on a shared mic), no_notes, off, test,
 -- before (ended before this migration).
 
 alter table public.meetings
   add column summary_state text
-    check (summary_state is null or summary_state in ('sending', 'sent', 'none', 'uncertain', 'no_notes', 'off', 'test', 'before')),
+    check (summary_state is null or summary_state in ('sending', 'sent', 'partial', 'none', 'uncertain', 'no_notes', 'off', 'test', 'before')),
   add column summary_at timestamptz;
 
 update public.meetings set summary_state = 'before', summary_at = now()
