@@ -35,8 +35,11 @@ test("Förbered möte: Från förra veckan and a typed-but-not-added point reach
   await page.getByRole("link", { name: `Till ${org.name}` }).click();
   await expect(page.getByText("Nästa möte")).toBeVisible();
   await page.getByRole("link", { name: "Ändra", exact: true }).click();
-  await page.getByRole("button", { name: "Ta fram dagordningen" }).click();
-  await expect(page.getByText("Du ändrar en förberedd dagordning")).toBeVisible();
+  // A click before hydration submits the form natively (the page reloads): click until it takes.
+  await expect(async () => {
+    await page.getByRole("button", { name: "Ta fram dagordningen" }).click();
+    await expect(page.getByText("Du ändrar en förberedd dagordning")).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 20_000 });
   const labels = await page.getByRole("list", { name: "Dagordning" }).getByRole("textbox").evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
   expect(labels).toContain("Rekrytering");
   expect(await fake.docText(doc.id)).toContain("Rekrytering");

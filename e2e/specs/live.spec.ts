@@ -65,8 +65,9 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   ]);
   const { meetingId, docId } = await startMeeting(page, org);
 
-  // Everyone has spoken before Klar, so attendance is certain.
-  await expect(page.getByRole("list", { name: "Namn vi hört" }).getByRole("listitem")).toHaveCount(4, { timeout: 30_000 });
+  // Everyone has spoken before Klar, so attendance is certain (the fake merges two of its four
+  // diarized voices into one after the 6th line: three voices).
+  await expect(page.getByRole("list", { name: "Namn vi hört" }).getByRole("listitem")).toHaveCount(3, { timeout: 30_000 });
   await page.getByRole("button", { name: "Klar, alla har sagt sitt namn" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toHaveCount(0, { timeout: 30_000 });
   await expectNotesInDoc(docId);
