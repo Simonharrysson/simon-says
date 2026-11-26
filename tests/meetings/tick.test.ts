@@ -1045,20 +1045,43 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await events(id, "resumed")).toHaveLength(1);
   });
 
-  it("abandoned (no heartbeat for 15 min) finalized once; open session closed", async () => {
-    const { id, sessionId } = await meeting({ heartbeatAgoSec: 16 * 60 });
+  it("presence: no tab for 5 min ends it like Avsluta (done, final pass once, ended at the last heartbeat); session closed", async () => {
+    const { id, sessionId } = await meeting({ heartbeatAgoSec: 6 * 60 });
+    await say(id, sessionId, "hej", 1000);
+    const f = fakes();
+    const first = await tick.finalizeSweep({ deps: f.deps, orgId });
+    expect(first.autoEnded).toBeGreaterThanOrEqual(1);
+    await tick.finalizeSweep({ deps: f.deps, orgId });
+    const m = await read(id);
+    expect(m.status).toBe("done");
+    expect(m.end_status).toBe("done");
+    // ended_at is when the last tab was heard from, not when the cron ran.
+    expect(Math.abs(Date.parse(m.ended_at!) - Date.parse(m.last_heartbeat_at!))).toBeLessThan(1000);
+    expect(f.calls.filter((c) => c.final)).toHaveLength(1);
+    expect(f.headers.at(-1)).toMatch(/^Avslutat \d\d:\d\d$/);
+    expect(await events(id, "ended")).toHaveLength(1);
+    expect(await events(id, "abandoned")).toHaveLength(0);
+    const { data: s } = await adminClient().from("el_sessions").select("closed_at").eq("id", sessionId).single();
+    expect(s?.closed_at).not.toBeNull();
+  });
+
+  it("presence: nothing ever said → abandoned (the empty case, never a carry source)", async () => {
+    const { id } = await meeting({ heartbeatAgoSec: 6 * 60 });
+    const f = fakes();
+    const summary = await tick.finalizeSweep({ deps: f.deps, orgId });
+    expect(summary.abandoned).toBeGreaterThanOrEqual(1);
+    expect((await read(id)).status).toBe("abandoned");
+    expect(await events(id, "abandoned")).toHaveLength(1);
+  });
+
+  it("presence: within the grace period (4 min without a tab) the meeting stays live", async () => {
+    const { id, sessionId } = await meeting({ heartbeatAgoSec: 4 * 60 });
     await say(id, sessionId, "hej", 1000);
     const f = fakes();
     await tick.finalizeSweep({ deps: f.deps, orgId });
-    await tick.finalizeSweep({ deps: f.deps, orgId });
     const m = await read(id);
-    expect(m.status).toBe("abandoned");
-    expect(m.ended_at).not.toBeNull();
-    expect(f.calls.filter((c) => c.final)).toHaveLength(1);
-    expect(f.headers.at(-1)).toMatch(/^Avslutat \d\d:\d\d$/);
-    expect(await events(id, "abandoned")).toHaveLength(1);
-    const { data: s } = await adminClient().from("el_sessions").select("closed_at").eq("id", sessionId).single();
-    expect(s?.closed_at).not.toBeNull();
+    expect(m.status).toBe("live");
+    expect(m.ended_at).toBeNull();
   });
 
   it("ending twice is a no-op", async () => {
