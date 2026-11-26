@@ -21,6 +21,7 @@ import {
   changeFormatAction,
   deleteMeetingAction,
   deleteOrgAction,
+  endMeetingAction,
   deletePersonAction,
   leaveOrgAction,
   removeMemberAction,
@@ -32,6 +33,8 @@ import {
 } from "../actions";
 
 export const dynamic = "force-dynamic";
+// "Avsluta mötet" (endMeetingAction) runs the final notes pass after its response, in after().
+export const maxDuration = 300;
 
 const EMPTY_OVERVIEW: Overview = {
   meetingCount: 0,
@@ -139,6 +142,7 @@ export default async function OrgPage({
         setPersonRole: setPersonRoleAction,
         deletePerson: deletePersonAction,
         deleteMeeting: deleteMeetingAction,
+        endMeeting: endMeetingAction,
         updateOrg: updateOrgAction,
         deleteOrg: deleteOrgAction,
         removeMember: removeMemberAction,

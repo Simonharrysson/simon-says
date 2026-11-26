@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
 import { resumeMeeting, type ResumeResult } from "@/lib/meetings/resume";
+import { memberRole } from "@/lib/db/orgs";
+import { canRunMeeting } from "@/lib/meetings/access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +18,7 @@ const refusal: Partial<Record<ResumeResult, [number, string]>> = {
 };
 
 /**
- * "Fortsätt mötet": the starter continues an unfinished meeting. Live → nothing to do
+ * "Fortsätt mötet": any member continues an unfinished meeting. Live → nothing to do
  * (`{ result: "live" }`); abandoned < 2 h ago → back to live (`{ result: "resumed" }`).
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -29,10 +31,10 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   if (!isUuid(id)) return fail("not_found", 404);
 
   // As the user: RLS hides meetings of other orgs (404).
-  const { data: meeting, error } = await supabase.from("meetings").select("id, started_by").eq("id", id).maybeSingle();
+  const { data: meeting, error } = await supabase.from("meetings").select("id, org_id").eq("id", id).maybeSingle();
   if (error) throw new Error(`resume: meeting: ${error.message}`);
   if (!meeting) return fail("not_found", 404);
-  if (meeting.started_by !== user.id) return fail("not_starter", 403);
+  if (!canRunMeeting(await memberRole(supabase, meeting.org_id, user.id))) return fail("not_member", 403);
 
   const result = await resumeMeeting(meeting.id);
   const refused = refusal[result];

@@ -42,6 +42,8 @@ vi.mock("@/lib/env", async (importOriginal) => {
 const { POST: postSegments } = await import("@/app/api/meetings/[id]/segments/route");
 const { POST: postHeartbeat } = await import("@/app/api/meetings/[id]/heartbeat/route");
 const { ingestSegments, IngestError } = await import("@/lib/segments/ingest");
+const { getEnv } = await import("@/lib/env");
+const { issuePresenceToken, PRESENCE_TOKEN_HEADER } = await import("@/lib/meetings/presence-token");
 
 const as = (user: TestUser | null) => {
   current.db = user ? user.db : anonClient();
@@ -357,6 +359,7 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
         docPaused: false,
         lastTickOkAt: null,
         currentElSessionId: null,
+        signedOut: false,
       });
       const { data } = await adminClient().from("meetings").select("last_heartbeat_at, status").eq("id", m).single();
       expect(data!.last_heartbeat_at).not.toBeNull();
@@ -370,6 +373,38 @@ describe.skipIf(!hasLocalSupabase)("segment ingest + heartbeat", () => {
       const res = await call(postHeartbeat, m);
       expect(res.status).toBe(200);
       expect((await res.json()).stop).toBe(true);
+    });
+
+    it("heartbeat signed out: the tab's presence token keeps the meeting present (review I2)", async () => {
+      const m = await meeting();
+      const beat = (token: string | null) =>
+        postHeartbeat(
+          new NextRequest(`https://x.test/api/meetings/${m}/heartbeat`, {
+            method: "POST",
+            ...(token ? { headers: { [PRESENCE_TOKEN_HEADER]: token } } : {}),
+          }),
+          { params: Promise.resolve({ id: m }) },
+        );
+      const key = getEnv().TOKEN_ENC_KEY;
+      as(null);
+      expect((await beat(null)).status).toBe(401);
+      expect((await beat("forged.token")).status).toBe(401);
+      // Another meeting's token, an outsider's token and an expired one do not count.
+      const other = await meeting();
+      expect((await beat(issuePresenceToken(key, other, starter.id, Date.now()))).status).toBe(401);
+      expect((await beat(issuePresenceToken(key, m, member.id, Date.now()))).status).toBe(401);
+      expect((await beat(issuePresenceToken(key, m, starter.id, Date.now() - 6 * 3600_000))).status).toBe(401);
+      const { data: before } = await adminClient().from("meetings").select("last_heartbeat_at").eq("id", m).single();
+      expect(before!.last_heartbeat_at).toBeNull();
+
+      const res = await beat(issuePresenceToken(key, m, starter.id, Date.now()));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ stop: false, signedOut: true });
+      const { data } = await adminClient().from("meetings").select("last_heartbeat_at").eq("id", m).single();
+      expect(data!.last_heartbeat_at).not.toBeNull();
+
+      await adminClient().from("meetings").update({ status: "done" }).eq("id", m);
+      expect((await beat(issuePresenceToken(key, m, starter.id, Date.now()))).status).toBe(409);
     });
 
     it("heartbeat: 401 / 404 / 409 done", async () => {

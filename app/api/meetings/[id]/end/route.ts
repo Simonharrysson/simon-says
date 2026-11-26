@@ -1,6 +1,7 @@
 import { after, NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
-import { myRole } from "@/lib/db/orgs";
+import { memberRole } from "@/lib/db/orgs";
+import { canEndMeeting } from "@/lib/meetings/access";
 import { claimEnd, END_BUDGET_MS, finishMeeting } from "@/lib/meetings/tick";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -12,7 +13,8 @@ const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status, headers: noStore });
 
 /**
- * End a meeting. The starter or an org admin. Atomically live → ending and answers at once
+ * End a meeting. Any member (whoever runs it ends it from the live page; the org page offers
+ * it to admins and the starter). Atomically live → ending and answers at once
  * `{ result: "ending" }`; the final pass (close ElevenLabs sessions, final notes, header
  * `Avslutat HH:mm`, status done) runs after the response, and the cron retries it if this
  * function dies. The page polls the meeting until done. Works under KILL_SWITCH (no Claude then).
@@ -30,14 +32,12 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   // As the user: RLS hides meetings of other orgs (404).
   const { data: meeting, error } = await supabase
     .from("meetings")
-    .select("id, org_id, started_by")
+    .select("id, org_id")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`end: meeting: ${error.message}`);
   if (!meeting) return fail("not_found", 404);
-  if (meeting.started_by !== user.id && (await myRole(supabase, meeting.org_id)) !== "admin") {
-    return fail("forbidden", 403);
-  }
+  if (!canEndMeeting(await memberRole(supabase, meeting.org_id, user.id))) return fail("forbidden", 403);
 
   const deadlineAt = new Date(Date.now() + END_BUDGET_MS);
   const claim = await claimEnd(meeting.id);

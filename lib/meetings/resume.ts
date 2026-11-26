@@ -8,7 +8,7 @@ export { canResume, RESUME_WINDOW_MS };
 export type ResumeResult = "live" | "resumed" | "too_old" | "not_resumable" | "org_busy" | "not_found";
 
 /**
- * "Fortsätt mötet" (the caller checked the user is the starter). A live meeting just continues
+ * "Fortsätt mötet" (the caller checked the user is a member of the förening). A live meeting just continues
  * (`live`). An abandoned one ended < 2 h ago goes back to live (`resumed`): end fields cleared
  * and a fresh heartbeat, so the abandon sweep doesn't end it again at once; the next tick puts
  * the LIVE header back. Refused while another meeting of the org is running. Segments and notes

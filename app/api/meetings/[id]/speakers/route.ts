@@ -7,6 +7,8 @@ import { validName } from "@/lib/names/validate";
 import { runNameRound } from "@/lib/names/round";
 import { loadSpeakerView, type SpeakerRow } from "@/lib/names/speakers";
 import { resolveSpeaker } from "@/lib/segments/resolve";
+import { memberRole } from "@/lib/db/orgs";
+import { canRunMeeting } from "@/lib/meetings/access";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -25,8 +27,8 @@ interface MeetingRef {
   current_el_session_id: string | null;
 }
 
-/** The meeting, if the signed-in user started it; else the error response. */
-async function starterMeeting(id: string): Promise<MeetingRef | Response> {
+/** The meeting, if the signed-in user may run it (any member); else the error response. */
+async function runnableMeeting(id: string): Promise<MeetingRef | Response> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -41,24 +43,24 @@ async function starterMeeting(id: string): Promise<MeetingRef | Response> {
     .maybeSingle();
   if (error) throw new Error(`speakers: meeting: ${error.message}`);
   if (!data) return fail("not_found", 404);
-  if (data.started_by !== user.id) return fail("not_starter", 403);
+  if (!canRunMeeting(await memberRole(supabase, data.org_id as string, user.id))) return fail("not_member", 403);
   return data as MeetingRef;
 }
 
-/** The speaker list: labels heard, their names, the org's people. Starter only. */
+/** The speaker list: labels heard, their names, the org's people. Any member. */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const meeting = await starterMeeting((await params).id);
+  const meeting = await runnableMeeting((await params).id);
   if (meeting instanceof Response) return meeting;
   return NextResponse.json(await loadSpeakerView(meeting), { headers: noStore });
 }
 
 /**
  * "Klar": run the name round now for the current session (also after the automatic one; it
- * only fills labels nobody has named). Starter only, live meetings. Never fails on Claude:
+ * only fills labels nobody has named). Any member, live meetings. Never fails on Claude:
  * `result` is ok | failed | busy | skipped (kill switch or daily cap), plus the speaker list.
  */
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const meeting = await starterMeeting((await params).id);
+  const meeting = await runnableMeeting((await params).id);
   if (meeting instanceof Response) return meeting;
   if (meeting.status !== "live") return fail("not_live", 409);
   let result = "skipped";
@@ -70,7 +72,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 }
 
 /**
- * Name a speaker. Body `{ elSessionId, speakerLabel, personId?, displayName }`. Starter only.
+ * Name a speaker. Body `{ elSessionId, speakerLabel, personId?, displayName }`. Any member.
  * The label must have been heard in that session; it is resolved through merge aliases first;
  * the name is confirmed (needs_confirm off). With personId the person's own name is used.
  * Without it the name must look like a name (validName) and is matched to the org's people
@@ -78,7 +80,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
  * Applies to transcript lines written afterwards and to the notes from the next tick.
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const meeting = await starterMeeting((await params).id);
+  const meeting = await runnableMeeting((await params).id);
   if (meeting instanceof Response) return meeting;
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;

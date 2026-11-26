@@ -87,6 +87,10 @@ export interface LiveMeetingProps {
   /** "Klar" was pressed and the names are being read. */
   nameRoundBusy?: boolean;
   onResumeMeeting: () => void;
+  /** Resume screen: another tab is recording the meeting right now ("Ta över här"). */
+  connectedElsewhere?: boolean;
+  /** Resume screen: the meeting is still live (not abandoned). */
+  resumeLive?: boolean;
   onEndUnfinished?: () => void;
   onRetry: () => void;
   /** Leave the page (after confirming while running). Defaults to navigating to `orgHref`. */
@@ -141,6 +145,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           startedAt={p.startedAt ?? new Date().toISOString()}
           orgName={p.orgName}
           onResume={p.onResumeMeeting}
+          connectedElsewhere={p.connectedElsewhere}
+          live={p.resumeLive ?? true}
           onEnd={p.onEndUnfinished}
           resuming={p.busy}
           error={p.startError}

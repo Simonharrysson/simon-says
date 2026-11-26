@@ -50,10 +50,11 @@ const supa = vi.hoisted(() => ({ meeting: { id: "m1", org_id: "o1", started_by: 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
-    from: () => {
+    from: (table: string) => {
       const b: Record<string, unknown> = {};
       for (const m of ["select", "eq"]) b[m] = () => b;
-      b.maybeSingle = async () => ({ data: supa.meeting, error: null });
+      // org_members: the caller is a member (any member may run the meeting).
+      b.maybeSingle = async () => ({ data: table === "org_members" ? { role: "member" } : supa.meeting, error: null });
       return b;
     },
   }),

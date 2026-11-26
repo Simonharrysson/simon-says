@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
@@ -21,6 +22,8 @@ import {
   updateOrgSettings,
 } from "@/lib/db/orgs";
 import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
+import { endFromOrgPage } from "@/lib/meetings/end-from-org";
+import { END_BUDGET_MS, finishMeeting } from "@/lib/meetings/tick";
 import { validRole } from "@/lib/people/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -115,6 +118,28 @@ export async function deleteMeetingAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const result = isUuid(meetingId) ? await deleteMeeting(db, meetingId) : "not_found";
   redirect(`/orgs/${orgId}?${result === "deleted" ? "klart=mote" : `fel=mote-${result}`}`);
+}
+
+/**
+ * "Avsluta mötet" on a live meeting's row (admins and the starter). The final pass runs after
+ * the response; if this function dies first, the cron finishes it (status `ending`).
+ */
+export async function endMeetingAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const meetingId = field(form, "meetingId");
+  const db = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) redirect(`/login?next=/orgs/${orgId}`);
+  const result = isUuid(meetingId) ? await endFromOrgPage(db, user.id, meetingId) : "not_found";
+  if (result === "ending") {
+    const deadlineAt = new Date(Date.now() + END_BUDGET_MS);
+    after(() =>
+      finishMeeting(meetingId, { deadlineAt }).catch((e) => console.error(`end ${meetingId}: final pass failed: ${(e as Error).message}`)),
+    );
+  }
+  redirect(`/orgs/${orgId}?${result === "ending" || result === "noop" ? "klart=avslutat" : `fel=avsluta-${result}`}`);
 }
 
 export async function deleteOrgAction(form: FormData): Promise<void> {
