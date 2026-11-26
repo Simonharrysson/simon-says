@@ -11,7 +11,7 @@ export interface MailMessage {
   text: string;
   /** Optional HTML part (the text part stays the fallback). */
   html?: string;
-  /** Optional extra headers, e.g. List-Unsubscribe. */
+  /** Extra headers, e.g. List-Unsubscribe (lib/email/token.ts listUnsubscribeHeaders). */
   headers?: Record<string, string>;
 }
 

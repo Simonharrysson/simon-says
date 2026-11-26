@@ -30,6 +30,7 @@ export default function PrivacyPage() {
             <a href="#kort">Kort sagt</a>
             <a href="#i-rummet">I rummet</a>
             <a href="#sparas">Vad som sparas</a>
+            <a href="#mejl">Mejl</a>
             <a href="#vem">Vilka som behandlar data</a>
             <a href="#grund">Rättslig grund</a>
             <a href="#rattigheter">Dina rättigheter</a>
@@ -116,6 +117,14 @@ export default function PrivacyPage() {
             <li>Något annat i din Google Drive, inte heller namnen på mappar och dokument som visas när admin läser in gamla protokoll.</li>
             <li>Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först.</li>
           </ul>
+
+          <h2 id="mejl">Mejl</h2>
+          <p>
+            Du bestämmer vilka mejl Simon Says skickar till dig. Under Konto kan du stänga av varje sorts mejl för sig, eller
+            välja Inga mejl alls. Längst ner i varje mejl finns en länk till samma val som fungerar utan inloggning, även om du
+            inte har något konto. Vi sparar bara dina val (och, om du saknar konto, adressen de gäller) så länge tjänsten
+            drivs, så att ett nej fortsätter att gälla. Mejla oss om du vill att vi raderar dem.
+          </p>
 
           <h2 id="vem">Vilka som behandlar data</h2>
           <table className="w-full border-collapse text-sm [&_td]:border-b [&_td]:border-line [&_td]:py-3 [&_td]:pr-3 [&_td]:text-left [&_td]:align-top [&_th]:border-b [&_th]:border-line [&_th]:py-3 [&_th]:pr-3 [&_th]:text-left [&_th]:align-top [&_th]:text-xs [&_th]:font-semibold [&_th]:text-ink-3">
