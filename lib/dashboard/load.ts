@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadImportedHistory } from "@/lib/history/store";
-import { buildOverview, type DashInput, type DashItem, type DashMeeting, type DashPerson, type DashSpeaker, type Overview } from "./overview";
+import { buildOverview, type DashInput, type DashItem, type DashMeeting, type DashPerson, type Overview } from "./overview";
 
 // Reads the org dashboard's rows with the caller's client (the page passes the user's, so RLS
 // scopes everything to orgs they are a member of). Only counted meetings (not a Testmöte, ended),
 // only decision and task rows (and their tasks copies), paged past PostgREST's 1000-row cap.
+// The Översikt tab itself only reads `loadOverview` (meeting count and imported protocols).
 
 const PAGE = 1000;
 const ID_CHUNK = 100;
@@ -30,56 +31,45 @@ async function paged<T>(label: string, query: (from: number, to: number) => Prom
 }
 
 export async function loadOverviewInput(db: SupabaseClient, orgId: string): Promise<DashInput> {
-  const [meetingsRes, peopleRes] = await Promise.all([
-    db
-      .from("meetings")
-      .select("id, org_id, started_at, status, is_test, layout, agenda_roles, agenda_labels")
-      .eq("org_id", orgId)
-      .eq("is_test", false)
-      .in("status", ["done", "abandoned"])
-      .order("started_at", { ascending: false })
-      .limit(MAX_MEETINGS),
+  const [meetings, peopleRes] = await Promise.all([
+    loadCountedMeetings(db, orgId, "id, org_id, started_at, status, is_test, layout, agenda_roles, agenda_labels"),
     db.from("people").select("id, name, role").eq("org_id", orgId),
   ]);
-  if (meetingsRes.error) throw new Error(`overview: meetings: ${meetingsRes.error.message}`);
   if (peopleRes.error) throw new Error(`overview: people: ${peopleRes.error.message}`);
-  const meetings = (meetingsRes.data ?? []) as DashMeeting[];
-  const people = (peopleRes.data ?? []) as DashPerson[];
-  const ids = meetings.map((m) => m.id);
   const items: DashItem[] = [];
-  const speakers: DashSpeaker[] = [];
-  for (const part of chunks(ids, ID_CHUNK)) {
-    const [its, sps] = await Promise.all([
-      paged<DashItem>("items", (from, to) =>
+  for (const part of chunks(meetings.map((m) => m.id), ID_CHUNK)) {
+    items.push(
+      ...(await paged<DashItem>("items", (from, to) =>
         db.from("note_items").select(ITEM_COLUMNS).in("meeting_id", part).or(ITEM_FILTER).order("meeting_id").order("id").range(from, to),
-      ),
-      paged<DashSpeaker>("speakers", (from, to) =>
-        db
-          .from("speaker_map")
-          .select("meeting_id, el_session_id, speaker_label, person_id, display_name, merged_into_label")
-          .in("meeting_id", part)
-          .order("meeting_id")
-          .order("el_session_id")
-          .order("speaker_label")
-          .range(from, to),
-      ),
-    ]);
-    items.push(...its);
-    speakers.push(...sps);
+      )),
+    );
   }
-  return { meetings, items, speakers, people };
+  return { meetings, items, people: (peopleRes.data ?? []) as DashPerson[] };
 }
 
-/** The Översikt: own meetings and imported old protocols (a failed history read only leaves those out). */
-export async function loadOverview(db: SupabaseClient, orgId: string, now = new Date()): Promise<Overview> {
-  const [input, imported] = await Promise.all([
-    loadOverviewInput(db, orgId),
+async function loadCountedMeetings(db: SupabaseClient, orgId: string, columns: string): Promise<DashMeeting[]> {
+  const { data, error } = await db
+    .from("meetings")
+    .select(columns)
+    .eq("org_id", orgId)
+    .eq("is_test", false)
+    .in("status", ["done", "abandoned"])
+    .order("started_at", { ascending: false })
+    .limit(MAX_MEETINGS);
+  if (error) throw new Error(`overview: meetings: ${error.message}`);
+  return (data ?? []) as unknown as DashMeeting[];
+}
+
+/** The Översikt's basis: own counted meetings and imported old protocols (a failed history read only leaves those out). */
+export async function loadOverview(db: SupabaseClient, orgId: string): Promise<Overview> {
+  const [meetings, imported] = await Promise.all([
+    loadCountedMeetings(db, orgId, "id, org_id, started_at, status, is_test"),
     loadImportedHistory(db, orgId).catch((err: Error) => {
       console.error("overview: imported protocols unavailable", err?.message);
       return [];
     }),
   ]);
-  return buildOverview(orgId, input, now, imported);
+  return buildOverview(orgId, meetings, imported);
 }
 
 export interface OrgGoal {

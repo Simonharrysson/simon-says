@@ -188,11 +188,12 @@ buttons keep `title` + a visually hidden label instead of a tooltip.
 4. Show it on `/design?vy=primitives` and check light and dark.
 
 **Förening tabs.** The förening page has two tabs, "Möten" and "Översikt" (`?flik=oversikt`): server
-links with `aria-current` (`OrgDetailView` `tabs` prop). Översikt is `OverviewView` (goals with
-propose → approve, open tasks, decisions with search, recurring topics, attendance); data from
-`lib/dashboard`. Imported old protocols (`lib/history`) count in decisions (all years, labelled
-"Importerat") and recurring topics (formalities and Må-runda left out by label); their tasks are only
-counted, they have no attendance. Gallery: `org-overview`, `org-overview-goals`, `org-overview-empty`, `org-overview-history`, `org-overview-history-only`.
+links with `aria-current` (`OrgDetailView` `tabs` prop). Översikt is `OverviewView`: only "Mål" (propose → approve, "Skriv egna mål", "Läs in gamla protokoll"
+with its import progress), full width, under a line on what the goals build on ("Målen bygger på …",
+own meetings and imported protocols). Open tasks, decisions, recurring topics and attendance were
+removed as not helping the förening; the data helpers in `lib/dashboard` stay for the goals proposal
+and Förbered möte. Gallery: `org-overview`, `org-overview-goals`, `org-overview-empty`,
+`org-overview-history`, `org-overview-history-only`.
 
 Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) renders a
 presentational view in `components/views/` (`LandingView`, `LoginView`, `OrgsView`,
