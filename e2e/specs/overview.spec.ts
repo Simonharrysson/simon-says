@@ -53,7 +53,9 @@ test("protocol import, small path: read access → folder → Docs → goals", a
     });
   }
 
-  const { page } = await signedIn(admin, `${org.url}?flik=oversikt`);
+  // The sign-in's `next` takes no query string: open the tab after it.
+  const { page } = await signedIn(admin, org.url);
+  await page.goto(`${org.url}?flik=oversikt`);
   await page.getByRole("button", { name: "Läs in gamla protokoll" }).click();
   await page.getByRole("button", { name: "Ge åtkomst" }).click();
 
