@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Nytt möte", robots: { index: false,
  * Doc and the meeting (POST /api/meetings) and continues on /meetings/<id> without reloading.
  * If the förening already has a running meeting, its starter goes there; others to the förening.
  */
-const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
+const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "arsmote", "enkel"] as const;
 
 /**
  * The start screen's format choices: the förening's default first, the other standard formats,

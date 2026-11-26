@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MeetingRow } from "@/lib/db/types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { parseProfile, type FormatKind, type FormatProfile } from "./schema";
-import { ENKEL, STANDARD } from "./standard";
+import { ENKEL, STANDARD, type StandardKind } from "./standard";
 
 /** The org's default format; no default row (or an unreadable one) means Enkel. */
 export async function orgDefaultFormat(
@@ -97,7 +97,7 @@ function canonical(value: unknown): string {
  */
 export async function ensureStandardRow(
   orgId: string,
-  kind: "veckomote" | "styrelseprotokoll" | "enkel",
+  kind: StandardKind,
   db: SupabaseClient = supabaseAdmin(),
 ): Promise<string> {
   const want = canonical(STANDARD[kind]);

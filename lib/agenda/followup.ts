@@ -98,8 +98,88 @@ export function carryPlan(input: {
   if (!prev) return { adopted, open: [] };
   const sameIds = sameDoc?.id === prev.id ? new Set(adopted.map((r) => r.id)) : new Set<string>();
   const sources = new Set(adopted.map((r) => `${r.carried_from_meeting}\u0000${r.carried_from_id}`));
-  const open = openTasks(prev.rows).filter((r) => !sameIds.has(r.id) && !sources.has(`${prev.id}\u0000${r.id}`));
+  // An open row stands for an adopted one by id, or (a prepared agenda drawn from an earlier
+  // meeting whose tasks `prev` carried on) by the source both were carried from.
+  const open = openTasks(prev.rows).filter(
+    (r) =>
+      !sameIds.has(r.id) &&
+      !sources.has(`${prev.id}\u0000${r.id}`) &&
+      !(r.carried_from_meeting && sources.has(`${r.carried_from_meeting}\u0000${r.carried_from_id}`)),
+  );
   return { adopted, open };
+}
+
+/**
+ * The rows a new meeting saves under its follow-up item `followup` (the start's pre-fill, and the
+ * feature suite): `carryPlan`'s adopted rows (lines already in the Doc: a false start's, or a
+ * prepared agenda's) moved to this meeting, then fresh rows for the rest of `prev`'s open tasks,
+ * minus `excluded` sources (`<meeting>\u0000<item>`: tasks the ordförande took off a prepared
+ * agenda, or deleted from its Doc). Fresh ids continue after the adopted ones. `fictional`: an
+ * agenda Testmöte (no owner ids, Ruling 38).
+ */
+export function carriedForMeeting(input: {
+  meetingId: string;
+  prev: { id: string; rows: NoteItemRow[] } | null;
+  sameDoc: { id: string; rows: NoteItemRow[] } | null;
+  intact: (rangeName: string) => boolean;
+  excluded?: Set<string>;
+  followup: string;
+  people: RolePerson[];
+  groupBy: "role" | "person";
+  fictional?: boolean;
+}): NoteItemRow[] {
+  const { prev, followup } = input;
+  const plan = carryPlan({ prev: input.prev, sameDoc: input.sameDoc, intact: input.intact });
+  const excluded = input.excluded ?? new Set<string>();
+  const open = plan.open.filter(
+    (r) =>
+      !(prev && excluded.has(`${prev.id}\u0000${r.id}`)) &&
+      !(r.carried_from_meeting && excluded.has(`${r.carried_from_meeting}\u0000${r.carried_from_id}`)),
+  );
+  const adopted = plan.adopted.map((r) => ({ ...r, meeting_id: input.meetingId, anchor: followup, position: 0 })).map((r, position) => ({ ...r, position }));
+  const taken = new Set(adopted.map((r) => r.id));
+  let next = Math.max(0, ...adopted.map((r) => Number(r.id.slice(1)) || 0));
+  const fresh = prev
+    ? carriedItems(prev.id, open, followup, input.people, input.groupBy).map((r) => {
+        let id = `c${++next}`;
+        while (taken.has(id)) id = `c${++next}`;
+        return { ...r, id, position: adopted.length + r.position, meeting_id: input.meetingId, ...(input.fictional ? { owner_person_id: null } : {}) };
+      })
+    : [];
+  return [...adopted, ...fresh];
+}
+
+/**
+ * Latest finished real meeting of the org started before `before` whose format is one of
+ * `kinds` (null: a meeting without a format row, i.e. v1): "the previous meeting of the same
+ * kind" for a prepared agenda (Förbered möte). Looks at the 50 latest.
+ */
+export async function previousMeetingOfKinds(
+  orgId: string,
+  before: Date,
+  kinds: (string | null)[],
+  db: SupabaseClient = supabaseAdmin(),
+): Promise<{ id: string; startedAt?: string } | null> {
+  const { data, error } = await db
+    .from("meetings")
+    .select("id, started_at, format_profile_id")
+    .eq("org_id", orgId)
+    .eq("is_test", false)
+    .eq("status", "done")
+    .lt("started_at", before.toISOString())
+    .order("started_at", { ascending: false })
+    .limit(50);
+  if (error) throw new Error(`previousMeetingOfKinds: ${error.message}`);
+  const rows = (data ?? []) as { id: string; started_at: string; format_profile_id: string | null }[];
+  const ids = [...new Set(rows.map((r) => r.format_profile_id).filter((x): x is string => Boolean(x)))];
+  const kindOf = new Map<string, string>();
+  if (ids.length) {
+    const { data: profiles, error: e2 } = await db.from("format_profiles").select("id, kind").in("id", ids);
+    if (e2) throw new Error(`previousMeetingOfKinds: ${e2.message}`);
+    for (const p of (profiles ?? []) as { id: string; kind: string }[]) kindOf.set(p.id, p.kind);
+  }
+  const hit = rows.find((r) => kinds.includes(r.format_profile_id ? (kindOf.get(r.format_profile_id) ?? null) : null));
+  return hit ? { id: hit.id, startedAt: hit.started_at } : null;
 }
 
 /**

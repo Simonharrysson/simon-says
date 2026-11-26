@@ -467,3 +467,35 @@ Server: `POST /api/orgs/<id>/history/drive` (admins, the separate 24 h import gr
 a signed ticket the estimate/import routes require before using the read access);
 `DELETE` = Ta bort läsåtkomst. Gallery: `org-overview-import-access`,
 `-declined`, `-files`, `-progress`.
+
+## Förbered möte (todo #6, migration 0033)
+
+`/orgs/<id>/forbered` (any member; "Förbered möte" next to "Starta möte", which also lists upcoming
+prepared meetings with "Dagordning" and "Ändra"). `PrepareMeeting` (container) / `PrepareMeetingView`
+(`components/views/PrepareMeeting.tsx`), three steps under the title ("1. Möte — 2. Dagordning — 3. Klart"):
+
+1. **Vilket möte?** Three radio cards, Veckomöte preselected (Styrelsemöte, Årsmöte), Datum (proposed:
+   the last meeting's weekday, on or after today) and optional Tid (its time, to the quarter hour).
+   "Ta fram dagordningen".
+2. **Dagordning** (`GET /api/orgs/<id>/prepare`): one numbered list, each item an editable label with ↑ ↓
+   and a grey trash (`danger-ghost`). "Från förra veckan" lists the previous meeting-of-that-kind's open
+   tasks as the Doc will show them, each with a checkbox (untick = not on the agenda). "Lägg till punkt"
+   (placeholder "T.ex. Fest på universitetet") adds before the items the format keeps last. "Fler punkter"
+   holds recurring Översikt topics ("Har tagits upp på N möten") and removed standing items, dashed, with
+   "Lägg till". "Skapa dagordning" (primary, the only one) → "Skapar dokumentet …". Preparing again for a
+   date that has one: info banner "Du ändrar en förberedd dagordning" and "Uppdatera dagordningen"; a
+   date a meeting was held in: neutral banner, nothing editable.
+3. **Klart**: success banner with the Doc name, what happens on meeting day, "Öppna dokumentet" (primary)
+   and "Till <förening>". When someone had written in the Doc, a grey line says the order there was kept.
+
+The Doc: `YYYY-MM-DD[ HH.MM] Dagordning – <förening>` in the meeting folder (else the preparer's own
+folder), shared with the members, the format's skeleton with the chosen items; "Från förra veckan"
+lines are written by the notes engine (`ss-prep-<id>-c<n>`), so the meeting adopts them and writes
+"✓ klart" in the same line. Preparing again changes only Simon Says' untouched lines.
+
+**Start screen.** `AgendaStep` view state `prepared` comes first: "Starta med dagordningen från
+<tisdag 1 december> kl. 18.00", grey "<typ> · <Doc-namn>", **Använd** · Välj annan · Skapa nytt
+dokument. No format select (the prepared format is used). If the starter's Google account can't edit it
+yet (prepared by someone else, drive.file): a line saying so and **Öppna i Google-väljaren**. The
+Picker-off fallback shows it too. `/design`: `org-prepared`, `prepare-*`, `live-agenda-prepared`,
+`live-agenda-prepared-picker`.
