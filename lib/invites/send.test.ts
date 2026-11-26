@@ -4,11 +4,11 @@ import { inviterNameFor, sendInvites } from "./send";
 
 // sendInvites with a scripted database and a fake mailer (the DB rules run in tests/api/invites.test.ts).
 function fakeDb(claims: Record<string, { result: string; send_id?: number; next_at?: string }>) {
-  const finished: [number, boolean][] = [];
+  const finished: [number, string][] = [];
   const rpc = vi.fn(async (fn: string, args: Record<string, unknown>) => {
     if (fn === "claim_invite_send") return { data: claims[args.p_email as string], error: null };
     if (fn === "finish_invite_send") {
-      finished.push([args.p_send_id as number, args.p_ok as boolean]);
+      finished.push([args.p_send_id as number, args.p_outcome as string]);
       return { data: null, error: null };
     }
     throw new Error(fn);
@@ -35,7 +35,7 @@ describe("sendInvites", () => {
       { email: "c@example.com", result: "failed" },
       { email: "d@example.com", result: "resend_limit", nextAt: "2026-11-27T10:00:00Z" },
     ]);
-    expect(finished).toEqual([[1, true], [2, false]]);
+    expect(finished.sort()).toEqual([[1, "sent"], [2, "failed"]]);
     expect(mailer.send).toHaveBeenCalledTimes(2);
     expect(mailer.send.mock.calls[0][0]).toMatchObject({ to: "a@example.com", replyTo: "anna@example.com", subject: "Anna Berg bjuder in dig till Föreningen på Simon Says" });
     // No address in the log line.
@@ -48,6 +48,35 @@ describe("sendInvites", () => {
     const mailer = { send: vi.fn(async () => true) };
     await expect(sendInvites({ ...input, emails: ["a@example.com"] }, { db, mailer, gapMs: 0 })).rejects.toMatchObject({ code: "42501" });
     expect(mailer.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendInvites: outcomes, keys, time and names", () => {
+  it("passes the claim's Idempotency-Key and records an uncertain send as such", async () => {
+    const { db, finished } = fakeDb({ "a@example.com": { result: "ok", send_id: 7, idem_key: "invite-x-0" } as never });
+    const mailer = { send: vi.fn(async () => true), sendWithOutcome: vi.fn(async (_m: { idempotencyKey?: string }) => "uncertain" as const) };
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    const res = await sendInvites({ ...input, emails: ["a@example.com"] }, { db, mailer, gapMs: 0 });
+    expect(res).toEqual([{ email: "a@example.com", result: "uncertain" }]);
+    expect(mailer.sendWithOutcome.mock.calls[0][0]).toMatchObject({ idempotencyKey: "invite-x-0" });
+    expect(mailer.send).not.toHaveBeenCalled();
+    expect(finished).toEqual([[7, "uncertain"]]);
+  });
+
+  it("stops starting sends at the deadline: the rest are not_sent, in order", async () => {
+    const claims = Object.fromEntries(["a", "b", "c"].map((x, i) => [`${x}@example.com`, { result: "ok", send_id: i + 1 }]));
+    const { db } = fakeDb(claims);
+    const mailer = { send: vi.fn(async () => true) };
+    const res = await sendInvites({ ...input, emails: ["a@example.com", "b@example.com", "c@example.com"] }, { db, mailer, gapMs: 0, deadlineMs: -1 });
+    expect(res.map((r) => r.result)).toEqual(["not_sent", "not_sent", "not_sent"]);
+    expect(mailer.send).not.toHaveBeenCalled();
+  });
+
+  it("refuses names that look like links before anything is claimed", async () => {
+    const { db } = fakeDb({});
+    const mailer = { send: vi.fn(async () => true) };
+    await expect(sendInvites({ ...input, orgName: "Konto låst – verifiera på bank-login.se", emails: ["a@example.com"] }, { db, mailer })).rejects.toMatchObject({ code: "name_link" });
+    expect(db.rpc).not.toHaveBeenCalled();
   });
 });
 

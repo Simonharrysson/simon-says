@@ -10,7 +10,7 @@ import type { MailMessage } from "@/lib/mail";
 const m = vi.hoisted(() => ({
   db: null as SupabaseClient | null,
   sent: [] as MailMessage[],
-  deliver: true,
+  deliver: true as boolean | "uncertain",
 }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
 vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
@@ -19,7 +19,11 @@ vi.mock("@/lib/mail", () => ({
   defaultMailer: () => ({
     async send(msg: MailMessage) {
       m.sent.push(msg);
-      return m.deliver;
+      return m.deliver === true;
+    },
+    async sendWithOutcome(msg: MailMessage) {
+      m.sent.push(msg);
+      return m.deliver === "uncertain" ? "uncertain" : m.deliver ? "sent" : "failed";
     },
   }),
 }));
@@ -123,12 +127,51 @@ describe.skipIf(!hasLocalSupabase)("invites route", () => {
     if (!r.ok) throw new Error("org");
     const mailer = { send: vi.fn(async () => true) };
     const input = { orgId: r.id, userId: admin.id, inviterName: "A", inviterEmail: null, orgName: "G", inviteUrl: "https://app.test/join/x", resend: false };
-    const emails = Array.from({ length: 50 }, (_, i) => `limit${i}@example.com`);
-    const first = await sendInvites({ ...input, emails }, { db: adminClient(), mailer, gapMs: 0 });
-    expect(first.every((x) => x.result === "sent")).toBe(true);
+    for (let turn = 0; turn < 5; turn++) {
+      const emails = Array.from({ length: 10 }, (_, i) => `limit${turn * 10 + i}@example.com`);
+      const got = await sendInvites({ ...input, emails }, { db: adminClient(), mailer, gapMs: 0 });
+      expect(got.every((x) => x.result === "sent")).toBe(true);
+    }
     const over = await sendInvites({ ...input, emails: ["one-more@example.com"] }, { db: adminClient(), mailer, gapMs: 0 });
     expect(over).toEqual([{ email: "one-more@example.com", result: "org_limit" }]);
     expect(mailer.send).toHaveBeenCalledTimes(50);
+  });
+
+  it("a förening named like a link is refused with a sentence; nothing is sent", async () => {
+    const r = await createOrg(admin.db, "Konto låst – verifiera på bank-login.se");
+    if (!r.ok) throw new Error("org");
+    m.db = admin.db;
+    const res = await post(r.id, { emails: "offer@example.com" });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("name_link_org");
+    expect(m.sent).toHaveLength(0);
+  });
+
+  it("an uncertain send is retried with the same Idempotency-Key; after a delivery the key changes", async () => {
+    m.db = admin.db;
+    m.deliver = "uncertain";
+    const first = (await (await post(orgId, { emails: "osaker@example.com" })).json()) as Body;
+    expect(first.results).toEqual([{ email: "osaker@example.com", result: "uncertain" }]);
+    expect(first.invites.find((i) => i.email === "osaker@example.com")?.status).toBe("uncertain");
+    m.deliver = true;
+    await post(orgId, { emails: ["osaker@example.com"], resend: true });
+    await post(orgId, { emails: ["osaker@example.com"], resend: true });
+    const keys = m.sent.map((s) => s.idempotencyKey);
+    expect(keys[0]).toBeTruthy();
+    expect(keys[1]).toBe(keys[0]);
+    expect(keys[2]).not.toBe(keys[0]);
+  });
+
+  it("the cron sweep turns a hung send into 'uncertain'", async () => {
+    const db = adminClient();
+    const { data: claim } = await db.rpc("claim_invite_send", { p_org_id: orgId, p_user_id: admin.id, p_email: "hang@example.com", p_resend: false, p_org_limit: 50, p_user_limit: 200, p_address_limit: 2 });
+    expect(claim.result).toBe("ok");
+    await db.from("org_invite_sends").update({ at: new Date(Date.now() - 6 * 60_000).toISOString() }).eq("id", claim.send_id);
+    await db.from("org_invites").update({ last_attempt_at: new Date(Date.now() - 6 * 60_000).toISOString() }).eq("org_id", orgId).eq("email", "hang@example.com");
+    const { data: n } = await db.rpc("sweep_stale_invite_sends");
+    expect(n).toBeGreaterThanOrEqual(1);
+    const { data: row } = await db.from("org_invites").select("status").eq("org_id", orgId).eq("email", "hang@example.com").single();
+    expect(row!.status).toBe("uncertain");
   });
 
   it("the tables are not readable or writable by signed-in users", async () => {

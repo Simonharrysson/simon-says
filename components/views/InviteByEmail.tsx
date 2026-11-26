@@ -8,10 +8,11 @@ import { IconChevronDown, IconChevronRight, IconRefresh } from "@/components/ui/
 import { controlClass } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDateTime, plural } from "@/lib/format";
-import { inviteBody, inviteFooter, inviteSubject } from "@/lib/invites/email";
+import { inviteBody, inviteFooter, inviteSubject, linkLikeName } from "@/lib/invites/email";
 import {
   canResend,
   INVITE_LIMITS,
+  LINK_NAME_MESSAGE,
   parseEmails,
   RESULT_LABEL,
   RETRYABLE,
@@ -83,12 +84,15 @@ export function InviteByEmail(p: InviteByEmailProps) {
   const [results, setResults] = useState<AddressOutcome[] | null>(p.initialResults ?? null);
   const [invites, setInvites] = useState<InviteRow[]>(p.invites);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const members = new Set(p.memberEmails ?? []);
   const parsed = parseEmails(text);
   const already = parsed.valid.filter((e) => members.has(e));
   const toSend = parsed.valid.filter((e) => !members.has(e));
-  const tooMany = toSend.length > INVITE_LIMITS.perRequest;
+  const tooMany = toSend.length > INVITE_LIMITS.perForm;
+  // A förening or inviter name that looks like a link: the server refuses, say so up front (I1).
+  const linkName = linkLikeName(p.inviterName, p.orgName);
   const typed = new Set(parsed.valid);
   const offer = (p.suggestions ?? []).filter((e) => !typed.has(e) && !members.has(e));
 
@@ -96,11 +100,25 @@ export function InviteByEmail(p: InviteByEmailProps) {
     setError(null);
     if (one) setBusyEmail(one);
     else setSending(true);
-    const res = await send(emails, resend);
+    // In turns of 10, so each request ends well inside the server's time limit.
+    const got: AddressOutcome[] = [];
+    let res: SendResponse = { ok: true, results: [], invites };
+    for (let i = 0; i < emails.length; i += INVITE_LIMITS.perRequest) {
+      if (!one) setProgress({ done: i, total: emails.length });
+      res = await send(emails.slice(i, i + INVITE_LIMITS.perRequest), resend);
+      if (!res.ok) break;
+      got.push(...res.results);
+    }
     setSending(false);
     setBusyEmail(null);
+    setProgress(null);
     if (!res.ok) {
       setError(res.message);
+      if (got.length === 0) return;
+      // Earlier turns went out: show them, and keep the rest in the box.
+      const tried = new Set(got.map((r) => r.email));
+      setResults(got);
+      setText(emails.filter((e) => !tried.has(e)).join("\n"));
       return;
     }
     setInvites(res.invites);
@@ -111,9 +129,9 @@ export function InviteByEmail(p: InviteByEmailProps) {
       if (outcome) setResults((prev) => (prev?.some((r) => r.email === one) ? prev.map((r) => (r.email === one ? outcome : r)) : [...(prev ?? []), outcome]));
       return;
     }
-    setResults([...already.map((email) => ({ email, result: "member" as const })), ...parsed.invalid.map((email) => ({ email, result: "invalid" as const })), ...res.results.filter((r) => r.result !== "invalid")]);
+    setResults([...already.map((email) => ({ email, result: "member" as const })), ...parsed.invalid.map((email) => ({ email, result: "invalid" as const })), ...got.filter((r) => r.result !== "invalid")]);
     // Keep only what may need another go in the box.
-    setText(res.results.filter((r) => RETRYABLE.has(r.result)).map((r) => r.email).join("\n"));
+    setText(got.filter((r) => RETRYABLE.has(r.result)).map((r) => r.email).join("\n"));
   }
 
   return (
@@ -139,7 +157,7 @@ export function InviteByEmail(p: InviteByEmailProps) {
               {plural(toSend.length, "adress", "adresser")}
               {already.length > 0 && ` · ${plural(already.length, "är redan medlem", "är redan medlemmar")}`}
               {parsed.invalid.length > 0 && <span className="text-red"> · inte e-post: {parsed.invalid.join(", ")}</span>}
-              {tooMany && <span className="text-red"> · högst {INVITE_LIMITS.perRequest} åt gången</span>}
+              {tooMany && <span className="text-red"> · högst {INVITE_LIMITS.perForm} åt gången</span>}
             </>
           )}
         </p>
@@ -153,9 +171,11 @@ export function InviteByEmail(p: InviteByEmailProps) {
         </div>
       )}
 
+      {linkName && <Banner tone="warning">{LINK_NAME_MESSAGE[linkName]}</Banner>}
+
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" loading={sending} disabled={toSend.length === 0 || tooMany || busyEmail !== null} onClick={() => run(toSend, false)}>
-          {sending ? "Skickar…" : toSend.length > 0 ? `Skicka ${plural(toSend.length, "inbjudan", "inbjudningar")}` : "Skicka inbjudan"}
+        <Button variant="primary" loading={sending} disabled={toSend.length === 0 || tooMany || busyEmail !== null || linkName !== null} onClick={() => run(toSend, false)}>
+          {sending ? (progress && progress.total > INVITE_LIMITS.perRequest ? `Skickar ${progress.done + 1}–${Math.min(progress.done + INVITE_LIMITS.perRequest, progress.total)} av ${progress.total}…` : "Skickar…") : toSend.length > 0 ? `Skicka ${plural(toSend.length, "inbjudan", "inbjudningar")}` : "Skicka inbjudan"}
         </Button>
         <Button variant="ghost" icon={preview ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />} aria-expanded={preview} aria-controls={`${id}-preview`} onClick={() => setPreview(!preview)}>
           {preview ? "Dölj mejlet" : "Visa mejlet"}
@@ -217,7 +237,7 @@ function InviteListRow({ invite: inv, busy, disabled, onResend }: { invite: Invi
       {inv.status !== "accepted" &&
         (resendable ? (
           <Button size="sm" variant="secondary" icon={<IconRefresh size={14} />} loading={busy} disabled={disabled} onClick={onResend}>
-            {inv.status === "failed" ? "Försök igen" : "Skicka igen"}
+            {inv.status === "sent" ? "Skicka igen" : "Försök igen"}
           </Button>
         ) : (
           inv.nextResendAt && <span className="text-xs text-ink-3">Igen {formatDateTime(inv.nextResendAt)}</span>

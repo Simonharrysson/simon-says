@@ -36,9 +36,11 @@ describe("canResend", () => {
     expect(canResend(row({ recentSends: 2, nextResendAt: "2026-11-26T11:00:00Z" }), now)).toBe(true);
   });
 
-  it("a failed send can be tried again; accepted and in-flight cannot", () => {
+  it("a failed or uncertain send can be tried again; accepted and in-flight cannot; a hung send after 5 min can", () => {
     expect(canResend(row({ status: "failed", recentSends: 0 }), now)).toBe(true);
+    expect(canResend(row({ status: "uncertain", recentSends: 0 }), now)).toBe(true);
     expect(canResend(row({ status: "accepted" }), now)).toBe(false);
-    expect(canResend(row({ status: "sending" }), now)).toBe(false);
+    expect(canResend(row({ status: "sending", lastAttemptAt: "2026-11-26T11:58:00Z" }), now)).toBe(false);
+    expect(canResend(row({ status: "sending", lastAttemptAt: "2026-11-26T11:54:00Z" }), now)).toBe(true);
   });
 });

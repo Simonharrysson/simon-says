@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
-import { INVITE_LIMITS, parseEmails } from "@/lib/invites/rules";
+import { linkLikeName } from "@/lib/invites/email";
+import { INVITE_LIMITS, LINK_NAME_MESSAGE, parseEmails } from "@/lib/invites/rules";
 import { inviterNameFor, listInvites, sendInvites, type AddressResult } from "@/lib/invites/send";
 import { defaultMailer } from "@/lib/mail";
 import { appOrigin } from "@/lib/origin";
@@ -9,7 +10,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-// Up to 50 addresses, sent one after the other.
+// Up to 10 addresses per request (the form sends longer lists in turns), two at a time; sends
+// stop starting after 40 s, so the request ends inside this.
 export const maxDuration = 60;
 
 const noStore = { "cache-control": "no-store" };
@@ -70,6 +72,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const org = await getOrg(db, id);
     if (!org) return fail("not_found", 404, "Föreningen finns inte.");
     const { data: person } = await admin.from("people").select("name").eq("org_id", id).eq("member_user_id", gate.userId).maybeSingle();
+    const inviterName = inviterNameFor(person?.name as string | undefined, gate.metadata);
+    // Mail clients link anything that looks like a domain: never carry one in our mail (I1).
+    const linkName = linkLikeName(inviterName, org.name);
+    if (linkName) return fail(`name_link_${linkName}`, 400, LINK_NAME_MESSAGE[linkName]);
     const results: AddressResult[] = parsed.invalid.map((email) => ({ email, result: "invalid" as const }));
     if (parsed.valid.length > 0) {
       results.push(
@@ -77,7 +83,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           {
             orgId: id,
             userId: gate.userId,
-            inviterName: inviterNameFor(person?.name as string | undefined, gate.metadata),
+            inviterName,
             inviterEmail: gate.email,
             orgName: org.name,
             // The link as it is now: a rotated code must not go out in an old e-mail.
