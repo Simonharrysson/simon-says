@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { FormatCard } from "@/components/views/FormatCard";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
+import { SummarySettingsForm } from "@/components/views/SummarySettingsForm";
+import { summaryOptions } from "@/lib/summaries/recipients";
 import { OrgDetailView, type OrgTab } from "@/components/views/OrgDetailView";
 import { OverviewView } from "@/components/views/OverviewView";
 import { listGoals, loadOverview, type OrgGoal } from "@/lib/dashboard/load";
@@ -45,6 +47,7 @@ import {
   setPersonRoleAction,
   rotateInviteAction,
   updateOrgAction,
+  updateSummaryAction,
 } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -202,6 +205,16 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
+      summarySettings={
+        isAdmin ? (
+          <SummarySettingsForm
+            orgId={org.id}
+            mode={org.summary_mode ?? "missed"}
+            people={summaryOptions(people, members)}
+            action={updateSummaryAction}
+          />
+        ) : undefined
+      }
       formatCard={
         <FormatCard
           orgId={org.id}

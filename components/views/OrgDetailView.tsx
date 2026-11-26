@@ -57,6 +57,8 @@ export interface OrgDetailViewProps {
   startMeetingHref?: string;
   /** The meeting-format card (`FormatCard`), shown above the people panel. */
   formatCard?: ReactNode;
+  /** Admins: "Sammanfattning efter mötet" (`SummarySettingsForm`, 0037), in Inställningar. */
+  summarySettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
    * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
@@ -239,7 +241,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions, logoUrl, komIgang } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, liveMeetingHref, tabs, actions, logoUrl, komIgang } = props;
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
@@ -393,6 +395,11 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <>
           <Panel title="Inställningar" titleId="settings-title" id="installningar">
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
+            {summarySettings && (
+              <div id="sammanfattning" className="mt-6 scroll-mt-6 border-t border-line pt-6">
+                {summarySettings}
+              </div>
+            )}
             <p className="mt-6 border-t border-line pt-4 text-sm text-ink-3">
               Logga, styrelsen, stadgar och röster: <a href={`/orgs/${org.id}/kom-igang`}>öppna Kom igång</a>.
             </p>
@@ -480,7 +487,7 @@ function MeetingsPanel({
                 meeting.ended_at &&
                 formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000);
               return (
-                <li key={meeting.id}>
+                <li key={meeting.id} id={`mote-${meeting.id}`} className="scroll-mt-6">
                   <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
                     <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
                       <span className="font-medium wrap-anywhere">{formatMeetingDate(meeting.started_at)}</span>

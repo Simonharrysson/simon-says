@@ -19,8 +19,10 @@ import {
   rotateInviteCode,
   setMemberRole,
   setPersonRole,
+  setSummarySettings,
   updateOrgSettings,
 } from "@/lib/db/orgs";
+import type { SummaryMode } from "@/lib/db/types";
 import { shareOrgDocsWithNewMember } from "@/lib/docs/access";
 import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
 import { endFromOrgPage } from "@/lib/meetings/end-from-org";
@@ -75,6 +77,20 @@ export async function updateOrgAction(form: FormData): Promise<void> {
     share_transcript: form.get("share_transcript") === "on",
     show_on_status: form.get("show_on_status") === "on",
   });
+  revalidatePath(`/orgs/${orgId}`);
+}
+
+const SUMMARY_MODES: SummaryMode[] = ["missed", "all", "selected", "off"];
+
+/** Inställningar → "Sammanfattning efter mötet" (0037). The database checks admin. */
+export async function updateSummaryAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const mode = field(form, "summary_mode") as SummaryMode;
+  const people = form.getAll("summary_person").map(String).filter(isUuid);
+  const db = await createSupabaseServerClient();
+  if (!SUMMARY_MODES.includes(mode) || !(await setSummarySettings(db, orgId, mode, people))) {
+    redirect(`/orgs/${orgId}?fel=sammanfattning`);
+  }
   revalidatePath(`/orgs/${orgId}`);
 }
 
