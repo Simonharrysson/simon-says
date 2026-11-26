@@ -27,7 +27,19 @@ export interface DocLine {
 
 /** The stand-in meeting id of a prepared agenda (range names `ss-prep-<id>-…`). */
 export const prepKey = (preparedId: string) => `prep-${preparedId}`;
-const itemRange = (key: string, n: number) => `ss-${key}-ag-${n}`;
+/** An item line's range: `ss-<key>-ag-<n>` when created, `ss-<key>-g<gen>-ag-<n>` when prepared again (never a name used before). */
+const itemRange = (key: string, n: number, gen = 0) => (gen ? `ss-${key}-g${gen}-ag-${n}` : `ss-${key}-ag-${n}`);
+
+/**
+ * Write-ahead journal of one Doc batch, saved before the batch is sent: every range the batch
+ * writes, with the exact text we intend there (`id`: the draft item of a new item line), and
+ * every range it deletes. The next run reconciles a batch that was written but never saved.
+ */
+export interface Journal {
+  /** `row`: a new carried line's row, so an unsaved line is adopted (never written twice). */
+  writes: { range: string; text: string; id?: string; row?: NoteItemRow }[];
+  deletes: string[];
+}
 
 /** An item's line in the Doc: "§3 Val av justerare" in a § format, else the label. */
 export function itemText(profile: FormatProfile, label: string, position: number): string {
@@ -117,7 +129,8 @@ export function planReprepare(
   stored: DocLine[],
   carried: NoteItemRow[],
   items: DraftItem[],
-): { mode: ReprepareMode; requests: DocsRequest[]; lines: DocLine[]; inserts: string[] } {
+  gen = 0,
+): { mode: ReprepareMode; requests: DocsRequest[]; lines: DocLine[]; inserts: string[]; journal: Journal } {
   const on = items.filter((i) => i.on);
   const scan = scanAgenda(tab, profile);
   const reg = region(scan);
@@ -151,9 +164,12 @@ export function planReprepare(
     const numbered = profile.numbering === "numbered";
     const texts = on.map((i, n) => itemText(profile, i.label, n + 1));
     const requests: DocsRequest[] = [];
+    const deletes: string[] = [];
     // Our ranges go first (named ranges change no text; only names present are deleted).
     for (const name of new Set([...stored.map((l) => l.range), ...carried.map((r) => r.range_name).filter((x): x is string => Boolean(x))])) {
-      if (tab.ranges.has(name)) requests.push({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tab.tabId] } } });
+      if (!tab.ranges.has(name)) continue;
+      requests.push({ deleteNamedRange: { name, tabsCriteria: { tabIds: [tab.tabId] } } });
+      deletes.push(name);
     }
     requests.push({ deleteContentRange: { range: { tabId: tab.tabId, startIndex: reg.start, endIndex: reg.limit } } });
     // At reg.start now stands the tasks heading: the new paragraphs take its style, set below.
@@ -179,7 +195,7 @@ export function planReprepare(
           },
         });
       }
-      const range = itemRange(key, n + 1);
+      const range = itemRange(key, n + 1, gen);
       requests.push({ createNamedRange: { name: range, range: { tabId: tab.tabId, startIndex: at, endIndex: end } } });
       lines.push({ id: on[n].id, key: `ag-${n + 1}`, range, text });
       at = end + 1;
@@ -190,13 +206,14 @@ export function planReprepare(
         createParagraphBullets: { range: { tabId: tab.tabId, startIndex: reg.start, endIndex: at - 1 }, bulletPreset: "NUMBERED_DECIMAL_ALPHA_ROMAN" },
       });
     }
-    return { mode: "rewrite", requests, lines, inserts: [] };
+    return { mode: "rewrite", requests, lines, inserts: [], journal: { writes: lines.map((l) => ({ range: l.range, text: l.text, id: l.id })), deletes } };
   }
 
   // Merge: one batch of deletes and replaces (highest index first), inserts afterwards.
   const want = new Map(on.map((i, n) => [i.id, itemText(profile, i.label, n + 1)]));
   const ops: { index: number; requests: DocsRequest[] }[] = [];
   const lines: DocLine[] = [];
+  const journal: Journal = { writes: [], deletes: [] };
   for (const line of stored) {
     const { state, para } = states.get(line.id)!;
     if (state === "gone") continue;
@@ -207,6 +224,7 @@ export function planReprepare(
       continue;
     }
     if (text === undefined) {
+      journal.deletes.push(line.range);
       ops.push({
         index: para!.start,
         requests: [
@@ -216,12 +234,15 @@ export function planReprepare(
       });
       continue;
     }
-    if (text !== line.text) ops.push({ index: para!.start, requests: [replaceRange(tab.tabId, line.range, text)] });
+    if (text !== line.text) {
+      ops.push({ index: para!.start, requests: [replaceRange(tab.tabId, line.range, text)] });
+      journal.writes.push({ range: line.range, text });
+    }
     lines.push({ ...line, text });
   }
   ops.sort((a, b) => b.index - a.index);
   const known = new Set(stored.map((l) => l.id));
-  return { mode: "merge", requests: ops.flatMap((o) => o.requests), lines, inserts: on.filter((i) => !known.has(i.id)).map((i) => i.id) };
+  return { mode: "merge", requests: ops.flatMap((o) => o.requests), lines, inserts: on.filter((i) => !known.has(i.id)).map((i) => i.id), journal };
 }
 
 /**
@@ -236,6 +257,7 @@ export function planInsert(
   lines: DocLine[],
   items: DraftItem[],
   id: string,
+  gen = 0,
 ): { requests: DocsRequest[]; line: DocLine } | null {
   const on = items.filter((i) => i.on);
   const pos = on.findIndex((i) => i.id === id);
@@ -246,7 +268,7 @@ export function planInsert(
     const span = l ? itemSpan(tab, l.range) : null;
     return span ? tab.paragraphs.find((p) => p.start === span.paraStart) ?? null : null;
   };
-  const range = itemRange(key, nextN(lines));
+  const range = itemRange(key, nextN(lines), gen);
   const lineOf = (start: number) => ({ id, key: `ag-${nextN(lines)}`, range, text, start });
   const next = on.slice(pos + 1).map(present).find((p): p is Paragraph => p !== null);
   let start: number;
@@ -319,40 +341,66 @@ export function planCarried(
 }
 
 /**
- * Before preparing again (idempotent after a step that wrote the Doc but was not saved): our item
- * ranges the stored lines lack are adopted when their text is a draft item's line (so the item is
- * never inserted twice); our carried ranges no stored row has are removed, their paragraph too
- * while it is exactly the range's text (ours, untouched).
+ * Before preparing again: the last run's journal (a batch that may have been written but never
+ * saved) is settled against the Doc. A journaled write whose range holds exactly the journaled
+ * text is ours: a stored line or row takes that text, a new item line or carried row is adopted
+ * (so it is never written twice). A new carried line a human edited is adopted locked with their
+ * text. Any other journaled range holding something else is a human's: its text stays, only the
+ * range of ours is dropped. A journaled delete whose range is gone was ours: the stored line or
+ * row goes (never read as a human's deletion). Our ranges known to neither are dropped, their
+ * text kept. Never deletes text that is not exactly ours.
  */
 export function planReconcile(
   tab: NotesTab,
-  profile: FormatProfile,
   key: string,
   stored: DocLine[],
   carried: NoteItemRow[],
-  items: DraftItem[],
-): { requests: DocsRequest[]; lines: DocLine[] } {
-  const on = items.filter((i) => i.on);
-  const lines = [...stored];
-  const known = new Set([...stored.map((l) => l.range), ...carried.map((r) => r.range_name).filter(Boolean)]);
+  journal: Journal | null,
+): { requests: DocsRequest[]; lines: DocLine[]; carried: NoteItemRow[] } {
+  let lines = stored.map((l) => ({ ...l }));
+  let rows = carried.map((r) => ({ ...r }));
   const dels: { index: number; requests: DocsRequest[] }[] = [];
-  for (const name of tab.ranges.keys()) {
-    if (!name.startsWith(`ss-${key}-`) || known.has(name)) continue;
+  const dropRange = (name: string, index: number) => dels.push({ index, requests: [{ deleteNamedRange: { name, tabsCriteria: { tabIds: [tab.tabId] } } }] });
+  const exactSpan = (name: string, text: string) => {
     const span = itemSpan(tab, name);
-    const rest = name.slice(`ss-${key}-`.length);
-    if (/^ag-\d+$/.test(rest)) {
-      if (!span) continue;
-      const pos = on.findIndex((i, n) => !lines.some((l) => l.id === i.id) && itemText(profile, i.label, n + 1) === span.paraText);
-      if (pos >= 0) lines.push({ id: on[pos].id, key: rest, range: name, text: span.paraText });
+    return span && !span.ambiguous && !span.suggested && span.rangeText === span.paraText && span.paraText === text ? span : null;
+  };
+  const gone = new Set((journal?.deletes ?? []).filter((d) => !tab.ranges.has(d)));
+  lines = lines.filter((l) => !gone.has(l.range));
+  rows = rows.filter((r) => r.deleted_by_human || !r.range_name || !gone.has(r.range_name));
+  for (const w of journal?.writes ?? []) {
+    const span = exactSpan(w.range, w.text);
+    const line = lines.find((l) => l.range === w.range);
+    const row = rows.find((r) => r.range_name === w.range);
+    if (line || row) {
+      if (span && line) line.text = w.text;
+      if (span && row) Object.assign(row, { last_rendered_text: w.text, locked: false });
       continue;
     }
-    if (!/^c\d+$/.test(rest)) continue;
-    const reqs: DocsRequest[] = [{ deleteNamedRange: { name, tabsCriteria: { tabIds: [tab.tabId] } } }];
-    if (span && !span.ambiguous && span.rangeText === span.paraText) {
-      reqs.push({ deleteContentRange: { range: { tabId: tab.tabId, startIndex: span.paraStart, endIndex: span.paraEnd } } });
+    const any = itemSpan(tab, w.range);
+    if (!any) continue;
+    if (span && w.id && /-ag-\d+$/.test(w.range)) {
+      lines = lines.filter((l) => l.id !== w.id || itemSpan(tab, l.range));
+      if (!lines.some((l) => l.id === w.id)) {
+        lines.push({ id: w.id, key: `ag-${nextN(lines)}`, range: w.range, text: w.text });
+        continue;
+      }
     }
-    dels.push({ index: span?.paraStart ?? 0, requests: reqs });
+    if (w.row && !rows.some((r) => r.carried_from_meeting === w.row!.carried_from_meeting && r.carried_from_id === w.row!.carried_from_id && !r.deleted_by_human)) {
+      // A new carried line that was written but not saved: ours as written, or a human's (locked) once edited.
+      rows.push(
+        span
+          ? { ...w.row, range_name: w.range, last_rendered_text: w.text, locked: false, deleted_by_human: false }
+          : { ...w.row, range_name: w.range, last_rendered_text: w.text, locked: true, text: any.paraText, owner: null, due: null },
+      );
+      continue;
+    }
+    dropRange(w.range, any.rangeStart);
+  }
+  const known = new Set([...lines.map((l) => l.range), ...rows.map((r) => r.range_name).filter(Boolean), ...(journal?.writes ?? []).map((w) => w.range)]);
+  for (const name of tab.ranges.keys()) {
+    if (name.startsWith(`ss-${key}-`) && !known.has(name)) dropRange(name, itemSpan(tab, name)?.rangeStart ?? 0);
   }
   dels.sort((a, b) => b.index - a.index);
-  return { requests: dels.flatMap((d) => d.requests), lines };
+  return { requests: dels.flatMap((d) => d.requests), lines, carried: rows };
 }
