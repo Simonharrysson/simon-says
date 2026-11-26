@@ -4,7 +4,7 @@ import { decrypt, encrypt } from "@/lib/crypto";
 import { e2eGoogleRoot } from "@/lib/e2e/guard";
 import { getEnv } from "@/lib/env";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { hasDriveReadonly } from "./scopes";
+import { hasCalendarReadonly, hasDriveReadonly } from "./scopes";
 
 /** The user's Google grant is gone (never stored, revoked, or expired): they must sign in again. */
 export class GoogleAuthLostError extends Error {
@@ -167,6 +167,73 @@ export async function getImportGoogleAuth(userId: string): Promise<OAuth2Client>
     if (err instanceof GoogleAuthLostError) {
       await deleteImportToken(userId).catch(() => undefined);
       throw new DriveAccessMissingError(userId);
+    }
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// "Koppla kalender" (calendar.readonly, its own incremental consent, todo #14). The refresh token
+// is kept apart in google_calendar_tokens (0046) and used only to read calendars: the förening
+// page's upcoming meetings, the admin's calendar choice and the event a meeting matches at start.
+// "Koppla från" deletes our copy.
+
+/** The user has no (live) calendar grant: "Koppla kalender" again. */
+export class CalendarAccessMissingError extends Error {
+  constructor(readonly userId: string) {
+    super(`no calendar.readonly grant for user ${userId}`);
+    this.name = "CalendarAccessMissingError";
+  }
+}
+
+export async function storeCalendarToken(userId: string, refreshToken: string, scope: string): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("google_calendar_tokens")
+    .upsert({ user_id: userId, refresh_token_enc: encrypt(refreshToken), scope, created_at: new Date().toISOString() });
+  if (error) throw new Error(`storeCalendarToken: ${error.message}`);
+}
+
+/**
+ * "Koppla från": deletes OUR copy only. Not revoked at Google (revoking any token of a grant
+ * revokes the user's whole grant to the app, the sign-in token included); the user can remove the
+ * access in their Google account.
+ */
+export async function deleteCalendarToken(userId: string): Promise<void> {
+  const { error } = await supabaseAdmin().from("google_calendar_tokens").delete().eq("user_id", userId);
+  if (error) throw new Error(`deleteCalendarToken: ${error.message}`);
+}
+
+async function calendarRow(userId: string): Promise<{ refresh_token_enc: string; scope: string } | null> {
+  const { data, error } = await supabaseAdmin()
+    .from("google_calendar_tokens")
+    .select("refresh_token_enc, scope")
+    .eq("user_id", userId)
+    .maybeSingle();
+  // A database without 0046 (deploy order): nobody is connected.
+  if (error && (error.code === "42P01" || error.code === "PGRST205")) return null;
+  if (error) throw new Error(`calendarRow: ${error.message}`);
+  const row = data as { refresh_token_enc: string; scope: string } | null;
+  return row && hasCalendarReadonly(row.scope) ? row : null;
+}
+
+/** True when the user has connected a calendar (stored, calendar.readonly). */
+export async function hasCalendarAccess(userId: string): Promise<boolean> {
+  return (await calendarRow(userId)) !== null;
+}
+
+/**
+ * The calendar client (calendar.readonly). A missing or revoked grant is
+ * CalendarAccessMissingError (a revoked one is deleted too).
+ */
+export async function getCalendarGoogleAuth(userId: string): Promise<OAuth2Client> {
+  const row = await calendarRow(userId);
+  if (!row) throw new CalendarAccessMissingError(userId);
+  try {
+    return await clientFor(userId, decrypt(row.refresh_token_enc));
+  } catch (err) {
+    if (err instanceof GoogleAuthLostError) {
+      await deleteCalendarToken(userId).catch(() => undefined);
+      throw new CalendarAccessMissingError(userId);
     }
     throw err;
   }
