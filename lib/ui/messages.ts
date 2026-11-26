@@ -24,7 +24,8 @@ export function loginError(code: string | undefined) {
 }
 
 const orgsNotices: Record<string, Notice> = {
-  limit: { tone: "danger", text: "Du kan skapa högst två föreningar. Be någon annan skapa den, eller radera en du inte använder." },
+  limit: { tone: "danger", text: "Du kan ha högst två föreningar som du har skapat. Radera en du inte använder, eller be någon annan skapa den." },
+  cap: { tone: "danger", text: "Du har skapat många föreningar på kort tid. Mejla simon@harrysson.co om du behöver fler." },
   invalid: { tone: "danger", text: "Ange ett namn (högst 100 tecken)." },
   inbjudan: { tone: "danger", title: "Inbjudningslänken gäller inte längre", text: "Be den som bjöd in dig om en ny länk." },
   raderad: { tone: "success", text: "Föreningen är raderad. Google-dokumenten ligger kvar i Drive." },

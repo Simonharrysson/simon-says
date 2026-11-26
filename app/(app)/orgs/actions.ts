@@ -3,6 +3,8 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getEnv } from "@/lib/env";
+import { isAdminEmail } from "@/lib/testmeeting/admin";
 import { isUuid } from "@/lib/db/ids";
 import {
   addPerson,
@@ -44,7 +46,12 @@ function orgIdFrom(form: FormData): string {
 
 export async function createOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
-  const result = await createOrg(db, field(form, "name"));
+  const { data } = await db.auth.getUser();
+  const user = data.user;
+  // ADMIN_EMAILS skip the create limits (0041): the insert goes through the service role.
+  const env = getEnv();
+  const exempt = user && isAdminEmail(user.email, env.ADMIN_EMAILS, env.ALARM_EMAIL) ? user.id : undefined;
+  const result = await createOrg(exempt ? supabaseAdmin() : db, field(form, "name"), exempt);
   if (!result.ok) redirect(`/orgs?fel=${result.reason}`);
   // A new förening starts Kom igång (todo #5); every step can be skipped.
   redirect(`/orgs/${result.id}/kom-igang`);

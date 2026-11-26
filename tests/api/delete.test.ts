@@ -153,7 +153,7 @@ describe.skipIf(!hasLocalSupabase)("deletion", () => {
       for (const table of ["org_members", "people", "meetings"]) {
         expect(await countRows(table, "org_id", orgId), table).toBe(0);
       }
-      // Spend and the 2-org limit outlive the org.
+      // Spend and the org limits outlive the org.
       expect(await countRows("usage_daily", "org_id", orgId)).toBe(1);
       expect(await countRows("org_creations", "org_id", orgId)).toBe(1);
       expect(await countRows("el_sessions", "id", sessionId)).toBe(0);
