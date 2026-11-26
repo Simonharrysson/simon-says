@@ -532,13 +532,18 @@ const FJALL: FixtureSeries = {
   ],
   extras: ["Knut Ahlström", "Stina Malm"],
   routine: (i) => [
-    { at: i, item: "Ekonomi", kind: "report", text: `{kass} gick igenom kassan; ${9000 + ((i * 640) % 4000)} kr, inga konstigheter.` },
-    {
-      at: i,
-      item: "Turer",
-      kind: "report",
-      text: ["Helgens dagstur till Omberg samlade 14 deltagare.", "Kvällspaddlingen ställdes in på grund av blåst.", "Vandringen i Tiveden hade 9 deltagare.", "Skidturen i Kolmården lockade 21 personer."][i % 4],
-    },
+    // From 14 on the meetings are Simon Says' own: its notes hold decisions and tasks, no status lines.
+    ...(i < 14
+      ? [
+          { at: i, item: "Ekonomi", kind: "report" as const, text: `{kass} gick igenom kassan; ${9000 + ((i * 640) % 4000)} kr, inga konstigheter.` },
+          {
+            at: i,
+            item: "Turer",
+            kind: "report" as const,
+            text: ["Helgens dagstur till Omberg samlade 14 deltagare.", "Kvällspaddlingen ställdes in på grund av blåst.", "Vandringen i Tiveden hade 9 deltagare.", "Skidturen i Kolmården lockade 21 personer."][i % 4],
+          },
+        ]
+      : [{ at: i, item: "Ekonomi", kind: "decision" as const, text: "godkänna kassarapporten" }]),
     ...(i % 3 === 1 ? [{ at: i, item: "Turer", kind: "task" as const, text: "Lägga ut nästa månads turer i kalendern", owner: "tur", done: true }] : []),
     ...(i === 14 || i === 16 ? [{ at: i, item: "Stugan", kind: "task" as const, text: "Kalla till städdag i stugan vid Ljungsjön", owner: "sekr", done: false }] : []),
   ],
@@ -579,7 +584,7 @@ const FJALL: FixtureSeries = {
         { at: 4, item: "Fjällveckan", kind: "decision", text: "ställa in fjällveckan i Abisko, för få har anmält sig" },
         { at: 13, item: "Fjällveckan", kind: "report", text: "Fjällveckan i Abisko blir av ändå: studentkåren sponsrar resan och anmälan öppnar nästa vecka." },
         { at: 15, item: "Fjällveckan", kind: "task", text: "Boka tåg till Abisko", owner: "tur", done: false },
-        { at: 17, item: "Fjällveckan", kind: "report", text: "16 anmälda till fjällveckan, tågen är bokade." },
+        { at: 17, item: "Fjällveckan", kind: "decision", text: "genomföra fjällveckan med de 16 anmälda; tågen är bokade" },
       ],
     },
     {

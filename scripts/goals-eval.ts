@@ -55,7 +55,8 @@ function paidClient(budget: number): NotesClient {
               console.log(`  (cached ${key})`);
               return JSON.parse(readFileSync(file, "utf8")) as BetaMessage;
             }
-            const worst = estimateUsd(body, body.messages.length && JSON.stringify(body).includes("historik") ? 20_000 : 5_000);
+            // Output: the largest measured was 3 652 (digest) and ~400 (extraction); twice that as the worst case.
+            const worst = estimateUsd(body, JSON.stringify(body).includes("historik") ? 8_000 : 1_500);
             const spent = ledgerTotal(LEDGER);
             if (spent + worst > budget) throw new Error(`budget: ledger $${spent.toFixed(4)} + estimate $${worst.toFixed(4)} > $${budget}`);
             const t0 = Date.now();

@@ -48,6 +48,13 @@ describe("goals fixtures", () => {
     }
   });
 
+  it("Simon Says' own meetings (ownFrom) hold no status reports, as ownHistory never makes any", () => {
+    for (const s of series) {
+      for (const p of s.protocols.filter((x) => x.truth.source === "simonsays")) expect(p.truth.items.some((i) => i.kind === "report")).toBe(false);
+    }
+    expect(series.some((s) => s.protocols.some((p) => p.truth.source === "simonsays"))).toBe(true);
+  });
+
   it("report-only achievements have no decision in the achieving protocol", () => {
     for (const s of series) {
       for (const g of s.goals.filter((x) => x.tags.includes("report-only"))) {
