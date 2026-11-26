@@ -31,14 +31,17 @@ test("Översikt: Föreslå mål → edit → Godkänn målen @phone", async ({ p
   await expect(page.getByRole("list", { name: "Mål" })).toContainText("Ett hackathon den 14 februari");
 });
 
-test("protocol import, small path: read access → folder → Docs → goals", async ({ page, seedOrg }) => {
-  const org = await seedOrg();
-  const folder = await fake.createDoc({ name: `Protokoll ${org.name}`, mimeType: "application/vnd.google-apps.folder", owner: "admin@e2e.test" });
+test("protocol import, small path: read access → folder → Docs → goals", async ({ seedOrg, newEmail, signedIn }) => {
+  // Its own admin: the read access it grants (24 h) must not leak into a retry or another spec
+  // (a retry as the shared admin would never see "Ge åtkomst" again).
+  const admin = newEmail("import-admin");
+  const org = await seedOrg({ admin });
+  const folder = await fake.createDoc({ name: `Protokoll ${org.name}`, mimeType: "application/vnd.google-apps.folder", owner: admin });
   for (const date of ["2025-09-02", "2025-09-16", "2025-10-07"]) {
     await fake.createDoc({
       name: `${date} Styrelsemöte`,
       parents: [folder.id],
-      owner: "admin@e2e.test",
+      owner: admin,
       createdTime: `${date}T18:00:00Z`,
       modifiedTime: `${date}T20:00:00Z`,
       paragraphs: [
@@ -50,6 +53,8 @@ test("protocol import, small path: read access → folder → Docs → goals", a
     });
   }
 
+  // The sign-in's `next` takes no query string: open the tab after it.
+  const { page } = await signedIn(admin, org.url);
   await page.goto(`${org.url}?flik=oversikt`);
   await page.getByRole("button", { name: "Läs in gamla protokoll" }).click();
   await page.getByRole("button", { name: "Ge åtkomst" }).click();

@@ -107,6 +107,8 @@ export interface PrepareMeetingViewProps {
   /** The format's display name ("Veckomöte", "Årsmöte", a förening's own name). */
   formatName?: string;
   items: DraftItem[];
+  /** Opened from a calendar event (todo #14): its title, shown and put in the Doc's name. */
+  eventTitle?: string | null;
   /** Preparing again: the agenda already made for this date. */
   existing?: { docUrl: string; docName: string; updatedAt: string; held: boolean } | null;
   onType(type: MeetingType): void;
@@ -123,6 +125,7 @@ export interface PrepareMeetingViewProps {
 
 export function PrepareMeetingView(p: PrepareMeetingViewProps) {
   const t = useTranslations("prepare");
+  const tCal = useTranslations("calendar");
   const id = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const first = useRef(true);
@@ -145,6 +148,7 @@ export function PrepareMeetingView(p: PrepareMeetingViewProps) {
         <h1 className="text-2xl focus:outline-none" ref={headingRef} tabIndex={-1}>
           {p.phase.step === "done" ? t("doneTitle") : t("title")}
         </h1>
+        {p.eventTitle && <p className="text-sm text-ink-2">{tCal("fromCalendar", { title: p.eventTitle })}</p>}
         <Steps step={p.phase.step} />
       </header>
       {p.phase.step === "type" && <TypeStep {...p} uid={id} />}
@@ -547,7 +551,7 @@ interface DraftResponse {
   message?: string;
 }
 
-export function PrepareMeeting(props: { orgId: string; orgName: string; today: string; defaultDate: string; defaultTime: string }) {
+export function PrepareMeeting(props: { orgId: string; orgName: string; today: string; defaultDate: string; defaultTime: string; eventTitle?: string | null }) {
   const t = useTranslations("prepare");
   const [phase, setPhase] = useState<PreparePhase>({ step: "type" });
   const [type, setType] = useState<MeetingType>("veckomote");
@@ -587,6 +591,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
           type,
           date,
           time: time || null,
+          ...(props.eventTitle ? { eventTitle: props.eventTitle } : {}),
           items: bodyItems(list),
         }),
       });
@@ -610,6 +615,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
       date={date}
       time={time}
       today={props.today}
+      eventTitle={props.eventTitle}
       formatName={formatName}
       items={items}
       existing={existing}

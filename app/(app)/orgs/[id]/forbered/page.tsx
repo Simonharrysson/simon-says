@@ -7,6 +7,8 @@ import { getOrg, myRole } from "@/lib/db/orgs";
 import { validDate } from "@/lib/prepare/draft";
 import { proposedWhen } from "@/lib/prepare/when";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { stockholmDateTime } from "@/lib/calendar/events";
+import { orgEvent } from "@/lib/calendar/load";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -16,11 +18,11 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Förbered möte (todo #6): any member prepares the next meeting's agenda. The date and time are
  * proposed from the förening's last meeting (same weekday, next week); the steps run in the
- * client (PrepareMeeting → /api/orgs/<id>/prepare).
+ * client (PrepareMeeting → /api/orgs/<id>/prepare). `?event=<id>`: prefilled from that calendar event.
  */
-export default async function PreparePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ datum?: string }> }) {
+export default async function PreparePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ datum?: string; event?: string }> }) {
   const { id } = await params;
-  const { datum } = await searchParams;
+  const { datum, event } = await searchParams;
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
@@ -42,6 +44,19 @@ export default async function PreparePage({ params, searchParams }: { params: Pr
     when.date = datum;
     when.time = "";
   }
+  // "Förbered" on a calendar event (todo #14): its date, time and title, read again from the
+  // förening's calendar with the member's own grant (never taken from the URL).
+  let eventTitle: string | null = null;
+  const user = event ? (await db.auth.getUser()).data.user : null;
+  const picked = user && event ? await orgEvent(user.id, org, event) : null;
+  if (picked) {
+    const at = stockholmDateTime(picked.start);
+    if (at.date >= when.today) {
+      when.date = at.date;
+      when.time = at.time;
+      eventTitle = picked.title || null;
+    }
+  }
 
-  return <PrepareMeeting orgId={org.id} orgName={org.name} today={when.today} defaultDate={when.date} defaultTime={when.time} />;
+  return <PrepareMeeting orgId={org.id} orgName={org.name} today={when.today} defaultDate={when.date} defaultTime={when.time} eventTitle={eventTitle} />;
 }

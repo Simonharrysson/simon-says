@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export function AccountView({
   saveEmailPrefs,
   saveLocale,
   localeFailed,
+  calendar,
 }: {
   email: string;
   userId: string;
@@ -30,9 +32,12 @@ export function AccountView({
   saveLocale: FormAction;
   /** The last save reached the cookie but not the account (`?fel=sprak`). */
   localeFailed?: boolean;
+  /** "Kalender" (todo #14): connect or disconnect the Google Calendar (CalendarConnect). */
+  calendar?: ReactNode;
 }) {
   const t = useTranslations("account");
   const common = useTranslations("common");
+  const calT = useTranslations("calendar");
   const locale = useLocale();
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">
@@ -90,6 +95,11 @@ export function AccountView({
           )}
         </div>
       </Panel>
+      {calendar && (
+        <Panel title={calT("connectTitle")} titleId="calendar-title" id="kalender">
+          {calendar}
+        </Panel>
+      )}
       <Panel title={t("orgsTitle")} titleId="orgs-link-title">
         <div className="flex flex-col gap-4">
           <p className="text-ink-2">{t("orgsText")}</p>

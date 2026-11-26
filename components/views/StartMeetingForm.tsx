@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -39,12 +39,15 @@ export function StartMeetingForm({
   orgId,
   showTestMeeting = false,
   prepared = [],
+  calendar,
 }: {
   orgId: string;
   /** Admins of the service only (decided on the server): the quiet Testmöte menu. */
   showTestMeeting?: boolean;
   /** Upcoming prepared agendas, soonest first; the row shows the next one. */
   prepared?: PreparedLink[];
+  /** The förening's calendar part (todo #14): `StartCalendarSlot` in a Suspense, so Google never holds up the page. */
+  calendar?: ReactNode;
 }) {
   const t = useTranslations("start");
   const types = useTranslations("formats.meetingTypes");
@@ -94,6 +97,7 @@ export function StartMeetingForm({
           </span>
         </p>
       )}
+      {calendar}
       {error && (
         <Banner tone="danger" title={t("startFailedTitle")}>
           {error}

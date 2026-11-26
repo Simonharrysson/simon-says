@@ -134,7 +134,8 @@ describe.skipIf(!hasLocalSupabase)("Privat space (0045)", () => {
       const { count } = await admin.from(t).select("*", { count: "exact", head: true }).eq("meeting_id", m2);
       expect(count, t).toBe(0);
     }
-    const { data: c2 } = await a.db.from("contexts").insert({ org_id: spaceA, name: "Att radera" }).select("id").single();
+    const { data: c2, error: ce } = await a.db.from("contexts").insert({ org_id: spaceA, name: "Att radera" }).select("id").single();
+    expect(ce).toBeNull();
     const m3 = await seedPrivatMeeting(spaceA, a.id, c2!.id);
     // Not while one of its meetings runs.
     await admin.from("meetings").update({ status: "live" }).eq("id", m3);

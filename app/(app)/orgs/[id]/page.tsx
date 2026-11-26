@@ -37,6 +37,12 @@ import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
 import { dismissAction, saveProfileAction } from "./kom-igang/actions";
+import { Suspense } from "react";
+import { OrgCalendarSlot, StartCalendarSlot } from "@/components/calendar/CalendarSlots";
+import { calendarResult } from "@/lib/calendar/events";
+import type { Notice } from "@/lib/ui/messages";
+import type { Locale } from "@/lib/i18n/config";
+import { messages } from "@/lib/i18n/messages";
 import { OrgProfileForm } from "@/components/views/OrgProfileForm";
 import {
   addPersonAction,
@@ -135,17 +141,24 @@ async function safeMembers(orgId: string): Promise<OrgMember[] | undefined> {
   }
 }
 
+/** The `?kalender=` result of "Koppla kalender" (from the start card or Inställningar) as the page notice. */
+function calendarNotice(raw: string | undefined, locale: Locale): Notice | null {
+  const result = calendarResult(raw);
+  if (!result) return null;
+  return { tone: result === "ok" || result === "fran" ? "success" : "danger", text: messages[locale].calendar.result[result], code: `kalender-${result}` };
+}
+
 export default async function OrgPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string }>;
 }) {
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("org");
-  const { fel, klart, flik, import: openImport, drive } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive, kalender } = await searchParams;
   const tab: OrgTab = flik === "oversikt" ? "oversikt" : "moten";
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
@@ -200,7 +213,7 @@ export default async function OrgPage({
       }
       docAccess={docAccess}
       viewerEmail={userResult.data.user?.email ?? null}
-      notice={orgNotice(fel, klart, locale)}
+      notice={orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale)}
       tabs={{
         active: tab,
         href: (t) => (t === "oversikt" ? `/orgs/${org.id}?flik=oversikt` : `/orgs/${org.id}`),
@@ -224,6 +237,14 @@ export default async function OrgPage({
           ) : undefined,
       }}
       profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
+      calendarSettings={
+        isAdmin && tab === "moten" && me ? (
+          // Google's answer streams in; the rest of the page never waits for it (todo #14).
+          <Suspense fallback={null}>
+            <OrgCalendarSlot orgId={org.id} userId={me} org={org} />
+          </Suspense>
+        ) : undefined
+      }
       summarySettings={
         isAdmin ? (
           <SummarySettingsForm
@@ -262,6 +283,13 @@ export default async function OrgPage({
           orgId={org.id}
           showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
           prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
+          calendar={
+            me && tab === "moten" && org.calendar_id ? (
+              <Suspense fallback={null}>
+                <StartCalendarSlot orgId={org.id} userId={me} org={org} />
+              </Suspense>
+            ) : undefined
+          }
         />}
       actions={{
         rotateInvite: rotateInviteAction,

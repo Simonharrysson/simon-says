@@ -126,6 +126,9 @@
     },
     "admin-invalid": {
       "text": "Rollen gick inte att ändra. Ladda om sidan och försök igen."
+    },
+    "kalender": {
+      "text": "Kalendern kunde inte sparas. Välj en av dina egna kalendrar och försök igen. Bara en admin kan ändra den."
     }
   }
 }

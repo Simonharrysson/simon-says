@@ -81,6 +81,10 @@ export interface OrgRow {
   instagram_url?: string | null;
   /** 0047: "Kräv vem, när och klart när" for tasks (default true). */
   require_task_fields?: boolean;
+  /** 0046: the förening's meeting calendar (Google id, name as chosen, title filter); null = none. Never logged. */
+  calendar_id?: string | null;
+  calendar_name?: string | null;
+  calendar_filter?: string | null;
   /** 0045: the kind of space; absent on rows read before 0045 (= förening). */
   kind?: SpaceKind;
   created_by: string | null;
@@ -163,6 +167,8 @@ export interface MeetingRow {
   summary_at?: string | null;
   /** 0047: the Avsluta dialog's answers, applied by the final pass (lib/notes/tasks.ts). */
   task_answers?: unknown;
+  /** 0046: the calendar event the meeting matched at start ({ title, expected, declined }: lib/calendar/events.ts). */
+  calendar_event?: unknown;
   /** 0045: the Privat context the recording belongs to. */
   context_id?: string | null;
 }

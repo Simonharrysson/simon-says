@@ -12,6 +12,7 @@ import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { goalLabel } from "@/lib/prepare/goals";
 import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { orgEvent } from "@/lib/calendar/load";
 import { createContextAction } from "@/app/(app)/privat/actions";
 import { suggestedContext } from "@/lib/privat/contexts";
 import { listContexts } from "@/lib/privat/contexts-db";
@@ -57,10 +58,10 @@ export default async function NewMeetingPage({
   searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ sammanhang?: string }>;
+  searchParams: Promise<{ sammanhang?: string; event?: string }>;
 }) {
   const { orgId } = await params;
-  const { sammanhang } = await searchParams;
+  const { sammanhang, event } = await searchParams;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -105,7 +106,14 @@ export default async function NewMeetingPage({
     );
   }
 
-  const [def, rows, goals] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId), goalSuggestionsFor(db, orgId)]);
+  // "Starta" on a calendar event (todo #14): its title for the consent step, read with the
+  // starter's own grant (the start reads it again; nothing is taken from the URL but the id).
+  const [def, rows, goals, picked] = await Promise.all([
+    orgDefaultFormat(db, orgId),
+    listOrgFormats(db, orgId),
+    goalSuggestionsFor(db, orgId),
+    event ? orgEvent(user.id, org, event) : Promise.resolve(null),
+  ]);
 
   return (
     <main id="innehall">
@@ -118,6 +126,7 @@ export default async function NewMeetingPage({
         formats={startFormats(def, rows, await getLocale())}
         pickerEnabled={pickerEnabled(getEnv())}
         goals={goals.map((g) => ({ id: g.goalId, label: goalLabel(g.title), reason: g.reason }))}
+        calendarEvent={picked ? { id: picked.id, title: picked.title } : null}
       />
     </main>
   );

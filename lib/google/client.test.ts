@@ -151,3 +151,36 @@ describe("getImportGoogleAuth / hasImportAccess (google_import_tokens)", () => {
   });
 });
 
+
+describe("the calendar's separate calendar.readonly grant (google_calendar_tokens)", () => {
+  const CAL = "openid email profile https://www.googleapis.com/auth/calendar.readonly";
+
+  it("stores the calendar token encrypted in its own table", async () => {
+    const { storeCalendarToken } = await import("./client");
+    await storeCalendarToken("u1", "1//cal", CAL);
+    expect(calls.tables).toEqual(["google_calendar_tokens"]);
+    const v = upserts[0] as { refresh_token_enc: string; scope: string };
+    expect(v.refresh_token_enc).not.toContain("1//cal");
+    expect(v.scope).toBe(CAL);
+  });
+
+  it("counts only a row with calendar.readonly", async () => {
+    const { hasCalendarAccess } = await import("./client");
+    row.current = { refresh_token_enc: encrypt("1//cal"), scope: CAL };
+    expect(await hasCalendarAccess("u1")).toBe(true);
+    row.current = { refresh_token_enc: encrypt("1//cal"), scope: "openid" };
+    expect(await hasCalendarAccess("u1")).toBe(false);
+  });
+
+  it("none: CalendarAccessMissingError; revoked: deleted, CalendarAccessMissingError; live: a client", async () => {
+    const { getCalendarGoogleAuth, CalendarAccessMissingError } = await import("./client");
+    await expect(getCalendarGoogleAuth("u1")).rejects.toBeInstanceOf(CalendarAccessMissingError);
+    row.current = { refresh_token_enc: encrypt("1//cal"), scope: CAL };
+    getAccessToken.mockRejectedValue({ response: { data: { error: "invalid_grant" } } });
+    await expect(getCalendarGoogleAuth("u1")).rejects.toBeInstanceOf(CalendarAccessMissingError);
+    expect(calls.deletes).toEqual(["google_calendar_tokens"]);
+    getAccessToken.mockReset().mockResolvedValue({ token: "ya29" });
+    const client = (await getCalendarGoogleAuth("u1")) as unknown as { credentials: unknown };
+    expect(client.credentials).toEqual({ refresh_token: "1//cal" });
+  });
+});

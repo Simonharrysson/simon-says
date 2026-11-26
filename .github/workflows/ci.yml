@@ -58,6 +58,17 @@ jobs:
 
       - run: npx vitest run
 
+      # A DB test that failed on the stack itself (e.g. a 502 from the API gateway) is only
+      # diagnosable from the gateway and PostgREST logs.
+      - name: local Supabase logs
+        if: failure()
+        run: |
+          for c in kong rest auth db; do
+            echo "::group::supabase_${c}_simon-says"
+            docker logs --tail 300 "supabase_${c}_simon-says" 2>&1 || true
+            echo "::endgroup::"
+          done
+
   # End-to-end (docs/testing.md "E2E"): the real app under `next dev` against its own local
   # Supabase (jobs can't share a stack), every external service faked (e2e/fakes).
   e2e:

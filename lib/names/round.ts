@@ -5,6 +5,7 @@ import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { extractNames, NameRoundError, type ExtractedName, type NameSegment } from "./extract";
 import { ensurePerson } from "./people";
+import { parseMeetingEvent } from "@/lib/calendar/events";
 import { isFullName, validName } from "./validate";
 
 // The name round on the server (Task 11). Runs once per ElevenLabs session: from the tick once
@@ -134,7 +135,7 @@ export async function runNameRound(
     }
     if (!claimed.length) return { status: "busy" };
 
-    const [segments, rowsRes, peopleRes, sessionRes] = await Promise.all([
+    const [segments, rowsRes, peopleRes, sessionRes, calendarRes] = await Promise.all([
       roundSegments(sessionId),
       db()
         .from("speaker_map")
@@ -143,6 +144,8 @@ export async function runNameRound(
         .eq("el_session_id", sessionId),
       db().from("people").select("id, name").eq("org_id", meeting.org_id),
       db().from("el_sessions").select("kind").eq("id", sessionId).maybeSingle(),
+      // 0046, on its own: a database without the column only loses the hint.
+      db().from("meetings").select("calendar_event").eq("id", meeting.id).maybeSingle(),
     ]);
     const rows = must("speakers", rowsRes) as SpeakerMapRow[];
     // A Testmöte session (kind 'test') never reads or grows the förening's people list: its
@@ -165,7 +168,10 @@ export async function runNameRound(
 
     let found: ExtractedName[];
     try {
+      // The calendar invitation's people (todo #14) as a hint; never for a Testmöte (people is empty).
+      const invited = new Set(parseMeetingEvent((calendarRes?.data as { calendar_event?: unknown } | null)?.calendar_event)?.expected ?? []);
       found = await (opts.extract ?? extractNames)(segments, people.map((p) => p.name), {
+        expected: people.filter((p) => invited.has(p.id)).map((p) => p.name),
         timeoutMs: opts.timeoutMs,
         onUsage: (u) => recordClaudeUsage(meeting.org_id, u),
       });

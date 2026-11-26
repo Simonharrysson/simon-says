@@ -81,6 +81,8 @@ export interface LiveMeetingControllerProps {
   pickerEnabled?: boolean;
   /** New meeting: "Mål att ta upp" for a new Doc (todo #12). */
   goals?: GoalOption[];
+  /** New meeting from "Starta" on a calendar event (todo #14): its id (sent to the server) and title (shown). */
+  calendarEvent?: { id: string; title: string } | null;
   /**
    * A Privat recording (0045). New: the contexts to pick from (ContextPicker replaces the agenda
    * step) and how to add one. Either way: where the summary is shown and the back link's words.
@@ -448,6 +450,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             transcriptInDoc: choice?.agendaDocId ? choice.transcriptInDoc : null,
             // Only for a new Doc in a format; the server re-reads the titles.
             ...(!choice?.agendaDocId && choice?.goalIds?.length ? { goalIds: choice.goalIds } : {}),
+            // The server reads the event again with the starter's own grant.
+            ...(props.calendarEvent ? { calendarEventId: props.calendarEvent.id } : {}),
           }),
         });
         const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
@@ -885,6 +889,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           : undefined
       }
       micLevel={micLevel}
+      eventTitle={props.calendarEvent?.title ?? null}
       onMicCheck={() => {
         setStartError(null);
         mic()

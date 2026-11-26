@@ -168,6 +168,28 @@ it is deleted when they leave the org.
   **and a third-party security assessment (CASA)** before it can be used by more than 100 users;
   until then Google shows an "unverified app" warning on that consent screen and the 100-user
   cap applies. Consider this before the service opens wider.
+- **Calendar, `calendar.readonly` (todo #14, branch calendar):** optional, per user, asked only by
+  "Koppla kalender" (Inställningar, the förening's Starta möte card or its calendar setting), by its
+  own consent of identity + `calendar.readonly` **without** `include_granted_scopes`, so this
+  long-lived token never carries drive.readonly or drive.file (`app/(app)/calendar-actions.ts`).
+  `/auth/callback?atkomst=kalender` makes the same account check as the import and stores the
+  token apart (`google_calendar_tokens`, 0046, encrypted); "Koppla från" deletes our copy (not
+  revoked at Google, same reason as above). An admin chooses the förening's calendar among their
+  own **shared** calendars only (`orgs.calendar_id/name/filter`; id `…@group.calendar.google.com`,
+  never a primary calendar, which would put each starter's private events into the Doc; written by
+  the server after checking the admin's list, no column grant, checked in 0046 too); **every member reads it with their own grant**, never
+  another member's. Only titles, times and guests are fetched (`fields`), never descriptions or
+  places (`lib/calendar/api.ts`). The förening page renders the calendar parts in `<Suspense>`
+  with a 60 s per-user cache and a 3 s token-refresh limit, so Google never holds up the page. At start the matching event (picked "Starta", else the filtered
+  event happening now ±30 min) is read with the starter's grant: its title names the Doc and
+  prefixes the header line, its guests are matched to people (e-mail, or exact unique full name)
+  and stored as ids only (`meetings.calendar_event`). Invited people who did not decline are
+  *expected*: they never get "Du missade mötet", and an invitation never makes attendance certain
+  (`lib/summaries/recipients.ts`); they are a hint to the name round. Närvarande is still written
+  only from voices heard (an invitation is not attendance).
+  **`calendar.readonly` is a Google "sensitive" scope:** the app must pass Google's OAuth
+  verification (no CASA) before more than 100 users can grant it; until then the consent screen
+  shows the "unverified app" warning.
 - Default: the service **creates a new Doc per meeting** in the förening's
   meeting folder when the starter's grant can add to it (they picked the folder
   once in the Picker), else in the starter's own folder "Simon Says – <förening>".

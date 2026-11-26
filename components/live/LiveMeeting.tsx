@@ -79,6 +79,8 @@ export interface LiveMeetingProps {
   agendaConfirmed?: boolean;
   agendaDoc?: { transcriptInDoc: boolean } | null;
   onNewDocInstead?: () => void;
+  /** Consent step: the calendar event it was started from (todo #14). */
+  eventTitle?: string | null;
   /** A control request is in flight. */
   busy?: boolean;
   autoStopped?: boolean;
@@ -144,6 +146,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           agendaConfirmed={p.agendaConfirmed}
           agendaDoc={p.agendaDoc}
           onNewDocInstead={p.onNewDocInstead}
+          eventTitle={p.eventTitle}
           privat={Boolean(p.privat)}
         />
         <PrivacyNote />

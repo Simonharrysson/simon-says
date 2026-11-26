@@ -31,6 +31,8 @@ import { kindsOfType } from "@/lib/prepare/draft";
 import { withGoalItems } from "@/lib/prepare/goals";
 import { goalTitles } from "@/lib/prepare/goals-load";
 import { preparedForDoc, type PreparedAgenda } from "@/lib/prepare/store";
+import type { MeetingCalendarEvent } from "@/lib/calendar/events";
+import { calendarSnapshotForStart } from "@/lib/calendar/load";
 import { isUuid } from "@/lib/db/ids";
 import { privatTitle } from "@/lib/privat/format";
 import { isPrivat } from "@/lib/privat/space";
@@ -56,6 +58,11 @@ export interface StartOptions {
    * ta upp" (org_goals ids, at most two; todo #12), added as topic items. Titles are re-read here.
    */
   goalIds?: string[];
+  /**
+   * The calendar event picked on the förening page ("Starta", todo #14). Re-read with the
+   * starter's own grant; without it, the förening calendar's event happening now is used.
+   */
+  calendarEventId?: string;
   /**
    * A Privat space only (0045): the context the recording belongs to (required there), and
    * whether to also write a Google Doc ("Skriv även i ett Google-dokument"). Without a Doc the
@@ -198,6 +205,13 @@ export async function startMeeting(
   const limited = await startLimit(user.id);
   if (limited) return limited;
 
+  // The calendar event this meeting is (todo #14), looked up alongside the checks below: its title
+  // names the Doc, its guests are expected attendance. Never a Testmöte or a Privat space; best effort (null).
+  const calendarP: Promise<MeetingCalendarEvent | null> =
+    eventKind === "started" && org.calendar_id && !isPrivat(org)
+      ? calendarSnapshotForStart({ userId: user.id, org, eventId: opts.calendarEventId ?? null })
+      : Promise.resolve(null);
+
   // Förbered möte (0033): a Doc Simon Says prepared for this förening. Looked up here, never taken
   // from the request: the Doc is ours (shareable), it runs in the prepared format unless the
   // starter chose another, and its "Från förra veckan" lines are adopted. Not for Testmöten.
@@ -225,6 +239,7 @@ export async function startMeeting(
     return googleDown();
   }
 
+  const calendarEvent = await calendarP;
   const meetingId = randomUUID();
   const startedAt = new Date();
   const isTest = opts.isTest ?? eventKind === "test_started";
@@ -239,6 +254,7 @@ export async function startMeeting(
     meetingFolderId: org.meeting_folder_id ?? null,
     isTest,
     user,
+    eventTitle: calendarEvent?.title || null,
   };
 
   const setup = docless
@@ -357,6 +373,8 @@ export async function startMeeting(
     }
   }
 
+  if (calendarEvent) await saveCalendarEvent(meetingId, calendarEvent);
+
   const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
   // A prepared agenda was shared with the members when it was made (through the preparer's grant).
@@ -372,6 +390,8 @@ export async function startMeeting(
     transcriptTab: transcriptTabId !== null,
     agenda: agendaMode,
     layout,
+    // Counts only: never the event's title or guests.
+    ...(calendarEvent ? { calendar: { expected: calendarEvent.expected.length, declined: calendarEvent.declined.length } } : {}),
   });
 
   let carried = 0;
@@ -433,6 +453,15 @@ export async function startMeeting(
     carried,
     warnings: agendaMode && anchor ? missingRequired(anchor.scan, format.profile) : [],
   };
+}
+
+/**
+ * The matched calendar event on the meeting (0046), for the tick's header and the summary's
+ * attendance. Best effort: a database without 0046, or any failure, only logs.
+ */
+async function saveCalendarEvent(meetingId: string, event: MeetingCalendarEvent): Promise<void> {
+  const { error } = await supabaseAdmin().from("meetings").update({ calendar_event: event }).eq("id", meetingId);
+  if (error) console.warn(`meetings ${meetingId}: calendar event not saved (${error.code ?? ""}): ${error.message}`);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -505,6 +534,8 @@ interface SetupCtx {
   meetingFolderId: string | null;
   isTest: boolean;
   user: { id: string; email?: string | null };
+  /** The matched calendar event's title (todo #14), for the Doc's name. */
+  eventTitle?: string | null;
 }
 
 /** The org's other members with an email (the starter owns the Doc). */
@@ -520,7 +551,7 @@ const sharedIds = (members: OrgMember[], shared: string[]) => {
 };
 
 /** The new Doc's file name: date and time, "Mötesprotokoll", the förening; a Testmöte marked. */
-const docTitle = (ctx: SetupCtx) => meetingTitle(ctx.orgName, ctx.startedAt, { test: ctx.isTest });
+const docTitle = (ctx: SetupCtx) => meetingTitle(ctx.orgName, ctx.startedAt, { test: ctx.isTest, eventTitle: ctx.eventTitle });
 
 /** Agenda mode: the checks (no writes), then the anchoring (the only Doc write before the guard, F14). Their Doc: never shared by us. */
 /**

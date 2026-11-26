@@ -13,6 +13,25 @@ export const GOOGLE_SCOPES = ["openid", "email", "profile", DRIVE_FILE] as const
 /** The incremental request for the protocol import: the sign-in scopes plus drive.readonly. */
 export const IMPORT_SCOPES = [...GOOGLE_SCOPES, DRIVE_READONLY] as const;
 
+/**
+ * Read access to the user's calendars (event titles, times, attendees). Asked ONLY of a user who
+ * presses "Koppla kalender", by its own incremental consent, never at sign-in. A Google
+ * "sensitive" scope (app verification before more than 100 users).
+ */
+export const CALENDAR_READONLY = "https://www.googleapis.com/auth/calendar.readonly";
+
+/**
+ * The calendar consent: identity plus calendar.readonly only. Deliberately WITHOUT
+ * include_granted_scopes, so this long-lived token never also carries drive.readonly (the import's,
+ * 24 h) or drive.file (the sign-in token's).
+ */
+export const CALENDAR_SCOPES = ["openid", "email", "profile", CALENDAR_READONLY] as const;
+
+/** True when a space-separated granted-scope string includes calendar.readonly. */
+export function hasCalendarReadonly(grantedScope: string | null | undefined): boolean {
+  return !!grantedScope && grantedScope.split(/\s+/).includes(CALENDAR_READONLY);
+}
+
 /** True when a space-separated granted-scope string includes drive.file. */
 export function hasDriveFile(grantedScope: string): boolean {
   return grantedScope.split(/\s+/).includes(DRIVE_FILE);
