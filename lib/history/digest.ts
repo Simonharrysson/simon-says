@@ -14,11 +14,11 @@ export const DIGEST_SYSTEM_PROMPT = `You read the whole meeting history of a Swe
 
 The history is a list of meetings with their date: agenda items (Punkter), decisions (Beslut), tasks (Uppgifter, with the owner's role and [klar]/[ej klar]) and status lines (Läge). Older meetings come from imported protocols, newer ones may come from Simon Says.
 
-A goal is something the förening wants to achieve or build over several weeks or months: a project, an event to arrange, a target to reach, a change to make. NOT a goal: routine that happens every meeting (the treasurer's report, booking the room for the next evening, checking equipment), formalities, and one-off errands that are done in a week.
+A goal is something the förening set out to achieve, build or change and followed across at least two meetings: a project, an event to arrange, a target to reach, a change to how it works. Small practical changes count too when they span meetings (say, a shared calendar or a new member register being set up). NOT a goal: routine that recurs at every meeting (the treasurer's report, booking the room for the next evening, checking equipment), formalities, errands that start and finish within one meeting, and recurring chores however often they come up (cleaning days, bookings, equipment checks), also when they concern something a goal produced.
 
 For every goal, decide its status as of the reference date (the latest meeting):
 - "achieved": a meeting says it was reached, finished or carried out (a status line is enough: "vi passerade 150 medlemmar", "premiären gick bra", "kommunen har beviljat bidraget").
-- "dropped": a meeting says it was given up, cancelled, put on ice or replaced by something else.
+- "dropped": a meeting says it was given up, cancelled, shelved with no plan to return ("läggs på is", "skippar") or replaced by something else. A pause with a time to come back ("pausas till efter jul", "on hold until spring") is NOT dropped: if nobody takes it up again it becomes stale.
 - "stale": neither achieved nor dropped, and not mentioned at all in the ${STALE_MONTHS} months before the reference date. It went quiet; nobody decided anything.
 - "current": still being worked on, mentioned in the ${STALE_MONTHS} months before the reference date.
 
