@@ -58,11 +58,16 @@ export async function myRole(db: Db, orgId: string): Promise<OrgMemberRow["role"
     data: { user },
   } = await db.auth.getUser();
   if (!user) return null;
+  return memberRole(db, orgId, user.id);
+}
+
+/** A known user's role in an org (no second auth round trip), or null when not a member. */
+export async function memberRole(db: Db, orgId: string, userId: string): Promise<OrgMemberRow["role"] | null> {
   const { data, error } = await db
     .from("org_members")
     .select("role")
     .eq("org_id", orgId)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) fail("myRole", error);
   return data?.role ?? null;

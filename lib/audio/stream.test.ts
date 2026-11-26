@@ -685,11 +685,11 @@ describe("LiveStream", () => {
     expect(t.sockets).toHaveLength(1);
   });
 
-  it("403 not_starter on segments drops the runs and stops sending (not authLost)", async () => {
+  it("403 not_member on segments drops the runs and stops sending (not authLost)", async () => {
     const t = setup();
     const health: { authLost: boolean }[] = [];
     t.stream.on("health", (h) => health.push(h));
-    t.replies.segments.push(json(403, { error: "not_starter" }));
+    t.replies.segments.push(json(403, { error: "not_member" }));
     await t.stream.start();
     await settle();
     t.sockets[0].open();
@@ -697,7 +697,24 @@ describe("LiveStream", () => {
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
     await settle();
     expect(t.stream.pending).toBe(0);
-    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_starter" });
+    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_member" });
+    expect(t.audio.stopped).toBe(true);
+    expect(health.some((h) => h.authLost)).toBe(false);
+  });
+
+  it("404 on segments (an account outside the förening: RLS hides the meeting) stops the same way", async () => {
+    const t = setup();
+    const health: { authLost: boolean }[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    t.replies.segments.push(json(404, { error: "not_found" }));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["x", "s"]]));
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    await settle();
+    expect(t.stream.pending).toBe(0);
+    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_member" });
     expect(t.audio.stopped).toBe(true);
     expect(health.some((h) => h.authLost)).toBe(false);
   });

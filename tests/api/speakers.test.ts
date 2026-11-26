@@ -136,16 +136,12 @@ describe.skipIf(!hasLocalSupabase)("/api/meetings/[id]/speakers", () => {
   const get = async (id: string) => (await GET(req(id, "GET"), ctx(id))).json();
   const patch = (id: string, body: unknown) => PATCH(req(id, "PATCH", body), ctx(id));
 
-  it("starter only: 401 signed out, 403 for another member, 404 for a bad id", async () => {
-    const { id, session } = await meeting();
-    const s = await session(600);
-    const body = { elSessionId: s, speakerLabel: "speaker_0", displayName: "Anna" };
+  it("any member: 401 signed out, 200 for another member, 404 for a bad id", async () => {
+    const { id } = await meeting();
     current.db = anonClient();
     expect((await GET(req(id, "GET"), ctx(id))).status).toBe(401);
     current.db = member.db;
-    expect((await GET(req(id, "GET"), ctx(id))).status).toBe(403);
-    expect((await patch(id, body)).status).toBe(403);
-    expect((await POST(req(id, "POST"), ctx(id))).status).toBe(403);
+    expect((await GET(req(id, "GET"), ctx(id))).status).toBe(200);
     current.db = starter.db;
     expect((await GET(req("nope", "GET"), ctx("nope"))).status).toBe(404);
   });

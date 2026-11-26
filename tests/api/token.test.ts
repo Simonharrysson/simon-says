@@ -173,17 +173,19 @@ describe.skipIf(!hasLocalSupabase)("POST /api/meetings/[id]/token", () => {
     expect((await callToken(randomUUID())).status).toBe(401);
   });
 
-  it("403 for a member who didn't start the meeting, 404 for outsiders and bad ids", async () => {
+  it("any member may run the meeting (takes over: mints); 404 for outsiders and bad ids", async () => {
     const id = await live(orgId, starter.id);
-    as(member);
-    const res = await callToken(id);
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "not_starter" });
     as(outsider);
     expect((await callToken(id)).status).toBe(404);
     as(starter);
     expect((await callToken("not-a-uuid")).status).toBe(404);
     expect(mint.fn).not.toHaveBeenCalled();
+    as(member);
+    const res = await callToken(id);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.token).toBe("tok-test");
+    expect((await meetingRow(id)).current_el_session_id).toBe(body.sessionId);
   });
 
   it("403 without confirmed consent", async () => {
