@@ -50,6 +50,13 @@ begin
     raise exception 'profile kind does not match the meeting type' using errcode = '22023';
   end if;
   perform 1 from public.orgs o where o.id = p_org_id for update;
+  -- The same profile again (a retried save): keep the row the förening already points at.
+  select f.id into v_id from public.orgs o
+  join public.format_profiles f on f.id = case when p_type = 'styrelsemote' then o.styrelse_format_id else o.arsmote_format_id end
+  where o.id = p_org_id and f.profile = p_profile;
+  if v_id is not null then
+    return v_id;
+  end if;
   insert into public.format_profiles (org_id, kind, profile, approved_by, approved_at, is_default)
   values (p_org_id, v_kind, p_profile, auth.uid(), now(), false)
   returning id into v_id;
@@ -62,8 +69,28 @@ begin
 end;
 $$;
 
+-- Both from the stadgar in one transaction (onboarding step 4): null leaves that type as it is.
+create function public.set_type_formats(p_org_id uuid, p_styrelse jsonb, p_arsmote jsonb)
+returns void
+language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if not public.is_org_admin(p_org_id) then
+    raise exception 'only org admins can set formats' using errcode = '42501';
+  end if;
+  if p_styrelse is not null then
+    perform public.set_type_format(p_org_id, 'styrelsemote', p_styrelse);
+  end if;
+  if p_arsmote is not null then
+    perform public.set_type_format(p_org_id, 'arsmote', p_arsmote);
+  end if;
+end;
+$$;
+
 revoke all on function public.set_type_format(uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.set_type_format(uuid, text, jsonb) to authenticated;
+revoke all on function public.set_type_formats(uuid, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.set_type_formats(uuid, jsonb, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------------------------
 -- org_onboarding: where the admin is in "Kom igång". Steps: namn, styrelsen, mapp, format,
@@ -123,21 +150,50 @@ alter table public.people
   add column voice_consent_by uuid references auth.users on delete set null;
 create index people_org_email_idx on public.people (org_id, lower(email)) where email is not null;
 
--- Admins only: set or clear a person's e-mail (invite). Links the person to an existing member
--- with that e-mail. Returns ok | invalid | taken (another person in the org has it) | forbidden.
+-- Links a person to the member of their org whose CONFIRMED e-mail (trimmed, lowercased) is
+-- p_email, when that member is not linked to anyone else yet. Unconfirmed addresses never link.
+create function public.link_person_by_email(p_person_id uuid)
+returns void
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_org uuid;
+  v_email text;
+  v_user uuid;
+begin
+  select p.org_id, lower(btrim(p.email)) into v_org, v_email from public.people p
+  where p.id = p_person_id and p.member_user_id is null;
+  if v_email is null then
+    return;
+  end if;
+  select m.user_id into v_user from public.org_members m
+  join auth.users u on u.id = m.user_id
+  where m.org_id = v_org and lower(btrim(u.email)) = v_email and u.email_confirmed_at is not null
+    and not exists (select 1 from public.people q where q.org_id = v_org and q.member_user_id = m.user_id)
+  limit 1;
+  if v_user is not null then
+    update public.people set member_user_id = v_user where id = p_person_id and member_user_id is null;
+  end if;
+end;
+$$;
+revoke all on function public.link_person_by_email(uuid) from public, anon, authenticated;
+
+-- Admins only: set or clear a person's e-mail (invite). A new address that is not the linked
+-- account's unlinks it, then links the member with that (confirmed) address, if any. Clearing
+-- keeps the link. Returns ok | invalid | taken (another person in the org has it) | forbidden.
 create function public.set_person_email(p_person_id uuid, p_email text)
 returns text
 language plpgsql volatile security definer set search_path = ''
 as $$
 declare
   v_org uuid;
+  v_member uuid;
   v_email text := nullif(lower(btrim(p_email)), '');
-  v_user uuid;
 begin
   if auth.uid() is null then
     return 'forbidden';
   end if;
-  select p.org_id into v_org from public.people p where p.id = p_person_id;
+  select p.org_id, p.member_user_id into v_org, v_member from public.people p where p.id = p_person_id;
   if v_org is null or not public.is_org_admin(v_org) then
     return 'forbidden';
   end if;
@@ -150,19 +206,64 @@ begin
     return 'taken';
   end if;
   update public.people set email = v_email where id = p_person_id;
-  if v_email is not null then
-    select m.user_id into v_user from public.org_members m
-    join auth.users u on u.id = m.user_id
-    where m.org_id = v_org and lower(u.email) = v_email
-      and not exists (select 1 from public.people q where q.org_id = v_org and q.member_user_id = m.user_id)
-    limit 1;
-    if v_user is not null then
-      update public.people set member_user_id = v_user where id = p_person_id and member_user_id is null;
-    end if;
+  if v_email is not null and v_member is not null and not exists (
+    select 1 from auth.users u where u.id = v_member and lower(btrim(u.email)) = v_email
+  ) then
+    update public.people set member_user_id = null where id = p_person_id;
   end if;
+  perform public.link_person_by_email(p_person_id);
   return 'ok';
 end;
 $$;
+
+-- Admins only, ONE transaction (onboarding step 2): adds a board person with role and e-mail,
+-- optionally linked to a member nobody has named (p_member_user_id). Returns jsonb:
+-- {"result": "ok", "id"} | {"result": "duplicate", "id"} (that name exists: edit it instead) |
+-- {"result": "taken" | "invalid" | "forbidden"}. Name and role are validated by the caller too.
+create function public.add_board_person(p_org_id uuid, p_name text, p_role text, p_email text, p_member_user_id uuid)
+returns jsonb
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_name text := btrim(p_name);
+  v_role text := nullif(btrim(p_role), '');
+  v_email text := nullif(lower(btrim(p_email)), '');
+  v_id uuid;
+begin
+  if auth.uid() is null or not public.is_org_admin(p_org_id) then
+    return jsonb_build_object('result', 'forbidden');
+  end if;
+  if length(v_name) not between 1 and 100 or (v_role is not null and length(v_role) not between 1 and 40) then
+    return jsonb_build_object('result', 'invalid');
+  end if;
+  if v_email is not null and (length(v_email) not between 3 and 254 or v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$') then
+    return jsonb_build_object('result', 'invalid');
+  end if;
+  select p.id into v_id from public.people p where p.org_id = p_org_id and lower(btrim(p.name)) = lower(v_name);
+  if v_id is not null then
+    return jsonb_build_object('result', 'duplicate', 'id', v_id);
+  end if;
+  if v_email is not null and exists (select 1 from public.people p where p.org_id = p_org_id and lower(p.email) = v_email) then
+    return jsonb_build_object('result', 'taken');
+  end if;
+  if p_member_user_id is not null and (
+    not exists (select 1 from public.org_members m where m.org_id = p_org_id and m.user_id = p_member_user_id)
+    or exists (select 1 from public.people q where q.org_id = p_org_id and q.member_user_id = p_member_user_id)
+  ) then
+    return jsonb_build_object('result', 'invalid');
+  end if;
+  insert into public.people (org_id, name, role, email, member_user_id)
+  values (p_org_id, v_name, v_role, v_email, p_member_user_id)
+  returning id into v_id;
+  perform public.link_person_by_email(v_id);
+  return jsonb_build_object('result', 'ok', 'id', v_id);
+exception when unique_violation then
+  select p.id into v_id from public.people p where p.org_id = p_org_id and lower(btrim(p.name)) = lower(v_name);
+  return jsonb_build_object('result', 'duplicate', 'id', v_id);
+end;
+$$;
+revoke all on function public.add_board_person(uuid, text, text, text, uuid) from public, anon, authenticated;
+grant execute on function public.add_board_person(uuid, text, text, text, uuid) to authenticated;
 
 -- An admin, or the person's own linked member, records (true) or withdraws (false) voice consent.
 create function public.set_voice_consent(p_person_id uuid, p_consent boolean)
@@ -202,7 +303,8 @@ as $$
 declare
   v_email text;
 begin
-  select lower(u.email) into v_email from auth.users u where u.id = new.user_id;
+  -- Only a confirmed address links (an unverified sign-up must not claim someone's invite).
+  select lower(btrim(u.email)) into v_email from auth.users u where u.id = new.user_id and u.email_confirmed_at is not null;
   if v_email is null then
     return null;
   end if;
@@ -212,7 +314,7 @@ begin
   update public.people p set member_user_id = new.user_id
   where p.id = (
     select p2.id from public.people p2
-    where p2.org_id = new.org_id and lower(p2.email) = v_email and p2.member_user_id is null
+    where p2.org_id = new.org_id and lower(btrim(p2.email)) = v_email and p2.member_user_id is null
     limit 1
   );
   return null;
@@ -223,6 +325,26 @@ revoke all on function public.link_person_on_join() from public, anon, authentic
 create trigger org_members_link_person
   after insert on public.org_members
   for each row execute function public.link_person_on_join();
+
+-- The person's account link goes (member removed, left, account deleted, or e-mail changed):
+-- their voice consent goes with it; it is asked again.
+create function public.people_clear_voice_consent()
+returns trigger
+language plpgsql set search_path = ''
+as $$
+begin
+  if old.member_user_id is not null and new.member_user_id is distinct from old.member_user_id then
+    new.voice_consent_at := null;
+    new.voice_consent_by := null;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.people_clear_voice_consent() from public, anon, authenticated;
+
+create trigger people_clear_voice_consent
+  before update of member_user_id on public.people
+  for each row execute function public.people_clear_voice_consent();
 
 -- ---------------------------------------------------------------------------------------------
 -- Storage: org logos. Private bucket; one object per förening at `<org id>/logo` (a square image

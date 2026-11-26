@@ -44,7 +44,8 @@ export function boardRows(people: BoardPerson[], members: BoardMember[]): BoardR
       personId: p.id,
       name: p.name,
       role: p.role ?? null,
-      email: member?.email || p.email || null,
+      // The person's own (invite) address first: after an admin changes it, the list shows the new one.
+      email: p.email || member?.email || null,
       status: member ? "account" : p.email ? "invited" : "name",
       member,
       voiceConsent: Boolean(p.voice_consent_at),

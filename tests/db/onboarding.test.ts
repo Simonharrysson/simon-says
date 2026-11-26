@@ -150,3 +150,81 @@ describe.skipIf(!hasLocalSupabase)("onboarding (0035)", () => {
     expect(rm).toBeNull();
   });
 });
+
+describe.skipIf(!hasLocalSupabase)("onboarding (0035): review fixes", () => {
+  let admin: TestUser;
+  let member: TestUser;
+  let orgId: string;
+
+  beforeAll(async () => {
+    [admin, member] = await Promise.all([createTestUser("obf-adm"), createTestUser("obf-mem")]);
+    orgId = await newOrg(admin, "Granskningsföreningen");
+    expect(await joinOrg(member.db, await inviteCode(orgId))).toBe(orgId);
+  });
+
+  it("an unconfirmed address never links, on join or by set_person_email", async () => {
+    const email = `obf-unconf-${Date.now()}@test.local`;
+    const { data, error } = await adminClient().auth.admin.createUser({ email, password: `pw-${Date.now()}x`, email_confirm: false });
+    if (error || !data.user) throw new Error(error?.message);
+    const p = await person(orgId, "Obekräftad Olsson");
+    expect((await admin.db.rpc("set_person_email", { p_person_id: p, p_email: email })).data).toBe("ok");
+    // Joins (written as the server would; the trigger runs either way).
+    const { error: joinError } = await adminClient().from("org_members").insert({ org_id: orgId, user_id: data.user.id });
+    expect(joinError).toBeNull();
+    expect((await personRow(p)).member_user_id).toBeNull();
+    expect((await admin.db.rpc("set_person_email", { p_person_id: p, p_email: ` ${email.toUpperCase()} ` })).data).toBe("ok");
+    expect((await personRow(p)).member_user_id).toBeNull();
+  });
+
+  it("add_board_person: one transaction; a duplicate name points at the existing row; bad e-mail adds nothing", async () => {
+    const add = (name: string, email: string, role = "") =>
+      admin.db.rpc("add_board_person", { p_org_id: orgId, p_name: name, p_role: role, p_email: email, p_member_user_id: null });
+    const { data: ok } = await add("Lisa Holm", "lisa@example.com", "Kassör");
+    expect(ok.result).toBe("ok");
+    const { data: row } = await adminClient().from("people").select("name, role, email").eq("id", ok.id).single();
+    expect(row).toEqual({ name: "Lisa Holm", role: "Kassör", email: "lisa@example.com" });
+
+    expect((await add(" lisa holm ", "")).data).toEqual({ result: "duplicate", id: ok.id });
+    expect((await add("Per Ström", "lisa@example.com")).data).toEqual({ result: "taken" });
+    expect((await add("Per Ström", "inte-en-adress")).data).toEqual({ result: "invalid" });
+    const { count } = await adminClient().from("people").select("*", { count: "exact", head: true }).eq("org_id", orgId).eq("name", "Per Ström");
+    expect(count).toBe(0);
+    expect((await member.db.rpc("add_board_person", { p_org_id: orgId, p_name: "X", p_role: "", p_email: "", p_member_user_id: null })).data).toEqual({ result: "forbidden" });
+
+    // Naming a member links straight away.
+    const { data: named } = await admin.db.rpc("add_board_person", { p_org_id: orgId, p_name: "Medlem Månsson", p_role: "", p_email: "", p_member_user_id: member.id });
+    expect(named.result).toBe("ok");
+    expect((await personRow(named.id)).member_user_id).toBe(member.id);
+  });
+
+  it("a new e-mail on a linked person unlinks the old account; leaving clears voice consent", async () => {
+    const { data: p } = await adminClient().from("people").select("id").eq("org_id", orgId).eq("member_user_id", member.id).single();
+    const id = p!.id as string;
+    expect((await admin.db.rpc("set_voice_consent", { p_person_id: id, p_consent: true })).data).toBe(true);
+    expect((await admin.db.rpc("set_person_email", { p_person_id: id, p_email: "ny-adress@example.com" })).data).toBe("ok");
+    expect(await personRow(id)).toMatchObject({ email: "ny-adress@example.com", member_user_id: null, voice_consent_at: null });
+
+    // Back to the member's own address: linked again; then the member leaves → consent cleared.
+    expect((await admin.db.rpc("set_person_email", { p_person_id: id, p_email: member.email })).data).toBe("ok");
+    expect((await personRow(id)).member_user_id).toBe(member.id);
+    expect((await admin.db.rpc("set_voice_consent", { p_person_id: id, p_consent: true })).data).toBe(true);
+    expect((await member.db.rpc("leave_org", { p_org_id: orgId })).error).toBeNull();
+    expect(await personRow(id)).toMatchObject({ member_user_id: null, voice_consent_at: null, voice_consent_by: null });
+  });
+
+  it("set_type_formats saves both in one call; the same lists again reuse the rows", async () => {
+    const ars = { ...ARSMOTE, fixedAgendaItems: ARSMOTE.fixedAgendaItems.slice(0, 3) };
+    const styr = { ...STYRELSEPROTOKOLL, requiredItems: ["Fråga om beslutsmässighet"] };
+    expect((await admin.db.rpc("set_type_formats", { p_org_id: orgId, p_styrelse: styr, p_arsmote: ars })).error).toBeNull();
+    const before = await adminClient().from("format_profiles").select("id").eq("org_id", orgId);
+    expect((await admin.db.rpc("set_type_formats", { p_org_id: orgId, p_styrelse: styr, p_arsmote: ars })).error).toBeNull();
+    const after = await adminClient().from("format_profiles").select("id").eq("org_id", orgId);
+    expect(after.data?.length).toBe(before.data?.length);
+    // A wrong kind rolls the whole call back.
+    const { error } = await admin.db.rpc("set_type_formats", { p_org_id: orgId, p_styrelse: { ...styr, requiredItems: ["Annat"] }, p_arsmote: STYRELSEPROTOKOLL });
+    expect(error?.code).toBe("22023");
+    const { data: org } = await adminClient().from("orgs").select("styrelse_format_id").eq("id", orgId).single();
+    const { data: still } = await adminClient().from("format_profiles").select("profile").eq("id", org!.styrelse_format_id).single();
+    expect((still!.profile as { requiredItems: string[] }).requiredItems).toEqual(["Fråga om beslutsmässighet"]);
+  });
+});

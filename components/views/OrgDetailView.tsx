@@ -588,7 +588,7 @@ function PeoplePanel({
   // Members nobody has named yet (0035): shown here too, so the list holds everyone (audit U3).
   const unnamed = (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId));
   return (
-    <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length}</span>}>
+    <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length + unnamed.length}</span>}>
       <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
         Alla som brukar vara med på mötena. Namnen används för att känna igen vem som talar. De behöver inget konto.
         {isAdmin && (

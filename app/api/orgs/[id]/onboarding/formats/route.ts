@@ -47,14 +47,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const current = await orgDefaultFormat(db, id);
       if (!current.id) await chooseStandardFormat(db, id, "veckomote");
     }
+    let styrelse: unknown = null;
     if (board) {
-      const profile = parseProfile({ ...STYRELSEPROTOKOLL, requiredItems: cleanItems(board) });
-      if (!profile) return fail("invalid_profile", 400, "Punkterna är inte giltiga.");
-      const { error } = await db.rpc("set_type_format", { p_org_id: id, p_type: "styrelsemote", p_profile: profile });
-      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      styrelse = parseProfile({ ...STYRELSEPROTOKOLL, requiredItems: cleanItems(board) });
+      if (!styrelse) return fail("invalid_profile", 400, "Punkterna är inte giltiga.");
     }
-    if (arsmote && arsmote.length > 0) {
-      const { error } = await db.rpc("set_type_format", { p_org_id: id, p_type: "arsmote", p_profile: arsmoteProfile(arsmote) });
+    const ars = arsmote && arsmote.length > 0 ? arsmoteProfile(arsmote) : null;
+    if (styrelse || ars) {
+      // One transaction; saving the same lists again reuses the rows (set_type_formats, 0035).
+      const { error } = await db.rpc("set_type_formats", { p_org_id: id, p_styrelse: styrelse, p_arsmote: ars });
       if (error) throw Object.assign(new Error(error.message), { code: error.code });
     }
   } catch (err) {

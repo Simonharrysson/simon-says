@@ -191,6 +191,14 @@ export function Onboarding(p: OnboardingProps) {
   };
 
   const board = (r: Promise<ActionResult>) => r.then((x) => { router.refresh(); return msg(x); }, () => "Vi nådde inte servern. Försök igen.");
+  const boardAdd = (r: Promise<ActionResult>) =>
+    r.then(
+      (x) => {
+        router.refresh();
+        return x.ok ? null : x.editPersonId ? { message: x.message, editPersonId: x.editPersonId } : x.message;
+      },
+      () => "Vi nådde inte servern. Försök igen.",
+    );
 
   const logoUrl = versionedLogoUrl(orgId, logoAt);
   const shell = {
@@ -235,7 +243,7 @@ export function Onboarding(p: OnboardingProps) {
             rows={p.board}
             inviteUrl={p.inviteUrl}
             myEmail={p.myEmail}
-            onAdd={(input, member) => board(addBoardPersonAction(orgId, input, member))}
+            onAdd={(input, member) => boardAdd(addBoardPersonAction(orgId, input, member))}
             onUpdate={(id, input) => board(updateBoardPersonAction(orgId, id, input))}
             onRemove={(id) => board(removeBoardPersonAction(orgId, id))}
           />

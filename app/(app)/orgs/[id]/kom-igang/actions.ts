@@ -13,7 +13,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 // Kom igång (todo #5): actions the wizard calls directly. All run as the signed-in user; RLS and
 // the 0035 functions decide; the checks here only turn refusals into Swedish sentences.
 
-export type ActionResult = { ok: true } | { ok: false; message: string };
+/** `editPersonId`: the name is already on the list; the form offers to edit that person instead. */
+export type ActionResult = { ok: true } | { ok: false; message: string; editPersonId?: string };
 const fail = (message: string): ActionResult => ({ ok: false, message });
 const OK: ActionResult = { ok: true };
 const ADMIN_ONLY = "Bara administratörer kan ändra det här.";
@@ -81,19 +82,31 @@ export async function addBoardPersonAction(orgId: string, input: BoardInput, mem
   if (!db) return fail(ADMIN_ONLY);
   const v = checkInput(input);
   if (typeof v === "string") return fail(v);
-  const row: Record<string, unknown> = { org_id: orgId, name: v.name };
-  if (memberUserId && isUuid(memberUserId)) row.member_user_id = memberUserId;
-  const { data, error } = await db.from("people").insert(row).select("id").single();
-  if (error?.code === "23505") {
-    return fail(memberUserId ? `${v.name} finns redan i listan. Ändra ${v.name} och skriv in e-postadressen, så kopplas kontot dit.` : `${v.name} finns redan i listan.`);
+  // One transaction (add_board_person, 0035): the person, role and e-mail are saved together or not at all.
+  const { data, error } = await db.rpc("add_board_person", {
+    p_org_id: orgId,
+    p_name: v.name,
+    p_role: v.role ?? "",
+    p_email: v.email ?? "",
+    p_member_user_id: memberUserId && isUuid(memberUserId) ? memberUserId : null,
+  });
+  if (error) {
+    console.error(`add_board_person: ${error.message}`.slice(0, 200));
+    return fail("Personen kunde inte läggas till. Försök igen.");
   }
-  if (error || !data) return fail("Personen kunde inte läggas till. Försök igen.");
-  const id = data.id as string;
-  if (v.role && !(await setPersonRole(db, id, v.role))) return fail("Rollen kunde inte sparas. Försök igen.");
-  if (v.email) {
-    const msg = await setEmail(db, id, v.email);
-    if (msg) return fail(msg);
+  const res = data as { result: string; id?: string };
+  if (res.result === "duplicate" && res.id) {
+    return {
+      ok: false,
+      message: memberUserId
+        ? `${v.name} finns redan i listan. Ändra ${v.name} och skriv in kontots e-postadress, så kopplas de ihop.`
+        : `${v.name} finns redan i listan.`,
+      editPersonId: res.id,
+    };
   }
+  if (res.result === "taken") return fail("Någon annan i listan har redan den e-postadressen.");
+  if (res.result === "invalid") return fail("Kontrollera namn, roll och e-post och försök igen.");
+  if (res.result !== "ok") return fail(ADMIN_ONLY);
   refresh(orgId);
   return OK;
 }

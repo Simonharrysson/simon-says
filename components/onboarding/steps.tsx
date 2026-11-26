@@ -146,12 +146,16 @@ export interface BoardInput {
   email: string;
 }
 
+export type FormError = string | { message: string; editPersonId?: string } | null;
+const errText = (e: FormError) => (e === null ? null : typeof e === "string" ? e : e.message);
+
 export interface BoardStepProps {
   orgName: string;
   rows: BoardRow[];
   inviteUrl: string;
   /** Each returns an error sentence, or null when it worked. */
-  onAdd: (input: BoardInput, memberUserId?: string) => Promise<string | null>;
+  /** An error sentence; `editPersonId` when the name is already on the list (offer to edit it). */
+  onAdd: (input: BoardInput, memberUserId?: string) => Promise<FormError>;
   onUpdate: (personId: string, input: BoardInput) => Promise<string | null>;
   onRemove: (personId: string) => Promise<string | null>;
   /** The signed-in admin's own e-mail, to say "du" on their row. */
@@ -188,7 +192,7 @@ export function BoardStep(p: BoardStepProps) {
                     uid={`${id}-${key}`}
                     rolesList={`${id}-roles`}
                     initial={{ name: row.name ?? "", role: row.role ?? "", email: row.personId ? (row.email ?? "") : "" }}
-                    emailLocked={row.status === "account"}
+                    emailLocked={!row.personId}
                     submitLabel={row.personId ? "Spara" : "Lägg till"}
                     onCancel={() => setEditing(null)}
                     onSubmit={async (input) => {
@@ -196,9 +200,10 @@ export function BoardStep(p: BoardStepProps) {
                       if (!err) setEditing(null);
                       return err;
                     }}
+                    onEditExisting={setEditing}
                   />
                 ) : (
-                  <BoardRowView row={row} invite={{ orgName: p.orgName, inviteUrl: p.inviteUrl }} me={Boolean(p.myEmail && row.email?.toLowerCase() === p.myEmail)} onEdit={() => setEditing(key)} onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined} />
+                  <BoardRowView row={row} invite={{ orgName: p.orgName, inviteUrl: p.inviteUrl }} me={Boolean(p.myEmail && (row.member?.email ?? "").toLowerCase() === p.myEmail)} onEdit={() => setEditing(key)} onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined} />
                 )}
               </li>
             );
@@ -208,7 +213,7 @@ export function BoardStep(p: BoardStepProps) {
 
       <div className="flex flex-col gap-3 rounded-lg border border-dashed border-rail p-4">
         <span className="text-sm font-medium">Lägg till någon</span>
-        <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel="Lägg till" onSubmit={(input) => p.onAdd(input)} resetOnSuccess />
+        <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel="Lägg till" onSubmit={(input) => p.onAdd(input)} onEditExisting={setEditing} resetOnSuccess />
       </div>
 
       {invited.length > 0 && (
@@ -230,7 +235,7 @@ function statusLine(row: BoardRow, me: boolean): ReactNode {
     return (
       <>
         <span className="text-green">Har konto</span>
-        {row.email && <span className="wrap-anywhere"> · {row.email}</span>}
+        {row.member?.email && <span className="wrap-anywhere"> · {row.member.email}</span>}
         {me && " · du"}
         {row.member?.role === "admin" && " · admin"}
       </>
@@ -318,20 +323,24 @@ function PersonForm({
   onCancel,
   resetOnSuccess,
   emailLocked,
+  onEditExisting,
 }: {
   uid: string;
   rolesList: string;
   initial: BoardInput;
   submitLabel: string;
-  onSubmit: (input: BoardInput) => Promise<string | null>;
+  onSubmit: (input: BoardInput) => Promise<FormError>;
+  /** Opens the existing person's row (a duplicate name). */
+  onEditExisting?: (personId: string) => void;
   onCancel?: () => void;
   resetOnSuccess?: boolean;
   emailLocked?: boolean;
 }) {
   const [v, setV] = useState(initial);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  const existing = error && typeof error === "object" ? error.editPersonId : undefined;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!v.name.trim()) {
@@ -378,7 +387,16 @@ function PersonForm({
           </Button>
         )}
       </div>
-      {error && <Note tone="danger">{error}</Note>}
+      {error && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Note tone="danger">{errText(error)}</Note>
+          {existing && onEditExisting && (
+            <Button variant="secondary" size="sm" icon={<IconPencil size={16} />} onClick={() => onEditExisting(existing)}>
+              Ändra {v.name.trim()}
+            </Button>
+          )}
+        </div>
+      )}
     </form>
   );
 }
@@ -702,15 +720,15 @@ export function VoicesStep(p: VoicesStepProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel">
-        <p className="font-medium">Simon Says lär sig rösterna från namnrundan i ert första möte — ingen behöver spela in något.</p>
+        <p className="font-medium">Snart: Simon Says lär sig rösterna från namnrundan i ert första möte — ingen behöver spela in något.</p>
         <p className="text-sm text-ink-2">
-          Alla säger sitt namn i namnrundan, som vanligt. Den meningen blir rösten Simon Says känner igen – en
-          gång, aldrig mer. Från andra mötet står namnen där direkt.
+          Tanken: alla säger sitt namn i namnrundan, som vanligt, och den meningen blir rösten Simon Says känner
+          igen – en gång, aldrig mer. Då står namnen där direkt från andra mötet.
         </p>
         <p className="text-sm text-ink-3">
-          Funktionen testas fortfarande och slås på senare. En röst är känslig information, så den sparas bara för den
-          som har sagt ja, kan tas bort när som helst och tas bort när någon lämnar föreningen. Utan ja fungerar
-          namnrundan som i dag.
+          Det fungerar inte än: funktionen testas och slås på senare. Fram till dess sparas ingen röst, och namnrundan
+          fungerar som i dag. En röst är känslig information: när funktionen kommer sparas den bara för den som har
+          sagt ja, kan tas bort när som helst och tas bort när någon lämnar föreningen (då tas också ert ja bort).
         </p>
       </div>
       {p.people.length === 0 ? (
