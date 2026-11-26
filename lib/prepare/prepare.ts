@@ -20,7 +20,7 @@ import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
-import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine } from "./doc";
+import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine, type Journal } from "./doc";
 import { runReprepare } from "./reprepare";
 import { preparedDocState } from "./stale";
 import {
@@ -35,7 +35,7 @@ import {
   type MeetingType,
   type PrepareBody,
 } from "./draft";
-import { missingTable, preparedForDate, type PreparedAgenda } from "./store";
+import { acquireLease, missingTable, preparedForDate, releaseLease, type PreparedAgenda } from "./store";
 
 // Förbered möte, server side: the draft (GET) and "Skapa dagordning" (POST). The Doc is written
 // with the preparer's own Google grant (drive.file: Simon Says created it, so it may edit and
@@ -231,7 +231,14 @@ const readTab = async (auth: OAuth2Client, docId: string, tabId: string) =>
   parseNotesTab((await docsOf(auth).get({ documentId: docId, includeTabsContent: true, suggestionsViewMode: "SUGGESTIONS_INLINE" })).data, tabId);
 
 /** One revision-guarded batch planned from a fresh read (a conflict re-reads and re-plans). */
-async function guarded<T>(auth: OAuth2Client, docId: string, tabId: string, plan: (tab: ReturnType<typeof parseNotesTab>) => { requests: DocsRequest[]; value: T }): Promise<T> {
+async function guarded<T>(
+  auth: OAuth2Client,
+  docId: string,
+  tabId: string,
+  plan: (tab: ReturnType<typeof parseNotesTab>) => { requests: DocsRequest[]; value: T; journal?: Journal },
+  /** Called with the batch's journal right before it is sent (preparing again saves it there). */
+  before?: (journal: Journal) => Promise<void>,
+): Promise<T> {
   const { value } = await writeWithRevisionGuard(
     async () => {
       const tab = await readTab(auth, docId, tabId);
@@ -239,6 +246,7 @@ async function guarded<T>(auth: OAuth2Client, docId: string, tabId: string, plan
     },
     async ({ tab, planned }) => {
       if (planned.requests.length) {
+        await before?.(planned.journal ?? { writes: [], deletes: [] });
         await docsOf(auth).batchUpdate({ documentId: docId, requestBody: { requests: planned.requests, writeControl: { requiredRevisionId: tab.revisionId } } });
       }
       return planned.value;
@@ -349,12 +357,38 @@ async function update(
 ): Promise<SaveResult> {
   const key = prepKey(existing.id);
   const db = supabaseAdmin();
+  // One preparer at a time; the plan is made from the row as it is once the lease is ours.
+  let fresh: PreparedAgenda | null = null;
+  for (let i = 0; i < 10 && !fresh; i++) {
+    fresh = await acquireLease(existing.id);
+    if (!fresh) await new Promise((r) => setTimeout(r, 2000));
+  }
+  if (!fresh) return failed("busy", 409, "Någon annan uppdaterar dagordningen just nu. Försök igen om en liten stund.");
+  try {
+    return await updateLeased(auth, orgId, fresh, key, items, desired, dropped, src, body);
+  } finally {
+    await releaseLease(existing.id);
+  }
+}
+
+async function updateLeased(
+  auth: OAuth2Client,
+  orgId: string,
+  existing: PreparedAgenda,
+  key: string,
+  items: DraftItem[],
+  desired: NoteItemRow[],
+  dropped: string[],
+  src: Sources,
+  body: PrepareBody,
+): Promise<SaveResult> {
+  const db = supabaseAdmin();
   const save = async (patch: Record<string, unknown>) => {
     const { error } = await db.from("prepared_agendas").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", existing.id).eq("org_id", orgId);
     if (error) throw new Error(`update: ${error.message}`);
   };
   const res = await runReprepare(
-    { step: (plan) => guarded(auth, existing.doc_id, existing.tab_id, plan), save },
+    { step: (plan, before) => guarded(auth, existing.doc_id, existing.tab_id, plan, before), save },
     {
       key,
       docId: existing.doc_id,
@@ -363,6 +397,8 @@ async function update(
       ownerLabel: src.ownerLabel,
       lines: existing.doc_lines,
       carried: existing.carried,
+      journal: existing.journal ?? null,
+      gen: existing.gen ?? 0,
       items,
       desired,
     },

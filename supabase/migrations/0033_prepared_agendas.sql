@@ -24,7 +24,11 @@ alter table public.format_profiles add constraint format_profiles_kind_check
 -- - carried: the "Från förra veckan" lines as note_items-shaped rows (rendered by the notes
 --   engine, carried_from_* set); the meeting started in the Doc adopts them;
 -- - dropped: carried sources (`<meeting>:<item>`) the ordförande took off the agenda;
--- - shared_with: members the Doc was shared with as writers (recorded as the meeting's shares).
+-- - shared_with: members the Doc was shared with as writers (recorded as the meeting's shares);
+-- - gen / journal: preparing again writes ranges under a new generation and journals each Doc
+--   batch before sending it (lib/prepare/reprepare.ts), so a crash between the Doc write and the
+--   save is settled on the next run;
+-- - busy_until: a lease, so two people preparing the same date never plan from the same state.
 
 create table public.prepared_agendas (
   id uuid primary key default gen_random_uuid(),
@@ -42,6 +46,9 @@ create table public.prepared_agendas (
   dropped jsonb not null default '[]'::jsonb,
   source_meeting_id uuid references public.meetings on delete set null,
   shared_with uuid[] not null default '{}',
+  gen integer not null default 0,
+  journal jsonb,
+  busy_until timestamptz,
   prepared_by uuid references auth.users on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

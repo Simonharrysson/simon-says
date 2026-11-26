@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { NoteItemRow } from "@/lib/db/types";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import type { DocLine } from "./doc";
+import type { DocLine, Journal } from "./doc";
 import type { DraftItem, MeetingType } from "./draft";
 
 // prepared_agendas (0033): one prepared agenda per förening and meeting date. Written by the
@@ -28,6 +28,8 @@ export interface PreparedAgenda {
   dropped: string[];
   source_meeting_id: string | null;
   shared_with: string[];
+  gen: number;
+  journal: Journal | null;
   prepared_by: string | null;
   updated_at: string;
 }
@@ -36,7 +38,7 @@ export interface PreparedAgenda {
 export const missingTable = (code: string | undefined) => code === "42P01" || code === "PGRST205";
 
 const COLUMNS =
-  "id, org_id, meeting_date, meeting_time, kind, format_profile_id, doc_id, tab_id, doc_name, items, doc_lines, carried, dropped, source_meeting_id, shared_with, prepared_by, updated_at";
+  "id, org_id, meeting_date, meeting_time, kind, format_profile_id, doc_id, tab_id, doc_name, items, doc_lines, carried, dropped, source_meeting_id, shared_with, prepared_by, updated_at, gen, journal";
 
 async function one(label: string, query: PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>): Promise<PreparedAgenda | null> {
   const { data, error } = await query;
@@ -80,4 +82,27 @@ export async function upcomingPrepared(db: SupabaseClient, orgId: string, today:
     return [];
   }
   return (data ?? []) as Pick<PreparedAgenda, "id" | "meeting_date" | "meeting_time" | "kind" | "doc_id" | "doc_name">[];
+}
+
+/** How long one "Skapa dagordning" may hold a prepared agenda. */
+export const LEASE_MS = 120_000;
+
+/**
+ * Take the prepared agenda's lease (atomic: one conditional update), returning the row as it is
+ * now, or null while someone else holds it. Every plan is made from this fresh row.
+ */
+export async function acquireLease(id: string, now = new Date(), db: SupabaseClient = supabaseAdmin()): Promise<PreparedAgenda | null> {
+  const { data, error } = await db
+    .from("prepared_agendas")
+    .update({ busy_until: new Date(now.getTime() + LEASE_MS).toISOString() })
+    .eq("id", id)
+    .or(`busy_until.is.null,busy_until.lt.${now.toISOString()}`)
+    .select(COLUMNS);
+  if (error) throw new Error(`prepared_agendas: lease: ${error.message}`);
+  return ((data ?? []) as PreparedAgenda[])[0] ?? null;
+}
+
+export async function releaseLease(id: string, db: SupabaseClient = supabaseAdmin()): Promise<void> {
+  const { error } = await db.from("prepared_agendas").update({ busy_until: null }).eq("id", id);
+  if (error) console.error(`prepared_agendas: release: ${error.message}`);
 }
