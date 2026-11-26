@@ -396,6 +396,68 @@ describe("feature: formats (parked fixes)", () => {
     }
   });
 
+  it("N2: one numbered item a human took the bullet off does not flip the meeting into bold mode", async () => {
+    const doc = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Kommande event"), num("Ekonomi"), num("Övrigt")]);
+    const sim = FormatSim.start({
+      id: "m-n2a",
+      doc,
+      profile: VECKOMOTE,
+      people: PEOPLE,
+      script: {
+        notes: notesTicks([
+          [
+            { op: "add", id: "x1", kind: "note", anchor: "ag-3", text: "Sommarfesten är bokad" },
+            { op: "add", id: "x2", kind: "note", anchor: "ag-4", text: "Fakturan är betald" },
+          ],
+        ]),
+      },
+    });
+    const ev = para(sim, "Kommande event");
+    sim.human([{ deleteParagraphBullets: { range: range(ev.start, ev.end) } }]);
+    // Under Ekonomi a fully bold note line and a typed "2. …" line (their bullets removed).
+    const ek = para(sim, "Ekonomi");
+    sim.human([{ insertText: { text: "\nKassan stämmer\n2. Budgeten är klar", location: { tabId: TAB, index: ek.end - 1 } } }]);
+    const kassan = para(sim, "Kassan stämmer");
+    sim.human([{ deleteParagraphBullets: { range: range(kassan.start, para(sim, "2. Budgeten är klar").end) } }]);
+    elOf(sim.doc, "Kassan stämmer").paragraph!.elements![0].textRun!.textStyle = { bold: true };
+    expect(sim.tab().paragraphs.find((p) => p.text === "Kassan stämmer\n")?.bold).toBe(true);
+
+    await sim.tick(block([{ at: 1000, speaker: 0, text: "Sommarfesten är bokad och fakturan betald." }]));
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3", "ag-4", "ag-5"]);
+    const lines = linesOf(sim.doc);
+    expect(lines.slice(lines.indexOf("Kommande event"), lines.indexOf("Övrigt"))).toEqual([
+      "Kommande event",
+      "– Sommarfesten är bokad.",
+      "Ekonomi",
+      "Kassan stämmer",
+      "2. Budgeten är klar",
+      "– Fakturan är betald.",
+    ]);
+  });
+
+  it("N2: in a bold agenda a human's numbered list under an item is its sub-points, not new items", async () => {
+    const b = (text: string) => paraEl(text, { bold: true });
+    const doc = agendaDoc([b("Godkänn dagordning"), b("Ekonomi"), b("Övrigt")]);
+    const sim = FormatSim.start({
+      id: "m-n2b",
+      doc,
+      profile: VECKOMOTE,
+      people: PEOPLE,
+      script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-2", text: "Fakturan är betald" }]]) },
+    });
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3"]);
+    const ek = para(sim, "Ekonomi");
+    sim.human([
+      { insertText: { text: "\nFakturan från hallen\nMedlemsavgifter", location: { tabId: TAB, index: ek.end - 1 } } },
+      { createParagraphBullets: { range: range(ek.end, ek.end + "Fakturan från hallen\nMedlemsavgifter".length), bulletPreset: "NUMBERED_DECIMAL_ALPHA_ROMAN" } },
+    ]);
+    expect(para(sim, "Medlemsavgifter").bullet).toBeTruthy();
+    await sim.tick(block([{ at: 1000, speaker: 0, text: "Fakturan är betald." }]));
+    expect(agKeys(sim)).toEqual(["ag-1", "ag-2", "ag-3"]);
+    const lines = linesOf(sim.doc);
+    expect(lines.slice(lines.indexOf("Ekonomi"), lines.indexOf("Övrigt"))).toEqual(["Ekonomi", "Fakturan från hallen", "Medlemsavgifter", "Fakturan är betald."]);
+  });
+
 });
 
 describe.skipIf(!hasLocalSupabase)("feature: formats (runTick on the local stack)", () => {

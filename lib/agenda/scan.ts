@@ -145,10 +145,14 @@ export function withoutEarlierLines(tab: NotesTab): NotesTab {
  * Scan the agenda. `opts.anchors` (during a meeting: `anchoredStarts`) fixes the item mode to the
  * one found at the start (final review R1-I1), so a human's edit never unmakes the items:
  * - every anchored paragraph is an item, and the region reaches back to the first of them;
- * - the item mode comes from the anchored paragraphs: lists holding one keep items at that
- *   level, any other list follows the glyph rule (numbered at level 0 = items, else sub-points);
- *   bold / typed-number lines are items only when an anchored item is such a line (the
- *   bold-only rule (1) is no longer recomputed: one human bullet must not end it).
+ * - the item mode comes from the majority of the anchored paragraphs (parked N2): bold mode
+ *   when more of them are plain bold / typed-number lines than list or heading items (a plain
+ *   "<fixed label>:" line counts for neither), so one item a human took the bullet off never flips
+ *   a list agenda, and one human bullet never ends a bold one;
+ * - list mode: lists holding an anchored item keep items at that level, any other list follows the
+ *   glyph rule (numbered at level 0 = items, else sub-points); bold / typed lines are notes;
+ * - bold mode: bold / typed-number lines are items, and no list is (a human's list inside an
+ *   item's block is its sub-points, numbered or not).
  * Without anchors: the start-time rules (R-A5) below.
  */
 export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchors?: number[] } = {}): AgendaScan {
@@ -217,7 +221,10 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
       const b = paraBullet(p);
       if (b && !anchorLists.has(b.listId)) anchorLists.set(b.listId, b.level);
     }
-    const anchoredBold = anchorParas.some((p) => !paraBullet(p) && !isHeadingStyle(p) && !fixedLabels.has(normLabel(paraLine(p))));
+    // Parked N2: by majority, so one stray line (a bullet removed, a bullet added) never flips it.
+    const plainAnchor = (p: Paragraph) => !paraBullet(p) && !isHeadingStyle(p);
+    const counted = anchorParas.filter((p) => !plainAnchor(p) || !fixedLabels.has(normLabel(paraLine(p))));
+    const anchoredBold = 2 * counted.filter(plainAnchor).length > counted.length;
     // (1) Fully bold or typed-number plain lines mark items only in a Doc without list or heading
     // items; elsewhere they are a human's notes under the item.
     const boldOnly = anchored ? anchoredBold : listParas.length === 0 && !hasHeadings;
@@ -266,6 +273,8 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
       const b = paraBullet(p)!;
       const l = lists.get(b.listId)!;
       if (anchored) {
+        // Bold mode (N2): a list is a human's sub-points; an anchored list paragraph is still an item (isItem).
+        if (anchoredBold) return false;
         const level = anchorLists.get(b.listId);
         if (level !== undefined) return b.level === level;
         return l.minLevel === 0 && b.level === 0 && isNumberedGlyph(listGlyph(tab, b.listId, 0));
