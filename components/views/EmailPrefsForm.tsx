@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { IconCheck } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -34,6 +34,8 @@ export function EmailPrefsForm({
   const [prefs, setPrefs] = useState(initial);
   const [status, setStatus] = useState<"idle" | "saved" | "failed">("idle");
   const [pending, startTransition] = useTransition();
+  // Each change gets a number; a failed save only puts things back if nothing newer was chosen.
+  const latest = useRef(0);
 
   useEffect(() => {
     if (status !== "saved") return;
@@ -43,10 +45,12 @@ export function EmailPrefsForm({
 
   const apply = (next: EmailPrefs) => {
     const before = prefs;
+    const id = ++latest.current;
     setPrefs(next);
     setStatus("idle");
     startTransition(async () => {
       const ok = await save(next).catch(() => false);
+      if (id !== latest.current) return;
       if (ok) setStatus("saved");
       else {
         setPrefs(before);
