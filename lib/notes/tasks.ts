@@ -271,3 +271,33 @@ export function withDueDates(rows: NoteItemRow[], meetingStartedAt: string): Not
     return (r.due_date ?? null) === due_date ? r : { ...r, due_date };
   });
 }
+
+// ---------------------------------------------------------------------------------------------
+// The Avsluta dialog (components/live/EndTasksDialog.tsx): each incomplete task completed or dismissed.
+
+/** How the Avsluta dialog handled one incomplete task. */
+export type EndHandled = { kind: "completed"; values: Partial<Record<TaskField, string>> } | { kind: "dismissed" };
+
+/** Every task handled: completed (all its missing fields typed; never a locked one) or dismissed. */
+export function endReady(tasks: TaskView[], handled: Record<string, EndHandled | undefined>): boolean {
+  return tasks.every((t) => {
+    const h = handled[t.id];
+    if (!h) return false;
+    if (h.kind === "dismissed") return true;
+    return !t.locked && t.missing.every((f) => h.values[f]?.trim());
+  });
+}
+
+/** The answers POST /end carries: completed tasks only, the missing fields as typed. */
+export function endAnswers(tasks: TaskView[], handled: Record<string, EndHandled | undefined>): TaskAnswer[] {
+  return tasks.flatMap((t) => {
+    const h = handled[t.id];
+    if (h?.kind !== "completed") return [];
+    const a: TaskAnswer = { id: t.id };
+    for (const f of t.missing) {
+      const v = h.values[f]?.trim();
+      if (v) a[f] = v;
+    }
+    return [a];
+  });
+}

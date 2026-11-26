@@ -19,6 +19,8 @@ import { NameRound, type NameRoundEntry } from "./NameRound";
 import { PartialStrip } from "./PartialStrip";
 import { ResumeMeeting } from "./ResumeMeeting";
 import { SpeakerList } from "./SpeakerList";
+import { TasksPanel } from "./TasksPanel";
+import type { TaskAnswer, TaskView } from "@/lib/notes/tasks";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
 
 export interface LiveMeetingProps {
@@ -81,7 +83,11 @@ export interface LiveMeetingProps {
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
-  onStop: () => void;
+  onStop: (answers?: TaskAnswer[]) => void;
+  /** This meeting's tasks ("Uppgifter"); undefined: not loaded yet (no panel). */
+  tasks?: TaskView[];
+  /** Avsluta asks about these first (the förening requires Vem, När, Klart när). */
+  askTasks?: () => Promise<TaskView[]>;
   onReLogin: () => void;
   onAssignSpeaker: (speaker: SpeakerKey, choice: SpeakerChoice) => void;
   onNameRoundDone: () => void;
@@ -203,6 +209,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           onPause={p.onPause}
           onResume={p.onResume}
           onStop={p.onStop}
+          askTasks={p.askTasks}
           busy={p.busy}
           className="max-[52rem]:col-span-full"
         />
@@ -271,8 +278,9 @@ export function LiveMeeting(p: LiveMeetingProps) {
             <PartialStrip text={p.partialText} speaker={p.partialSpeaker} mode={status.partial} level={p.micLevel} />
           </div>
           {!nameRound && (
-            <aside>
+            <aside className="flex flex-col gap-6">
               <SpeakerList speakers={p.speakers} people={p.people} onAssign={p.onAssignSpeaker} />
+              {p.tasks && <TasksPanel tasks={p.tasks} />}
             </aside>
           )}
         </div>

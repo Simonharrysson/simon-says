@@ -1,0 +1,42 @@
+{
+  "panel": {
+    "title": "Uppgifter",
+    "empty": "Uppgifter som någon tar på sig hamnar här.",
+    "who": "Vem",
+    "when": "När",
+    "doneWhen": "Klart när",
+    "missing": "saknas",
+    "askOwnerDue": "Vem ansvarar och när ska det vara klart?",
+    "askDoneWhen": "Hur vet ni att det är klart?",
+    "askNow": "Fråga nu",
+    "asked": "Klar",
+    "editedInDoc": "Ändrad i dokumentet",
+    "toAsk": "{count, plural, one {# att fråga om} other {# att fråga om}}"
+  },
+  "end": {
+    "title": "Avsluta mötet?",
+    "intro": "{count, plural, one {En uppgift saknar} other {# uppgifter saknar}} vem, när eller klart när. Fyll i det som saknas eller lämna uppgiften som den är.",
+    "save": "Spara",
+    "leave": "Lämna som det är",
+    "saved": "Skrivs in i dokumentet",
+    "left": "Lämnas som den är",
+    "undo": "Ändra",
+    "editedInDoc": "Raden är ändrad i dokumentet, så den lämnas som den är.",
+    "remaining": "{count, plural, one {# uppgift kvar} other {# uppgifter kvar}}",
+    "allHandled": "Alla uppgifter är klara att avsluta.",
+    "stay": "Fortsätt mötet",
+    "confirm": "Avsluta mötet",
+    "whoHint": "Namn eller roll",
+    "whenHint": "Till exempel fredag 5 dec",
+    "doneWhenHint": "Till exempel kontraktet är påskrivet",
+    "fillAll": "Fyll i det som saknas, eller välj Lämna som det är."
+  },
+  "summary": {
+    "doneWhen": "klart när: {text}",
+    "overdue": "försenad"
+  },
+  "settings": {
+    "label": "Uppgifter: Kräv vem, när och klart när",
+    "hint": "Saknas något skrivs det ut i dokumentet, och när ni avslutar mötet får ni fylla i det eller lämna det som det är."
+  }
+}

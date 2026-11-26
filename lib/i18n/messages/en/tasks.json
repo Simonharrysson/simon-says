@@ -1,0 +1,42 @@
+{
+  "panel": {
+    "title": "Tasks",
+    "empty": "Tasks someone takes on show up here.",
+    "who": "Who",
+    "when": "When",
+    "doneWhen": "Done when",
+    "missing": "missing",
+    "askOwnerDue": "Who is responsible, and when should it be done?",
+    "askDoneWhen": "How will you know it is done?",
+    "askNow": "Ask now",
+    "asked": "Done",
+    "editedInDoc": "Edited in the document",
+    "toAsk": "{count, plural, one {# to ask about} other {# to ask about}}"
+  },
+  "end": {
+    "title": "End the meeting?",
+    "intro": "{count, plural, one {One task is missing} other {# tasks are missing}} who, when or done when. Fill in what is missing, or leave the task as it is.",
+    "save": "Save",
+    "leave": "Leave as it is",
+    "saved": "Goes into the document",
+    "left": "Left as it is",
+    "undo": "Change",
+    "editedInDoc": "The line was edited in the document, so it is left as it is.",
+    "remaining": "{count, plural, one {# task left} other {# tasks left}}",
+    "allHandled": "Every task is ready to end.",
+    "stay": "Continue the meeting",
+    "confirm": "End the meeting",
+    "whoHint": "Name or role",
+    "whenHint": "For example Friday 5 Dec",
+    "doneWhenHint": "For example the contract is signed",
+    "fillAll": "Fill in what is missing, or choose Leave as it is."
+  },
+  "summary": {
+    "doneWhen": "done when: {text}",
+    "overdue": "overdue"
+  },
+  "settings": {
+    "label": "Tasks: Require who, when and done when",
+    "hint": "Anything missing is written out in the document, and when you end the meeting you can fill it in or leave it as it is."
+  }
+}

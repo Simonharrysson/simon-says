@@ -4,6 +4,8 @@ import { AGENDA_OPS_JSON_SCHEMA, OPS_JSON_SCHEMA, toAgendaOp, toNotesOp, type No
 import { applyOps } from "@/lib/notes/engine";
 import {
   applyTaskAnswers,
+  endAnswers,
+  endReady,
   incompleteTasks,
   isOverdue,
   markPlaceholders,
@@ -195,5 +197,38 @@ describe("deadlines as days", () => {
       meeting,
     );
     expect(rows.map((r) => r.due_date ?? null)).toEqual(["2026-11-27", "2026-11-20", null]);
+  });
+});
+
+describe("Avsluta dialog: complete or dismiss each incomplete task", () => {
+  const view = (id: string, missing: ("owner" | "due" | "doneWhen")[], locked = false) => ({
+    id,
+    text: "x",
+    owner: null,
+    due: null,
+    doneWhen: null,
+    missing,
+    locked,
+  });
+  const tasks = [view("n1", ["due", "doneWhen"]), view("n2", ["owner"]), view("n3", ["doneWhen"], true)];
+
+  it("Avsluta is enabled only when every task is completed (all missing typed) or dismissed", () => {
+    expect(endReady(tasks, {})).toBe(false);
+    const partly = { n1: { kind: "completed" as const, values: { due: "fredag" } }, n2: { kind: "dismissed" as const }, n3: { kind: "dismissed" as const } };
+    expect(endReady(tasks, partly)).toBe(false);
+    const all = { ...partly, n1: { kind: "completed" as const, values: { due: "fredag", doneWhen: " bokat " } } };
+    expect(endReady(tasks, all)).toBe(true);
+    // A locked task can only be left as it is.
+    expect(endReady([tasks[2]], { n3: { kind: "completed", values: { doneWhen: "x" } } })).toBe(false);
+    expect(endReady([], {})).toBe(true);
+  });
+
+  it("answers: completed tasks only, their missing fields trimmed", () => {
+    expect(
+      endAnswers(tasks, {
+        n1: { kind: "completed", values: { due: " fredag ", doneWhen: "bokat", owner: "ignored: not missing" } },
+        n2: { kind: "dismissed" },
+      }),
+    ).toEqual([{ id: "n1", due: "fredag", doneWhen: "bokat" }]);
   });
 });

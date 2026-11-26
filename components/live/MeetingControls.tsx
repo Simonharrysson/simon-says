@@ -2,16 +2,20 @@
 
 import { useTranslations } from "next-intl";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IconPause, IconPlay, IconStop } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
+import type { TaskAnswer, TaskView } from "@/lib/notes/tasks";
+import { EndTasksDialog } from "./EndTasksDialog";
 import { LiveDialog, type LiveDialogHandle } from "./LiveDialog";
 
 /**
  * Paus / Fortsätt and Avsluta. Paus is the big, always-reachable button (people ask for it
  * mid-sentence). Avsluta asks once, because ending runs the final pass and can't be undone.
  * With `canPause={false}` (the meeting has stopped on its own) only Avsluta is offered.
+ * With `askTasks` (the förening requires Vem, När and Klart när) Avsluta first reads the
+ * incomplete tasks: any → the tasks dialog (complete or leave each), none → the usual question.
  */
 export function MeetingControls({
   status,
@@ -21,11 +25,14 @@ export function MeetingControls({
   busy,
   canPause = true,
   className,
+  askTasks,
 }: {
   status: "live" | "paused" | "ending";
   onPause: () => void;
   onResume: () => void;
-  onStop: () => void;
+  onStop: (answers?: TaskAnswer[]) => void;
+  /** The incomplete tasks to ask about before ending (empty: none); never throws. */
+  askTasks?: () => Promise<TaskView[]>;
   /** A pause/resume/stop request is in flight. */
   busy?: boolean;
   canPause?: boolean;
@@ -34,6 +41,16 @@ export function MeetingControls({
   const t = useTranslations("live");
   const dialog = useRef<LiveDialogHandle>(null);
   const ending = status === "ending";
+  const [tasks, setTasks] = useState<TaskView[] | null>(null);
+  const [checking, setChecking] = useState(false);
+  const askEnd = async () => {
+    if (!askTasks) return dialog.current?.showModal();
+    setChecking(true);
+    const open = await askTasks();
+    setChecking(false);
+    if (open.length) setTasks(open);
+    else dialog.current?.showModal();
+  };
   return (
     <div className={cn("flex gap-2 max-[52rem]:[&>button]:flex-1", className)}>
       {canPause &&
@@ -57,9 +74,9 @@ export function MeetingControls({
         size="lg"
         variant="danger-quiet"
         icon={<IconStop size={16} />}
-        onClick={() => dialog.current?.showModal()}
-        disabled={ending}
-        loading={ending}
+        onClick={() => void askEnd()}
+        disabled={ending || checking}
+        loading={ending || checking}
       >
         {ending ? t("controls.ending") : t("controls.end")}
       </Button>
@@ -71,10 +88,20 @@ export function MeetingControls({
         stayLabel={t("controls.stay")}
         confirmLabel={t("controls.confirmEnd")}
         confirmIcon={<IconStop size={16} />}
-        onConfirm={onStop}
+        onConfirm={() => onStop()}
       >
         {t("stopCopy")}
       </LiveDialog>
+      {tasks && (
+        <EndTasksDialog
+          open
+          tasks={tasks}
+          onOpenChange={(o) => {
+            if (!o) setTasks(null);
+          }}
+          onConfirm={(answers) => onStop(answers)}
+        />
+      )}
     </div>
   );
 }
