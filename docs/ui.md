@@ -588,4 +588,8 @@ name gets a zero-width non-joiner in the e-mail, and the subject is cut at 80 ch
 sends 10 addresses per request (two at a time, no new send after 40 s: "Hann inte skickas"). A
 timeout or 5xx is "Osäkert – kan ha skickats"; Försök igen reuses the send's Resend Idempotency-Key,
 so it can't arrive twice. Sends hung in `sending` for 5 min are swept to `uncertain` by the import cron.
+Every invite goes through the mail-settings gate (0039, `sendUserMailDetailed`, category
+`invite`), checked before `claim_invite_send` so an address that said no uses no quota: its line says
+"Vill inte ha mejl" (no retry). Each e-mail carries the recipient's own settings link
+(`emailPrefsUrl`) in the footer and List-Unsubscribe headers.
 `/design`: `invite-email*`.

@@ -33,6 +33,7 @@ const RESULTS: AddressOutcome[] = [
   { email: "johan.ek@example.com", result: "member" },
   { email: "erik.lund@exampel", result: "invalid" },
   { email: "karin.sjo@example.com", result: "failed" },
+  { email: "nils.ro@example.com", result: "opted_out" },
 ];
 
 /** Answers like the route: example.com addresses are sent, "fel" in the address fails. */
