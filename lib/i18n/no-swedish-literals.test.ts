@@ -19,36 +19,6 @@ const ALLOWED: Record<string, string> = {
   "components/design/": "dev-only /design gallery chrome and fake data",
 };
 
-/** Files not moved to the catalogs yet. Shrinks to nothing; don't add to it. */
-const NOT_YET = new Set<string>([
-  "app/api/google/picker-token/route.ts",
-  "app/api/meetings/[id]/doc-access/route.ts",
-  "app/api/meetings/route.ts",
-  "app/api/meetings/test/route.ts",
-  "app/api/mejl/avsluta/route.ts",
-  "app/api/orgs/[id]/agenda-candidates/route.ts",
-  "app/api/orgs/[id]/format/route.ts",
-  "app/api/orgs/[id]/formats/propose/route.ts",
-  "app/api/orgs/[id]/formats/route.ts",
-  "app/api/orgs/[id]/formats/stadgar/route.ts",
-  "app/api/orgs/[id]/goals/propose/route.ts",
-  "app/api/orgs/[id]/goals/route.ts",
-  "app/api/orgs/[id]/history/drive/route.ts",
-  "app/api/orgs/[id]/history/estimate/route.ts",
-  "app/api/orgs/[id]/history/import/route.ts",
-  "app/api/orgs/[id]/history/jobs/[jobId]/cancel/route.ts",
-  "app/api/orgs/[id]/history/jobs/[jobId]/items/[itemId]/route.ts",
-  "app/api/orgs/[id]/history/jobs/[jobId]/route.ts",
-  "app/api/orgs/[id]/history/jobs/[jobId]/seen/route.ts",
-  "app/api/orgs/[id]/history/jobs/route.ts",
-  "app/api/orgs/[id]/history/route.ts",
-  "app/api/orgs/[id]/logo/route.ts",
-  "app/api/orgs/[id]/meeting-folder/route.ts",
-  "app/api/orgs/[id]/onboarding/formats/route.ts",
-  "app/api/orgs/[id]/onboarding/stadgar/route.ts",
-  "app/api/orgs/[id]/prepare/route.ts",
-]);
-
 /** Literals that may appear anywhere (proper nouns, Doc-bound values, technical tokens). */
 const ALLOWED_LITERALS = new Set<string>([]);
 
@@ -84,7 +54,7 @@ describe("no Swedish literals outside the catalogs", () => {
   it("components/** and app/** keep their copy in lib/i18n/messages", () => {
     const offenders = SCANNED.flatMap(files)
       .map((p) => relative(ROOT, join(ROOT, p)))
-      .filter((p) => !Object.keys(ALLOWED).some((prefix) => p.startsWith(prefix)) && !NOT_YET.has(p))
+      .filter((p) => !Object.keys(ALLOWED).some((prefix) => p.startsWith(prefix)))
       .flatMap(swedishLiterals);
     expect(offenders).toEqual([]);
   });

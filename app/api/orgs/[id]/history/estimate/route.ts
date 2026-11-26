@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT, requestLocale } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
@@ -31,28 +32,29 @@ export type EstimateDoc = { docId: string; sections: number } | { docId: string;
  * in one Anthropic batch at half price (lib/history/progress.ts).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.historyAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as { docIds?: unknown; tickets?: unknown } | null;
   const raw = body?.docIds;
   const docIds = Array.isArray(raw) ? [...new Set(raw)] : [];
   if (!docIds.length || docIds.length > MAX_IMPORT_DOCS || !docIds.every((d): d is string => typeof d === "string" && DRIVE_ID.test(d))) {
-    return fail("bad_request", 400, `Välj mellan 1 och ${MAX_IMPORT_DOCS} protokoll.`);
+    return fail("bad_request", 400, t("api.pickProtocols", { max: MAX_IMPORT_DOCS }));
   }
   // From the folder browser: every file needs the ticket its listing signed, and is read with the
   // import's read access. Without tickets (the Picker): the sign-in grant (drive.file).
   const tickets = body?.tickets && typeof body.tickets === "object" ? (body.tickets as Record<string, unknown>) : null;
   if (tickets && !docIds.every((d) => checkTicket(tickets[d], user.id, id, d))) {
-    return fail("stale_list", 400, "Listan är för gammal. Gå tillbaka och visa mötena i mapparna igen.");
+    return fail("stale_list", 400, t("api.staleList"));
   }
 
   let own: Set<string>;
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     imported = h.count;
   } catch (err) {
     console.error(`history/estimate: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
 
   const docs: EstimateDoc[] = [];
@@ -81,21 +83,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const auth = tickets ? await getImportGoogleAuth(user.id) : await getGoogleAuth(user.id);
     for (const d of await readPickedDocs(auth, docIds, { own, skipTabIds })) {
       if (!d.ok) {
-        docs.push({ docId: d.docId, error: d.reason, message: reasonMessage(d.reason) ?? "" });
+        docs.push({ docId: d.docId, error: d.reason, message: reasonMessage(d.reason, requestLocale(request)) ?? "" });
         continue;
       }
       docs.push({ docId: d.docId, sections: d.sections.length });
       chars.push(...d.sections.map((s) => s.text.length));
     }
   } catch (err) {
-    if (err instanceof DriveAccessMissingError) return fail("needs_drive_access", 403, "Simon Says läsrättighet till din Drive har gått ut. Ge åtkomst igen.");
-    if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
+    if (err instanceof DriveAccessMissingError) return fail("needs_drive_access", 403, t("api.driveAccessExpired"));
+    if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, t("api.googleAuthLost"));
     const status = googleStatus(err);
-    if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa ett av dokumenten. Kontrollera att du fortfarande har åtkomst till det i Google Drive och välj det igen.");
+    if (status === 403 || status === 404) return fail("doc_unreadable", 403, t("api.docUnreadable"));
     console.error(`history/estimate: docs: ${(err as Error).message}`.slice(0, 200));
-    return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+    return fail("google_unavailable", 502, t("api.googleUnavailable"));
   }
-  if (chars.length > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, `Dokumenten innehåller ${chars.length} möten. Välj högst ${MAX_BATCH_PROTOCOLS} åt gången.`);
+  if (chars.length > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, t("api.tooManyMeetings", { count: chars.length, max: MAX_BATCH_PROTOCOLS }));
   // The digest reads every meeting: these, the ones already imported and Simon Says' own.
   const e = estimateImport(chars, ownMeetings + imported);
   console.info(`history/estimate: ${docIds.length} docs, ${chars.length} protocols, ${docs.filter((d) => "error" in d).length} refused`);

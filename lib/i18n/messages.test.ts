@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createTranslator } from "next-intl";
 import { describe, expect, it } from "vitest";
+import { localizeMessage } from "./api";
 import { en, sv } from "./messages";
 
 // Swedish is the source of truth: English must have exactly its keys, the same placeholders
@@ -65,5 +68,21 @@ describe("message catalogs", () => {
       }
       expect(errors).toEqual([]);
     }
+  });
+});
+
+describe("lib messages localized at the route boundary", () => {
+  // lib/meetings/start.ts and lib/formats/stadgar-file.ts answer in Swedish; the routes translate
+  // them by looking the text up in the api catalog (localizeMessage). Every such text must be there.
+  const files = ["lib/meetings/start.ts", "lib/formats/stadgar-file.ts"];
+  it("every Swedish failure text in them has an English version", () => {
+    const missing: string[] = [];
+    for (const f of files) {
+      const src = readFileSync(join(__dirname, "..", "..", f), "utf8");
+      for (const m of src.matchAll(/(?:failed\([^,]+,\s*\d+,\s*|message:\s*|const TOO_LARGE = )"([^"]*[åäöÅÄÖ][^"]*)"/g)) {
+        if (localizeMessage(m[1], "en") === m[1]) missing.push(`${f}: ${m[1]}`);
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

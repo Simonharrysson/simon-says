@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
@@ -10,7 +11,6 @@ export const dynamic = "force-dynamic";
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) =>
   NextResponse.json({ error, message }, { status, headers: noStore });
-const FORBIDDEN = "Bara administratörer kan byta mötesformat.";
 
 /**
  * Approve an edited format as the förening's default. Body `{ profile, folderId?, kind? }`:
@@ -20,33 +20,34 @@ const FORBIDDEN = "Bara administratörer kan byta mötesformat.";
  * keys are stored). `folderId` becomes the meeting folder only when the förening has none.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
 
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, FORBIDDEN);
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.formatAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as { profile?: unknown; folderId?: unknown; kind?: unknown } | null;
   const kindRaw = body?.kind ?? "learned";
-  if (kindRaw !== "learned" && kindRaw !== "styrelseprotokoll") return fail("bad_request", 400, "Okänt format.");
+  if (kindRaw !== "learned" && kindRaw !== "styrelseprotokoll") return fail("bad_request", 400, t("api.unknownFormat"));
   const profile = forceLearned(body?.profile, kindRaw);
-  if (!profile) return fail("invalid_profile", 400, "Formatet är inte giltigt. Kontrollera fälten och försök igen.");
+  if (!profile) return fail("invalid_profile", 400, t("api.invalidFormat"));
   const folderId = body?.folderId ?? null;
   if (folderId !== null && (typeof folderId !== "string" || !DRIVE_ID.test(folderId))) {
-    return fail("bad_request", 400, "Mappen är inte giltig.");
+    return fail("bad_request", 400, t("api.invalidFolder"));
   }
 
   const { data, error } = await db.rpc("set_default_format", { p_org_id: id, p_kind: kindRaw, p_profile: profile });
   if (error) {
-    if (error.code === "42501") return fail("forbidden", 403, FORBIDDEN);
+    if (error.code === "42501") return fail("forbidden", 403, t("api.formatAdminsOnly"));
     console.error(`formats: set_default_format: ${error.message}`);
-    return fail("save_failed", 500, "Formatet kunde inte sparas. Försök igen.");
+    return fail("save_failed", 500, t("api.formatSaveFailed"));
   }
 
   if (folderId) {

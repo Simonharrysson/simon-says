@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
@@ -33,17 +34,18 @@ const googleStatus = (err: unknown): number | undefined => {
  * picked Doc that is not a template, else of the first Doc).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
 
   const role = await myRole(db, id);
-  if (!role) return fail("not_found", 404, "Föreningen finns inte.");
-  if (role !== "admin") return fail("forbidden", 403, "Bara administratörer kan byta mötesformat.");
+  if (!role) return fail("not_found", 404, t("api.orgNotFound"));
+  if (role !== "admin") return fail("forbidden", 403, t("api.formatAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as { docIds?: unknown } | null;
   const raw = body?.docIds;
@@ -54,14 +56,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     raw.length > MAX_DOCS ||
     !docIds.every((d): d is string => typeof d === "string" && DRIVE_ID.test(d))
   ) {
-    return fail("bad_request", 400, `Välj mellan 1 och ${MAX_DOCS} dokument.`);
+    return fail("bad_request", 400, t("api.pickDocs", { max: MAX_DOCS }));
   }
 
   // The org's people: a label holding one of their first names never leaves a Doc (privacy).
   const { data: people, error: peopleError } = await db.from("people").select("name").eq("org_id", id);
   if (peopleError) {
     console.error(`formats/propose: people: ${peopleError.message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
   const names = firstNames(((people ?? []) as { name: string }[]).map((p) => p.name));
 
@@ -91,15 +93,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {
-      return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
+      return fail("google_auth_lost", 401, t("api.googleAuthLost"));
     }
     const status = googleStatus(err);
     if (status === 403 || status === 404) {
-      return fail("doc_unreadable", 403, "Simon Says kan inte läsa ett av dokumenten. Välj dem igen i Google-väljaren.");
+      return fail("doc_unreadable", 403, t("api.docUnreadablePick"));
     }
     // The message only: never Doc text or titles.
     console.error(`formats/propose: docs: ${(err as Error).message}`.slice(0, 200));
-    return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+    return fail("google_unavailable", 502, t("api.googleUnavailable"));
   }
 
   const templates = docs.filter((d) => d.isTemplate).length;
@@ -108,9 +110,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const res = await proposeFormat({ orgId: id, docs });
   if (!res.ok) {
     if (res.error === "spend") {
-      return fail("spend", 503, "Simon Says kan inte föreslå ett format just nu. Försök igen i morgon eller välj ett standardformat.");
+      return fail("spend", 503, t("api.formatSpend"));
     }
-    return fail(res.error, 502, "Simon Says kunde inte föreslå ett format från dokumenten. Försök igen eller välj ett standardformat.");
+    return fail(res.error, 502, t("api.formatFailed"));
   }
   return NextResponse.json(
     { profile: res.profile, explanation: res.explanation, qualityNote: res.qualityNote, folderId },

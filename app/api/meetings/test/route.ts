@@ -1,4 +1,6 @@
 import { after, NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
+import type { Translator } from "@/lib/i18n/translator";
 import type { OAuth2Client } from "google-auth-library";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg } from "@/lib/db/orgs";
@@ -34,25 +36,26 @@ const fail = (error: string, status: number, message: string) =>
  * the new Doc.
  */
 export async function POST(request: NextRequest) {
+  const t = apiT(request);
   const startedAt = Date.now();
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!canRunTestMeeting(user.email)) return fail("forbidden", 403, "Testmöte är bara för administratörer.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!canRunTestMeeting(user.email)) return fail("forbidden", 403, t("api.testAdminsOnly"));
 
   const body = (await request.json().catch(() => null)) as { orgId?: unknown; mode?: unknown } | null;
   const orgId = typeof body?.orgId === "string" ? body.orgId : "";
-  if (!isUuid(orgId)) return fail("bad_request", 400, "Föreningen saknas. Ladda om sidan och försök igen.");
+  if (!isUuid(orgId)) return fail("bad_request", 400, t("api.orgMissing"));
   const mode = body?.mode ?? "new";
-  if (mode !== "new" && mode !== "agenda") return fail("bad_request", 400, "Okänt testläge. Ladda om sidan och försök igen.");
-  if (getEnv().KILL_SWITCH) return fail("kill_switch", 503, "Tjänsten är pausad just nu. Försök igen senare.");
+  if (mode !== "new" && mode !== "agenda") return fail("bad_request", 400, t("api.testUnknownMode"));
+  if (getEnv().KILL_SWITCH) return fail("kill_switch", 503, t("api.killSwitch"));
 
   let result: StartResult;
   let lines: FixtureLine[] | undefined;
   if (mode === "agenda") {
-    const started = await startAgendaTest(supabase, user, orgId);
+    const started = await startAgendaTest(supabase, user, orgId, t);
     if ("response" in started) return started.response;
     ({ result, lines } = started);
   } else {
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest) {
     console.error(`test meeting ${result.meetingId}: ${(err as Error).message}`);
     // Ending runs a final pass: after the response, so the 500 is immediate.
     after(() => endMeeting(result.meetingId, { abandon: true }).catch(() => undefined));
-    return fail("save_failed", 500, "Testmötet kunde inte startas. Försök igen om en liten stund.");
+    return fail("save_failed", 500, t("api.testFailed"));
   }
 
   const meetingId = result.meetingId;
@@ -80,19 +83,20 @@ async function startAgendaTest(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   user: { id: string; email?: string | null },
   orgId: string,
+  t: Translator,
 ): Promise<{ result: StartResult; lines: FixtureLine[] } | { response: NextResponse }> {
   // As the user: RLS hides orgs they are not in. startMeeting checks membership again.
   const org = await getOrg(supabase, orgId);
-  if (!org) return { response: fail("not_found", 404, "Föreningen finns inte.") };
+  if (!org) return { response: fail("not_found", 404, t("api.orgNotFound")) };
   let auth: OAuth2Client;
   try {
     auth = await getGoogleAuth(user.id);
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {
-      return { response: fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.") };
+      return { response: fail("google_auth_lost", 401, t("api.googleAuthLost")) };
     }
     console.error(`test meeting: google auth: ${(err as Error).message}`);
-    return { response: fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.") };
+    return { response: fail("google_unavailable", 502, t("api.googleUnavailable")) };
   }
   let run: "a" | "b";
   let docId: string;
@@ -102,7 +106,7 @@ async function startAgendaTest(
     ({ docId } = await createTestAgendaDoc(auth, { orgName: org.name, folderId: org.meeting_folder_id ?? null, startedAt: new Date() }));
   } catch (err) {
     console.error(`test meeting: agenda doc: ${(err as Error).message}`);
-    return { response: fail("doc_failed", 502, "Vi kunde inte skapa testdokumentet i din Google Drive. Försök igen om en liten stund.") };
+    return { response: fail("doc_failed", 502, t("api.testDocFailed")) };
   }
   const result = await startMeeting(supabase, user, orgId, "test_started", {
     agendaDocId: docId,

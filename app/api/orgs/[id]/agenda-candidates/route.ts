@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { listCandidates, type DriveDoc } from "@/lib/agenda/candidates";
 import { localDate } from "@/lib/docs/create";
@@ -70,16 +71,17 @@ async function preparedSuggestion(p: NonNullable<Awaited<ReturnType<typeof prepa
  * Agenda-Doc candidates in the förening's meeting folder, read with the caller's own Google
  * grant. Docs already used by any meeting of the förening are left out. Members only.
  */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
   } = await db.auth.getUser();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const org = await getOrg(db, id);
-  if (!org || (await myRole(db, id)) === null) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!org || (await myRole(db, id)) === null) return fail("not_found", 404, t("api.orgNotFound"));
 
   const folderId = org.meeting_folder_id ?? null;
   const folderName = org.meeting_folder_name ?? null;
@@ -104,10 +106,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(body, { headers: noStore });
   } catch (err) {
     if (err instanceof GoogleAuthLostError) {
-      return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
+      return fail("google_auth_lost", 401, t("api.googleAuthLost"));
     }
     // The message only: never file names.
     console.error(`agenda-candidates: drive: ${(err as Error).message}`);
-    return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+    return fail("google_unavailable", 502, t("api.googleUnavailable"));
   }
 }

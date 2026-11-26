@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { dayUsd } from "@/lib/db/usage";
 import { getEnv } from "@/lib/env";
 import { DriveAccessMissingError, getGoogleAuth, getImportGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { estimateImport } from "@/lib/history/cost";
 import { createBatchJob, createDirectJob, currentJobId, jobView, type NewItem } from "@/lib/history/jobs";
-import { BATCH_RATE_LIMITED, MAX_IMPORT_DOCS } from "@/lib/history/limits";
+import { MAX_IMPORT_DOCS } from "@/lib/history/limits";
 import { BATCH_SPEND_SHARE, importMode, MAX_BATCH_PROTOCOLS, neutralLabel } from "@/lib/history/progress";
 import { googleStatus } from "@/lib/history/read-doc";
 import { readPickedDocs } from "@/lib/history/read-picked";
@@ -19,9 +20,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /** The import the Översikt shows (open, or finished and not yet closed): `{ job }` or `{ job: null }`. */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
-  const guard = await requireAdmin(id);
+  const guard = await requireAdmin(id, t);
   if (!guard.ok) return guard.reply;
   try {
     const admin = supabaseAdmin();
@@ -29,7 +31,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ job: jobId ? await jobView(admin, jobId) : null }, { headers: noStore });
   } catch (err) {
     console.error(`history/jobs: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
 }
 
@@ -47,8 +49,9 @@ interface PickedBody {
  * the estimate fits today's Claude budget for imports. → `{ job }` (the job view).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
-  const guard = await requireAdmin(id);
+  const guard = await requireAdmin(id, t);
   if (!guard.ok) return guard.reply;
   const { db, userId } = guard;
 
@@ -60,15 +63,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       : [],
   );
   if (!docs.length || docs.length !== raw.length || docs.length > MAX_IMPORT_DOCS || new Set(docs.map((d) => d.docId)).size !== docs.length) {
-    return fail("bad_request", 400, `Välj mellan 1 och ${MAX_IMPORT_DOCS} protokoll.`);
+    return fail("bad_request", 400, t("api.pickProtocols", { max: MAX_IMPORT_DOCS }));
   }
   const tickets = body?.tickets && typeof body.tickets === "object" ? (body.tickets as Record<string, unknown>) : null;
   if (tickets && !docs.every((d) => checkTicket(tickets[d.docId], userId, id, d.docId))) {
-    return fail("stale_list", 400, "Listan är för gammal. Gå tillbaka och visa mötena i mapparna igen.");
+    return fail("stale_list", 400, t("api.staleList"));
   }
   const viaListing = Boolean(tickets);
   const meetings = docs.reduce((n, d) => n + d.sections, 0);
-  if (meetings > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, `Dokumenten innehåller ${meetings} möten. Välj högst ${MAX_BATCH_PROTOCOLS} åt gången.`);
+  if (meetings > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, t("api.tooManyMeetings", { count: meetings, max: MAX_BATCH_PROTOCOLS }));
   // Stored labels are neutral: file names are never stored (/integritet); the browser keeps them.
   const docIndex = new Map(docs.map((d, k) => [d.docId, k]));
   const label = (d: { docId: string }, section: number, sections: number) => neutralLabel(docIndex.get(d.docId) ?? 0, section, sections);
@@ -79,7 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     [own, skipTabIds] = await Promise.all([ownDocIds(db, id, docs.map((d) => d.docId)), transcriptTabIds(db, id)]);
   } catch (err) {
     console.error(`history/jobs: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    return fail("error", 500, t("api.generic"));
   }
   const admin = supabaseAdmin();
 
@@ -109,16 +112,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       }
     } catch (err) {
-      if (err instanceof DriveAccessMissingError) return fail("google_auth_lost", 401, "Simon Says läsrättighet till din Drive har gått ut. Ge åtkomst igen.");
-      if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
+      if (err instanceof DriveAccessMissingError) return fail("google_auth_lost", 401, t("api.driveAccessExpired"));
+      if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, t("api.googleAuthLost"));
       const status = googleStatus(err);
-      if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa ett av dokumenten. Kontrollera att du fortfarande har åtkomst till det i Google Drive och välj det igen.");
+      if (status === 403 || status === 404) return fail("doc_unreadable", 403, t("api.docUnreadable"));
       console.error(`history/jobs: docs: ${(err as Error).message}`.slice(0, 200));
-      return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+      return fail("google_unavailable", 502, t("api.googleUnavailable"));
     }
-    if (items.length > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, `Dokumenten innehåller ${items.length} möten. Välj högst ${MAX_BATCH_PROTOCOLS} åt gången.`);
+    if (items.length > MAX_BATCH_PROTOCOLS) return fail("too_many", 400, t("api.tooManyMeetings", { count: items.length, max: MAX_BATCH_PROTOCOLS }));
     const env = getEnv();
-    if (env.KILL_SWITCH) return fail("spend", 503, "Simon Says kan inte läsa protokoll just nu. Försök igen i morgon.");
+    if (env.KILL_SWITCH) return fail("spend", 503, t("api.importSpend"));
     let spendRoom: number;
     let ownMeetings = 0;
     try {
@@ -131,18 +134,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       ownMeetings = (m.count ?? 0) + h.count;
     } catch (err) {
       console.error(`history/jobs: spend: ${(err as Error).message}`.slice(0, 200));
-      return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+      return fail("error", 500, t("api.generic"));
     }
     const e = estimateImport(chars, ownMeetings);
     created = await createBatchJob(admin, batchClient(), { orgId: id, userId, viaListing, estimateUsd: e.totalUsd, spendRoom, items });
   }
 
   if (!created.ok) {
-    if (created.error === "busy") return fail("busy", 409, "En inläsning pågår redan för föreningen. Vänta tills den är klar eller avbryt den.");
-    if (created.error === "rate_limited") return fail("rate_limited", 429, BATCH_RATE_LIMITED);
-    if (created.error === "spend") return fail("spend", 503, "Simon Says har inte utrymme för en så stor inläsning i dag. Försök i morgon eller välj färre protokoll.");
-    if (created.error === "submit") return fail("submit", 502, "Simon Says kunde inte skicka protokollen till Claude. Inget har kostat något. Försök igen om en liten stund.");
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
+    if (created.error === "busy") return fail("busy", 409, t("api.importBusy"));
+    if (created.error === "rate_limited") return fail("rate_limited", 429, t("api.batchRateLimited"));
+    if (created.error === "spend") return fail("spend", 503, t("api.importTooBig"));
+    if (created.error === "submit") return fail("submit", 502, t("api.importSubmitFailed"));
+    return fail("error", 500, t("api.generic"));
   }
   console.info(`history/jobs: ${meetings} meetings, ${importMode(meetings)}`);
   return NextResponse.json({ job: await jobView(admin, created.jobId) }, { headers: noStore });

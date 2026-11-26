@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { apiT } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
 import { isMeetingType, PrepareBodySchema } from "@/lib/prepare/draft";
 import { loadDraft, savePrepared } from "@/lib/prepare/prepare";
@@ -25,20 +26,21 @@ async function signedIn() {
  * unticked suggestions; an agenda already prepared for that date comes back to be edited. Members only.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const { db, user } = await signedIn();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const type = request.nextUrl.searchParams.get("typ") ?? "veckomote";
   const date = request.nextUrl.searchParams.get("datum") ?? "";
-  if (!isMeetingType(type)) return fail("bad_request", 400, "Mötestypen är ogiltig.");
+  if (!isMeetingType(type)) return fail("bad_request", 400, t("api.invalidMeetingType"));
   try {
     const res = await loadDraft(db, id, type, date);
     if (!res.ok) return fail(res.error, res.status, res.message);
     return NextResponse.json(res.draft, { headers: noStore });
   } catch (err) {
     console.error(`prepare: draft: ${(err as Error).message}`);
-    return fail("draft_failed", 500, "Vi kunde inte ta fram dagordningen just nu. Försök igen om en liten stund.");
+    return fail("draft_failed", 500, t("api.draftFailed"));
   }
 }
 
@@ -49,12 +51,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  * `{ docUrl, docName, date, created, reordered }`.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const t = apiT(request);
   const { id } = await params;
   const { db, user } = await signedIn();
-  if (!user) return fail("unauthenticated", 401, "Du är inte inloggad. Logga in och försök igen.");
-  if (!isUuid(id)) return fail("not_found", 404, "Föreningen finns inte.");
+  if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
+  if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
   const parsed = PrepareBodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return fail("bad_request", 400, "Dagordningen är ogiltig. Ladda om sidan och försök igen.");
+  if (!parsed.success) return fail("bad_request", 400, t("api.invalidAgenda"));
   try {
     const res = await savePrepared(db, user, id, parsed.data);
     if (!res.ok) return fail(res.error, res.status, res.message);
@@ -62,6 +65,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(body, { headers: noStore });
   } catch (err) {
     console.error(`prepare: save: ${(err as Error).message}`);
-    return fail("save_failed", 500, "Dagordningen kunde inte sparas. Försök igen om en liten stund.");
+    return fail("save_failed", 500, t("api.agendaSaveFailed"));
   }
 }

@@ -9,8 +9,7 @@ import { countedMeetings, itemLabel, openTasks, recurringTopics, underCheckin, t
 // texts become "en person".
 
 export const MIN_MEETINGS = 3;
-/** "Föreslå mål" at most 3 times per förening per 24 h (0028 claim_goal_proposal). */
-export const GOALS_RATE_LIMITED = "Du har bett om förslag tre gånger i dag. Försök igen i morgon.";
+/** "Föreslå mål" at most 3 times per förening per 24 h (0028 claim_goal_proposal); the reply is api.goalsRateLimited. */
 export const MAX_DECISIONS = 60;
 export const MAX_TASKS = 30;
 const MAX_TEXT = 200;
