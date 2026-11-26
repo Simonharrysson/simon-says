@@ -57,11 +57,6 @@
       "start": "Anpassa format",
       "busy": "…",
       "hint": "Ta bort eller lägg till punkter, t.ex. Må-runda."
-    },
-    "stadgar": {
-      "start": "Lägg in punkter från stadgarna",
-      "busy": "Simon Says läser stadgarna …",
-      "hint": "Google-dokument eller PDF, högst 10 MB. Stadgarna sparas inte."
     }
   },
   "tryAgain": "Försök igen",
@@ -69,10 +64,6 @@
   "pickLearnTitle": "Välj en mall eller 1–5 gamla protokoll",
   "tooManyDocs": "Välj högst {max} dokument.",
   "proposeFailed": "Simon Says kunde inte föreslå ett format. Försök igen.",
-  "pickStadgarTitle": "Välj föreningens stadgar",
-  "stadgarFailed": "Simon Says kunde inte läsa stadgarna. Försök igen.",
-  "stadgarFound": "Stadgarna kräver {count} punkter på varje styrelsemöte. Kontrollera dem nedan innan du godkänner.",
-  "stadgarNone": "Simon Says hittade inga punkter som stadgarna kräver på styrelsemöten. Du kan lägga till dem själv nedan.",
   "errors": {
     "titleEmpty": "Titeln får inte vara tom.",
     "titleLong": "Titeln får vara högst {max} tecken.",

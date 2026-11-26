@@ -16,6 +16,7 @@ import { formatDateTime } from "@/lib/format";
 import type { InviteRow } from "@/lib/invites/rules";
 import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
+import { StadgarArsmote, type StadgarPhase } from "@/components/views/StadgarArsmote";
 import { OrgLogo } from "./OrgLogo";
 
 // Kom igång's six steps and the end, presentational (no fetching): the container
@@ -472,13 +473,7 @@ export function FolderStep(p: FolderStepProps) {
 
 export type WeeklyChoice = "veckomote" | "learn" | "current";
 
-export type StadgarPhase =
-  | { phase: "idle" }
-  | { phase: "reading" }
-  | { phase: "review"; board: string[]; arsmote: string[] }
-  | { phase: "saving"; board: string[]; arsmote: string[] }
-  | { phase: "saved"; board: number; arsmote: number }
-  | { phase: "error"; message: string };
+export type { StadgarPhase } from "@/components/views/StadgarArsmote";
 
 export interface FormatStepProps {
   choice: WeeklyChoice;
@@ -489,10 +484,10 @@ export interface FormatStepProps {
   learn?: ReactNode;
   pickerEnabled: boolean;
   stadgar: StadgarPhase;
-  /** Already saved from an earlier visit. */
-  stadgarSaved?: { styrelse: boolean; arsmote: boolean };
+  /** An årsmöte from the stadgar is already saved (an earlier visit). */
+  stadgarSaved?: boolean;
   onStadgarPick: () => void;
-  onStadgarChange: (board: string[], arsmote: string[]) => void;
+  onStadgarChange: (arsmote: string[]) => void;
   onStadgarSave: () => void;
   onStadgarCancel: () => void;
 }
@@ -500,6 +495,7 @@ export interface FormatStepProps {
 
 export function FormatStep(p: FormatStepProps) {
   const t = useTranslations("onboarding.format");
+  const stadgarCopy = useTranslations("stadgar");
   const id = useId();
   // The Veckomöte's items as they will stand in the (Swedish) Doc.
   const preview = t.raw("preview") as string[];
@@ -537,132 +533,21 @@ export function FormatStep(p: FormatStepProps) {
           <h2 id={`${id}-stadgar`} className="text-lg">
             {t("statutes")} <span className="font-normal text-ink-3">{t("optional")}</span>
           </h2>
-          <p className="max-w-[34rem] text-sm text-ink-2">{t.rich("statutesText", { strong: (chunks) => <strong>{chunks}</strong> })}</p>
+          <p className="max-w-[34rem] text-sm text-ink-2">
+            {stadgarCopy("lead")} {stadgarCopy("edit")}
+          </p>
         </div>
-        <StadgarBlock {...p} uid={id} />
+        <StadgarArsmote
+          uid={`${id}-stadgar`}
+          stadgar={p.stadgar}
+          pickerEnabled={p.pickerEnabled}
+          saved={p.stadgarSaved}
+          onPick={p.onStadgarPick}
+          onChange={p.onStadgarChange}
+          onSave={p.onStadgarSave}
+          onCancel={p.onStadgarCancel}
+        />
       </section>
-    </div>
-  );
-}
-
-function StadgarBlock(p: FormatStepProps & { uid: string }) {
-  const t = useTranslations("onboarding.format");
-  const common = useTranslations("common");
-  const s = p.stadgar;
-  if (s.phase === "reading") {
-    return (
-      <p className="flex items-center gap-2 text-sm text-ink-2" role="status" aria-live="polite">
-        <Spinner /> {t("reading")}
-      </p>
-    );
-  }
-  if (s.phase === "review" || s.phase === "saving") {
-    return (
-      <div className="mt-2 flex flex-col gap-6 animate-notice-in">
-        <ItemList
-          uid={`${p.uid}-board`}
-          title={t("boardTitle")}
-          empty={t("boardEmpty")}
-          items={s.board}
-          max={15}
-          onChange={(board) => p.onStadgarChange(board, s.arsmote)}
-        />
-        <ItemList
-          uid={`${p.uid}-ars`}
-          title={t("annualTitle")}
-          empty={t("annualEmpty")}
-          items={s.arsmote}
-          max={18}
-          onChange={(arsmote) => p.onStadgarChange(s.board, arsmote)}
-        />
-        <div className="flex flex-wrap gap-2">
-          <Button variant="primary" onClick={p.onStadgarSave} loading={s.phase === "saving"}>
-            {t("save")}
-          </Button>
-          <Button variant="ghost" onClick={p.onStadgarCancel} disabled={s.phase === "saving"}>
-            {common("cancel")}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-  if (s.phase === "saved" || (s.phase === "idle" && p.stadgarSaved && (p.stadgarSaved.styrelse || p.stadgarSaved.arsmote))) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <p className="flex items-start gap-2 text-sm text-green" aria-live="polite">
-          <IconCheck size={18} className="mt-[0.1rem] flex-none" />
-          <span>
-            {s.phase === "saved"
-              ? s.arsmote
-                ? t("savedBoth", { board: s.board, annual: s.arsmote })
-                : t("savedBoard", { board: s.board })
-              : t("followStatutes")}
-          </span>
-        </p>
-        {p.pickerEnabled && (
-          <Button variant="ghost" size="sm" onClick={p.onStadgarPick}>
-            {t("readAgain")}
-          </Button>
-        )}
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-start gap-3">
-      {s.phase === "error" && <Banner tone="danger" live={false}>{s.message}</Banner>}
-      {p.pickerEnabled ? (
-        <Button variant="secondary" onClick={p.onStadgarPick}>
-          {s.phase === "error" ? t("tryAgain") : t("pickStatutes")}
-        </Button>
-      ) : (
-        <p className="text-sm text-ink-3">{t("pickerOff")}</p>
-      )}
-      <p className={hintClass}>{t("statutesHint")}</p>
-    </div>
-  );
-}
-
-function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; title: string; empty: string; items: string[]; max: number; onChange: (items: string[]) => void }) {
-  const t = useTranslations("onboarding.format");
-  const [draft, setDraft] = useState("");
-  const add = (e: FormEvent) => {
-    e.preventDefault();
-    const clean = draft.replace(/\s+/g, " ").trim().slice(0, 80);
-    if (!clean || items.length >= max) return;
-    onChange([...items, clean]);
-    setDraft("");
-  };
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-base font-semibold">
-        {title} <span className="font-normal text-ink-3">· {t("items", { count: items.length })}</span>
-      </h3>
-      {items.length === 0 ? (
-        <p className="text-sm text-ink-3">{empty}</p>
-      ) : (
-        <ol className="flex flex-col rounded-lg bg-surface shadow-panel">
-          {items.map((item, i) => (
-            <li key={`${i}-${item}`} className="flex min-h-11 items-center gap-3 border-t border-line px-4 py-1 first:border-t-0">
-              <span className="w-6 flex-none font-mono text-xs text-ink-3">{i + 1}.</span>
-              <span className="min-w-0 flex-1 text-sm wrap-anywhere">{item}</span>
-              <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={16} />} onClick={() => onChange(items.filter((_, j) => j !== i))}>
-                {t("removeItem", { item })}
-              </Button>
-            </li>
-          ))}
-        </ol>
-      )}
-      {items.length < max && (
-        <form onSubmit={add} className="flex gap-2">
-          <Label htmlFor={`${uid}-add`} className="sr-only">
-            {t("newItem", { title })}
-          </Label>
-          <Input id={`${uid}-add`} value={draft} maxLength={80} placeholder={t("addPlaceholder")} onChange={(e) => setDraft(e.target.value)} />
-          <Button type="submit" variant="ghost" icon={<IconPlus size={18} />} disabled={!draft.trim()}>
-            {t("add")}
-          </Button>
-        </form>
-      )}
     </div>
   );
 }

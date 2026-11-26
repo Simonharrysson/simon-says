@@ -10,7 +10,7 @@ import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, t
 import { runEndFlow } from "@/lib/live/end-flow";
 import { SIGNED_IN_CHANNEL, SIGNED_IN_PATH } from "@/lib/live/signed-in";
 import { stopParam } from "@/lib/ui/limit-copy";
-import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption } from "./AgendaStep";
+import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption, type GoalOption } from "./AgendaStep";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
@@ -71,6 +71,8 @@ export interface LiveMeetingControllerProps {
   formats?: AgendaFormatOption[];
   /** The Google Picker is configured; off: only a new Doc (as before A11). */
   pickerEnabled?: boolean;
+  /** New meeting: "Mål att ta upp" for a new Doc (todo #12). */
+  goals?: GoalOption[];
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -406,6 +408,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             formatProfileId: choice?.formatProfileId ?? null,
             formatKind: choice?.formatKind ?? null,
             transcriptInDoc: choice?.agendaDocId ? choice.transcriptInDoc : null,
+            // Only for a new Doc in a format; the server re-reads the titles.
+            ...(!choice?.agendaDocId && choice?.goalIds?.length ? { goalIds: choice.goalIds } : {}),
           }),
         });
         const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
@@ -773,6 +777,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             initialFormat={keptFormat}
             disabled={phase === "starting"}
             onChange={setAgenda}
+            goals={props.goals}
           />
         ) : undefined
       }

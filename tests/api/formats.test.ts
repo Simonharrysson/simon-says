@@ -35,7 +35,7 @@ vi.mock("@/lib/formats/learn", async (importOriginal) => ({
 
 vi.mock("@/lib/formats/stadgar", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/formats/stadgar")>()),
-  extractRequiredItems: m.extractRequiredItems,
+  extractArsmoteItems: m.extractRequiredItems,
 }));
 
 const propose = (await import("@/app/api/orgs/[id]/formats/propose/route")).POST;
@@ -198,7 +198,7 @@ describe.skipIf(!hasLocalSupabase)("format learning routes", () => {
       expect(m.extractRequiredItems).not.toHaveBeenCalled();
     });
 
-    it("Google Doc → plain text → requiredItems; text never logged", async () => {
+    it("Google Doc → plain text → the årsmöte's items (todo #15); text never logged", async () => {
       m.db = admin.db;
       m.filesGet.mockResolvedValue({ data: { mimeType: "application/vnd.google-apps.document" } });
       m.filesExport.mockResolvedValue({ data: STADGAR_TEXT });
@@ -210,7 +210,7 @@ describe.skipIf(!hasLocalSupabase)("format learning routes", () => {
       info.mockRestore();
       error.mockRestore();
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ requiredItems: ["Fråga om mötets behöriga utlysande", "Val av justerare"] });
+      expect(await res.json()).toEqual({ arsmote: ["Fråga om mötets behöriga utlysande", "Val av justerare"] });
       expect(m.filesExport).toHaveBeenCalledWith({ fileId: "stadgarAAAA1111", mimeType: "text/plain" }, { responseType: "text" });
       expect(m.extractRequiredItems).toHaveBeenCalledWith({ kind: "doc", text: STADGAR_TEXT }, { orgId });
       expect(logs.join("\n")).not.toMatch(/ÅSBACKA|styrelsemöte ska/);
@@ -254,7 +254,7 @@ describe.skipIf(!hasLocalSupabase)("format learning routes", () => {
       expect((await callStadgar(orgId, { fileId: "stadgarAAAA1111" })).status).toBe(503);
     });
 
-    it("approve a Styrelseprotokoll with the stadgar's items; member cannot", async () => {
+    it("a Styrelseprotokoll with stadgar items saved before todo #15 can still be approved (Anpassa); member cannot", async () => {
       const profile = { ...STYRELSEPROTOKOLL, requiredItems: ["Fråga om beslutsmässighet", "Val av justerare"] };
       m.db = member.db;
       expect((await callApprove(orgId, { profile, kind: "styrelseprotokoll" })).status).toBe(403);

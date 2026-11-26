@@ -20,6 +20,7 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 import { formatLabel, formatName } from "@/lib/formats/standard";
 import type { FormatKind, FormatProfile } from "@/lib/formats/schema";
 import { LearnFormatView, useFormatFlow } from "./FormatEditor";
+import { StadgarArsmote, useStadgarArsmote } from "./StadgarArsmote";
 import { useMeetingFolderPicker } from "./useMeetingFolderPicker";
 
 export interface FormatCardProps {
@@ -44,7 +45,7 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /**
  * The förening's meeting format. Everyone sees the state (format, its version, the meeting folder,
  * the stadgar's items behind a disclosure); admins get one "Ändra" menu that starts each change:
- * switch format, adjust it, learn one (B2), the stadgar's items (C1), the meeting folder. The
+ * switch format, adjust it, learn one (B2), the årsmöte from the stadgar (todo #15), the meeting folder. The
  * switcher, the flows' progress, errors and editor and the folder's result show in the card.
  */
 export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
@@ -53,7 +54,8 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const t = useTranslations("formatEditor");
   const common = useTranslations("common");
   const locale = useLocale();
-  const flowCopy = (v: "learn" | "customize" | "stadgar") => ({ start: t(`flows.${v}.start`), hint: t(`flows.${v}.hint`) });
+  const stadgarCopy = useTranslations("stadgar");
+  const flowCopy = (v: "learn" | "customize") => ({ start: t(`flows.${v}.start`), hint: t(`flows.${v}.hint`) });
   const custom = formats
     .map((f) => ({ ...f, custom: f.custom ?? f.kind === "learned", requiredCount: f.requiredCount ?? 0 }))
     .filter((f) => f.custom);
@@ -74,6 +76,13 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const meta = capitalize([version, folderLine].filter(Boolean).join(" · "));
 
   const flow = useFormatFlow(orgId, current.profile);
+  // The stadgar → the årsmöte's agenda (todo #15); shown in the card while it runs.
+  const stadgar = useStadgarArsmote(orgId);
+  const [stadgarOpen, setStadgarOpen] = useState(false);
+  const closeStadgar = () => {
+    stadgar.cancel();
+    setStadgarOpen(false);
+  };
   const folder = useMeetingFolderPicker(orgId);
   const [changing, setChanging] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -82,7 +91,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
 
   // Back from a flow's editor (approved or cancelled) or the switcher: focus returns to "Ändra".
   const wasOpen = useRef(false);
-  const open = changing || flow.view.phase !== "idle";
+  const open = changing || flow.view.phase !== "idle" || stadgarOpen;
   useEffect(() => {
     if (open) wasOpen.current = true;
     else if (wasOpen.current) {
@@ -115,6 +124,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
             hint={t("card.switchHint")}
             onSelect={() => {
               flow.reset();
+              closeStadgar();
               focusSelect.current = true;
               setChanging(true);
             }}
@@ -127,6 +137,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
             hint={flowCopy("customize").hint}
             onSelect={() => {
               setChanging(false);
+              closeStadgar();
               flow.start("customize");
             }}
           >
@@ -139,6 +150,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
           disabled={!pickerEnabled}
           onSelect={() => {
             setChanging(false);
+            closeStadgar();
             void flow.start("learn");
           }}
         >
@@ -147,13 +159,15 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
         {pickerEnabled && (
           <>
             <DropdownMenuItem
-              hint={flowCopy("stadgar").hint}
+              hint={stadgarCopy("lead")}
               onSelect={() => {
                 setChanging(false);
-                void flow.start("stadgar");
+                flow.reset();
+                setStadgarOpen(true);
+                void stadgar.pick();
               }}
             >
-              {flowCopy("stadgar").start}
+              {stadgarCopy("start")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem hint={t("card.folderHint")} onSelect={() => void folder.pick()}>
@@ -233,6 +247,28 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
               </Button>
             </div>
           </form>
+        )}
+
+        {isAdmin && stadgarOpen && (
+          <div className="flex flex-col gap-3 border-t border-line pt-4">
+            <p className="text-sm text-ink-2">{stadgarCopy("lead")}</p>
+            <StadgarArsmote
+              uid="format-stadgar"
+              stadgar={stadgar.stadgar}
+              pickerEnabled={pickerEnabled}
+              onPick={() => void stadgar.pick()}
+              onChange={stadgar.change}
+              onSave={() => void stadgar.save()}
+              onCancel={closeStadgar}
+            />
+            {(stadgar.stadgar.phase === "idle" || stadgar.stadgar.phase === "saved" || stadgar.stadgar.phase === "error") && (
+              <div>
+                <Button variant="ghost" size="sm" onClick={closeStadgar}>
+                  {common("close")}
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {isAdmin && flow.view.phase !== "idle" && (

@@ -220,7 +220,8 @@
     "pickerFailed": "Google-väljaren kunde inte öppnas. Försök igen.",
     "pickFolderNamed": "Välj mötesmappen ”{folder}”",
     "pickFolder": "Välj mötesmappen",
-    "folderSaveFailed": "Mötesmappen kunde inte sparas. Försök igen."
+    "folderSaveFailed": "Mötesmappen kunde inte sparas. Försök igen.",
+    "goalsTitle": "Mål att ta upp"
   },
   "controller": {
     "tabStopped": "⚠ Stannat – Simon Says",

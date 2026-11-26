@@ -37,7 +37,8 @@ const { FormatSim, V1Sim, block, notesTicks, scriptedClient } = await import("@/
 const { fixtureDoc, linesOf, FMT_ENDED } = await import("@/test/formatdoc");
 const { VECKOMOTE, STYRELSEPROTOKOLL, ENKEL } = await import("@/lib/formats/standard");
 const { proposeFormat } = await import("@/lib/formats/learn");
-const { extractRequiredItems } = await import("@/lib/formats/stadgar");
+const { extractArsmoteItems } = await import("@/lib/formats/stadgar");
+const { arsmoteProfile } = await import("@/lib/formats/arsmote-profile");
 const { docStructure } = await import("@/lib/formats/structure");
 const { docOf, paraEl, TAB } = await import("@/test/docsim");
 const { applyDoc, anchoredDoc } = await import("@/test/formatdoc");
@@ -201,16 +202,32 @@ describe("feature: formats (document formats)", () => {
     expect(linesOf(sim.doc).some((l) => /må-runda/i.test(l))).toBe(false);
   });
 
-  it("Styrelseprotokoll with the stadgar's required items: §1..§11, a decision under its §, the Justerare task above the signatures", async () => {
+  it("the stadgar give the årsmöte's agenda only (todo #15): one call, an Årsmöte format, no board items", async () => {
     offline.on = true;
     const stadgar = readFileSync("fixtures/stadgar/fiktiv-forening.txt", "utf8");
     const { client, calls } = scriptedClient({
-      stadgar: () => ({ items: ["Mötets öppnande", "Fråga om mötets behöriga utlysande", "Val av justerare", "Ekonomisk rapport"] }),
+      stadgar: () => ({ items: ["Mötets öppnande", "Val av mötesordförande", "Fråga om ansvarsfrihet för styrelsen", "Val av revisorer"] }),
     });
-    const req = await extractRequiredItems({ kind: "doc", text: stadgar }, { orgId: "o", client });
-    expect(req.ok).toBe(true);
-    expect(calls[0].text).toContain("Fråga om mötets behöriga utlysande");
-    const profile = { ...STYRELSEPROTOKOLL, requiredItems: req.ok ? req.items : [] };
+    const res = await extractArsmoteItems({ kind: "doc", text: stadgar }, { orgId: "o", client });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].text).toContain("List the årsmöte agenda.");
+    if (!res.ok) throw new Error(res.error);
+    const ars = arsmoteProfile(res.items);
+    expect(ars.kind).toBe("arsmote");
+    expect(ars.requiredItems).toEqual([]);
+    expect(ars.fixedAgendaItems.map((i) => i.label)).toEqual([
+      "Mötets öppnande",
+      "Val av mötesordförande",
+      "Fråga om ansvarsfrihet för styrelsen",
+      "Val av revisorer",
+      "Övriga frågor",
+      "Mötets avslutande",
+    ]);
+  });
+
+  it("Styrelseprotokoll with stadgar items saved before todo #15 (still applied): §1..§11, a decision under its §, the Justerare task above the signatures", async () => {
+    offline.on = true;
+    const profile = { ...STYRELSEPROTOKOLL, requiredItems: ["Mötets öppnande", "Fråga om mötets behöriga utlysande", "Val av justerare", "Ekonomisk rapport"] };
     const sim = FormatSim.skeleton({
       id: "m-styr",
       profile,

@@ -11,7 +11,7 @@ export const onboardingViews = [
   { id: "onboarding-4", title: "Kom igång · 4. så brukar ni ha möten" },
   { id: "onboarding-4-learn", title: "Kom igång · 4. som våra gamla protokoll" },
   { id: "onboarding-4-reading", title: "Kom igång · 4. läser stadgarna" },
-  { id: "onboarding-4-stadgar", title: "Kom igång · 4. stadgarna: styrelsemöte + årsmöte" },
+  { id: "onboarding-4-stadgar", title: "Kom igång · 4. stadgarna: årsmötets dagordning" },
   { id: "onboarding-4-saved", title: "Kom igång · 4. stadgarna sparade" },
   { id: "onboarding-5", title: "Kom igång · 5. era tidigare möten" },
   { id: "onboarding-6", title: "Kom igång · 6. röster" },

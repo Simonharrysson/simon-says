@@ -21,6 +21,7 @@ import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { followupSource, importedCarried, type ImportedItem } from "./carry-source";
+import { goalSuggestionsFor } from "./goals-load";
 import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine, type Journal } from "./doc";
 import { runReprepare } from "./reprepare";
 import { preparedDocState } from "./stale";
@@ -36,6 +37,7 @@ import {
   type MeetingType,
   type PrepareBody,
 } from "./draft";
+import { isOfferedType } from "./types";
 import { acquireLease, missingTable, preparedForDate, releaseLease, type PreparedAgenda } from "./store";
 
 // Förbered möte, server side: the draft (GET) and "Skapa dagordning" (POST). The Doc is written
@@ -54,13 +56,16 @@ export function preparedTitle(orgName: string, date: string, time: string | null
 
 /**
  * The format a meeting type runs in: the förening's own version of that kind when it is the
- * default; else its own Styrelsemöte / Årsmöte format from the stadgar (onboarding, 0035);
- * else the standard.
+ * default; else its own Styrelsemöte / Årsmöte format (0035; the årsmöte's from the stadgar);
+ * else the standard. Veckomöte is the förening's ordinary meeting: it runs in the default format,
+ * a Styrelseprotokoll included (todo #15: no separate Styrelsemöte type, so a förening whose
+ * default is Styrelseprotokoll keeps it).
  */
 export async function formatForType(orgId: string, type: MeetingType): Promise<{ id: string | null; profile: FormatProfile }> {
   const def = await orgDefaultFormat(supabaseAdmin(), orgId);
   const k = def.profile.kind;
-  if (def.id && ((type === "veckomote" && (k === "veckomote" || k === "learned")) || (type === "styrelsemote" && k === "styrelseprotokoll"))) return def;
+  const ordinary = k === "veckomote" || k === "learned" || k === "styrelseprotokoll";
+  if (def.id && ((type === "veckomote" && ordinary) || (type === "styrelsemote" && k === "styrelseprotokoll"))) return def;
   if (type !== "veckomote") {
     const own = await typeFormat(orgId, type);
     if (own) return own;
@@ -146,15 +151,18 @@ async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType,
     if (error) console.error(`prepare: protocol items unavailable: ${error.message}`);
     else carried = importedCarried(protocol.id, (data ?? []) as ImportedItem[], "followup", people, groupBy);
   }
-  // Recurring topics (Översikt), read with the caller's client (RLS); never fails the draft.
+  // Recurring topics (Översikt) and "Mål att ta upp" (the approved goals, todo #12), read with
+  // the caller's client (RLS); neither ever fails the draft.
   let topics: { label: string; meetings: number }[] = [];
+  const goalsP = goalSuggestionsFor(userDb, orgId, now);
   try {
     topics = recurringTopics(orgId, await loadOverviewInput(userDb, orgId));
   } catch (err) {
     console.error(`prepare: topics unavailable: ${(err as Error).message}`);
   }
+  const goals = await goalsP;
   const label = (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy);
-  const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics, ...(hasFollowup ? { origin: pick.origin } : {}) });
+  const fresh = buildDraft({ profile, carried, ctx: { profile, ownerLabel: label }, topics, goals, ...(hasFollowup ? { origin: pick.origin } : {}) });
   return { profile, formatId, prevId: pick.use === "meeting" ? (prev?.id ?? null) : null, carried, people, ownerLabel: label, fresh };
 }
 
@@ -198,7 +206,8 @@ export async function loadDraft(
   if (!(await member(userDb, orgId))) return failed("not_found", 404, "Föreningen finns inte.");
   if (!validDate(date)) return failed("bad_request", 400, "Datumet är ogiltigt.");
   const existing = await preparedForDate(orgId, date);
-  const kind = existing?.kind ?? type;
+  // A Styrelsemöte is no longer offered (todo #15); only an agenda prepared as one keeps it.
+  const kind = existing?.kind ?? (isOfferedType(type) ? type : "veckomote");
   const src = await sources(userDb, orgId, kind, now, date);
   const items = existing ? refreshDraft(existing.items, src.fresh, new Set(existing.dropped)) : src.fresh;
   return {
@@ -238,6 +247,7 @@ export async function savePrepared(
     console.error(`prepare: lookup: ${(err as Error).message}`);
     return failed("save_failed", 500, "Dagordningen kunde inte sparas. Försök igen om en liten stund.");
   }
+  if (!existing && !isOfferedType(body.type)) return failed("bad_request", 400, "Mötestypen är ogiltig.");
   const type = existing?.kind ?? body.type;
   const src = await sources(userDb, orgId, type, now, body.date);
   const items = normaliseItems(body.items, src.fresh);

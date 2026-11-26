@@ -3,7 +3,7 @@ import { apiT, localizeMessage, requestLocale } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
-import { extractRequiredItems } from "@/lib/formats/stadgar";
+import { extractArsmoteItems } from "@/lib/formats/stadgar";
 import { readStadgarFile } from "@/lib/formats/stadgar-file";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -15,9 +15,12 @@ const fail = (error: string, status: number, message: string) =>
   NextResponse.json({ error, message }, { status, headers: noStore });
 
 /**
- * Required agenda items from the förening's stadgar (Task C1). Body `{ fileId }`: a Google Doc
- * (read as plain text) or a PDF (at most 10 MB), picked by an admin and read with the admin's own
- * Google grant. → `{ requiredItems }`. Stores nothing; the stadgar text is never logged.
+ * The årsmöte's agenda from the förening's stadgar (todo #15). The UI now reads the stadgar through
+ * POST …/onboarding/stadgar (StadgarArsmote.tsx, shared by onboarding and Mötesformat); this route
+ * answers the same for a browser tab opened before that change. Body `{ fileId }`: a Google Doc (read as plain text) or a PDF (at most
+ * 10 MB), picked by an admin and read with the admin's own Google grant. → `{ arsmote }`. Stores
+ * nothing (the admin checks the list and saves it with POST …/onboarding/formats `{ arsmote }`);
+ * the stadgar text is never logged. The stadgar no longer add items to board or weekly formats.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
@@ -41,13 +44,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!file.ok) return fail(file.error, file.status, localizeMessage(file.message, requestLocale(request)));
   const input = file.input;
 
-  const res = await extractRequiredItems(input, { orgId: id });
+  const res = await extractArsmoteItems(input, { orgId: id });
   if (!res.ok) {
     if (res.error === "spend") {
       return fail("spend", 503, t("api.statutesSpend"));
     }
     return fail(res.error, 502, t("api.statutesFailed"));
   }
-  console.info(`formats/stadgar: ${input.kind}, ${res.items.length} items`);
-  return NextResponse.json({ requiredItems: res.items }, { headers: noStore });
+  console.info(`formats/stadgar: ${input.kind}, ${res.items.length} annual-meeting items`);
+  return NextResponse.json({ arsmote: res.items }, { headers: noStore });
 }

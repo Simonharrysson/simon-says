@@ -4,8 +4,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Banner } from "@/components/ui/Banner";
-import { PickerError, usePicker } from "@/components/google/Picker";
 import { LearnFormatView, useFormatFlow } from "@/components/views/FormatEditor";
+import { useStadgarArsmote } from "@/components/views/StadgarArsmote";
 import { useMeetingFolderPicker } from "@/components/views/useMeetingFolderPicker";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { STEP_IDS, markStep, stepNumber, type OnboardingState, type StepId } from "@/lib/onboarding/steps";
@@ -24,7 +24,7 @@ import {
 } from "@/app/(app)/orgs/[id]/kom-igang/actions";
 import { squareLogo } from "./logo-image";
 import { OnboardingShell, StepFooter, type ShellStep } from "./OnboardingShell";
-import { BoardStep, DoneStep, FolderStep, FormatStep, HistoryStep, LogoStep, VoicesStep, type StadgarPhase, type WeeklyChoice } from "./steps";
+import { BoardStep, DoneStep, FolderStep, FormatStep, HistoryStep, LogoStep, VoicesStep, type WeeklyChoice } from "./steps";
 
 // Kom igång (todo #5), the container: one step at a time, each skippable, progress saved on
 // every Fortsätt / Hoppa över (org_onboarding, 0035) and kept in the URL (?steg=n), so it can be
@@ -43,7 +43,8 @@ export interface OnboardingProps {
   pickerEnabled: boolean;
   /** The förening's default format: its kind and display name (null: none yet → Enkel). */
   format: { kind: FormatProfile["kind"] | null; name: string; profile: FormatProfile | null };
-  stadgarSaved: { styrelse: boolean; arsmote: boolean };
+  /** An årsmöte from the stadgar is saved (orgs.arsmote_format_id). */
+  stadgarSaved: boolean;
   historyCount: number;
 }
 
@@ -75,8 +76,8 @@ export function Onboarding(p: OnboardingProps) {
   const folder = useMeetingFolderPicker(orgId);
   const [choice, setChoice] = useState<WeeklyChoice>(p.format.kind && p.format.kind !== "enkel" && p.format.kind !== "veckomote" ? "current" : "veckomote");
   const flow = useFormatFlow(orgId, p.format.profile ?? undefined);
-  const picker = usePicker();
-  const [stadgar, setStadgar] = useState<StadgarPhase>({ phase: "idle" });
+  const stadgarFlow = useStadgarArsmote(orgId);
+  const stadgar = stadgarFlow.stadgar;
   const [voicePending, setVoicePending] = useState<string | null>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
@@ -139,49 +140,6 @@ export function Onboarding(p: OnboardingProps) {
       router.refresh();
     } else setLogoMsg({ text: t("logo.removeFailed"), tone: "danger" });
     setLogoBusy(false);
-  };
-
-  const pickStadgar = async () => {
-    let picked;
-    try {
-      picked = await picker.open({ mode: "doc-or-pdf", title: t("pickStadgar") });
-    } catch (err) {
-      setStadgar({ phase: "error", message: err instanceof PickerError ? err.message : t("pickerFailed") });
-      return;
-    }
-    if (!picked?.[0]) return;
-    setStadgar({ phase: "reading" });
-    try {
-      const res = await fetch(`/api/orgs/${orgId}/onboarding/stadgar`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileId: picked[0].id }),
-      });
-      const json = (await res.json().catch(() => null)) as { board?: string[]; arsmote?: string[]; message?: string } | null;
-      if (!res.ok || !Array.isArray(json?.board) || !Array.isArray(json?.arsmote)) {
-        setStadgar({ phase: "error", message: json?.message ?? t("stadgarFailed") });
-        return;
-      }
-      setStadgar({ phase: "review", board: json.board, arsmote: json.arsmote });
-    } catch {
-      setStadgar({ phase: "error", message: t("offline") });
-    }
-  };
-
-  const saveStadgar = async () => {
-    if (stadgar.phase !== "review") return;
-    const { board, arsmote } = stadgar;
-    setStadgar({ phase: "saving", board, arsmote });
-    const res = await fetch(`/api/orgs/${orgId}/onboarding/formats`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ board, arsmote }),
-    }).catch(() => null);
-    if (res?.ok) setStadgar({ phase: "saved", board: board.length, arsmote: arsmote.length });
-    else {
-      const json = (await res?.json().catch(() => null)) as { message?: string } | null;
-      setStadgar({ phase: "error", message: json?.message ?? t("formatsFailed") });
-    }
   };
 
   const onConsent = async (personId: string, consent: boolean) => {
@@ -325,10 +283,10 @@ export function Onboarding(p: OnboardingProps) {
             pickerEnabled={p.pickerEnabled}
             stadgar={stadgar}
             stadgarSaved={p.stadgarSaved}
-            onStadgarPick={pickStadgar}
-            onStadgarChange={(b, a) => stadgar.phase === "review" && setStadgar({ phase: "review", board: b, arsmote: a })}
-            onStadgarSave={saveStadgar}
-            onStadgarCancel={() => setStadgar({ phase: "idle" })}
+            onStadgarPick={stadgarFlow.pick}
+            onStadgarChange={stadgarFlow.change}
+            onStadgarSave={stadgarFlow.save}
+            onStadgarCancel={stadgarFlow.cancel}
           />
           {formatError && (
             <Banner tone="danger" live={false}>

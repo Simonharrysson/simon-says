@@ -57,11 +57,6 @@
       "start": "Customise format",
       "busy": "…",
       "hint": "Remove or add items, e.g. the check-in round."
-    },
-    "stadgar": {
-      "start": "Add items from the statutes",
-      "busy": "Simon Says is reading the statutes …",
-      "hint": "Google Doc or PDF, at most 10 MB. The statutes aren't stored."
     }
   },
   "tryAgain": "Try again",
@@ -69,10 +64,6 @@
   "pickLearnTitle": "Choose a template or 1–5 old minutes",
   "tooManyDocs": "Choose at most {max} documents.",
   "proposeFailed": "Simon Says couldn't propose a format. Try again.",
-  "pickStadgarTitle": "Choose the association's statutes",
-  "stadgarFailed": "Simon Says couldn't read the statutes. Try again.",
-  "stadgarFound": "The statutes require {count} items at every board meeting. Check them below before you approve.",
-  "stadgarNone": "Simon Says found no items the statutes require at board meetings. You can add them yourself below.",
   "errors": {
     "titleEmpty": "The title can't be empty.",
     "titleLong": "The title can be at most {max} characters.",

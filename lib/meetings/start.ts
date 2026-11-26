@@ -28,6 +28,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { docUrl } from "@/lib/ui/meetings";
 import { kindsOfType } from "@/lib/prepare/draft";
+import { withGoalItems } from "@/lib/prepare/goals";
+import { goalTitles } from "@/lib/prepare/goals-load";
 import { preparedForDoc, type PreparedAgenda } from "@/lib/prepare/store";
 
 export type { StandardKind } from "@/lib/formats/standard";
@@ -46,6 +48,11 @@ export interface StartOptions {
   isTest?: boolean;
   /** Agenda mode: Simon Says created the agenda Doc (the Testmöte agenda), so it may share it. */
   agendaCreatedByApp?: boolean;
+  /**
+   * A new Doc in a format (not agenda mode, not Enkel): the förening's goals ticked under "Mål att
+   * ta upp" (org_goals ids, at most two; todo #12), added as topic items. Titles are re-read here.
+   */
+  goalIds?: string[];
 }
 
 export type StartResult =
@@ -221,7 +228,7 @@ export async function startMeeting(
     ? await agendaSetup(ctx, opts.agendaDocId!, format.profile)
     : format.profile.kind === "enkel"
       ? await v1Setup(ctx, format.profile, org.share_transcript)
-      : await formatSetup(ctx, format.profile, org.share_transcript);
+      : await formatSetup(ctx, withGoalItems(format.profile, await goalTitles(orgId, opts.goalIds ?? [])), org.share_transcript);
   if ("ok" in setup) return setup;
 
   const anchor = setup.anchor;

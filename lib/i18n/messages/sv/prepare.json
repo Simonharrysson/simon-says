@@ -61,5 +61,9 @@
   "kept": "Någon har skrivit i dokumentet, så ordningen där är kvar som den var. Nya punkter är tillagda.",
   "toOrg": "Till {org}",
   "retryLater": "Försök igen om en liten stund.",
-  "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen."
+  "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen.",
+  "tagGoal": "Mål",
+  "goalsTitle": "Mål att ta upp",
+  "goalsHint": "Föreningens mål som kan behöva en stund på mötet.",
+  "goalFallback": "Ett av föreningens mål"
 }

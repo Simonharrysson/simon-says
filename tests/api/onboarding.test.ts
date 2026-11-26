@@ -22,9 +22,9 @@ vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
   driveApi: () => ({ files: { get: m.filesGet, export: m.filesExport } }),
 }));
-vi.mock("@/lib/formats/arsmote", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/formats/arsmote")>()),
-  extractStadgarAgendas: m.extract,
+vi.mock("@/lib/formats/stadgar", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/formats/stadgar")>()),
+  extractArsmoteItems: m.extract,
 }));
 
 const stadgar = (await import("@/app/api/orgs/[id]/onboarding/stadgar/route")).POST;
@@ -52,29 +52,31 @@ describe.skipIf(!hasLocalSupabase)("onboarding routes", () => {
     await joinOrg(member.db, data!.invite_code as string);
   });
 
-  it("stadgar: one call gives both lists; members are refused", async () => {
+  it("stadgar: one call gives the årsmöte's agenda only; members are refused", async () => {
     m.filesGet.mockResolvedValue({ data: { mimeType: "application/vnd.google-apps.document" } });
     m.filesExport.mockResolvedValue({ data: "§ 7 Årsmöte. Vid årsmötet behandlas …" });
-    m.extract.mockResolvedValue({ ok: true, board: ["Fråga om beslutsmässighet"], arsmote: ["Mötets öppnande", "Val av revisorer"], usage: {} });
+    m.extract.mockResolvedValue({ ok: true, items: ["Mötets öppnande", "Val av revisorer"], usage: {} });
     m.db = member.db;
     expect((await stadgar(json("https://x.test", { fileId: "abcdefghijklmnop12345" }), ctx(orgId))).status).toBe(403);
     m.db = admin.db;
     const res = await stadgar(json("https://x.test", { fileId: "abcdefghijklmnop12345" }), ctx(orgId));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ board: ["Fråga om beslutsmässighet"], arsmote: ["Mötets öppnande", "Val av revisorer"] });
+    expect(await res.json()).toEqual({ arsmote: ["Mötets öppnande", "Val av revisorer"] });
     expect(m.extract).toHaveBeenCalledTimes(1);
   });
 
-  it("formats: Veckomöte becomes the default; the stadgar's types are stored beside it", async () => {
+  it("formats: Veckomöte becomes the default; the stadgar's årsmöte is stored beside it, no board items (todo #15)", async () => {
     m.db = admin.db;
+    // An older browser tab may still send `board`: ignored, never stored.
     const res = await formats(json("https://x.test", { weekly: true, board: ["Fråga om beslutsmässighet"], arsmote: ["Mötets öppnande", "Val av revisorer"] }), ctx(orgId));
     expect(res.status).toBe(200);
     expect((await orgDefaultFormat(admin.db, orgId)).profile.kind).toBe("veckomote");
     const { data: org } = await adminClient().from("orgs").select("styrelse_format_id, arsmote_format_id").eq("id", orgId).single();
-    const styr = await profile(org!.styrelse_format_id as string);
+    expect(org!.styrelse_format_id).toBeNull();
     const ars = await profile(org!.arsmote_format_id as string);
-    expect(styr?.requiredItems).toEqual(["Fråga om beslutsmässighet"]);
     expect(ars?.fixedAgendaItems.map((i) => i.label)).toEqual(["Mötets öppnande", "Val av revisorer", "Övriga frågor", "Mötets avslutande"]);
+    const { count } = await adminClient().from("format_profiles").select("id", { count: "exact", head: true }).eq("org_id", orgId).eq("kind", "styrelseprotokoll");
+    expect(count).toBe(0);
 
     m.db = member.db;
     expect((await formats(json("https://x.test", { weekly: true }), ctx(orgId))).status).toBe(403);

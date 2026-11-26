@@ -41,5 +41,6 @@
   "metaPrepare": "Prepare meeting",
   "metaNewMeeting": "New meeting",
   "metaMeeting": "Meeting",
-  "metaKomIgang": "Get started"
+  "metaKomIgang": "Get started",
+  "close": "Close"
 }

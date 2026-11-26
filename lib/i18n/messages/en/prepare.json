@@ -61,5 +61,9 @@
   "kept": "Someone has written in the document, so the order there is kept as it was. New items have been added.",
   "toOrg": "Back to {org}",
   "retryLater": "Try again in a little while.",
-  "offline": "We couldn't reach the server. Check the network and try again."
+  "offline": "We couldn't reach the server. Check the network and try again.",
+  "tagGoal": "Goal",
+  "goalsTitle": "Goals to raise",
+  "goalsHint": "The association's goals that may need some time at the meeting.",
+  "goalFallback": "One of the association's goals"
 }

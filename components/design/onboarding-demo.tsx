@@ -93,7 +93,7 @@ function FormatDemo({ stadgar, choice: initial = "veckomote", learnOpen }: { sta
         pickerEnabled
         stadgar={s}
         onStadgarPick={noop}
-        onStadgarChange={(board, arsmote) => setS({ phase: "review", board, arsmote })}
+        onStadgarChange={(arsmote) => setS({ phase: "review", arsmote })}
         onStadgarSave={noop}
         onStadgarCancel={noop}
       />
@@ -114,7 +114,6 @@ function VoicesDemo({ empty }: { empty?: boolean }) {
   );
 }
 
-const STADGAR_BOARD = ["Fråga om mötets behöriga utlysande", "Fråga om beslutsmässighet", "Ekonomisk rapport"];
 const STADGAR_ARS = [
   "Mötets öppnande",
   "Fastställande av röstlängd",
@@ -156,7 +155,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
       inviterName="Anna Berg"
       pickerEnabled={false}
       format={{ kind: null, name: "Enkel", profile: null }}
-      stadgarSaved={{ styrelse: false, arsmote: false }}
+      stadgarSaved={false}
       historyCount={0}
     />
   ),
@@ -177,8 +176,8 @@ export const onboardingRender: Record<string, () => ReactNode> = {
   "onboarding-4": () => <FormatDemo stadgar={{ phase: "idle" }} />,
   "onboarding-4-learn": () => <FormatDemo stadgar={{ phase: "idle" }} learnOpen />,
   "onboarding-4-reading": () => <FormatDemo stadgar={{ phase: "reading" }} />,
-  "onboarding-4-stadgar": () => <FormatDemo stadgar={{ phase: "review", board: STADGAR_BOARD, arsmote: STADGAR_ARS }} />,
-  "onboarding-4-saved": () => <FormatDemo stadgar={{ phase: "saved", board: 3, arsmote: 14 }} />,
+  "onboarding-4-stadgar": () => <FormatDemo stadgar={{ phase: "review", arsmote: STADGAR_ARS }} />,
+  "onboarding-4-saved": () => <FormatDemo stadgar={{ phase: "saved", arsmote: 14 }} />,
   "onboarding-5": () => (
     <Frame step="protokoll" done={["namn", "styrelsen", "mapp", "format"]} logo={DEMO_LOGO} footer={footer()}>
       <HistoryStep importHref="#" historyCount={0} />

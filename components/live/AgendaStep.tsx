@@ -34,6 +34,17 @@ export interface AgendaChoice {
   formatKind: string | null;
   transcriptInDoc: boolean;
   confirmed: boolean;
+  /** A new Doc in a format: the goals ticked under "Mål att ta upp" (todo #12). */
+  goalIds?: string[];
+}
+
+/** "Mål att ta upp" on the start screen (todo #12): a goal Simon Says suggests, with why. */
+export interface GoalOption {
+  id: string;
+  /** "Mål: <titel>", as it would stand in the Doc. */
+  label: string;
+  /** Shown here only, never in the Doc. */
+  reason: string;
 }
 
 export type AgendaViewState =
@@ -103,6 +114,10 @@ export interface AgendaStepViewProps {
   onTranscriptChange: (on: boolean) => void;
   /** Focus the confirmed choice on mount (after "Skapa nytt dokument i stället", whose button is gone). */
   focusChoiceOnMount?: boolean;
+  /** A new Doc in a format: the goals to offer, and the ticked ones. */
+  goals?: GoalOption[];
+  goalIds?: string[];
+  onGoalChange?: (id: string, on: boolean) => void;
 }
 
 /** What the polite live region says for a state (the visible line may be richer). */
@@ -138,6 +153,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   const strong = (chunks: ReactNode) => <strong className="wrap-anywhere">{chunks}</strong>;
   const id = useId();
   const formatName = p.formats.find((f) => optionValue(f) === p.formatValue)?.name ?? "";
+  const formatKind = p.formats.find((f) => optionValue(f) === p.formatValue)?.kind;
   const off = p.view.state === "picker-off";
   const lock = p.busy || p.disabled;
 
@@ -315,6 +331,24 @@ export function AgendaStepView(p: AgendaStepViewProps) {
         />
       )}
 
+      {p.chosen?.kind === "new" && formatKind !== "enkel" && (p.goals?.length ?? 0) > 0 && (
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-1 font-medium">{t("goalsTitle")}</legend>
+          {p.goals!.map((g) => (
+            <Check
+              key={g.id}
+              id={`${id}-goal-${g.id}`}
+              title={g.label}
+              checked={p.goalIds?.includes(g.id) ?? false}
+              onCheckedChange={(on) => p.onGoalChange?.(g.id, on === true)}
+              disabled={p.disabled}
+            >
+              {g.reason}
+            </Check>
+          ))}
+        </fieldset>
+      )}
+
       {p.formats.length > 1 && !(p.chosen?.kind === "agenda" && p.chosen.prepared) && !(p.chosen === null && p.view.state === "prepared") && (
         <div className="flex max-w-[22rem] flex-col gap-1">
           <Label htmlFor={`${id}-format`}>{t("format")}</Label>
@@ -349,6 +383,8 @@ export interface AgendaStepProps {
   /** Pre-select this format override (kept across the remount after an agenda_* error). */
   initialFormat?: Pick<AgendaChoice, "formatProfileId" | "formatKind"> | null;
   disabled?: boolean;
+  /** "Mål att ta upp" (todo #12): offered under a new Doc in a format, unticked. */
+  goals?: GoalOption[];
 }
 
 /** The container: reads the candidates, opens the Picker, reports the choice through `onChange`. */
@@ -361,8 +397,16 @@ export function AgendaStep(props: AgendaStepProps) {
  * an agenda Simon Says prepared (Förbered möte) and this starter can edit is offered first: it
  * needs no Picker.
  */
-function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = null, startWithNewDoc = false }: AgendaStepProps) {
+/** The ticked goals, as toggled by the view. */
+function useGoalTicks() {
+  const [goalIds, setGoalIds] = useState<string[]>([]);
+  const onGoalChange = useCallback((id: string, on: boolean) => setGoalIds((ids) => (on ? [...ids.filter((x) => x !== id), id] : ids.filter((x) => x !== id))), []);
+  return { goalIds, onGoalChange };
+}
+
+function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = null, startWithNewDoc = false, goals }: AgendaStepProps) {
   const [formatValue, setFormatValue] = useState(() => initialValue(formats, initialFormat));
+  const { goalIds, onGoalChange } = useGoalTicks();
   const [prepared, setPrepared] = useState<PreparedSuggestion | null>(null);
   const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>({ kind: "new" });
   useEffect(() => {
@@ -388,8 +432,9 @@ function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = nul
       ...(usePrep ? { formatProfileId: null, formatKind: null } : formatFields(formats, formatValue)),
       transcriptInDoc: false,
       confirmed: chosen !== null,
+      goalIds: chosen?.kind === "new" ? goalIds : [],
     });
-  }, [formats, formatValue, onChange, chosen, prepared]);
+  }, [formats, formatValue, onChange, chosen, prepared, goalIds]);
   return (
     <AgendaStepView
       view={prepared && chosen === null ? { state: "prepared", prepared } : { state: "picker-off" }}
@@ -406,6 +451,9 @@ function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = nul
       onNewDoc={() => setChosen({ kind: "new" })}
       onFormatChange={setFormatValue}
       onTranscriptChange={() => {}}
+      goals={goals}
+      goalIds={goalIds}
+      onGoalChange={onGoalChange}
     />
   );
 }
@@ -430,9 +478,11 @@ function AgendaStepOn({
   startWithNewDoc = false,
   initialFormat = null,
   disabled,
+  goals,
 }: AgendaStepProps) {
   const t = useTranslations("live.agenda");
   const picker = usePicker();
+  const { goalIds, onGoalChange } = useGoalTicks();
   const [view, setView] = useState<AgendaViewState>({ state: "loading" });
   const [folderId, setFolderId] = useState<string | null>(null);
   const [folderName, setFolderName] = useState<string | null>(null);
@@ -485,8 +535,9 @@ function AgendaStepOn({
       ...(chosen?.kind === "agenda" && chosen.prepared ? { formatProfileId: null, formatKind: null } : formatFields(formats, formatValue)),
       transcriptInDoc: chosen?.kind === "agenda" && shareTranscript ? transcriptInDoc : false,
       confirmed: chosen !== null,
+      goalIds: chosen?.kind === "new" ? goalIds : [],
     });
-  }, [chosen, agendaDocId, formats, formatValue, transcriptInDoc, shareTranscript, onChange]);
+  }, [chosen, agendaDocId, formats, formatValue, transcriptInDoc, shareTranscript, onChange, goalIds]);
 
   const chooseDoc = (doc: { id: string; name: string }) => {
     setAgendaDocId(doc.id);
@@ -559,6 +610,9 @@ function AgendaStepOn({
       onFormatChange={setFormatValue}
       onTranscriptChange={setTranscriptInDoc}
       focusChoiceOnMount={startWithNewDoc}
+      goals={goals}
+      goalIds={goalIds}
+      onGoalChange={onGoalChange}
     />
   );
 }

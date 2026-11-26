@@ -9,6 +9,8 @@ import { getEnv, pickerEnabled } from "@/lib/env";
 import { formatLabel, formatName } from "@/lib/formats/standard";
 import type { Locale } from "@/lib/i18n/config";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
+import { goalLabel } from "@/lib/prepare/goals";
+import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +23,8 @@ export async function generateMetadata(): Promise<Metadata> {
  * Doc and the meeting (POST /api/meetings) and continues on /meetings/<id> without reloading.
  * If the förening already has a running meeting, its starter goes there; others to the förening.
  */
-const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "arsmote", "enkel"] as const;
+/** Styrelseprotokoll is chosen in Mötesformat's "Byt format" (todo #15), so it is offered here only as the default or a saved version. */
+const STANDARD_KINDS = ["veckomote", "arsmote", "enkel"] as const;
 
 /**
  * The start screen's format choices: the förening's default first, the other standard formats,
@@ -66,7 +69,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
   const running = active?.[0];
   if (running) redirect(running.started_by === user.id ? `/meetings/${running.id}` : `/orgs/${orgId}`);
 
-  const [def, rows] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId)]);
+  const [def, rows, goals] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId), goalSuggestionsFor(db, orgId)]);
 
   return (
     <main id="innehall">
@@ -78,6 +81,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
         meeting={null}
         formats={startFormats(def, rows, await getLocale())}
         pickerEnabled={pickerEnabled(getEnv())}
+        goals={goals.map((g) => ({ id: g.goalId, label: goalLabel(g.title), reason: g.reason }))}
       />
     </main>
   );

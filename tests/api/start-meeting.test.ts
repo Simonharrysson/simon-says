@@ -91,8 +91,15 @@ async function adminAnswer(q: Query): Promise<{ data: unknown; error: null }> {
     if (q.op === "update") return (m.noteUpdate(q.payload, val(q, "id")), ok(null));
     return ok(m.noteRows.filter((r) => r.meeting_id === val(q, "meeting_id")));
   }
+  if (q.table === "org_goals") {
+    const ids = (q.filters.find(([op, col]) => op === "in" && col === "id")?.[2] ?? []) as string[];
+    return ok(GOAL_ROWS.filter((g) => g.org_id === val(q, "org_id") && ids.includes(g.id)));
+  }
   throw new Error(`unexpected admin query ${q.op} ${q.table}`);
 }
+
+/** "Mål att ta upp" (todo #12): the förening's goals as org_goals holds them. */
+const GOAL_ROWS = [{ id: "00000000-0000-4000-8000-0000000000a1", org_id: "", title: "Ny lokal för styrelsen" }];
 
 /** A chainable, awaitable PostgREST stand-in recording the filters. */
 function builder(table: string) {
@@ -322,6 +329,11 @@ describe("POST /api/meetings", () => {
     expect((await call({ orgId: ORG })).status).toBe(400);
     expect((await call({ orgId: ORG, consent: "true" })).status).toBe(400);
     expect((await call({ orgId: "nope", consent: true })).status).toBe(400);
+    // "Mål att ta upp" (todo #12): at most two goal ids, uuids only.
+    expect((await call({ orgId: ORG, consent: true, goalIds: ["nope"] })).status).toBe(400);
+    expect((await call({ orgId: ORG, consent: true, goalIds: "x" })).status).toBe(400);
+    const id = "00000000-0000-4000-8000-00000000000a";
+    expect((await call({ orgId: ORG, consent: true, goalIds: [id, id, id] })).status).toBe(400);
     expect(m.createMeetingDoc).not.toHaveBeenCalled();
   });
 
@@ -636,6 +648,27 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect((await agendaCall()).status).toBe(200);
     expect(Object.values(insertedRow().agenda_roles)).not.toContain("checkin");
     expect(insertedRow().checkin_window).toBeNull();
+  });
+
+  it("Mål att ta upp: a ticked goal (title re-read from org_goals) is a topic in the new Doc; agenda mode ignores it", async () => {
+    GOAL_ROWS[0].org_id = ORG;
+    m.profiles = [{ id: "pdef", org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: true }];
+    const goalId = GOAL_ROWS[0].id;
+    const unknown = "00000000-0000-4000-8000-0000000000b2";
+    expect((await call({ orgId: ORG, consent: true, goalIds: [goalId, unknown] })).status).toBe(200);
+    const profile = m.createFormatDoc.mock.calls[0][1].profile;
+    expect(profile.fixedAgendaItems.filter((i: { key: string }) => i.key.startsWith("goal-"))).toEqual([{ key: "goal-1", label: "Mål: Ny lokal för styrelsen", role: "topic" }]);
+    const roles = m.anchorAgenda.mock.calls[0][1].roles as Record<string, string>;
+    expect(roles).toEqual(rolesFromSkeleton(profile));
+    expect(Object.keys(roles)).toHaveLength(Object.keys(rolesFromSkeleton(VECKOMOTE)).length + 1);
+    // The stored format is untouched.
+    expect(VECKOMOTE.fixedAgendaItems.some((i) => i.key.startsWith("goal-"))).toBe(false);
+
+    m.createFormatDoc.mockClear();
+    m.anchorAgenda.mockClear();
+    expect((await agendaCall({ goalIds: [goalId] })).status).toBe(200);
+    expect(m.createFormatDoc).not.toHaveBeenCalled();
+    expect(m.anchorAgenda.mock.calls[0][1].roles).toBeUndefined();
   });
 
   it("fallback with the org default Veckomöte: a new format Doc, anchored with the skeleton's roles", async () => {

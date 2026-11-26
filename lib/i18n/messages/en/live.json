@@ -220,7 +220,8 @@
     "pickerFailed": "The Google picker couldn't be opened. Try again.",
     "pickFolderNamed": "Choose the meeting folder “{folder}”",
     "pickFolder": "Choose the meeting folder",
-    "folderSaveFailed": "The meeting folder couldn't be saved. Try again."
+    "folderSaveFailed": "The meeting folder couldn't be saved. Try again.",
+    "goalsTitle": "Goals to raise"
   },
   "controller": {
     "tabStopped": "⚠ Stopped – Simon Says",

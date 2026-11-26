@@ -42,7 +42,7 @@ export const TAGGED_FILES: Record<string, string[]> = {
   ],
   transcription: ["lib/people/roles.test.ts", "lib/docs/transcript.test.ts", "scripts/lib/notes-score.test.ts"],
   voices: ["lib/names/extract.test.ts", "tests/meetings/name-round.test.ts", "tests/api/speakers.test.ts"],
-  chain: ["lib/agenda/followup.test.ts", "tests/db/followup.test.ts", "lib/meetings/summary.test.ts"],
+  chain: ["lib/agenda/followup.test.ts", "tests/db/followup.test.ts", "lib/meetings/summary.test.ts", "lib/prepare/goals.test.ts"],
   safety: ["lib/docs/notes.test.ts", "lib/notes/checkin.test.ts", "lib/limits.test.ts", "tests/meetings/tick.test.ts", "tests/db/rls.test.ts"],
 };
 
