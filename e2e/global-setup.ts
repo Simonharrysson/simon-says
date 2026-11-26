@@ -12,7 +12,6 @@ const WARM = [
   "/integritet",
   "/orgs",
   "/installningar",
-  "/api/e2e/login?email=warmup%40e2e.test&next=/orgs",
   "/orgs/00000000-0000-4000-8000-000000000000",
   "/orgs/00000000-0000-4000-8000-000000000000/kom-igang",
   "/orgs/00000000-0000-4000-8000-000000000000/forbered",
