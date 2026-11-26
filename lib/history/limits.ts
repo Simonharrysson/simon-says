@@ -9,3 +9,6 @@ export const IMPORT_RATE_LIMITED = "Simon Says har läst 60 protokoll åt fören
 export function formatUsd(x: number): string {
   return `≈ ${(Math.max(0.01, Math.ceil(x * 100 - 1e-9) / 100)).toFixed(2).replace(".", ",")} USD`;
 }
+
+/** A picked Doc that is one of Simon Says' own meeting Docs: its meeting is already in the history. */
+export const OWN_DOC_MESSAGE = "Det här är ett av Simon Says egna mötesdokument; det mötet finns redan med.";

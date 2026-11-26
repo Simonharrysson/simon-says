@@ -92,13 +92,12 @@ export function buildExtractUserText(doc: { title: string; text: string }): stri
 const collapse = (s: string) => s.normalize("NFC").replace(/\s+/g, " ").trim();
 const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 
-/** A real calendar date YYYY-MM-DD between 1990 and next year, else null. */
+/** A real calendar date YYYY-MM-DD from 1990 up to today (a protocol is never from the future), else null. */
 export function validDate(s: string | null | undefined, now = new Date()): string | null {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   const d = new Date(`${s}T12:00:00Z`);
   if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) return null;
-  const y = Number(s.slice(0, 4));
-  return y >= 1990 && y <= now.getUTCFullYear() + 1 ? s : null;
+  return Number(s.slice(0, 4)) >= 1990 && s <= now.toISOString().slice(0, 10) ? s : null;
 }
 
 /** A topic label that may be stored: the dashboard's filter (≤ 8 words, no digits, no name). */
