@@ -29,3 +29,9 @@ From every meeting: decisions (with the agenda item they belong to), tasks (owne
 ## Cost
 
 Views 1–3 and 5 are plain database queries (no Claude). Goals (b) is one Claude call per month per förening.
+
+## Simon's answers (2026-11-26)
+
+1. Goals: **(b)** — Simon Says proposes goals from what keeps coming up in meetings; the admin approves/edits (edit path = (a)).
+2. Who sees: **all members see everything**, including attendance per person.
+3. Where: **a tab ("Översikt") on the förening page**.
