@@ -15,8 +15,7 @@ import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
 import { FORMAT_NAMES } from "@/lib/formats/standard";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { getEnv, pickerEnabled } from "@/lib/env";
-import { storedGoogleScope } from "@/lib/google/client";
-import { hasDriveReadonly } from "@/lib/google/scopes";
+import { hasImportAccess } from "@/lib/google/client";
 import { appOrigin } from "@/lib/origin";
 import { canRunTestMeeting } from "@/lib/testmeeting/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -77,10 +76,10 @@ async function safeOverview(
   }
 }
 
-/** Does the user's stored Google grant include drive.readonly? A read failure counts as no. */
+/** Has the user live read access for the protocol import (0034)? A read failure counts as no. */
 async function safeDriveReadonly(userId: string): Promise<boolean> {
   try {
-    return hasDriveReadonly(await storedGoogleScope(userId));
+    return await hasImportAccess(userId);
   } catch (err) {
     console.error("org page: google scope unavailable", (err as Error)?.message);
     return false;
@@ -126,7 +125,7 @@ export default async function OrgPage({
   // The protocol import (admins, Översikt): has this admin's grant drive.readonly (the
   // incremental consent)? Read only here, for the import; never required anywhere else.
   const driveReadonly = isAdmin && tab === "oversikt" && userResult.data.user ? await safeDriveReadonly(userResult.data.user.id) : false;
-  const importBack = drive === "ok" || drive === "nej" || drive === "fel" ? drive : undefined;
+  const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
@@ -162,6 +161,7 @@ export default async function OrgPage({
               loadError={!dashboard}
               importAccess={{
                 driveReadonly,
+                email: userResult.data.user?.email ?? null,
                 meetingFolder: org.meeting_folder_id ? { id: org.meeting_folder_id, name: org.meeting_folder_name ?? "Föreningens mötesmapp" } : null,
               }}
               initialGoalsPhase={isAdmin && openImport === "1" ? { phase: "import", consent: importBack } : undefined}

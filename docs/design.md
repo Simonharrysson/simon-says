@@ -153,9 +153,16 @@ it is deleted when they leave the org.
   (`include_granted_scopes=true`, `app/(app)/orgs/drive-access.ts`); never at sign-in and never
   required anywhere else. It lets the import list the admin's folders and the Docs in them
   (`lib/history/drive-list.ts`, metadata only; a Doc is opened only when ticked) instead of the
-  Picker, because with `drive.file` picking a folder does not grant its children. The stored
-  `google_tokens.scope` says whether the grant has it; a later plain sign-in replaces the token
-  with a drive.file-only one and the import asks again. An admin who says no gets the Picker.
+  Picker, because with `drive.file` picking a folder does not grant its children. The refresh
+  token from that consent is stored **apart** (`google_import_tokens`, 0034, encrypted like
+  `google_tokens`) and used only by the import's routes; the sign-in token is never replaced and
+  keeps its own scopes, and `getGoogleAuth` fails closed on any stored token wider than drive.file.
+  The import token lives 24 h (lookup cutoff + the 5-minute cron deletes it); "Ta bort
+  läsåtkomst" deletes our copy at once. We do not call Google's revoke: revoking any token of a
+  combined (incremental) grant revokes all of its scopes, the sign-in drive.file included. The
+  consent must come back as the signed-in user, else that session is signed out, the admin's
+  restored and nothing stored (`?drive=konto`). The read access opens only files the admin's own
+  listing signed (`lib/history/ticket.ts`, 3 h). An admin who says no gets the Picker.
   **`drive.readonly` is a Google "restricted" scope:** the app must pass Google's verification
   **and a third-party security assessment (CASA)** before it can be used by more than 100 users;
   until then Google shows an "unverified app" warning on that consent screen and the 100-user

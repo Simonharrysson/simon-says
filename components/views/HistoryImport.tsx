@@ -25,7 +25,10 @@ import { FileStep, FolderStep } from "./DriveSteps";
 
 /** What the page knows for the import: the admin's grant and the förening's meeting folder. */
 export interface ImportAccess {
+  /** Live read access for the import (google_import_tokens, under 24 h). */
   driveReadonly: boolean;
+  /** The signed-in account, named when Google came back as another one. */
+  email: string | null;
   meetingFolder: { id: string; name: string } | null;
 }
 
@@ -48,22 +51,30 @@ export interface FileDated {
 
 export type ImportPhase =
   /** The grant lacks drive.readonly: explain, "Ge åtkomst". `consent`: back from Google with a no or an error. */
-  | { phase: "access"; consent?: "nej" | "fel" }
+  | { phase: "access"; consent?: "nej" | "fel" | "konto" | "borttagen" }
   | { phase: "folders"; selected?: DriveFolder[]; subfolders?: boolean }
   | { phase: "files"; folders: DriveFolder[]; subfolders: boolean; initialFiles?: { files: ImportFile[]; truncated: boolean; folders: number } }
   /** The fallback without read access: the Google Picker, one Doc at a time. */
   | { phase: "picker" }
-  | { phase: "estimating"; files: PickedFile[]; back: Back }
-  | { phase: "confirm"; files: PickedFile[]; estimate: ImportEstimate; back: Back }
+  | { phase: "estimating"; files: ImportDoc[]; back: Back }
+  | { phase: "confirm"; files: ImportDoc[]; estimate: ImportEstimate; back: Back }
   | { phase: "importing"; jobs: Job[] }
   | { phase: "dates"; fileDated: FileDated[]; result: ImportResult }
   | { phase: "error"; message: string; back: Back };
+
+/** A Doc to import: from the Picker, or from the folder browser with the listing's signed ticket. */
+export interface ImportDoc {
+  id: string;
+  name: string;
+  ticket?: string;
+}
 
 /** Where "Tillbaka" goes from the cost step. */
 type Back = { phase: "files"; folders: DriveFolder[]; subfolders: boolean } | { phase: "picker" };
 
 export interface Job {
   docId: string;
+  ticket?: string;
   section: number;
   sections: number;
   label: string;
@@ -95,7 +106,8 @@ export function DriveAccessNote() {
     <p className="max-w-[68ch]">
       För att du ska kunna välja mappar och se mötena i dem behöver Simon Says läsrättighet till din Google Drive. Den används
       bara här: Simon Says visar dina mappar och namnen på mötena i de mappar du väljer, öppnar bara de protokoll du kryssar
-      i, och sparar inget annat från din Drive. Du kan ta bort åtkomsten när som helst i ditt Google-konto.
+      i, och sparar inget annat från din Drive. Åtkomsten gäller i 24 timmar och tas sedan bort automatiskt; du kan också ta
+      bort den direkt.
     </p>
   );
 }
@@ -111,7 +123,7 @@ export function HistoryImport({
   orgId: string;
   access: ImportAccess;
   /** Back from Google's consent screen. */
-  consent?: "ok" | "nej" | "fel";
+  consent?: "ok" | "nej" | "fel" | "konto";
   /** /design only. */
   initial?: ImportPhase;
   onDone: (result: ImportResult) => void;
@@ -119,17 +131,20 @@ export function HistoryImport({
 }) {
   const picker = usePicker();
   const [view, setView] = useState<ImportPhase>(
-    initial ?? (access.driveReadonly ? { phase: "folders" } : { phase: "access", ...(consent === "nej" || consent === "fel" ? { consent } : {}) }),
+    initial ?? (access.driveReadonly ? { phase: "folders" } : { phase: "access", ...(consent && consent !== "ok" ? { consent } : {}) }),
   );
   const needsAccess = () => setView({ phase: "access" });
 
-  const estimate = async (files: PickedFile[], back: Back) => {
+  const estimate = async (files: ImportDoc[], back: Back) => {
     setView({ phase: "estimating", files, back });
     try {
       const res = await fetch(`/api/orgs/${orgId}/history/estimate`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ docIds: files.map((f) => f.id) }),
+        body: JSON.stringify({
+          docIds: files.map((f) => f.id),
+          ...(files.every((f) => f.ticket) ? { tickets: Object.fromEntries(files.map((f) => [f.id, f.ticket])) } : {}),
+        }),
       });
       const json = (await res.json().catch(() => null)) as (ImportEstimate & { message?: string }) | null;
       if (!res.ok || !json || typeof json.totalUsd !== "number" || !Array.isArray(json.docs)) {
@@ -158,12 +173,14 @@ export function HistoryImport({
     await estimate(files, { phase: "picker" });
   };
 
-  const run = async (files: PickedFile[], e: ImportEstimate) => {
+  const run = async (files: ImportDoc[], e: ImportEstimate) => {
     const jobs: Job[] = e.docs.flatMap((d) => {
       if (!("sections" in d)) return [];
-      const name = files.find((f) => f.id === d.docId)?.name ?? "Dokument";
+      const file = files.find((f) => f.id === d.docId);
+      const name = file?.name ?? "Dokument";
       return Array.from({ length: d.sections }, (_, section) => ({
         docId: d.docId,
+        ...(file?.ticket ? { ticket: file.ticket } : {}),
         section,
         sections: d.sections,
         label: d.sections > 1 ? `${name}, möte ${section + 1} av ${d.sections}` : name,
@@ -182,7 +199,7 @@ export function HistoryImport({
         const res = await fetch(`/api/orgs/${orgId}/history/import`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ docId: j.docId, section: j.section, sections: j.sections }),
+          body: JSON.stringify({ docId: j.docId, section: j.section, sections: j.sections, ...(j.ticket ? { ticket: j.ticket } : {}) }),
         });
         const json = (await res.json().catch(() => null)) as { error?: string; message?: string; protocolId?: string; date?: string; dateFrom?: string } | null;
         if (res.ok) {
@@ -224,6 +241,7 @@ export function HistoryImport({
         onNext={(folders, subfolders) => setView({ phase: "files", folders, subfolders })}
         onCancel={onCancel}
         onNeedsAccess={needsAccess}
+        onRemoved={() => setView({ phase: "access", consent: "borttagen" })}
       />
     );
   }
@@ -237,7 +255,7 @@ export function HistoryImport({
         subfolders={view.subfolders}
         initialFiles={view.initialFiles}
         onBack={() => setView({ phase: "folders", selected: view.folders, subfolders: view.subfolders })}
-        onNext={(files) => estimate(files.map((f) => ({ id: f.id, name: f.name, mimeType: "application/vnd.google-apps.document" })), back)}
+        onNext={(files) => estimate(files.map((f) => ({ id: f.id, name: f.name, ...(f.ticket ? { ticket: f.ticket } : {}) })), back)}
         onNeedsAccess={needsAccess}
       />
     );
@@ -317,6 +335,15 @@ export function HistoryImport({
           </Banner>
         ) : view.consent === "fel" ? (
           <Banner tone="danger">Google svarade inte som väntat. Försök igen om en liten stund.</Banner>
+        ) : view.consent === "konto" ? (
+          <Banner tone="warning" title="Fel Google-konto" live={false}>
+            {access.email ? `Välj samma Google-konto som du är inloggad med: ${access.email}.` : "Välj samma Google-konto som du är inloggad med."}{" "}
+            Inget sparades.
+          </Banner>
+        ) : view.consent === "borttagen" ? (
+          <Banner tone="success" live={false}>
+            Läsåtkomsten är borttagen hos Simon Says. Dina inlästa protokoll ligger kvar.
+          </Banner>
         ) : null}
         <DriveAccessNote />
         <form action={requestDriveAccess} className="flex flex-wrap gap-2">
@@ -324,7 +351,7 @@ export function HistoryImport({
           <SubmitButton variant="primary" icon={<IconGoogle size={16} />} pendingLabel="Öppnar Google …">
             Ge åtkomst
           </SubmitButton>
-          {view.consent === "nej" && (
+          {(view.consent === "nej" || view.consent === "borttagen") && (
             <Button type="button" variant="secondary" onClick={() => setView({ phase: "picker" })}>
               Välj ett och ett i stället
             </Button>

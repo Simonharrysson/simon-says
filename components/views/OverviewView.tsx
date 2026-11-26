@@ -35,7 +35,7 @@ export type GoalsPhase =
   | { phase: "error"; message: string; tone?: "warning" }
   | { phase: "editor"; goals: OverviewGoal[]; explanation?: string; suggestions?: GoalSuggestion[]; notice?: string }
   /** "Läs in gamla protokoll" (todo #7). `consent`: back from Google's drive.readonly consent. */
-  | { phase: "import"; initial?: ImportPhase; consent?: "ok" | "nej" | "fel" };
+  | { phase: "import"; initial?: ImportPhase; consent?: "ok" | "nej" | "fel" | "konto" };
 
 export interface OverviewViewProps {
   orgId: string;
@@ -103,7 +103,7 @@ function GoalsPanel({
   meetingCount,
   historyCount,
   initial,
-  importAccess = { driveReadonly: false, meetingFolder: null },
+  importAccess = { driveReadonly: false, email: null, meetingFolder: null },
 }: {
   orgId: string;
   isAdmin: boolean;

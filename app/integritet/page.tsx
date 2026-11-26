@@ -94,8 +94,9 @@ export default function PrivacyPage() {
             <li>
               Frivilligt, bara för admin och bara för att läsa in gamla protokoll: admin kan ge Simon Says läsrättighet till sin
               Google Drive. Den används för att visa adminens mappar och namnen på dokumenten i de mappar admin väljer; bara de
-              protokoll admin kryssar i öppnas. Mappar och dokumentnamn sparas inte. Läsrättigheten följer med adminens
-              Google-nyckel tills admin tar bort den i sitt Google-konto (eller loggar in igen utan den).
+              protokoll admin kryssar i öppnas. Mappar och dokumentnamn sparas inte. Nyckeln för läsrättigheten sparas
+              krypterad och separat från inloggningens, används bara för inläsningen och raderas automatiskt efter 24
+              timmar; admin kan också ta bort den direkt.
             </li>
           </ul>
           <p>

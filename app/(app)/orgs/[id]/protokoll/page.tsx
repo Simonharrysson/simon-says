@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /**
  * Where Google's consent for the protocol import returns (a query-free path, so it passes the
  * same `next` check as the login): opens the Översikt with the import open, passing on whether
- * the admin gave read access (`drive=ok`), said no (`nej`) or it failed (`fel`).
+ * the admin gave read access (`drive=ok`), said no (`nej`) it failed (`fel`) or came back as another Google account (`konto`).
  */
 export default async function ProtocolImportReturn({
   params,
@@ -18,6 +18,6 @@ export default async function ProtocolImportReturn({
   const { id } = await params;
   const { drive } = await searchParams;
   if (!isUuid(id)) notFound();
-  const result = drive === "ok" || drive === "nej" || drive === "fel" ? `&drive=${drive}` : "";
+  const result = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? `&drive=${drive}` : "";
   redirect(`/orgs/${id}?flik=oversikt&import=1${result}`);
 }

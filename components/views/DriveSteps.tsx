@@ -56,6 +56,7 @@ export function FolderStep({
   onNext,
   onCancel,
   onNeedsAccess,
+  onRemoved,
 }: {
   orgId: string;
   meetingFolder: { id: string; name: string } | null;
@@ -64,7 +65,22 @@ export function FolderStep({
   onNext: (folders: DriveFolder[], subfolders: boolean) => void;
   onCancel: () => void;
   onNeedsAccess: () => void;
+  /** "Ta bort läsåtkomst" done. */
+  onRemoved: () => void;
 }) {
+  const [removing, setRemoving] = useState(false);
+  const removeAccess = async () => {
+    setRemoving(true);
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/history/drive`, { method: "DELETE" });
+      if (res.ok) onRemoved();
+      else setError("Läsåtkomsten kunde inte tas bort. Försök igen.");
+    } catch {
+      setError("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+    } finally {
+      setRemoving(false);
+    }
+  };
   const [where, setWhere] = useState<Where>("root");
   const [path, setPath] = useState<DriveFolder[]>([]);
   const [query, setQuery] = useState("");
@@ -276,6 +292,12 @@ export function FolderStep({
           Avbryt
         </Button>
       </div>
+      <p className="text-xs text-ink-3">
+        Simon Says läsåtkomst till din Drive tas bort automatiskt efter 24 timmar.{" "}
+        <Button variant="ghost" size="sm" loading={removing} onClick={removeAccess} className="h-auto min-h-0 px-1 py-0 text-xs underline max-md:min-h-11">
+          Ta bort läsåtkomst nu
+        </Button>
+      </p>
     </div>
   );
 }

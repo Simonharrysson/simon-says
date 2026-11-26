@@ -133,7 +133,7 @@ function OverviewDemo({ goalsPhase }: { goalsPhase?: GoalsPhase }) {
         tabs={{
           active: "oversikt",
           href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin"),
-          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
+          overview: <OverviewView orgId={ORG_ID} isAdmin overview={demoOverview} goals={demoGoals} initialGoalsPhase={goalsPhase} importAccess={{ driveReadonly: true, email: "kassor@rutan.example", meetingFolder: { id: "1DemoFolderAAAA", name: "Styrelsen" } }} now={OVERVIEW_NOW} />,
         }}
         actions={actions}
       />
