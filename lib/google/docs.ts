@@ -1,14 +1,20 @@
 import { docs, type docs_v1 } from "@googleapis/docs";
 import { drive } from "@googleapis/drive";
 import type { OAuth2Client } from "google-auth-library";
+import { e2eGoogleRoot } from "@/lib/e2e/guard";
 
 // Thin helpers over the Docs/Drive APIs. Every request names its tab (tabId / tabsCriteria).
 // Indices are UTF-16 code units, the same unit as JS string length.
 
 export type DocsRequest = docs_v1.Schema$Request;
 
-export const docsApi = (auth: OAuth2Client) => docs({ version: "v1", auth });
-export const driveApi = (auth: OAuth2Client) => drive({ version: "v3", auth });
+// The e2e test mode points both at the fake Google server (lib/e2e/guard.ts); otherwise Google.
+const root = () => {
+  const rootUrl = e2eGoogleRoot();
+  return rootUrl ? { rootUrl } : {};
+};
+export const docsApi = (auth: OAuth2Client) => docs({ version: "v1", auth, ...root() });
+export const driveApi = (auth: OAuth2Client) => drive({ version: "v3", auth, ...root() });
 
 /** Insert items as consecutive paragraphs at `index`, with one named range per item (text only, no newline). */
 export function paragraphsWithRanges(

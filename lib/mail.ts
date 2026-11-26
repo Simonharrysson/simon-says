@@ -1,4 +1,5 @@
 import "server-only";
+import { e2eMailUrl } from "@/lib/e2e/guard";
 import { getEnv } from "@/lib/env";
 
 // Outgoing email behind a small interface. With RESEND_API_KEY set it sends through Resend's
@@ -73,6 +74,9 @@ export function resendMailer(apiKey: string, from: string, fetchFn: typeof fetch
 
 export function defaultMailer(): Mailer {
   const env = getEnv();
+  // The e2e test mode mails the fake provider (lib/e2e/guard.ts), never Resend.
+  const fake = e2eMailUrl();
+  if (fake) return resendMailer("e2e", env.MAIL_FROM ?? DEFAULT_MAIL_FROM, (_url, init) => fetch(fake, init));
   if (env.RESEND_API_KEY) return resendMailer(env.RESEND_API_KEY, env.MAIL_FROM ?? DEFAULT_MAIL_FROM);
   return {
     async send(message) {

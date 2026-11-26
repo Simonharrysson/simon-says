@@ -57,3 +57,61 @@ jobs:
       - run: npx tsc --noEmit
 
       - run: npx vitest run
+
+  # End-to-end (docs/testing.md "E2E"): the real app under `next dev` against its own local
+  # Supabase (jobs can't share a stack), every external service faked (e2e/fakes).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.65.5
+
+      # Auth and storage stay on (sign-in, logos); the e2e run signs in many test users, so the
+      # local stack's sign-in rate limits are lifted for this job only.
+      - name: supabase start
+        run: |
+          sed -i -E 's/^(sign_in_sign_ups|token_verifications|token_refresh) = .*/\1 = 10000/' supabase/config.toml
+          supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      - name: supabase db reset
+        run: supabase db reset
+
+      - name: local Supabase env
+        run: |
+          supabase status -o env \
+            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
+          cut -d= -f1 local.env
+          test "$(wc -l < local.env)" -eq 3
+          cat local.env >> "$GITHUB_ENV"
+          rm local.env
+
+      - name: Playwright browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run e2e
+
+      - name: Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

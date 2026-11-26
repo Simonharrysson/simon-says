@@ -1,6 +1,7 @@
 import "server-only";
 import { OAuth2Client } from "google-auth-library";
 import { decrypt, encrypt } from "@/lib/crypto";
+import { e2eGoogleRoot } from "@/lib/e2e/guard";
 import { getEnv } from "@/lib/env";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { hasDriveReadonly } from "./scopes";
@@ -77,7 +78,13 @@ const loggedWide = new Set<string>();
 
 async function clientFor(userId: string, refreshToken: string): Promise<OAuth2Client> {
   const env = getEnv();
-  const client = new OAuth2Client({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET });
+  // The e2e test mode refreshes against the fake Google server (lib/e2e/guard.ts).
+  const fake = e2eGoogleRoot();
+  const client = new OAuth2Client({
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+    ...(fake ? { endpoints: { oauth2TokenUrl: `${fake}token` } } : {}),
+  });
   client.setCredentials({ refresh_token: refreshToken });
   try {
     await client.getAccessToken();
