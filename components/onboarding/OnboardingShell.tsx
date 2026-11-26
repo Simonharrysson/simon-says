@@ -153,8 +153,10 @@ export function StepFooter({
         )}
         {onNext && (
           <Button variant="primary" onClick={onNext} loading={busy} disabled={nextDisabled}>
-            {nextLabel}
-            <IconArrowRight size={18} />
+            <span className="inline-flex items-center gap-2 whitespace-nowrap">
+              {nextLabel}
+              <IconArrowRight size={18} />
+            </span>
           </Button>
         )}
       </div>

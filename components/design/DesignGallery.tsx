@@ -35,6 +35,7 @@ import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
 import { designViews, type DesignGroup } from "./registry";
+import { onboardingRender } from "./onboarding-demo";
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
 
@@ -759,6 +760,7 @@ const render: Record<string, () => ReactNode> = {
   "live-ending": () => <LiveDemo phase="ending" elapsedMs={84 * 60_000} />,
   "live-ended": () => <LiveDemo phase="ended" elapsedMs={84 * 60_000} />,
   "live-resume": () => <LiveDemo phase="resume" />,
+  ...Object.fromEntries(Object.entries(onboardingRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
 };
 
 export function DesignGallery({ view }: { view: string | null }) {

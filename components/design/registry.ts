@@ -8,6 +8,8 @@ export interface DesignView {
   group: DesignGroup;
 }
 
+import { onboardingViews } from "./onboarding-views";
+
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
   { id: "primitives", title: "Komponenter", group: "Grunder" },
@@ -53,6 +55,7 @@ export const designViews: DesignView[] = [
   { id: "join-invalid", title: "Inbjudan · ogiltig länk", group: "Sidor" },
   { id: "account", title: "Konto", group: "Sidor" },
   { id: "status", title: "Status · med data", group: "Sidor" },
+  ...onboardingViews.map((v) => ({ ...v, group: "Sidor" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
   { id: "live-mic-denied", title: "Före start · mikrofonen blockerad", group: "Mötet live" },
   { id: "live-agenda-prepared", title: "Före start · förberedd dagordning", group: "Mötet live" },

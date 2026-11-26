@@ -535,7 +535,7 @@ function StadgarBlock(p: FormatStepProps & { uid: string }) {
   }
   if (s.phase === "review" || s.phase === "saving") {
     return (
-      <div className="flex flex-col gap-6 animate-notice-in">
+      <div className="mt-2 flex flex-col gap-6 animate-notice-in">
         <ItemList
           uid={`${p.uid}-board`}
           title="Varje styrelsemöte"
