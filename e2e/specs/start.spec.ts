@@ -14,6 +14,8 @@ test("start screen: one line, one tick, Start; the rest folded @phone", async ({
   await expect(page.getByText("Paus stoppar ljudet direkt.")).toBeHidden();
   await expect(page.getByRole("combobox", { name: "Format" })).toHaveCount(0);
   const start = page.getByRole("button", { name: "Starta mötet" });
+  // One screen: Start is in view without scrolling (phone width too).
+  await expect(start).toBeInViewport();
   await expect(start).toBeDisabled();
 
   // Retried until it sticks: a click before hydration does nothing.
@@ -26,7 +28,8 @@ test("start screen: one line, one tick, Start; the rest folded @phone", async ({
   // Inställningar för mötet: the mic check the tick started, and how it works.
   await page.locator("summary", { hasText: "Inställningar för mötet" }).click();
   await expect(page.getByRole("meter", { name: "Ljudnivå" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Så fungerar det" })).toBeVisible();
+  await expect(page.getByText("Paus stoppar ljudet direkt.")).toBeHidden();
+  await page.locator("summary", { hasText: "Så fungerar det" }).click();
   await expect(page.getByText("Paus stoppar ljudet direkt.")).toBeVisible();
 
   // Byt: the other choices, the format among them.

@@ -317,7 +317,7 @@ Building blocks (usable on their own):
   mötet**. Start is disabled until the tick and a confirmed agenda choice. Ticking starts the mic
   check; only a problem shows (the mic error banner, or after 8 s of silence a quiet "Mikrofonen
   hör inget än" line, never blocking). Everything else is a closed `<details>` **Inställningar
-  för mötet**: the mic meter / Testa mikrofonen and "Så fungerar det" (laptop, Doc fact, Paus,
+  för mötet**: the mic meter / Testa mikrofonen and a nested `<details>` "Så fungerar det" (laptop, Doc fact, Paus,
   locket). `agendaDoc` switches the Doc fact to "skrivs i den valda dagordningen";
   `onNewDocInstead` puts "Skapa nytt dokument i stället" in the error banner (the controller
   passes it for `agenda_*` errors).

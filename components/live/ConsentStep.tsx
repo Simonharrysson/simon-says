@@ -89,7 +89,7 @@ export function ConsentStep({
   onNewDocInstead?: () => void;
   /** A Privat recording (0045): the facts and hints speak of the user's own notes, not a förening's Doc. */
   privat?: boolean;
-  /** /design: render "Inställningar för mötet" open. */
+  /** /design: render "Inställningar för mötet" (and "Så fungerar det" in it) open. */
   settingsOpen?: boolean;
 }) {
   const t = useTranslations("live.consent");
@@ -215,9 +215,12 @@ export function ConsentStep({
               )}
             </div>
           )}
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold">{t("howItWorks")}</h2>
-            <ul className="flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">
+          <details className="group/how" open={settingsOpen}>
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-semibold text-ink-2 select-none hover:text-ink [&::-webkit-details-marker]:hidden">
+              <IconChevronDown size={16} className="-rotate-90 transition-transform duration-120 group-open/how:rotate-0" aria-hidden="true" />
+              {t("howItWorks")}
+            </summary>
+            <ul className="mt-1 flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">
               <li>{t("laptop")}</li>
               {privat ? null : agendaDoc ? (
                 <li>
@@ -233,7 +236,7 @@ export function ConsentStep({
               <li>{t("pause")}</li>
               <li>{t("lid")}</li>
             </ul>
-          </div>
+          </details>
         </div>
       </details>
     </section>

@@ -182,19 +182,17 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   // the line instead of letting it fall to <body>, and fold the panel. Not on mount (unless
   // asked), and not when the start screen picked today's agenda by itself.
   const choiceRef = useRef<HTMLParagraphElement>(null);
-  const mounted = useRef(false);
   const chosenKey = p.chosen ? (p.chosen.kind === "agenda" ? `agenda:${p.chosen.name}` : "new") : "";
   const auto = p.chosen?.kind === "agenda" && p.chosen.auto === true;
-  const focusOnMount = p.focusChoiceOnMount ?? false;
+  // The key last acted on (a previous-key ref, not a mounted flag: dev runs effects twice on mount).
+  const prevKey = useRef<string | null>(p.focusChoiceOnMount ? null : chosenKey);
   useEffect(() => {
-    if ((mounted.current && !auto) || (!mounted.current && focusOnMount)) {
-      if (chosenKey) {
-        setOpen(false);
-        choiceRef.current?.focus();
-      }
-    }
-    mounted.current = true;
-  }, [chosenKey, focusOnMount, auto]);
+    if (prevKey.current === chosenKey) return;
+    prevKey.current = chosenKey;
+    if (!chosenKey || auto) return;
+    setOpen(false);
+    choiceRef.current?.focus();
+  }, [chosenKey, auto]);
 
   const chosenPrepared = p.chosen?.kind === "agenda" && Boolean(p.chosen.prepared);
   const newLine = (p.inFolder ? t.rich("newInFolder", { format: formatName, strong }) : t.rich("newIn", { format: formatName, strong }));
@@ -395,8 +393,9 @@ function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = nul
   const { goalIds, onGoalChange } = useGoalTicks();
   const [prepared, setPrepared] = useState<PreparedSuggestion | null>(null);
   const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>({ kind: "new" });
-  /** The user chose something: the start screen no longer picks by itself. */
+  /** The user chose something (or pressed Start): the start screen no longer picks by itself. */
   const touched = useRef(startWithNewDoc);
+  if (disabled) touched.current = true;
   useEffect(() => {
     if (startWithNewDoc) return;
     let live = true;
@@ -446,12 +445,18 @@ function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = nul
         touched.current = true;
         setChosen({ kind: "new" });
       }}
-      onFormatChange={setFormatValue}
+      onFormatChange={(v) => {
+        touched.current = true;
+        setFormatValue(v);
+      }}
       onTranscriptChange={() => {}}
       focusChoiceOnMount={startWithNewDoc}
       goals={goals}
       goalIds={goalIds}
-      onGoalChange={onGoalChange}
+      onGoalChange={(id, on) => {
+        touched.current = true;
+        onGoalChange(id, on);
+      }}
     />
   );
 }
@@ -489,6 +494,8 @@ function AgendaStepOn({
   const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>({ kind: "new" });
   /** The user chose something (or "Skapa nytt dokument i stället"): the start screen no longer picks by itself. */
   const touched = useRef(startWithNewDoc);
+  // Start pressed (the step is disabled while starting): the line must not change under the POST.
+  if (disabled) touched.current = true;
   const [inFolder, setInFolder] = useState(false);
   const [agendaDocId, setAgendaDocId] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<PreparedSuggestion | null>(null);
@@ -618,14 +625,20 @@ function AgendaStepOn({
         setAgendaDocId(null);
         setMessage(null);
       }}
-      onFormatChange={setFormatValue}
+      onFormatChange={(v) => {
+        touched.current = true;
+        setFormatValue(v);
+      }}
       onTranscriptChange={setTranscriptInDoc}
       focusChoiceOnMount={startWithNewDoc}
       inFolder={inFolder}
       eventTitle={eventTitle}
       goals={goals}
       goalIds={goalIds}
-      onGoalChange={onGoalChange}
+      onGoalChange={(id, on) => {
+        touched.current = true;
+        onGoalChange(id, on);
+      }}
     />
   );
 }
