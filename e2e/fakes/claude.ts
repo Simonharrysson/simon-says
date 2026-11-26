@@ -96,7 +96,10 @@ function answer(kind: ClaudeKind, text: string): unknown {
         names: ["Anna Berg"],
       };
     }
-    case "digest":
+    case "digest": {
+      // Evidence must name meetings of the history (finalizeGoals drops the rest).
+      const dates = [...new Set(text.match(/\d{4}-\d{2}-\d{2}/g) ?? [])].sort();
+      const last = dates.at(-1) ?? null;
       return {
         goals: [
           {
@@ -104,13 +107,14 @@ function answer(kind: ClaudeKind, text: string): unknown {
             status: "current",
             why: "Det har tagits upp på flera möten.",
             earlier_names: [],
-            first_mentioned: null,
-            last_mentioned: null,
-            evidence: [],
+            first_mentioned: dates[0] ?? null,
+            last_mentioned: last,
+            evidence: dates.slice(-3).map((date) => ({ date, text: "Hackathonet planeras till februari." })),
           },
         ],
         explanation: "Målet bygger på era inlästa protokoll.",
       };
+    }
     case "roles": {
       const keys = [...new Set(text.match(/ag-\d+/g) ?? [])];
       return { roles: keys.map((key) => ({ key, role: "topic" })) };

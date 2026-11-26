@@ -47,7 +47,7 @@ test("settings: rename the förening and stop sharing the transcript", async ({ 
 
   // The account page.
   await page.goto("/installningar");
-  await expect(page.getByText("admin@e2e.test")).toBeVisible();
+  await expect(page.getByRole("main").getByText("admin@e2e.test")).toBeVisible();
   await expectAccessible(page);
 });
 
