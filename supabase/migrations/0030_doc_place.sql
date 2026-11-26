@@ -1,7 +1,7 @@
 -- Docs live in the förening (audit 2026-11-26 item 2): the meeting folder's name, and which
 -- members a meeting's Doc has been shared with.
--- Strictly additive and backward compatible with the deployed code: one nullable column, one new
--- table (old code never names either) and a backfill into that new table only.
+-- Strictly additive and backward compatible with the deployed code: two nullable columns, two new
+-- tables (old code never names any of them) and a backfill into the new share table only.
 
 -- ---------------------------------------------------------------------------------------------
 -- orgs.meeting_folder_name: the folder's name as the Google Picker returned it when an admin
@@ -35,6 +35,24 @@ grant select on table public.meeting_doc_shares to authenticated;
 create policy meeting_doc_shares_select on public.meeting_doc_shares for select to authenticated
   using (user_id = (select auth.uid()));
 
+-- meetings.app_created_doc: the meeting's Doc was created by Simon Says (a new meeting Doc, or an
+-- agenda Doc Simon Says made, e.g. the Testmöte agenda). Simon Says only ever shares such Docs;
+-- an agenda Doc the förening wrote is theirs to share. Null on rows before 0030: read as
+-- `not agenda_doc` (before 0030 every non-agenda Doc was ours).
+alter table public.meetings add column app_created_doc boolean;
+
+-- doc_access_requests: "Få åtkomst" presses, to cap them per member and meeting (each one is a
+-- Drive call on the starter's quota). Service role only; rows older than a day are useless.
+create table public.doc_access_requests (
+  meeting_id uuid not null references public.meetings on delete cascade,
+  user_id uuid not null references auth.users on delete cascade,
+  at timestamptz not null default now()
+);
+create index doc_access_requests_idx on public.doc_access_requests (meeting_id, user_id, at);
+alter table public.doc_access_requests enable row level security;
+revoke all on table public.doc_access_requests from anon, authenticated, service_role;
+grant select, insert, delete on table public.doc_access_requests to service_role;
+
 -- Backfill: before 0030 a new Doc (not an agenda Doc) was shared at the start with every member
 -- of that moment. Record that for members who joined before the meeting started, unless the
 -- start logged a failed share (we don't know whose). Everyone else can ask on the org page.
@@ -42,6 +60,8 @@ insert into public.meeting_doc_shares (meeting_id, user_id, shared_at)
 select mt.id, m.user_id, mt.started_at
   from public.meetings mt
   join public.org_members m on m.org_id = mt.org_id
+  -- No address, no share: never record (and so link) a Doc for an account without an email.
+  join auth.users u on u.id = m.user_id and u.email is not null and u.email <> ''
  where not mt.agenda_doc
    and m.joined_at <= mt.started_at
    and m.user_id is distinct from mt.started_by

@@ -40,6 +40,8 @@ export interface OrgDetailViewProps {
   members?: { userId: string; email: string; role: "admin" | "member" }[];
   people: { id: string; name: string; role?: string | null }[];
   meetings: OrgDetailMeeting[];
+  /** The viewer's sign-in address: meeting Docs are shared to it. */
+  viewerEmail?: string | null;
   /** Per meeting id; a meeting not in the map is `open` (e.g. the /design gallery). */
   docAccess?: Record<string, DocAccess>;
   notice: Notice | null;
@@ -109,7 +111,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
@@ -154,10 +156,16 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         <div className="flex flex-col gap-6">
           {active ? (
             <Banner tone="info" title="Ett möte pågår" live={false}>
-              {access(active) === "request" ? (
+              {access(active) !== "open" && active.started_by !== userId ? (
                 <div className="flex flex-col items-start gap-2">
                   <p>Anteckningarna skrivs i mötesdokumentet. Ett nytt möte kan startas när det är avslutat.</p>
-                  <DocAccessButton meetingId={active.id} docHref={docUrl(active.doc_id)} starter={starter(active)} />
+                  <DocAccessButton
+                    meetingId={active.id}
+                    docHref={docUrl(active.doc_id)}
+                    starter={starter(active)}
+                    email={viewerEmail}
+                    askOnly={access(active) === "ask"}
+                  />
                 </div>
               ) : (
                 <p>
@@ -181,6 +189,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             orgId={org.id}
             isAdmin={isAdmin}
             userId={userId}
+            viewerEmail={viewerEmail}
             access={access}
             starter={starter}
             deleteMeeting={actions.deleteMeeting}
@@ -323,7 +332,9 @@ function MeetingsPanel({
   liveMeetingHref,
   access,
   starter,
+  viewerEmail,
 }: {
+  viewerEmail?: string | null;
   access: (m: OrgDetailMeeting) => DocAccess;
   starter: (m: OrgDetailMeeting) => string;
   meetings: OrgDetailMeeting[];
@@ -376,8 +387,14 @@ function MeetingsPanel({
                           Fortsätt mötet
                         </ButtonLink>
                       )}
-                      {access(meeting) === "request" && !mine ? (
-                        <DocAccessButton meetingId={meeting.id} docHref={docUrl(meeting.doc_id)} starter={starter(meeting)} />
+                      {access(meeting) !== "open" && !mine ? (
+                        <DocAccessButton
+                          meetingId={meeting.id}
+                          docHref={docUrl(meeting.doc_id)}
+                          starter={starter(meeting)}
+                          email={viewerEmail}
+                          askOnly={access(meeting) === "ask"}
+                        />
                       ) : (
                         <a
                           className={buttonVariants({ size: "sm" })}
@@ -412,6 +429,7 @@ function MeetingsPanel({
           </ul>
           <p className="text-sm text-ink-3 border-t border-line px-6 pt-3 pb-4">
             Att radera ett möte tar bort transkription, anteckningar och logg här. Google-dokumentet ligger kvar.
+            {viewerEmail && ` Mötesdokumenten delas till ${viewerEmail} – öppna dem i Google med den adressen.`}
           </p>
         </>
       )}

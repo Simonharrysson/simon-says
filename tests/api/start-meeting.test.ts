@@ -433,6 +433,15 @@ describe("POST /api/meetings", () => {
     m.profiles = [];
   });
 
+  it("marks whether Simon Says created the Doc (only those are ever shared later); works without 0030", async () => {
+    await call({ orgId: ORG, consent: true });
+    expect(insertedRow().app_created_doc).toBe(true);
+    m.insert.mockReset().mockResolvedValueOnce({ error: { code: "PGRST204", message: "no column" } }).mockResolvedValue({ error: null });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+    expect(m.insert.mock.calls[1][0]).not.toHaveProperty("app_created_doc");
+  });
+
   it("a database without 0027: falls back to the 0021 guard", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     m.guard
@@ -463,6 +472,7 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(row).toMatchObject({
       id: json.meetingId,
       doc_id: AGENDA_DOC,
+      app_created_doc: false, // the förening's own Doc: never shared by Simon Says
       notes_tab_id: "t.0",
       layout: "format",
       agenda_doc: true,

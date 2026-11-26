@@ -7,7 +7,7 @@ import { OverviewView } from "@/components/views/OverviewView";
 import { listGoals, loadOverview, type OrgGoal } from "@/lib/dashboard/load";
 import type { Overview } from "@/lib/dashboard/overview";
 import { isUuid } from "@/lib/db/ids";
-import { sharedMeetingIds } from "@/lib/docs/access";
+import { appCreatedFlags, sharedMeetingIds } from "@/lib/docs/access";
 import { docAccessFor } from "@/lib/docs/access-state";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
@@ -93,7 +93,12 @@ export default async function OrgPage({
   const inviteUrl = `${appOrigin()}/join/${org.invite_code}`;
   const me = userResult.data.user?.id ?? null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
-  const docAccess = docAccessFor(meetings, me, await sharedMeetingIds(db));
+  const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
+  const docAccess = docAccessFor(
+    meetings.map((m) => ({ ...m, app_created_doc: flags.get(m.id) ?? null })),
+    me,
+    shared,
+  );
 
   return (
     <OrgDetailView
@@ -105,6 +110,7 @@ export default async function OrgPage({
       people={people}
       meetings={meetings}
       docAccess={docAccess}
+      viewerEmail={userResult.data.user?.email ?? null}
       notice={orgNotice(fel, klart)}
       tabs={{
         active: tab,

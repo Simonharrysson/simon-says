@@ -63,6 +63,8 @@ describe("shareOrgDocsWithNewMember", () => {
       { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false },
       { id: "m2", org_id: "org1", doc_id: "d2", started_by: "s2", agenda_doc: false },
       { id: "m3", org_id: "org1", doc_id: "d3", started_by: "s1", agenda_doc: false },
+      // The förening's own agenda Doc: never shared by Simon Says.
+      { id: "m4", org_id: "org1", doc_id: "d4", started_by: "s1", agenda_doc: true },
     ];
     g.shared = [{ meeting_id: "m3", user_id: NEW.id }];
     expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(2);
@@ -77,7 +79,6 @@ describe("shareOrgDocsWithNewMember", () => {
     expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }], [{ meeting_id: "m2", user_id: NEW.id }]]);
     // Only Docs Simon Says created, never the new member's own meetings.
     const meetingFilters = g.filters.filter((f) => f[0] === "meetings").map((f) => [f[1], ...(f[2] as unknown[])]);
-    expect(meetingFilters).toContainEqual(["eq", "agenda_doc", false]);
     expect(meetingFilters).toContainEqual(["neq", "started_by", NEW.id]);
   });
 
@@ -122,9 +123,13 @@ describe("shareMeetingDocWith", () => {
     expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }]]);
   });
 
-  it("an agenda Doc is shared on request too (through the starter who picked it)", async () => {
-    expect(await shareMeetingDocWith({ ...meeting, agenda_doc: true }, NEW)).toBe("shared");
-    expect(g.permCreate.mock.calls[0][1]).toMatchObject({ fileId: "d1" });
+  it("only Docs Simon Says created: the förening's own agenda Doc is never shared, with no Drive call", async () => {
+    expect(await shareMeetingDocWith({ ...meeting, agenda_doc: true }, NEW)).toBe("not_ours");
+    expect(await shareMeetingDocWith({ ...meeting, agenda_doc: true, app_created_doc: false }, NEW)).toBe("not_ours");
+    expect(g.getGoogleAuth).not.toHaveBeenCalled();
+    expect(g.permCreate).not.toHaveBeenCalled();
+    // An agenda Doc Simon Says made (the Testmöte agenda) is ours.
+    expect(await shareMeetingDocWith({ ...meeting, agenda_doc: true, app_created_doc: true }, NEW)).toBe("shared");
   });
 
   it("needs a starter who is still in the förening: never uses a departed member's Google grant", async () => {

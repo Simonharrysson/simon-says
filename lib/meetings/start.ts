@@ -40,6 +40,8 @@ export interface StartOptions {
   transcriptInDoc?: boolean;
   /** Default: eventKind === "test_started". */
   isTest?: boolean;
+  /** Agenda mode: Simon Says created the agenda Doc (the Testmöte agenda), so it may share it. */
+  agendaCreatedByApp?: boolean;
 }
 
 export type StartResult =
@@ -217,9 +219,7 @@ export async function startMeeting(
     : null;
   const layout = anchor ? "format" : "v1";
 
-  const { error: insertError } = await supabaseAdmin()
-    .from("meetings")
-    .insert({
+  const row = {
       id: meetingId,
       org_id: orgId,
       started_by: user.id,
@@ -239,7 +239,15 @@ export async function startMeeting(
       is_test: isTest,
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
-    });
+  };
+  // 0030: Simon Says only ever shares a Doc it created.
+  const appCreated = !agendaMode || opts.agendaCreatedByApp === true;
+  let { error: insertError } = await supabaseAdmin().from("meetings").insert({ ...row, app_created_doc: appCreated });
+  // A database without 0030 (deploy order): the row without the column.
+  if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703")) {
+    console.warn("meetings: app_created_doc missing (0030 not applied)");
+    ({ error: insertError } = await supabaseAdmin().from("meetings").insert(row));
+  }
   // A refused start never leaves a new, empty Doc in the förening's folder (an agenda Doc is theirs).
   const discardNewDoc = async () => {
     if (agendaMode) return;

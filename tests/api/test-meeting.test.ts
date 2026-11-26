@@ -164,7 +164,7 @@ describe("POST /api/meetings/test, mode agenda (A13)", () => {
     );
     const [, user, orgId, kind, opts] = m.startMeeting.mock.calls[0];
     expect([user.id, orgId, kind]).toEqual(["u1", ORG, "test_started"]);
-    expect(opts).toEqual({ agendaDocId: "tdoc", formatKind: "veckomote", transcriptInDoc: false, isTest: true });
+    expect(opts).toEqual({ agendaDocId: "tdoc", formatKind: "veckomote", transcriptInDoc: false, isTest: true, agendaCreatedByApp: true });
     expect(m.seed).toHaveBeenCalledWith("m1");
     expect(m.runFeed).not.toHaveBeenCalled();
     await m.after.mock.calls[0][0]();

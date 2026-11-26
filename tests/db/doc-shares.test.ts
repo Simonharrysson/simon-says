@@ -73,6 +73,19 @@ describe.skipIf(!hasLocalSupabase)("Docs in the förening (0030)", () => {
     expect(current.perm).toHaveLength(1);
   });
 
+  it("the förening's own agenda Doc: 409 ask, no Drive call; at most 3 presses per hour, then 429", async () => {
+    const { meetingId: agenda } = await seedMeeting(orgId, admin.id);
+    await adminClient().from("meetings").update({ agenda_doc: true, app_created_doc: false }).eq("id", agenda);
+    const res = await askFor(member, agenda);
+    expect([res.status, (await res.json()).error]).toEqual([409, "not_ours"]);
+    expect(current.perm).toHaveLength(1);
+
+    const { meetingId: ours } = await seedMeeting(orgId, admin.id);
+    for (let i = 0; i < 3; i++) expect((await askFor(member, ours)).status).toBe(204);
+    expect((await askFor(member, ours)).status).toBe(429);
+    expect(current.perm).toHaveLength(4);
+  });
+
   it("a starter who left the förening is never used: 409 with a message to ask", async () => {
     const { meetingId: other } = await seedMeeting(orgId, member.id);
     await adminClient().from("org_members").delete().eq("org_id", orgId).eq("user_id", member.id);

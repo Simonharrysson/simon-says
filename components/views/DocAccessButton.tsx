@@ -10,8 +10,22 @@ import { IconExternal } from "@/components/ui/icons";
  * "Dokument" link; if that can't be done, a plain line naming who to ask. Never a link to Google's
  * access-denied page.
  */
-export function DocAccessButton({ meetingId, docHref, starter }: { meetingId: string; docHref: string; starter: string }) {
-  const [state, setState] = useState<"idle" | "busy" | "open" | "ask">("idle");
+export function DocAccessButton({
+  meetingId,
+  docHref,
+  starter,
+  email,
+  askOnly = false,
+}: {
+  meetingId: string;
+  docHref: string;
+  starter: string;
+  /** The viewer's sign-in address, where the Doc is shared (shown, so a wrong Google account is explainable). */
+  email?: string | null;
+  /** The förening's own Doc: Simon Says never shares it, so only the line naming who to ask. */
+  askOnly?: boolean;
+}) {
+  const [state, setState] = useState<"idle" | "busy" | "open" | "ask">(askOnly ? "ask" : "idle");
 
   const ask = async () => {
     setState("busy");
@@ -25,11 +39,18 @@ export function DocAccessButton({ meetingId, docHref, starter }: { meetingId: st
 
   if (state === "open") {
     return (
-      <a className={buttonVariants({ size: "sm" })} href={docHref} target="_blank" rel="noopener noreferrer">
-        Dokument
-        <IconExternal size={16} />
-        <span className="sr-only">(öppnas i ny flik)</span>
-      </a>
+      <span className="flex flex-wrap items-center gap-2">
+        {email && (
+          <span role="status" className="text-sm text-ink-3">
+            Delat till {email}
+          </span>
+        )}
+        <a className={buttonVariants({ size: "sm" })} href={docHref} target="_blank" rel="noopener noreferrer">
+          Dokument
+          <IconExternal size={16} />
+          <span className="sr-only">(öppnas i ny flik)</span>
+        </a>
+      </span>
     );
   }
   if (state === "ask") {

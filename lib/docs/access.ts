@@ -1,6 +1,7 @@
 import "server-only";
 import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { appCreatedDoc } from "@/lib/docs/access-state";
 import { shareWith } from "@/lib/docs/create";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -11,9 +12,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 // Says recorded: the starter owns or picked the Doc, every other member has a row once we shared
 // it with them (at the start, when they joined, or when they asked on the org page).
 // Shares always go through the STARTER's grant: the Doc's owner, the only one who may share a Doc
-// we created (writersCanShare=false). The starter must still be a member of the förening. An
-// agenda Doc (the förening's own) is shared only when a member asks ("Få åtkomst"), never on join.
+// we created (writersCanShare=false). The starter must still be a member of the förening. Simon
+// Says only ever shares Docs it created (`appCreatedDoc`): an agenda Doc the förening wrote is
+// theirs to share, so a member is told to ask the starter (no Drive call).
 // Logs carry ids only, never emails or Doc names.
+
+export { appCreatedDoc };
 
 /** A table this database doesn't have yet (code deployed before 0030). */
 const missingTable = (code: string | undefined) => code === "42P01" || code === "PGRST205";
@@ -46,6 +50,8 @@ export async function sharedMeetingIds(db: SupabaseClient): Promise<Set<string>>
 interface ShareableMeeting {
   id: string;
   org_id: string;
+  /** 0030; null on older rows. */
+  app_created_doc?: boolean | null;
   doc_id: string;
   started_by: string | null;
   agenda_doc: boolean;
@@ -54,6 +60,8 @@ interface ShareableMeeting {
 export type ShareOutcome =
   /** Shared now (or it already was). */
   | "shared"
+  /** Not a Doc Simon Says created (the förening's own agenda Doc): never shared by us. */
+  | "not_ours"
   /** The starter is gone (left the förening, account deleted) or never recorded. */
   | "no_starter"
   /** The starter's Google connection has lapsed. */
@@ -83,14 +91,14 @@ async function stillMembers(orgId: string, userIds: string[]): Promise<Set<strin
 }
 
 /**
- * Share one meeting's Doc with a member who asked (the org page), agenda Docs included (the
- * starter picked it; Google refuses if their account may not share it). The caller has checked,
- * as the user, that they are a member of the meeting's förening. `user.email` is their sign-in
- * address. A starter who has left the förening is never used.
+ * Share one meeting's Doc with a member who asked (the org page): only a Doc Simon Says created.
+ * The caller has checked, as the user, that they are a member of the meeting's förening.
+ * `user.email` is their sign-in address. A starter who has left the förening is never used.
  */
 export async function shareMeetingDocWith(meeting: ShareableMeeting, user: { id: string; email: string }): Promise<ShareOutcome> {
   if (!meeting.started_by) return "no_starter";
   if (meeting.started_by === user.id) return "shared";
+  if (!appCreatedDoc(meeting)) return "not_ours";
   if (!(await stillMembers(meeting.org_id, [meeting.started_by])).has(meeting.started_by)) return "no_starter";
   let auth: OAuth2Client;
   try {
@@ -108,17 +116,16 @@ export const JOIN_SHARE_LIMIT = 60;
 
 /**
  * A member just joined: share the förening's earlier meeting Docs with them, through each
- * starter's own grant (starters still in the förening; agenda Docs excepted: those only on request;
- * ones already shared skipped). Runs after the join response (`after`), best effort: returns how
+ * starter's own grant (starters still in the förening; only Docs Simon Says created; ones already
+ * shared skipped). Runs after the join response (`after`), best effort: returns how
  * many were shared.
  */
 export async function shareOrgDocsWithNewMember(orgId: string, user: { id: string; email: string }): Promise<number> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("meetings")
-    .select("id, org_id, doc_id, started_by, agenda_doc")
+    .select("id, org_id, doc_id, started_by, agenda_doc, app_created_doc")
     .eq("org_id", orgId)
-    .eq("agenda_doc", false)
     .not("started_by", "is", null)
     .neq("started_by", user.id)
     .order("started_at", { ascending: false })
@@ -127,7 +134,7 @@ export async function shareOrgDocsWithNewMember(orgId: string, user: { id: strin
     console.error(`join share: meetings: ${error.message}`);
     return 0;
   }
-  const all = ((data ?? []) as ShareableMeeting[]).filter((m) => m.doc_id);
+  const all = ((data ?? []) as ShareableMeeting[]).filter((m) => m.doc_id && appCreatedDoc(m));
   // Only starters still in the förening: someone who left keeps their Drive, not our use of it.
   const members = await stillMembers(orgId, [...new Set(all.map((m) => m.started_by!))]);
   const meetings = all.filter((m) => members.has(m.started_by!));
@@ -166,4 +173,43 @@ async function sharedIdsFor(userId: string, ids: string[]): Promise<Set<string>>
     return new Set();
   }
   return new Set(((data ?? []) as { meeting_id: string }[]).map((r) => r.meeting_id));
+}
+
+/** "Få åtkomst" presses allowed per member and meeting per hour (each is a Drive call on the starter's quota). */
+export const ACCESS_REQUESTS_PER_HOUR = 3;
+
+/**
+ * Counts one "Få åtkomst" press; false when this member already pressed it
+ * ACCESS_REQUESTS_PER_HOUR times for this meeting in the last hour. Without 0030: true.
+ */
+export async function claimAccessRequest(meetingId: string, userId: string, now = new Date()): Promise<boolean> {
+  const db = supabaseAdmin();
+  const since = new Date(now.getTime() - 3_600_000).toISOString();
+  const { count, error } = await db
+    .from("doc_access_requests")
+    .select("meeting_id", { count: "exact", head: true })
+    .eq("meeting_id", meetingId)
+    .eq("user_id", userId)
+    .gte("at", since);
+  if (error) {
+    if (!missingTable(error.code)) console.error(`doc access: count: ${error.message}`);
+    return true;
+  }
+  if ((count ?? 0) >= ACCESS_REQUESTS_PER_HOUR) return false;
+  const { error: insertError } = await db.from("doc_access_requests").insert({ meeting_id: meetingId, user_id: userId });
+  if (insertError) console.error(`doc access: claim: ${insertError.message}`);
+  return true;
+}
+
+/**
+ * Each meeting's `app_created_doc` (0030), as the user (RLS: their föreningar). A database
+ * without 0030 gives an empty map (docAccessFor then reads `not agenda_doc`).
+ */
+export async function appCreatedFlags(db: SupabaseClient, orgId: string): Promise<Map<string, boolean | null>> {
+  const { data, error } = await db.from("meetings").select("id, app_created_doc").eq("org_id", orgId);
+  if (error) {
+    if (error.code !== "42703" && error.code !== "PGRST204") console.error(`meetings: app_created_doc: ${error.message}`);
+    return new Map();
+  }
+  return new Map(((data ?? []) as { id: string; app_created_doc: boolean | null }[]).map((r) => [r.id, r.app_created_doc]));
 }

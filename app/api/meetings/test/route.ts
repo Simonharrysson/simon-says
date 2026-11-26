@@ -110,6 +110,8 @@ async function startAgendaTest(
     formatKind: "veckomote",
     transcriptInDoc: false,
     isTest: true,
+    // The fictional agenda Doc is ours (createTestAgendaDoc).
+    agendaCreatedByApp: true,
   });
   if (!result.ok) {
     await trashTestDoc(auth, docId).catch((e: Error) => console.error(`test meeting: trash unused agenda doc: ${e.message}`));
