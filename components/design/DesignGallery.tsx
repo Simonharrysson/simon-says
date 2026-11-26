@@ -873,7 +873,7 @@ const render: Record<string, () => ReactNode> = {
   "live-resume": () => <LiveDemo phase="resume" />,
   ...Object.fromEntries(Object.entries(onboardingRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   ...Object.fromEntries(
-    Object.entries(summaryRender).map(([id, view]) => [id, () => (id.startsWith("unsubscribe") ? <PublicChrome noLoginLink>{view()}</PublicChrome> : <AppChrome>{view()}</AppChrome>)]),
+    Object.entries(summaryRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>]),
   ),
 };
 

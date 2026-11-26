@@ -87,8 +87,8 @@ export default function PrivacyPage() {
               Sammanfattning efter mötet: när ett möte är klart mejlar Simon Says besluten och uppgifterna till personer i
               föreningens personlista som har en e-postadress, som standard bara till dem som inte var med (admin kan välja
               alla, utvalda eller ingen). Aldrig till någon utanför personlistan, aldrig efter testmöten. Varje mejl har en
-              länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet)
-              och vem som avslutat; det försvinner med mötet, personen eller föreningen.
+              länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet); det
+              försvinner med mötet, personen eller föreningen.
             </li>
             <li>
               För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har

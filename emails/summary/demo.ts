@@ -5,7 +5,7 @@ import type { SummaryEmailInput } from "@/lib/summaries/email";
 
 const APP = "https://simonsays.harrysson.co";
 const ORG = "00000000-0000-4000-8000-0000000000aa";
-const unsubscribeHref = `${APP}/sammanfattning/avsluta?t=eyJwIjoiZGVtbyJ9.demo`;
+const unsubscribeHref = `${APP}/mejl?t=c2FyYUBleGVtcGVsLnNl.demo&k=meeting_summary`;
 
 export const demoSummaryEmails: Record<"missed" | "admin" | "short", SummaryEmailInput> = {
   missed: {

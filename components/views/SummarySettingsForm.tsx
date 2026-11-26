@@ -16,8 +16,6 @@ export interface SummaryPersonOption {
   /** Has an address (their own e-mail, or a linked member account). */
   hasEmail: boolean;
   selected: boolean;
-  /** Used the e-mail's "Avsluta prenumeration". */
-  unsubscribed: boolean;
 }
 
 const MODES: { mode: SummaryMode; title: string; hint: string }[] = [
@@ -50,7 +48,7 @@ export function SummarySettingsForm({
     const timer = setTimeout(() => setSaved(false), 3000);
     return () => clearTimeout(timer);
   }, [saved]);
-  const withEmail = people.filter((p) => p.hasEmail && !p.unsubscribed).length;
+  const withEmail = people.filter((p) => p.hasEmail).length;
 
   return (
     <form
@@ -67,7 +65,7 @@ export function SummarySettingsForm({
         <legend className="mb-1 font-medium">Sammanfattning efter mötet</legend>
         <p className="mb-2 text-sm text-ink-2">
           När ett möte är klart mejlar Simon Says besluten och uppgifterna. Var och en ser sina egna uppgifter först och kan
-          avsluta prenumerationen i mejlet. Testmöten skickas aldrig.
+          tacka nej i mejlet eller under Konto. Testmöten skickas aldrig.
         </p>
         {MODES.map((o) => {
           const checked = mode === o.mode;
@@ -105,7 +103,7 @@ export function SummarySettingsForm({
             <ul className="flex flex-col rounded-lg border border-line bg-surface">
               {people.map((p) => {
                 const id = `summary-person-${p.id}`;
-                const note = !p.hasEmail ? "Ingen e-postadress" : p.unsubscribed ? "Har avslutat prenumerationen" : null;
+                const note = !p.hasEmail ? "Ingen e-postadress" : null;
                 return (
                   <li key={p.id} className="border-t border-line first:border-t-0">
                     <label htmlFor={id} className={cn("flex min-h-11 items-center gap-3 px-4 py-2", p.hasEmail ? "cursor-pointer" : "cursor-not-allowed")}>

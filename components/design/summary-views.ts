@@ -6,7 +6,4 @@ export const summaryViews = [
   { id: "summary-email", title: "Sammanfattning · mejl, missade mötet, egna uppgifter" },
   { id: "summary-email-admin", title: "Sammanfattning · mejl till alla, admin, utan egna uppgifter" },
   { id: "summary-email-short", title: "Sammanfattning · mejl, bara beslut, utan konto" },
-  { id: "unsubscribe-confirm", title: "Sammanfattning · avsluta prenumeration" },
-  { id: "unsubscribe-done", title: "Sammanfattning · prenumerationen avslutad" },
-  { id: "unsubscribe-invalid", title: "Sammanfattning · ogiltig länk" },
 ] as const;

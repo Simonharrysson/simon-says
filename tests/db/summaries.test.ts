@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { NextRequest } from "next/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import type { MailMessage } from "@/lib/mail";
@@ -18,8 +17,7 @@ vi.mock("@/lib/env", async (importOriginal) => {
 
 const { createOrg, joinOrg, setSummarySettings } = await import("@/lib/db/orgs");
 const { sendMeetingSummaries, sendPendingSummaries } = await import("@/lib/summaries/send");
-const { POST: postUnsubscribe, GET: getUnsubscribe } = await import("@/app/api/summaries/unsubscribe/route");
-const { lookupUnsubscribe } = await import("@/lib/summaries/unsubscribe");
+const { POST: postUnsubscribe, GET: getUnsubscribe } = await import("@/app/api/mejl/avsluta/route");
 
 function fakeMailer(ok = true) {
   const sent: MailMessage[] = [];
@@ -92,9 +90,8 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     expect(await setSummarySettings(admin.db as SupabaseClient, orgId, "missed", [])).toBe(true);
   });
 
-  it("members can't tick people or unsubscribe someone directly; renaming still works", async () => {
+  it("members can't tick people or write e-mail addresses directly; renaming still works", async () => {
     expect((await member.db.from("people").update({ summary_selected: true }).eq("id", ids.sara)).error).not.toBeNull();
-    expect((await member.db.from("people").update({ summary_unsubscribed_at: new Date().toISOString() }).eq("id", ids.sara)).error).not.toBeNull();
     expect((await member.db.from("people").insert({ org_id: orgId, name: "Ny", summary_selected: true })).error).not.toBeNull();
     expect((await member.db.from("people").update({ name: "Sara Holm" }).eq("id", ids.sara)).error).toBeNull();
     // E-mail addresses are written only by the admin functions (an e-mail-only recipient is always admin-added).
@@ -195,35 +192,6 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     expect((await db().from("meeting_summary_sends").select("sent").eq("meeting_id", id)).data).toEqual([{ sent: false }]);
   });
 
-  it("one-click unsubscribe (POST) stops Sara's summaries in every mode; GET changes nothing", async () => {
-    const id = await meeting();
-    const f = fakeMailer();
-    await sendMeetingSummaries(id, f);
-    const url = f.sent[0].headers!["List-Unsubscribe"].slice(1, -1);
-    const get = await getUnsubscribe(new NextRequest(url));
-    expect(get.status).toBe(303);
-    expect((await db().from("people").select("summary_unsubscribed_at").eq("id", ids.sara).single()).data!.summary_unsubscribed_at).toBeNull();
-
-    const token = new URL(url).searchParams.get("t");
-    expect(await lookupUnsubscribe(token)).toEqual({ orgName: "Sammanfattningsföreningen", unsubscribed: false });
-    expect(await lookupUnsubscribe("nope")).toBeNull();
-
-    const bad = await postUnsubscribe(new NextRequest(url.replace(/t=.*/, "t=nope"), { method: "POST", body: "List-Unsubscribe=One-Click" }));
-    expect(bad.status).toBe(400);
-    const res = await postUnsubscribe(new NextRequest(url, { method: "POST", body: "List-Unsubscribe=One-Click" }));
-    expect(res.status).toBe(200);
-    expect((await postUnsubscribe(new NextRequest(url, { method: "POST" }))).status).toBe(200);
-    expect((await db().from("people").select("summary_unsubscribed_at").eq("id", ids.sara).single()).data!.summary_unsubscribed_at).not.toBeNull();
-    expect(await lookupUnsubscribe(token)).toEqual({ orgName: "Sammanfattningsföreningen", unsubscribed: true });
-
-    await setSummarySettings(admin.db as SupabaseClient, orgId, "selected", [ids.sara, ids.erik]);
-    const next = await meeting();
-    const g = fakeMailer();
-    await sendMeetingSummaries(next, g);
-    await setSummarySettings(admin.db as SupabaseClient, orgId, "missed", []);
-    expect(g.sent.map((m) => m.to)).toEqual(["erik@example.com"]);
-  });
-
   async function voices(meetingId: string, names: (string | null)[]) {
     const session = `el-${randomUUID()}`;
     expect((await db().from("el_sessions").insert({ id: session, meeting_id: meetingId, max_seconds: 3600 })).error).toBeNull();
@@ -307,6 +275,35 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     expect((await admin.db.rpc("set_person_email", { p_person_id: rut, p_email: "rut@example.com" })).data).toBe("ok");
     expect((await db().from("people").select("summary_removed_at").eq("id", rut).single()).data!.summary_removed_at).toBeNull();
     await db().from("people").delete().eq("id", rut);
+  });
+
+  it("through the e-mail gate: the one-click header (0039) stops Sara's summaries in every mode; GET changes nothing", async () => {
+    const id = await meeting();
+    const f = fakeMailer();
+    await sendMeetingSummaries(id, f);
+    const mail = f.sent[0];
+    expect(mail.to).toBe("sara@example.com");
+    const url = mail.headers!["List-Unsubscribe"].slice(1, -1);
+    expect(url).toMatch(/^https:\/\/app\.test\/api\/mejl\/avsluta\?t=.+&k=meeting_summary$/);
+    expect(mail.text).toMatch(/Avsluta prenumeration: https:\/\/app\.test\/mejl\?t=.+&k=meeting_summary/);
+
+    expect((await getUnsubscribe(new Request(url))).status).toBe(303);
+    const again = await meeting();
+    const g = fakeMailer();
+    await sendMeetingSummaries(again, g);
+    expect(g.sent.map((m) => m.to)).toEqual(["sara@example.com"]);
+
+    const res = await postUnsubscribe(new Request(url, { method: "POST", body: "List-Unsubscribe=One-Click" }));
+    expect(res.status).toBe(200);
+
+    await setSummarySettings(admin.db as SupabaseClient, orgId, "selected", [ids.sara, ids.erik]);
+    const next = await meeting();
+    const h = fakeMailer();
+    expect(await sendMeetingSummaries(next, h)).toMatchObject({ state: "sent", sent: 1, failed: 0 });
+    await setSummarySettings(admin.db as SupabaseClient, orgId, "missed", []);
+    expect(h.sent.map((m) => m.to)).toEqual(["erik@example.com"]);
+    const ev = (await db().from("meeting_events").select("detail").eq("meeting_id", next).eq("kind", "summary")).data!;
+    expect(ev[0].detail).toMatchObject({ sent: 1, optedOut: 1 });
   });
 
   it("meeting_events accepts 'summary' and keeps the older kinds", async () => {

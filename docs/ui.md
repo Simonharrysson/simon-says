@@ -563,8 +563,7 @@ Inställningar links to the guide.
 
 **Setting** (Inställningar, admins; `SummarySettingsForm`, `updateSummaryAction` → `set_summary_settings`):
 four radio cards, **Till de som missade mötet** (default) · Till alla · Till utvalda personer · Av. "Utvalda"
-opens a checkbox list of the people list (no address: disabled, "Ingen e-postadress"; unsubscribed: "Har
-avslutat prenumerationen"). Other modes show how many people have an address. Ticks are kept when the mode changes.
+opens a checkbox list of the people list (no address: disabled, "Ingen e-postadress"). Other modes show how many people have an address. Ticks are kept when the mode changes.
 
 **When**: `finishMeeting` sets the meeting `done`, then `trySendMeetingSummaries` (best effort, never changes the
 end); the 5-minute cron (`sendPendingSummaries`) sends what that skipped: a Doc paused at the end (after its final
@@ -578,8 +577,8 @@ else `people.email`), deduplicated. Present = a named voice (speaker map, merges
 first name; an ambiguous first name counts all of them as present), or the starter's account. Attendance is
 *certain* only when someone was identified by voice or Närvarande (the starter alone doesn't count) and no voice
 is unnamed ("Talare 2" on a shared mic, "Anna?"); otherwise "missed" sends nothing (`uncertain`, with the count
-of unnamed voices in the event) and "alla"/"utvalda" send with neutral wording. Unsubscribed people never get
-it; a person whose member link was removed (`summary_removed_at`) gets nothing by the old address. E-mail
+of unnamed voices in the event) and "alla"/"utvalda" send with neutral wording. Every send goes through the e-mail gate
+(`sendUserMail`, category `meeting_summary`, 0039): whoever said no never gets it (counted as `optedOut`); a person whose member link was removed (`summary_removed_at`) gets nothing by the old address. E-mail
 addresses are written only by the admin functions.
 
 **The e-mail** (`lib/summaries/email.ts`, design A "Calm Geist" from the invite e-mail): subject
@@ -588,9 +587,7 @@ addresses are written only by the admin functions.
 (max 3); lists capped with "… och N till i protokollet"; no Må-runda items, no info cells, no done tasks.
 **Öppna protokollet**: the Doc for the starter and members it was shared with; other members go to the meeting's
 row on the förening page (`#mote-<id>`, Få åtkomst); people without an account get the Doc with a line on asking
-for access. Footer: "Ändra vilka som får sammanfattningar" (admins) · **Avsluta prenumeration**
-(`/sammanfattning/avsluta?t=…`, a button, since mail scanners open links; one-click `POST
-/api/summaries/unsubscribe` via `List-Unsubscribe` + `List-Unsubscribe-Post`). The token is an HMAC of the
-person id (own label under TOKEN_ENC_KEY), no expiry. Logs and the `summary` event hold counts only.
-`/design`: `org-summary-*`, `summary-email*`, `unsubscribe-*`, and `org-admin`. Screenshots:
+for access. Footer: "Ändra vilka som får sammanfattningar" (admins) · **Avsluta prenumeration** (the address's `/mejl`
+page, `k=meeting_summary`); headers from `listUnsubscribeHeaders` (one-click `POST /api/mejl/avsluta`). Logs and the `summary` event hold counts only.
+`/design`: `org-summary-*`, `summary-email*` and `org-admin`. Screenshots:
 `emails/summary/shoot.sh` (desktop/phone, light/dark, into `.superpowers/meeting-summary/`).

@@ -1,22 +1,21 @@
 import type { ReactNode } from "react";
 import { Panel } from "@/components/ui/Panel";
 import { SummarySettingsForm, type SummaryPersonOption } from "@/components/views/SummarySettingsForm";
-import { UnsubscribeView } from "@/components/views/UnsubscribeView";
 import { renderSummaryEmail } from "@/lib/summaries/email";
 import { demoSummaryEmails } from "@/emails/summary/demo";
 
-// The summary e-mail's states for the /design gallery (0037): the setting, the e-mail itself (in
-// an iframe, as a mail client shows it; dark mode follows the system) and the unsubscribe page.
+// The summary e-mail's states for the /design gallery (0037): the setting and the e-mail itself (in
+// an iframe, as a mail client shows it; dark mode follows the system). Opting out is /mejl (0039).
 
 const noopAction = async () => {};
 const ORG_ID = "00000000-0000-4000-8000-0000000000aa";
 
 const options: SummaryPersonOption[] = [
-  { id: "p1", name: "Anna Berg", role: "Ordförande", hasEmail: true, selected: true, unsubscribed: false },
-  { id: "p2", name: "Erik Lund", role: "Kassör", hasEmail: true, selected: true, unsubscribed: false },
-  { id: "p5", name: "Johan Ek", role: null, hasEmail: false, selected: false, unsubscribed: false },
-  { id: "p3", name: "Sara Nyström", role: "Sekreterare", hasEmail: true, selected: false, unsubscribed: true },
-  { id: "p4", name: "Simon", role: null, hasEmail: true, selected: false, unsubscribed: false },
+  { id: "p1", name: "Anna Berg", role: "Ordförande", hasEmail: true, selected: true },
+  { id: "p2", name: "Erik Lund", role: "Kassör", hasEmail: true, selected: true },
+  { id: "p5", name: "Johan Ek", role: null, hasEmail: false, selected: false },
+  { id: "p3", name: "Sara Nyström", role: "Sekreterare", hasEmail: true, selected: false },
+  { id: "p4", name: "Simon", role: null, hasEmail: true, selected: false },
 ];
 
 /** The setting alone, as Inställningar shows it (also used in the gallery's "org-admin"). */
@@ -52,7 +51,4 @@ export const summaryRender: Record<string, () => ReactNode> = {
   "summary-email": () => <Email which="missed" />,
   "summary-email-admin": () => <Email which="admin" />,
   "summary-email-short": () => <Email which="short" />,
-  "unsubscribe-confirm": () => <UnsubscribeView state="confirm" token="demo" orgName="Exempelföreningen" unsubscribe={noopAction} />,
-  "unsubscribe-done": () => <UnsubscribeView state="done" orgName="Exempelföreningen" />,
-  "unsubscribe-invalid": () => <UnsubscribeView state="invalid" />,
 };
