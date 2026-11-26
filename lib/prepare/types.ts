@@ -39,7 +39,17 @@ export interface DraftItem {
   meetings?: number;
   /** The follow-up item: the open tasks it will list. */
   tasks?: DraftTask[];
+  /** The follow-up item: where its tasks come from (shown under it). */
+  origin?: FollowupOrigin;
 }
+
+/**
+ * Where "Från förra veckan" takes its open tasks from: the previous real Simon Says meeting
+ * (`meeting`), an imported protocol newer than that (`import`, within 60 days of the prepared
+ * date), nothing because that protocol is older (`too_old`), or no earlier meeting at all (`none`;
+ * Testmöten never count). `date`: the source meeting's local date (YYYY-MM-DD).
+ */
+export type FollowupOrigin = { kind: "meeting" | "import" | "too_old"; date: string } | { kind: "none" };
 
 
 /** The start screen's prepared-agenda suggestion (agenda-candidates `prepared`). */

@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, cleanupLosingAnchor, type AnchorResult } from "@/lib/agenda/anchor";
 import { carriedForMeeting, previousMeeting, previousMeetingOfKinds, previousOnDoc } from "@/lib/agenda/followup";
+import { preparedSkipsMeetings } from "@/lib/prepare/carry-source";
 import { missingRequired } from "@/lib/agenda/scan";
 import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle, trashDoc, type DocPlace } from "@/lib/docs/create";
 import { planFormatRender } from "@/lib/docs/format-render";
@@ -685,8 +686,12 @@ async function prefill(input: {
     // Testmöte only from agenda Testmöten. A prepared agenda: the previous meeting of its kind,
     // as the prepare drew from.
     const prepared = input.prepared ?? null;
+    // A prepared agenda that drew from an imported protocol (or found it too old to draw from):
+    // no older real meeting adds its tasks now; the prepared lines are the follow-up.
     const prev = prepared
-      ? await previousMeetingOfKinds(meeting.org_id, input.startedAt, kindsOfType(prepared.kind), db)
+      ? preparedSkipsMeetings(prepared)
+        ? null
+        : await previousMeetingOfKinds(meeting.org_id, input.startedAt, kindsOfType(prepared.kind), db)
       : await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc);
     // A false start on this same Doc (done or abandoned, after `prev`): its carried lines are
     // already in the Doc, so they are taken over, never written twice (final review R1/R2).

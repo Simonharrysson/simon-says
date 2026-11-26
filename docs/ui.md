@@ -287,9 +287,13 @@ any member may continue the running meeting: it gets "Till mötet" in the list a
 "Fortsätt mötet"; meetings abandoned < 2 h ago get "Fortsätt mötet" in the list. Admins and the starter also get
 a ghost "Avsluta mötet" (`ConfirmAction`, `actions.endMeeting`) on a live row. A live meeting nobody is connected
 to ends by itself after a grace period (`lib/meetings/presence.ts`), like Meet.
-`startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`: a link to the live
-page's consent step `/meetings/ny/<orgId>`, plus the admins' Testmöte); while a meeting is live/ending it is
-replaced by an info banner with the Doc link.
+`startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`), no explanatory
+text: when an agenda is prepared, one quiet row "Nästa möte  Veckomöte · tis 1 dec 18.00  Dagordning ↗  Ändra";
+then **Starta möte** (primary, mic; the live page's consent step `/meetings/ny/<orgId>`) and **Förbered möte**
+(secondary); service admins get a small ghost **Testmöte ▾** menu on the right (items "Utan dagordning" /
+"Med dagordning", each with a one-line hint; the trigger spins "Startar testmöte …"). Phone: the buttons
+stack full width, the menu under them. While a meeting is live/ending the panel is replaced by an info
+banner with the Doc link. `/design`: `org-start`, `org-prepared`.
 
 Members panel (final fix wave A2): each member's email with "admin" / "du". Admins get a ghost "Ta bort" per other
 member, everyone a ghost "Lämna" on their own row; both open a `ConfirmAction` dialog whose copy says that Docs
@@ -470,8 +474,8 @@ a signed ticket the estimate/import routes require before using the read access)
 
 ## Förbered möte (todo #6, migration 0033)
 
-`/orgs/<id>/forbered` (any member; "Förbered möte" next to "Starta möte", which also lists upcoming
-prepared meetings with "Dagordning" and "Ändra"). `PrepareMeeting` (container) / `PrepareMeetingView`
+`/orgs/<id>/forbered` (any member; "Förbered möte" next to "Starta möte", whose "Nästa möte" row links the
+next prepared agenda with "Dagordning" and "Ändra"). `PrepareMeeting` (container) / `PrepareMeetingView`
 (`components/views/PrepareMeeting.tsx`), three steps under the title ("1. Möte — 2. Dagordning — 3. Klart"):
 
 1. **Vilket möte?** Three radio cards, Veckomöte preselected (Styrelsemöte, Årsmöte), Datum (proposed:
@@ -479,8 +483,14 @@ prepared meetings with "Dagordning" and "Ändra"). `PrepareMeeting` (container) 
    "Ta fram dagordningen".
 2. **Dagordning** (`GET /api/orgs/<id>/prepare`): one numbered list, each item an editable label with ↑ ↓
    and a grey trash (`danger-ghost`). "Från förra veckan" lists the previous meeting-of-that-kind's open
-   tasks as the Doc will show them, each with a checkbox (untick = not on the agenda). "Lägg till punkt"
-   (placeholder "T.ex. Fest på universitetet") adds before the items the format keeps last. "Fler punkter"
+   tasks as the Doc will show them, each with a checkbox (untick = not on the agenda), under a grey line
+   naming the source ("Öppna uppgifter från mötet 24 nov."). An imported protocol (0032) newer than the
+   last real meeting and at most 60 days before the date is the source instead ("… från protokollet
+   19 nov (inläst)."; its tasks are text lines, a ✓ klart never reaches the imported history). Nothing to
+   carry: the line says why ("Inget tidigare möte än. Testmöten räknas inte." / "Senaste protokollet är
+   från 20 aug — för gammalt för att ta med uppgifter."). "Lägg till punkt"
+   (placeholder "T.ex. Fest på universitetet") adds before the items the format keeps last (the button
+   or Enter); text still in the field when "Skapa dagordning" is pressed is added too, never lost. "Fler punkter"
    holds recurring Översikt topics ("Har tagits upp på N möten") and removed standing items, dashed, with
    "Lägg till". "Skapa dagordning" (primary, the only one) → "Skapar dokumentet …". Preparing again for a
    date that has one: info banner "Du ändrar en förberedd dagordning" and "Uppdatera dagordningen"; a
@@ -497,7 +507,8 @@ lines are written by the notes engine (`ss-prep-<id>-c<n>`), so the meeting adop
 <tisdag 1 december> kl. 18.00", grey "<typ> · <Doc-namn>", **Använd** · Välj annan · Skapa nytt
 dokument. No format select (the prepared format is used). If the starter's Google account can't edit it
 yet (prepared by someone else, drive.file): a line saying so and **Öppna i Google-väljaren**. The
-Picker-off fallback shows it too. `/design`: `org-prepared`, `prepare-*`, `live-agenda-prepared`,
+Picker-off fallback shows it too. `/design`: `org-start`, `org-prepared`, `prepare-*` (incl. `prepare-draft-import`,
+`-no-meeting`, `-too-old`), `live-agenda-prepared`,
 `live-agenda-prepared-picker`.
 
 

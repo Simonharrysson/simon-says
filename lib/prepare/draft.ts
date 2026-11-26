@@ -11,8 +11,8 @@ import { mergeRequiredItems } from "@/lib/formats/skeleton";
 // unticked. The ordförande adds what Simon Says can't know, reorders and removes. Pure.
 
 export { MEETING_TYPES, isMeetingType, meetingTypeName } from "./types";
-export type { DraftItem, DraftSource, DraftTask, MeetingType } from "./types";
-import type { DraftItem, MeetingType } from "./types";
+export type { DraftItem, DraftSource, DraftTask, FollowupOrigin, MeetingType } from "./types";
+import type { DraftItem, FollowupOrigin, MeetingType } from "./types";
 
 /** The format kinds whose meetings count as "the same kind" of meeting (v1 meetings, no format, are weekly ones). */
 export function kindsOfType(type: MeetingType): (FormatKind | null)[] {
@@ -40,6 +40,8 @@ export function buildDraft(input: {
   carried: NoteItemRow[];
   ctx: LineCtx;
   topics: { label: string; meetings: number }[];
+  /** Where the carried tasks come from (shown under "Från förra veckan"). */
+  origin?: FollowupOrigin;
 }): DraftItem[] {
   const fixed = mergeRequiredItems(input.profile);
   const tasks = input.carried.map((r) => ({
@@ -57,7 +59,7 @@ export function buildDraft(input: {
         source: "standing" as const,
         on: true,
         ...(last ? { last: true } : {}),
-        ...(i.role === "followup" ? { tasks } : {}),
+        ...(i.role === "followup" ? { tasks, ...(input.origin ? { origin: input.origin } : {}) } : {}),
       }));
   const seen = new Set<string>();
   const suggestions: DraftItem[] = [];
@@ -76,8 +78,13 @@ export function buildDraft(input: {
  * (`dropped`); everything else is the stored draft as approved.
  */
 export function refreshDraft(stored: DraftItem[], fresh: DraftItem[], dropped: Set<string>): DraftItem[] {
-  const tasks = fresh.find((i) => i.tasks)?.tasks ?? [];
-  return stored.map((i) => (i.role === "followup" ? { ...i, tasks: tasks.map((t) => ({ ...t, on: !dropped.has(t.source) })) } : i));
+  const f = fresh.find((i) => i.tasks);
+  const tasks = f?.tasks ?? [];
+  return stored.map((i) => {
+    if (i.role !== "followup") return i;
+    const { origin: _old, ...rest } = i;
+    return { ...rest, tasks: tasks.map((t) => ({ ...t, on: !dropped.has(t.source) })), ...(f?.origin ? { origin: f.origin } : {}) };
+  });
 }
 
 /** The items that go into the Doc, in order (unticked suggestions and removed items left out). */

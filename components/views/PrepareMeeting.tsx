@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MEETING_TYPES, type DraftItem, type MeetingType } from "@/lib/prepare/types";
+import { addBack, addItem, bodyItems, withPending } from "@/lib/prepare/edit";
+import { MEETING_TYPES, type DraftItem, type FollowupOrigin, type MeetingType } from "@/lib/prepare/types";
 import { cn } from "@/lib/utils";
 
 // "Förbered möte" (todo #6): the ordförande prepares the next meeting. Step 1 chooses the kind
@@ -31,6 +32,8 @@ const when = (date: string, time: string | null) => `${longDate(date)}${time ? `
 
 // ---------------------------------------------------------------------------------------------
 // Editing the draft (pure; the gallery uses them too)
+
+export { addBack, addItem };
 
 const onIdx = (items: DraftItem[]) => items.map((it, i) => (it.on ? i : -1)).filter((i) => i >= 0);
 
@@ -53,29 +56,28 @@ export function removeItem(items: DraftItem[], id: string): DraftItem[] {
   return items.map((i) => (i.id === id ? { ...i, on: false } : i));
 }
 
-/** Put an item (back) on the agenda, before the items the format keeps last. */
-export function addBack(items: DraftItem[], id: string): DraftItem[] {
-  const it = items.find((i) => i.id === id);
-  if (!it) return items;
-  const rest = items.filter((i) => i.id !== id);
-  const at = it.last ? rest.length : rest.findIndex((i) => i.last && i.on);
-  const pos = at < 0 ? rest.length : at;
-  return [...rest.slice(0, pos), { ...it, on: true }, ...rest.slice(pos)];
-}
-
-/** A new item the ordförande knows about, before the items the format keeps last. */
-export function addItem(items: DraftItem[], label: string, id: string): DraftItem[] {
-  const clean = label.replace(/\s+/g, " ").trim();
-  if (!clean) return items;
-  return addBack([...items, { id, label: clean, role: "topic", source: "added", on: false }], id);
-}
-
 export function setTask(items: DraftItem[], itemId: string, source: string, on: boolean): DraftItem[] {
   return items.map((i) => (i.id === itemId && i.tasks ? { ...i, tasks: i.tasks.map((t) => (t.source === source ? { ...t, on } : t)) } : i));
 }
 
 export function renameItem(items: DraftItem[], id: string, label: string): DraftItem[] {
   return items.map((i) => (i.id === id ? { ...i, label } : i));
+}
+
+/** Under "Från förra veckan" when there is nothing to carry: why. */
+export function followupNote(origin: FollowupOrigin | undefined): string {
+  if (!origin) return "Inga öppna uppgifter från förra mötet.";
+  if (origin.kind === "none") return "Inget tidigare möte än. Testmöten räknas inte.";
+  if (origin.kind === "too_old") return `Senaste protokollet är från ${shortDate(origin.date)} — för gammalt för att ta med uppgifter.`;
+  if (origin.kind === "import") return `Inga öppna uppgifter i protokollet från ${shortDate(origin.date)}.`;
+  return `Inga öppna uppgifter från mötet ${shortDate(origin.date)}. Testmöten räknas inte.`;
+}
+
+/** Above the carried tasks: where they come from. */
+export function followupFrom(origin: FollowupOrigin | undefined): string {
+  if (origin?.kind === "meeting") return `Öppna uppgifter från mötet ${shortDate(origin.date)}.`;
+  if (origin?.kind === "import") return `Öppna uppgifter från protokollet ${shortDate(origin.date)} (inläst).`;
+  return "Öppna uppgifter från förra mötet.";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -107,7 +109,8 @@ export interface PrepareMeetingViewProps {
   onContinue(): void;
   onBack(): void;
   onItems(items: DraftItem[]): void;
-  onSave(): void;
+  /** Save `items` (the draft with any point still typed in "Lägg till punkt" added). */
+  onSave(items: DraftItem[]): void;
   /** A fresh id for an added item. */
   newId?: () => string;
 }
@@ -254,6 +257,17 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
     setAdding("");
     addRef.current?.focus();
   };
+  // A point typed but not added ("Lägg till" never pressed) goes on the agenda too: it is put in
+  // the list (so a retry after a failed save never adds it twice) and saved in the same step.
+  const pending = adding.trim() !== "";
+  const save = () => {
+    const items = pending ? withPending(p.items, adding, newId()) : p.items;
+    if (pending) {
+      p.onItems(items);
+      setAdding("");
+    }
+    p.onSave(items);
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -354,7 +368,7 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
             : "Simon Says skapar dokumentet i föreningens mötesmapp (eller i din Drive om du inte har öppnat mappen) och delar det med medlemmarna. Ni kan fortsätta skriva i det som vanligt."}
         </p>
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" size="lg" onClick={p.onSave} loading={saving} disabled={held || on.length === 0}>
+          <Button variant="primary" size="lg" onClick={save} loading={saving} disabled={held || (on.length === 0 && !pending)}>
             {saving ? (p.existing ? "Uppdaterar …" : "Skapar dokumentet …") : p.existing ? "Uppdatera dagordningen" : "Skapa dagordning"}
           </Button>
           {p.existing && (
@@ -418,10 +432,10 @@ function AgendaRow(props: {
       {item.tasks && (
         <div className="ml-9 flex flex-col gap-2">
           {item.tasks.length === 0 ? (
-            <p className={hintClass}>Inga öppna uppgifter från förra mötet.</p>
+            <p className={hintClass}>{followupNote(item.origin)}</p>
           ) : (
             <>
-              <p className={hintClass}>Öppna uppgifter från förra mötet. Bocka ur det som inte ska upp.</p>
+              <p className={hintClass}>{followupFrom(item.origin)} Bocka ur det som inte ska upp.</p>
               <ul className="flex flex-col gap-1">
                 {item.tasks.map((t) => {
                   const tid = `${inputId}-${t.source.replace(/[^a-z0-9]/gi, "-")}`;
@@ -510,7 +524,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
     }
   };
 
-  const save = async () => {
+  const save = async (list: DraftItem[]) => {
     setPhase({ step: "draft", saving: true });
     try {
       const res = await fetch(`/api/orgs/${props.orgId}/prepare`, {
@@ -520,13 +534,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
           type,
           date,
           time: time || null,
-          items: items.filter((i) => i.source !== "added" || i.label.trim()).map((i) => ({
-            id: i.id,
-            label: i.label.trim() || "Punkt",
-            source: i.source,
-            on: i.on && i.label.trim() !== "",
-            ...(i.tasks ? { tasks: i.tasks.map((t) => ({ source: t.source, on: t.on })) } : {}),
-          })),
+          items: bodyItems(list),
         }),
       });
       const json = (await res.json().catch(() => null)) as { docUrl: string; docName: string; created: boolean; reordered: boolean; message?: string } | null;
@@ -558,7 +566,7 @@ export function PrepareMeeting(props: { orgId: string; orgName: string; today: s
       onContinue={() => void load()}
       onBack={() => setPhase({ step: "type" })}
       onItems={setItems}
-      onSave={() => void save()}
+      onSave={(list) => void save(list)}
     />
   );
 }
