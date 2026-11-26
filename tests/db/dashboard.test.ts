@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, seedMeeting, type TestUser } from "@/test/local-supabase";
 import { loadOverview, listGoals } from "@/lib/dashboard/load";
 import { createOrg, joinOrg } from "@/lib/db/orgs";
+import { saveImportedProtocol } from "@/lib/history/store";
 
 // Org dashboard schema (0028) and the loader against the local stack. Fictional data only.
 
@@ -114,5 +115,30 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
     expect(none.decisions).toEqual([]);
 
     await svc.from("meetings").delete().in("id", [...seeded, live.meetingId]);
+  });
+
+  it("loadOverview: imported protocols count for members (decisions marked, tasks only counted), never for outsiders", async () => {
+    const saved = await saveImportedProtocol(admin.db, {
+      orgId,
+      driveFileId: "doc-ovhist0001",
+      date: "2024-10-08",
+      section: 0,
+      sections: 1,
+      dateFrom: "doc",
+      items: [
+        { kind: "topic", text: "Spelkafé", topic: null, owner: null, done: null },
+        { kind: "decision", text: "Spelkaféet hålls varannan fredag", topic: "Spelkafé", owner: null, done: null },
+        { kind: "task", text: "Boka biblioteket", topic: "Spelkafé", owner: "Eventansvarig", done: false },
+      ],
+    });
+    expect(saved.ok).toBe(true);
+    const o = await loadOverview(member.db, orgId, new Date("2026-11-26T18:00:00Z"));
+    expect(o.imported).toMatchObject({ count: 1, first: "2024-10-08", tasks: 1 });
+    expect(o.decisions.find((d) => d.text === "Spelkaféet hålls varannan fredag")).toMatchObject({ imported: true, item: "Spelkafé" });
+    expect(o.openTasks.flatMap((g) => g.tasks).some((t) => t.text === "Boka biblioteket")).toBe(false);
+    const none = await loadOverview(outsider.db, orgId);
+    expect(none.imported.count).toBe(0);
+    expect(none.decisions).toEqual([]);
+    expect((await admin.db.rpc("clear_history_protocols", { p_org_id: orgId })).error).toBeNull();
   });
 });
