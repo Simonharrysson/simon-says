@@ -38,12 +38,10 @@ export async function GET(request: NextRequest) {
   const admin = supabaseAdmin();
   const supabase = await createSupabaseServerClient();
   let userId: string | undefined;
-  let link = await admin.auth.admin.generateLink({ type: "magiclink", email });
-  if (link.error) {
-    const created = await admin.auth.admin.createUser({ email, email_confirm: true });
-    if (created.error && !/already/i.test(created.error.message)) return failed("create", created.error.message);
-    link = await admin.auth.admin.generateLink({ type: "magiclink", email });
-  }
+  // A confirmed user first (a magic link for an unknown address would be a sign-up link).
+  const created = await admin.auth.admin.createUser({ email, email_confirm: true });
+  if (created.error && !/already/i.test(created.error.message)) return failed("create", created.error.message);
+  const link = await admin.auth.admin.generateLink({ type: "magiclink", email });
   userId = link.data.user?.id;
   const tokenHash = link.data.properties?.hashed_token;
   const verified = tokenHash ? await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash }) : null;
@@ -51,7 +49,7 @@ export async function GET(request: NextRequest) {
     console.warn(`e2e login: magic link failed (${link.error?.message ?? verified?.error?.message ?? "no token"}), using a password`);
     if (!userId) return failed("link", link.error?.message);
     const password = `e2e-${crypto.randomUUID()}`;
-    const upd = await admin.auth.admin.updateUserById(userId, { password });
+    const upd = await admin.auth.admin.updateUserById(userId, { password, email_confirm: true });
     if (upd.error) return failed("password", upd.error.message);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return failed("sign-in", error.message);
