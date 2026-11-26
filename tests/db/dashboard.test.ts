@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, seedMeeting, type TestUser } from "@/test/local-supabase";
-import { loadOverview, listGoals } from "@/lib/dashboard/load";
+import { loadOverview, loadOverviewInput, listGoals } from "@/lib/dashboard/load";
+import { recurringTopics } from "@/lib/dashboard/overview";
 import { createOrg, joinOrg } from "@/lib/db/orgs";
 import { saveImportedProtocol } from "@/lib/history/store";
 
@@ -98,26 +99,19 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
     const live = await seedMeeting(orgId, admin.id, "live");
     await svc.from("note_items").insert({ meeting_id: live.meetingId, id: "d9", section: "decision", kind: "decision", text: "Pågår" });
 
-    const o = await loadOverview(member.db, orgId, new Date("2026-11-26T18:00:00Z"));
-    const texts = o.decisions.map((d) => d.text);
-    expect(texts).toContain("Beslut 2026-10-29");
-    expect(texts).toContain("Beslut 2026-10-01");
-    expect(texts.some((t) => /Test|Pågår|anteckning/.test(t))).toBe(false);
-    expect(o.decisions.find((d) => d.text === "Beslut 2026-10-29")!.item).toBe("Ekonomi");
-    expect(o.topics.map((t) => [t.label, t.meetings])).toEqual([["Ekonomi", 2]]);
-    const tasks = o.openTasks.flatMap((g) => g.tasks.map((t) => t.text));
-    expect(tasks).toEqual(expect.arrayContaining(["Uppgift 2026-10-01", "Uppgift 2026-10-29"]));
-    expect(tasks).not.toContain("Testuppgift");
-    expect(o.attendance.people.find((p) => p.name === "Ada Kask")!.attended).toBe(2);
+    const o = await loadOverview(member.db, orgId);
+    expect(o.meetingCount).toBe(2);
+    expect(o.firstMeeting).toBe("2026-10-01T17:00:00+00:00");
+    const topics = recurringTopics(orgId, await loadOverviewInput(member.db, orgId));
+    expect(topics.map((t) => [t.label, t.meetings])).toEqual([["Ekonomi", 2]]);
 
     const none = await loadOverview(outsider.db, orgId);
     expect(none.meetingCount).toBe(0);
-    expect(none.decisions).toEqual([]);
 
     await svc.from("meetings").delete().in("id", [...seeded, live.meetingId]);
   });
 
-  it("loadOverview: imported protocols count for members (decisions marked, tasks only counted), never for outsiders", async () => {
+  it("loadOverview: imported protocols count for members, never for outsiders", async () => {
     const saved = await saveImportedProtocol(admin.db, {
       orgId,
       driveFileId: "doc-ovhist0001",
@@ -132,13 +126,10 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
       ],
     });
     expect(saved.ok).toBe(true);
-    const o = await loadOverview(member.db, orgId, new Date("2026-11-26T18:00:00Z"));
-    expect(o.imported).toMatchObject({ count: 1, first: "2024-10-08", tasks: 1 });
-    expect(o.decisions.find((d) => d.text === "Spelkaféet hålls varannan fredag")).toMatchObject({ imported: true, item: "Spelkafé" });
-    expect(o.openTasks.flatMap((g) => g.tasks).some((t) => t.text === "Boka biblioteket")).toBe(false);
+    const o = await loadOverview(member.db, orgId);
+    expect(o.imported).toMatchObject({ count: 1, first: "2024-10-08" });
     const none = await loadOverview(outsider.db, orgId);
     expect(none.imported.count).toBe(0);
-    expect(none.decisions).toEqual([]);
     expect((await admin.db.rpc("clear_history_protocols", { p_org_id: orgId })).error).toBeNull();
   });
 });

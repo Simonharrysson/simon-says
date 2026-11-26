@@ -60,12 +60,7 @@ export const maxDuration = 300;
 const EMPTY_OVERVIEW: Overview = {
   meetingCount: 0,
   firstMeeting: null,
-  lastMeeting: null,
-  openTasks: [],
-  decisions: [],
-  topics: [],
-  attendance: { meetings: 0, people: [] },
-  imported: { count: 0, first: null, last: null, tasks: 0 },
+  imported: { count: 0, first: null, last: null },
 };
 export const metadata: Metadata = { title: "Förening" };
 

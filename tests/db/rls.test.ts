@@ -103,22 +103,41 @@ describe.skipIf(!hasLocalSupabase)("RLS and grants", () => {
     expect(orgs.map((o) => [o.name, o.role])).toEqual([["Org A", "admin"]]);
   });
 
-  it("rejects a 3rd org by the same user", async () => {
+  it("rejects an 11th existing org by the same user", async () => {
     const user = await createTestUser("limit");
-    expect((await createOrg(user.db, "Ett")).ok).toBe(true);
-    expect((await createOrg(user.db, "Två")).ok).toBe(true);
-    expect(await createOrg(user.db, "Tre")).toEqual({ ok: false, reason: "limit" });
-    expect(await listMyOrgs(user.db)).toHaveLength(2);
+    for (let i = 1; i <= 10; i++) expect((await createOrg(user.db, `Org ${i}`)).ok).toBe(true);
+    expect(await createOrg(user.db, "Elva")).toEqual({ ok: false, reason: "limit" });
+    expect(await listMyOrgs(user.db)).toHaveLength(10);
   });
 
-  it("counts orgs ever created: create 2, delete 1, a third is still rejected", async () => {
+  it("deleting an org frees a slot: at 10, delete 1, create again works, 11th refused", async () => {
     const user = await createTestUser("recreate");
     const first = await createOrg(user.db, "Ett");
-    expect((await createOrg(user.db, "Två")).ok).toBe(true);
     if (!first.ok) throw new Error("org");
+    for (let i = 2; i <= 10; i++) expect((await createOrg(user.db, `Org ${i}`)).ok).toBe(true);
+    expect(await createOrg(user.db, "Över")).toEqual({ ok: false, reason: "limit" });
     expect(await deleteOrg(user.db, first.id, "Ett")).toBe("deleted");
-    expect(await listMyOrgs(user.db)).toHaveLength(1);
-    expect(await createOrg(user.db, "Tre")).toEqual({ ok: false, reason: "limit" });
+    expect((await createOrg(user.db, "Igen")).ok).toBe(true);
+    expect(await createOrg(user.db, "Över igen")).toEqual({ ok: false, reason: "limit" });
+  });
+
+  it("lifetime cap: 30 creations ever, even when each is deleted", async () => {
+    const user = await createTestUser("cap");
+    for (let i = 1; i <= 30; i++) {
+      const r = await createOrg(user.db, `Cykel ${i}`);
+      if (!r.ok) throw new Error(`create ${i}: ${r.reason}`);
+      expect(await deleteOrg(user.db, r.id, `Cykel ${i}`)).toBe("deleted");
+    }
+    expect(await createOrg(user.db, "Över")).toEqual({ ok: false, reason: "cap" });
+  });
+
+  it("exempt (service-role insert for an admin) skips both limits but is still recorded", async () => {
+    const user = await createTestUser("exempt");
+    const admin = adminClient();
+    for (let i = 1; i <= 12; i++) expect((await createOrg(admin, `Admin ${i}`, user.id)).ok).toBe(true);
+    expect(await listMyOrgs(user.db)).toHaveLength(12);
+    const { count } = await admin.from("org_creations").select("*", { count: "exact", head: true }).eq("user_id", user.id);
+    expect(count).toBe(12);
   });
 
   it("org_creations is server-only", async () => {
