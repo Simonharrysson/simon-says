@@ -141,7 +141,7 @@ describe("runReprepare: a failure between a Doc batch and its save never strands
     const fest = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Fest på universitetet\n")!;
     applyDoc(doc, [{ insertText: { text: " stora", location: { tabId: TAB, index: fest.start + 4 } } }]);
     await run(doc, store, items);
-    expect(agenda(doc).filter((l) => l.startsWith("Fest på universitet"))).toEqual(["Fest stora på universitetet"]);
+    expect(agenda(doc).filter((l) => l.includes("universitetet"))).toEqual(["Fest stora på universitetet"]);
   });
 
   it("merge: an inserted line whose save failed is adopted, never inserted twice", async () => {
