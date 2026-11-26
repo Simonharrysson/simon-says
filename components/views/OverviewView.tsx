@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
@@ -9,18 +9,16 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { IconPlus, IconTrash } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Panel, panelFootClass, panelIntroClass, panelPadClass } from "@/components/ui/Panel";
-import { basisLine, formatDay, formatMonth, formatWeeks, matchesQuery } from "@/lib/dashboard/format";
+import { Panel } from "@/components/ui/Panel";
+import { basisLine } from "@/lib/dashboard/format";
 import type { Overview } from "@/lib/dashboard/overview";
 import type { GoalSuggestion } from "@/lib/history/digest-input";
 import type { JobView } from "@/lib/history/progress";
 import { HistoryImport, type ImportAccess, type ImportPhase, type ImportResult } from "./HistoryImport";
 import { plural } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
-// The förening's "Översikt" tab (org dashboard, todo #2): goals, open tasks, decisions,
-// recurring topics and attendance. Everything is computed on the server from stored rows
-// (lib/dashboard); this view only searches the decisions and runs the goals proposal.
+// The förening's "Översikt" tab (org dashboard, todo #2): the goals (Mål) and the old-protocol
+// import. The basis line is computed on the server (lib/dashboard); this view runs the goals proposal.
 
 export interface OverviewGoal {
   title: string;
@@ -57,13 +55,7 @@ export interface OverviewViewProps {
   importJob?: JobView | null;
 }
 
-const LONG_OPEN_WEEKS = 4;
-const DECISIONS_SHOWN = 12;
-const TOPIC_MONTHS = 3;
 const MAX_GOALS = 5;
-
-const rowClass = "border-t border-line px-6 py-3";
-const metaClass = "mt-0.5 text-sm text-ink-3";
 
 export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0, loadError, initialGoalsPhase, importAccess, importJob, now = new Date() }: OverviewViewProps) {
   if (loadError) {
@@ -78,16 +70,6 @@ export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0
     <div className="flex flex-col gap-6">
       <p className="text-sm text-ink-3 max-w-[68ch]">{basisLine(o, now)}</p>
       <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} canPropose={o.meetingCount >= 3 || historyCount > 0 || o.imported.count > 0} historyCount={historyCount} initial={initialGoalsPhase ?? (isAdmin && importJob ? { phase: "import", initial: { phase: "job", job: importJob } } : undefined)} importAccess={importAccess} />
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
-        <div className="flex flex-col gap-6">
-          <OpenTasksPanel overview={o} now={now} />
-          <DecisionsPanel overview={o} now={now} />
-        </div>
-        <div className="flex flex-col gap-6">
-          <TopicsPanel overview={o} />
-          <AttendancePanel overview={o} now={now} />
-        </div>
-      </div>
     </div>
   );
 }
@@ -481,214 +463,5 @@ function SuggestionList({
         ))}
       </ul>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Open tasks
-
-function OpenTasksPanel({ overview, now }: { overview: Overview; now: Date }) {
-  const count = overview.openTasks.reduce((n, g) => n + g.tasks.length, 0);
-  const oldTasks = overview.imported.tasks;
-  return (
-    <Panel flush title="Öppna uppgifter" titleId="tasks-title" actions={<span className="text-sm text-ink-3 tabular-nums">{count}</span>}>
-      <p className={cn(panelIntroClass, "text-sm text-ink-3")}>Det som inte är klart, äldst först. Uppgifter som följt med i {LONG_OPEN_WEEKS} veckor eller mer är markerade.</p>
-      {count === 0 ? (
-        <div className={panelPadClass}>
-          <EmptyState title="Inga öppna uppgifter">
-            <p>
-              {overview.meetingCount === 0 && overview.imported.count > 0
-                ? "Uppgifter från möten med Simon Says hamnar här tills någon bockar av dem i protokollet."
-                : "Uppgifter från mötena hamnar här tills någon bockar av dem i protokollet."}
-            </p>
-          </EmptyState>
-        </div>
-      ) : (
-        <div>
-          {overview.openTasks.map((g) => (
-            <section key={g.key} aria-label={g.label} className="border-t border-line">
-              <h3 className="flex flex-wrap items-baseline gap-x-2 bg-board px-6 py-2 text-sm font-medium">
-                <span>{g.label}</span>
-                {g.role && <span className="font-normal text-ink-3">{g.role}</span>}
-              </h3>
-              <ul>
-                {g.tasks.map((t) => (
-                  <li key={t.key} className={rowClass}>
-                    <p className="wrap-anywhere">{t.text}</p>
-                    <p className={metaClass}>
-                      <Badge tone={t.weeks >= LONG_OPEN_WEEKS ? "alert" : "neutral"} className="mr-2 inline-flex align-[0.05em]">{formatWeeks(t.weeks)}</Badge>
-                      <span>{[`sedan ${formatDay(t.since, now)}`, t.item, t.due && `klart senast ${t.due}`].filter(Boolean).join(" · ")}</span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      )}
-      {oldTasks > 0 && (
-        <p className={cn(panelFootClass, "text-sm text-ink-3")}>
-          {plural(oldTasks, "uppgift", "uppgifter")} i importerade protokoll räknas inte som öppna.
-        </p>
-      )}
-    </Panel>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Decisions
-
-function DecisionsPanel({ overview, now }: { overview: Overview; now: Date }) {
-  const [query, setQuery] = useState("");
-  const [all, setAll] = useState(false);
-  const hits = useMemo(
-    () => overview.decisions.filter((d) => matchesQuery(`${d.text} ${d.item ?? ""}`, query)),
-    [overview.decisions, query],
-  );
-  const searching = query.trim() !== "";
-  const shown = searching || all ? hits : hits.slice(0, DECISIONS_SHOWN);
-  return (
-    <Panel flush title="Beslut" titleId="decisions-title" actions={<span className="text-sm text-ink-3 tabular-nums">{overview.decisions.length}</span>}>
-      {overview.decisions.length === 0 ? (
-        <div className={panelPadClass}>
-          <EmptyState title="Inga beslut än">
-            <p>Besluten från föreningens möten och importerade protokoll hamnar här, med datum och dagordningspunkt.</p>
-          </EmptyState>
-        </div>
-      ) : (
-        <>
-          <div className={cn(panelIntroClass, "flex flex-col gap-2")}>
-            <Label htmlFor="decision-search">Sök bland besluten</Label>
-            <Input
-              id="decision-search"
-              type="search"
-              value={query}
-              placeholder="t.ex. hyran"
-              autoComplete="off"
-              aria-describedby="decision-search-hint"
-              onChange={(e) => setQuery(e.target.value)}
-            />
-            <p id="decision-search-hint" className="text-sm text-ink-3" aria-live="polite">
-              {searching
-                ? plural(hits.length, "beslut matchar", "beslut matchar")
-                : overview.imported.count > 0
-                  ? "Nyast först, också från de importerade protokollen."
-                  : "Nyast först."}
-            </p>
-          </div>
-          {shown.length === 0 ? (
-            <p className={cn(rowClass, "text-sm text-ink-3")}>Inga beslut matchar ”{query.trim()}”.</p>
-          ) : (
-            <ul aria-labelledby="decisions-title">
-              {shown.map((d) => (
-                <li key={d.key} className={rowClass}>
-                  <p className="wrap-anywhere">{d.text}</p>
-                  <p className={metaClass}>
-                    <span>{[formatDay(d.date, now), d.item, d.imported && "Importerat"].filter(Boolean).join(" · ")}</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {!searching && hits.length > DECISIONS_SHOWN && (
-            <div className={panelFootClass}>
-              <Button variant="ghost" size="sm" onClick={() => setAll((v) => !v)} aria-expanded={all}>
-                {all ? "Visa färre" : `Visa alla ${hits.length}`}
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </Panel>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Recurring topics
-
-function TopicsPanel({ overview }: { overview: Overview }) {
-  return (
-    <Panel flush title="Återkommande punkter" titleId="topics-title">
-      <p className={cn(panelIntroClass, "text-sm text-ink-3")}>Punkter på dagordningen som kommit tillbaka, och vad som beslutades under dem.</p>
-      {overview.topics.length === 0 ? (
-        <div className={panelPadClass}>
-          <EmptyState title="Inga återkommande punkter än">
-            <p>Syns när samma punkt har stått på dagordningen vid minst två möten.</p>
-          </EmptyState>
-        </div>
-      ) : (
-        <ul aria-labelledby="topics-title">
-          {overview.topics.map((t) => (
-            <li key={t.label} className={rowClass}>
-              <p className="flex flex-wrap items-baseline justify-between gap-x-3">
-                <span className="font-medium wrap-anywhere">{t.label}</span>
-                <span className="text-sm text-ink-3 tabular-nums">{plural(t.meetings, "möte", "möten")}</span>
-              </p>
-              {t.months.length > 0 ? (
-                <div className="mt-2 flex flex-col gap-2">
-                  {t.months.slice(0, TOPIC_MONTHS).map((m) => (
-                    <div key={m.month}>
-                      <p className="text-sm text-ink-3 first-letter:uppercase">{formatMonth(m.month)}</p>
-                      <ul className="list-dash pl-5 text-sm">
-                        {m.decisions.map((d, i) => (
-                          <li key={i} className="wrap-anywhere">
-                            {d}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-1 text-sm text-ink-3">Inga beslut under punkten än.</p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// Attendance
-
-function AttendancePanel({ overview, now }: { overview: Overview; now: Date }) {
-  const a = overview.attendance;
-  const hasImported = overview.imported.count > 0;
-  return (
-    <Panel flush title="Närvaro" titleId="attendance-title">
-      <p className={cn(panelIntroClass, "text-sm text-ink-3")}>
-        {a.meetings > 0
-          ? `Vem som hördes och fick sitt namn på ${plural(a.meetings, "möte", "möten")}. Den som var med men inte sa något syns inte.`
-          : "Vem som hördes och fick sitt namn på mötena. Syns efter första mötet med namnrunda."}
-        {hasImported && " Närvaro räknas från möten med Simon Says, de importerade protokollen har ingen."}
-      </p>
-      {a.meetings > 0 && a.people.length > 0 && (
-        <ul aria-labelledby="attendance-title">
-          {a.people.map((p) => {
-            const share = a.meetings ? p.attended / a.meetings : 0;
-            return (
-              <li key={p.personId} className={cn(rowClass, "flex flex-col gap-1.5")}>
-                <p className="flex items-baseline justify-between gap-3">
-                  <span className="font-medium wrap-anywhere">{p.name}</span>
-                  <span className="flex-none text-sm text-ink-3 tabular-nums">
-                    {p.attended} av {a.meetings}
-                  </span>
-                </p>
-                <div className="h-1 overflow-hidden rounded-full bg-sunk" aria-hidden="true">
-                  <div className="h-full rounded-full bg-ink-3" style={{ width: `${Math.round(share * 100)}%` }} />
-                </div>
-                {p.lastSeen && <p className="text-xs text-ink-3">Senast {formatDay(p.lastSeen, now)}</p>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {a.meetings > 0 && a.people.length === 0 && (
-        <p className={cn(panelPadClass, "text-sm text-ink-3")}>Lägg till personer under Möten för att se närvaron per person.</p>
-      )}
-      {a.meetings === 0 && <div className="pb-2" />}
-    </Panel>
   );
 }

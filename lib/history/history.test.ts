@@ -132,7 +132,6 @@ describe("ownHistory / mergeHistory / the digest text", () => {
       row("m2", "n5", "task", "Boka bord på mässan"),
       row("mt", "n6", "decision", "Testbeslut"),
     ],
-    speakers: [],
     people: [{ id: "p-ada", name: "Ada Kask" }],
   };
 
