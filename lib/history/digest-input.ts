@@ -215,3 +215,30 @@ export function finalizeGoals(
   goals.sort((a, b) => rank(a.status) - rank(b.status) || b.lastMentioned.localeCompare(a.lastMentioned));
   return { goals, demoted, droppedEvidence };
 }
+
+/** What the admin approves (org_goals holds at most this many). */
+export const MAX_APPROVE = 5;
+
+export interface GoalSuggestion {
+  title: string;
+  why: string | null;
+  status: GoalStatus;
+  lastMentioned: string;
+}
+
+/**
+ * The digest's goals → the editor's starting set (the current goals, at most MAX_APPROVE, most
+ * recently mentioned first) and the rest as suggestions with their status. A goal's `why` is
+ * the digest's sentence, cut to the approved goal's 240 characters.
+ */
+export function splitForApproval(goals: DigestGoal[]): { approve: { title: string; why: string | null }[]; others: GoalSuggestion[] } {
+  const current = goals.filter((g) => g.status === "current");
+  const approve = current.slice(0, MAX_APPROVE).map((g) => ({ title: g.title, why: g.why || null }));
+  const others = [...current.slice(MAX_APPROVE), ...goals.filter((g) => g.status !== "current")].map((g) => ({
+    title: g.title,
+    why: g.why || null,
+    status: g.status,
+    lastMentioned: g.lastMentioned,
+  }));
+  return { approve, others };
+}
