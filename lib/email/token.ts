@@ -8,7 +8,8 @@ import type { EmailCategory } from "./categories";
 // the mail went to and nothing else, so whoever has the mail can change that address's choices
 // without logging in (and only that address's). It does not expire: an unsubscribe link in an old
 // mail must keep working. The key is derived from TOKEN_ENC_KEY with its own label, so no new env
-// var is needed and it never equals another token's key.
+// var is needed and it never equals another token's key. Rotating TOKEN_ENC_KEY invalidates every
+// link in mails already sent (people then use Konto or a newer mail's link): rotate with that in mind.
 
 const key = () => createHmac("sha256", getEnv().TOKEN_ENC_KEY).update("simon-says email prefs v1").digest();
 const sign = (email: string) => createHmac("sha256", key()).update(email).digest("base64url");
