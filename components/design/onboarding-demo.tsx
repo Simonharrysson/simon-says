@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
 import { Onboarding } from "@/components/onboarding/Onboarding";
@@ -34,20 +35,24 @@ const boardRows: BoardRow[] = [
   { personId: null, name: null, role: null, email: "johan.ek@example.com", status: "account", member: { userId: "u4", email: "johan.ek@example.com", role: "member" }, voiceConsent: false },
 ];
 
-function Frame({ step, done = [], skipped = [], children, footer, logo = null, title, lead }: { step: ShellStep; done?: StepId[]; skipped?: StepId[]; children: ReactNode; footer?: ReactNode; logo?: string | null; title: string; lead?: string }) {
+function Frame({ step, done = [], skipped = [], children, footer, logo = null }: { step: ShellStep; done?: StepId[]; skipped?: StepId[]; children: ReactNode; footer?: ReactNode; logo?: string | null }) {
+  const t = useTranslations("onboarding.titles");
   return (
-    <OnboardingShell orgName={ORG} orgHref="#" logoUrl={logo} step={step} done={done} skipped={skipped} onGo={noop} title={title} lead={lead} footer={footer}>
+    <OnboardingShell orgName={ORG} orgHref="#" logoUrl={logo} step={step} done={done} skipped={skipped} onGo={noop} title={t(`${step}.title`)} lead={t(`${step}.lead`)} footer={footer}>
       {children}
     </OnboardingShell>
   );
 }
 
+function FinishFooter() {
+  return footer(false, useTranslations("onboarding.shell")("finish"));
+}
 const footer = (first = false, nextLabel?: string) => <StepFooter onBack={first ? undefined : noop} onSkip={first ? undefined : noop} onNext={noop} nextLabel={nextLabel} />;
 
 function LogoDemo({ withLogo }: { withLogo: boolean }) {
   const [name, setName] = useState(ORG);
   return (
-    <Frame step="namn" logo={withLogo ? DEMO_LOGO : null} title="Välkommen! Hur ser ni ut?" lead="Kontrollera namnet och lägg gärna till er logga, så känner alla igen föreningen." footer={footer(true)}>
+    <Frame step="namn" logo={withLogo ? DEMO_LOGO : null} footer={footer(true)}>
       <LogoStep orgName={name} logoUrl={withLogo ? DEMO_LOGO : null} onFile={noop} onRemove={noop} name={name} onName={setName} message={withLogo ? { text: "Loggan är sparad.", tone: "success" } : null} />
     </Frame>
   );
@@ -56,7 +61,7 @@ function LogoDemo({ withLogo }: { withLogo: boolean }) {
 function BoardDemo({ rows }: { rows: BoardRow[] }) {
   const [list, setList] = useState(rows);
   return (
-    <Frame step="styrelsen" done={["namn"]} logo={DEMO_LOGO} title="Vilka sitter i styrelsen?" lead="En lista för alla: namn och roll för anteckningarna, e-post för den som ska kunna starta möten." footer={footer()}>
+    <Frame step="styrelsen" done={["namn"]} logo={DEMO_LOGO} footer={footer()}>
       <BoardStep
         orgName={ORG}
         rows={list}
@@ -80,7 +85,7 @@ function FormatDemo({ stadgar, choice: initial = "veckomote", learnOpen }: { sta
   const [choice, setChoice] = useState<WeeklyChoice>(learnOpen ? "learn" : initial);
   const [s, setS] = useState(stadgar);
   return (
-    <Frame step="format" done={["namn", "styrelsen", "mapp"]} logo={DEMO_LOGO} title="Så brukar ni ha möten" lead="Simon Says skriver protokollet i er form. Det går att ändra när som helst." footer={footer()}>
+    <Frame step="format" done={["namn", "styrelsen", "mapp"]} logo={DEMO_LOGO} footer={footer()}>
       <FormatStep
         choice={choice}
         onChoice={setChoice}
@@ -99,7 +104,7 @@ function FormatDemo({ stadgar, choice: initial = "veckomote", learnOpen }: { sta
 function VoicesDemo({ empty }: { empty?: boolean }) {
   const [rows, setRows] = useState(boardRows.filter((r) => r.personId));
   return (
-    <Frame step="roster" done={["namn", "styrelsen", "mapp", "format"]} skipped={["protokoll"]} logo={DEMO_LOGO} title="Röster (valfritt)" lead="Simon Says kan lära sig vem som pratar, så att ni slipper namnrundan varje gång." footer={footer(false, "Klar")}>
+    <Frame step="roster" done={["namn", "styrelsen", "mapp", "format"]} skipped={["protokoll"]} logo={DEMO_LOGO} footer={<FinishFooter />}>
       <VoicesStep
         people={empty ? [] : rows.map((r) => ({ personId: r.personId!, name: r.name!, role: r.role, consent: r.voiceConsent }))}
         onConsent={(id, v) => setRows((l) => l.map((r) => (r.personId === id ? { ...r, voiceConsent: v } : r)))}
@@ -160,12 +165,12 @@ export const onboardingRender: Record<string, () => ReactNode> = {
   "onboarding-2-empty": () => <BoardDemo rows={[]} />,
   "onboarding-2": () => <BoardDemo rows={boardRows} />,
   "onboarding-3-empty": () => (
-    <Frame step="mapp" done={["namn", "styrelsen"]} logo={DEMO_LOGO} title="Var ska mötesdokumenten ligga?" lead="Simon Says skriver varje möte i ett Google-dokument. Välj en mapp i Drive som styrelsen delar." footer={footer()}>
+    <Frame step="mapp" done={["namn", "styrelsen"]} logo={DEMO_LOGO} footer={footer()}>
       <FolderStep folderName={null} folderSet={false} pickerEnabled onPick={noop} />
     </Frame>
   ),
   "onboarding-3": () => (
-    <Frame step="mapp" done={["namn", "styrelsen"]} logo={DEMO_LOGO} title="Var ska mötesdokumenten ligga?" lead="Simon Says skriver varje möte i ett Google-dokument. Välj en mapp i Drive som styrelsen delar." footer={footer()}>
+    <Frame step="mapp" done={["namn", "styrelsen"]} logo={DEMO_LOGO} footer={footer()}>
       <FolderStep folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={noop} message="Mötesmappen är sparad." />
     </Frame>
   ),
@@ -175,14 +180,14 @@ export const onboardingRender: Record<string, () => ReactNode> = {
   "onboarding-4-stadgar": () => <FormatDemo stadgar={{ phase: "review", board: STADGAR_BOARD, arsmote: STADGAR_ARS }} />,
   "onboarding-4-saved": () => <FormatDemo stadgar={{ phase: "saved", board: 3, arsmote: 14 }} />,
   "onboarding-5": () => (
-    <Frame step="protokoll" done={["namn", "styrelsen", "mapp", "format"]} logo={DEMO_LOGO} title="Era tidigare möten" lead="Läs in gamla protokoll, så vet Simon Says vad ni har beslutat och vad som är på gång – redan till första mötet." footer={footer()}>
+    <Frame step="protokoll" done={["namn", "styrelsen", "mapp", "format"]} logo={DEMO_LOGO} footer={footer()}>
       <HistoryStep importHref="#" historyCount={0} />
     </Frame>
   ),
   "onboarding-6": () => <VoicesDemo />,
   "onboarding-6-empty": () => <VoicesDemo empty />,
   "onboarding-klart": () => (
-    <Frame step="klart" done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} logo={DEMO_LOGO} title="Nu är ni redo" lead="Nu kan ni förbereda första mötet. Det du hoppade över kan du göra när som helst.">
+    <Frame step="klart" done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} logo={DEMO_LOGO}>
       <DoneStep done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} prepareHref="#" orgHref="#" onGo={noop} />
     </Frame>
   ),
