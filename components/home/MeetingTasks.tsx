@@ -74,7 +74,7 @@ function Row({
           </span>
         )}
         <div className="flex min-w-0 flex-col gap-1">
-          {task.canTick ? (
+          {task.canTick || task.done ? (
             <label htmlFor={id} className={cn("cursor-pointer font-medium wrap-anywhere", checked && "text-ink-3 line-through")}>
               {task.text}
             </label>
