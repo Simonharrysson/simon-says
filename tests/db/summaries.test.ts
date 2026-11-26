@@ -147,7 +147,7 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     // The admin started the meeting: straight to the Doc, neutral wording, the setting's link.
     expect(toAdmin.text).toMatch(/^Mötet /);
     expect(toAdmin.text).toContain("https://docs.google.com/document/d/");
-    expect(toAdmin.text).toContain(`Ändra vilka som får sammanfattningar: https://app.test/orgs/${orgId}#installningar`);
+    expect(toAdmin.text).toContain(`Ändra vilka som får sammanfattningar: https://app.test/orgs/${orgId}?flik=installningar#sammanfattning`);
     expect(f.sent.find((m) => m.to === "erik@example.com")!.text).not.toContain("Ändra vilka");
   });
 

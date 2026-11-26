@@ -198,6 +198,14 @@ export interface BoardStepProps {
   invites?: InviteRow[];
   /** "Bjud in via mejl" (`InviteByEmail`), under the list when someone has an e-mail. */
   inviteEmail?: ReactNode;
+  /**
+   * The förening page's Inställningar (one board list): per member user id, the account controls
+   * (make/remove admin, step down, remove from the förening, leave). A row with an account then
+   * offers those instead of the trash, which would only delete the name.
+   */
+  memberControls?: Record<string, ReactNode>;
+  /** False: no invite area under the list (the page has its own "Bjud in" panel). Default true. */
+  showInvite?: boolean;
 }
 
 export function BoardStep(p: BoardStepProps) {
@@ -238,7 +246,14 @@ export function BoardStep(p: BoardStepProps) {
                     onEditExisting={setEditing}
                   />
                 ) : (
-                  <BoardRowView row={row} invite={p.invites?.find((i) => i.email === row.email?.toLowerCase())} me={Boolean(p.myEmail && (row.member?.email ?? "").toLowerCase() === p.myEmail)} onEdit={() => setEditing(key)} onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined} />
+                  <BoardRowView
+                    row={row}
+                    invite={p.invites?.find((i) => i.email === row.email?.toLowerCase())}
+                    me={Boolean(p.myEmail && (row.member?.email ?? "").toLowerCase() === p.myEmail)}
+                    onEdit={() => setEditing(key)}
+                    onRemove={row.personId && !(p.memberControls && row.member) ? () => p.onRemove(row.personId!) : undefined}
+                    controls={row.member ? p.memberControls?.[row.member.userId] : undefined}
+                  />
                 )}
               </li>
             );
@@ -251,7 +266,7 @@ export function BoardStep(p: BoardStepProps) {
         <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel={t("add")} onSubmit={(input) => p.onAdd(input)} onEditExisting={setEditing} resetOnSuccess />
       </div>
 
-      {invited.length > 0 && (
+      {invited.length > 0 && p.showInvite !== false && (
         <div className="flex flex-col gap-3">
           {p.inviteEmail ? (
             <>
@@ -300,7 +315,22 @@ function StatusLine({ row, me, invite }: { row: BoardRow; me: boolean; invite?: 
   return t("nameOnly");
 }
 
-function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me: boolean; invite?: InviteRow; onEdit: () => void; onRemove?: () => Promise<string | null> }) {
+function BoardRowView({
+  row,
+  me,
+  invite,
+  onEdit,
+  onRemove,
+  controls,
+}: {
+  row: BoardRow;
+  me: boolean;
+  invite?: InviteRow;
+  onEdit: () => void;
+  onRemove?: () => Promise<string | null>;
+  /** Account controls (the förening page's Inställningar), under the status line. */
+  controls?: ReactNode;
+}) {
   const t = useTranslations("onboarding.board");
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -319,6 +349,7 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
           <span className="text-sm text-ink-3">
             <StatusLine row={row} me={me} invite={invite} />
           </span>
+          {controls && <span className="mt-1 -ml-3 flex flex-wrap items-center gap-1">{controls}</span>}
           {!row.personId && (
             <span className="mt-2">
               <Button variant="secondary" size="sm" icon={<IconPlus size={16} />} onClick={onEdit}>
