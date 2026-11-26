@@ -194,7 +194,7 @@
     "folderNamedAnnounce": "Your Google account hasn't opened the meeting folder {folder} yet.",
     "folderAnnounce": "Your Google account hasn't opened the meeting folder yet.",
     "chosen": "Agenda: <strong>{name}</strong>",
-    "preparedFor": "Prepared for {date} · {type}. Last week's tasks are already under “Från förra veckan”.",
+    "preparedFor": "Prepared for {date} · {type}. Last week's tasks are already under “Från förra veckan” (From last week).",
     "pickOther": "Choose another",
     "newDoc": "Create new document",
     "newIn": "New document in the format <strong>{format}</strong>",

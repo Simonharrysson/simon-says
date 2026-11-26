@@ -44,7 +44,7 @@
     "kept": "<strong>The usage records and the log of created associations remain even when the association is deleted.</strong> They contain no meeting content, only numbers and ids. The usage records are kept as long as the service runs, to prevent abuse of the free service and to follow the cost over time. When an association is deleted, only its id remains in the records, not its name. The log of created associations is kept to enforce the limit of two associations per person.",
     "notTitle": "What is not stored",
     "notAudio": "The audio from the meeting.",
-    "notDrive": "Anything else in your Google Drive, nor the names of folders and documents shown when an admin imports old minutes.",
+    "notDrive": "Nothing else in your Google Drive, and not the names of folders and documents shown when an admin imports old minutes.",
     "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first."
   },
   "mail": "You decide which e-mails Simon Says sends you. Under Account you can turn off each kind of e-mail separately, or choose No e-mail at all. At the bottom of every e-mail there is a link to the same choices that works without signing in, even if you don't have an account. We only store your choices (and, if you have no account, the address they apply to) as long as the service runs, so that a no keeps applying. E-mail us if you want us to delete them.",
@@ -52,12 +52,30 @@
     "service": "Service",
     "does": "Does",
     "goodToKnow": "Good to know",
-    "elevenlabs": { "what": "Turns the audio into text during the meeting.", "note": "Logs requests by default; zero retention may require a separate agreement. Processing may take place outside the EU. The audio is sent straight from the laptop." },
-    "anthropic": { "what": "Writes the notes from the transcript.", "note": "Gets the text, not the audio. Processing may take place outside the EU." },
-    "google": { "what": "Sign-in, and the document in the Drive of the person who starts the meeting.", "note": "We may only touch files Simon Says itself created or that you have chosen. Exception: an admin importing old minutes can give read access to their Drive (see What is stored). Processing may take place outside the EU." },
-    "supabase": { "what": "The database: accounts, associations, people lists, transcripts and notes.", "note": "Stored within the EU." },
-    "vercel": { "what": "Runs the website and the server.", "note": "The functions run in Stockholm. Vercel logs ordinary requests (for example IP address and URL) in its server logs." },
-    "resend": { "what": "Sends e-mail: operational alerts and daily summaries to us, invitations an admin sends to the addresses they type in, and meeting summaries to people on the association's people list.", "note": "A meeting summary contains the meeting's decisions, tasks and short other items, never the transcript." }
+    "elevenlabs": {
+      "what": "Turns the audio into text during the meeting.",
+      "note": "Logs requests by default; zero retention may require a separate agreement. Processing may take place outside the EU. The audio is sent straight from the laptop."
+    },
+    "anthropic": {
+      "what": "Writes the notes from the transcript.",
+      "note": "Gets the text, not the audio. Processing may take place outside the EU."
+    },
+    "google": {
+      "what": "Sign-in, and the document in the Drive of the person who starts the meeting.",
+      "note": "We may only touch files Simon Says itself created or that you have chosen. Exception: an admin importing old minutes can give read access to their Drive (see What is stored). Processing may take place outside the EU."
+    },
+    "supabase": {
+      "what": "The database: accounts, associations, people lists, transcripts and notes.",
+      "note": "Stored within the EU."
+    },
+    "vercel": {
+      "what": "Runs the website and the server.",
+      "note": "The functions run in Stockholm. Vercel logs ordinary requests (for example IP address and URL) in its server logs."
+    },
+    "resend": {
+      "what": "Sends e-mail: operational alerts and daily summaries to us, invitations an admin sends to the addresses they type in, and meeting summaries to people on the association's people list.",
+      "note": "A meeting summary contains the meeting's decisions, tasks and short other items, never the transcript."
+    }
   },
   "legal": {
     "intro": "This is our current assessment. A legal review is still pending.",

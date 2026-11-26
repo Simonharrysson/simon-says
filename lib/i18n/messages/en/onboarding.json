@@ -80,9 +80,9 @@
   },
   "logo": {
     "saveFailed": "The logo couldn't be saved. Try again.",
-    "saved": "The logo is saved.",
+    "saved": "Logo saved.",
     "offline": "We couldn't reach the server. Check the network and try again.",
-    "removed": "The logo is removed.",
+    "removed": "Logo removed.",
     "removeFailed": "The logo couldn't be removed. Try again.",
     "wrongType": "Choose a PNG, JPEG or WebP image.",
     "tooBigInput": "The image is too large (max 15 MB).",

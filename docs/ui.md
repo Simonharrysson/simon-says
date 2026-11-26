@@ -158,8 +158,8 @@ Todo #10: the web app is Swedish by default and can be switched to English. Buil
   have "English / Svenska" in the footer (`/sprak?till=en&tillbaka=…`, same-origin paths only; also
   saves the account's choice when signed in). Sign-in copies the saved choice into the cookie; an
   English choice made while signed out becomes the account's if it has none. `<html lang>` follows
-  the cookie. Reading it in the root layout makes every route render per request (the status page
-  is no longer cached for 60 s).
+  the cookie. Reading it in the root layout makes every route render per request; the status page
+  caches its numbers instead (`unstable_cache`, 60 s).
 - **Dates and numbers:** sv-SE / en-GB (24-hour clock in both), Europe/Stockholm; `lib/format.ts`
   and friends take a `locale`.
 - **E-mails** (invite, meeting summary) use the recipient's saved language: the account's

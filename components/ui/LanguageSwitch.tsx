@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 /**
@@ -10,12 +10,20 @@ import { useLocale, useTranslations } from "next-intl";
 export function LanguageSwitch() {
   const t = useTranslations("common");
   const locale = useLocale();
-  const path = usePathname() ?? "/";
-  const query = useSearchParams()?.toString();
-  const back = query ? `${path}?${query}` : path;
+  // The path only (no useSearchParams, which would force a Suspense boundary on static routes);
+  // the query is added from the address bar on click.
+  const back = usePathname() ?? "/";
   const to = locale === "en" ? "sv" : "en";
   return (
-    <a href={`/sprak?till=${to}&tillbaka=${encodeURIComponent(back)}`} hrefLang={to} lang={to}>
+    <a
+      href={`/sprak?till=${to}&tillbaka=${encodeURIComponent(back)}`}
+      hrefLang={to}
+      lang={to}
+      onClick={(e) => {
+        const here = window.location.pathname + window.location.search;
+        e.currentTarget.href = `/sprak?till=${to}&tillbaka=${encodeURIComponent(here)}`;
+      }}
+    >
       {t("switchLanguage")}
     </a>
   );

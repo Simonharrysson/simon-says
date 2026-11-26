@@ -1,5 +1,4 @@
 import { useTranslations } from "next-intl";
-import { Suspense } from "react";
 import { LanguageSwitch } from "./LanguageSwitch";
 
 const REPO = "https://github.com/Simonharrysson/simon-says";
@@ -16,9 +15,7 @@ export function SiteFooter() {
           <a href={REPO} rel="noopener">
             {t("sourceCode")}
           </a>
-          <Suspense>
-            <LanguageSwitch />
-          </Suspense>
+          <LanguageSwitch />
         </nav>
       </div>
     </footer>

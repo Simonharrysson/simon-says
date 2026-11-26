@@ -11,7 +11,7 @@ import { docUrl } from "@/lib/ui/meetings";
 import { hasOwnNotes, summaryContent, type SummaryItem } from "./content";
 import { defaultLocale, type Locale } from "@/lib/i18n/config";
 import { translator } from "@/lib/i18n/translator";
-import { localeForEmail, localeForUser } from "@/lib/i18n/user-locale";
+import { localeForEmail, localesForUsers } from "@/lib/i18n/user-locale";
 import { renderSummaryEmail } from "./email";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 
@@ -200,6 +200,7 @@ export async function sendMeetingSummaries(
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const timeLeft = () => (opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity);
   let mailed = false;
+  const accountLocales = await localesForUsers(recipients.flatMap((x) => (x.userId ? [x.userId] : [])), db);
   for (const r of recipients) {
     // Stop cleanly before the deadline; the cron resumes `sending` meetings.
     if (timeLeft() < SUMMARY_MIN_LEFT_MS) {
@@ -222,8 +223,9 @@ export async function sendMeetingSummaries(
     if (!ledger.length) continue;
     if (mailed) await sleep(SEND_GAP_MS);
     mailed = true;
-    // In the recipient's language: their account's choice, else their address's account's (0043).
-    const locale = r.userId ? await localeForUser(r.userId, db) : await localeForEmail(r.email, db);
+    // In the recipient's language: their account's choice (read once for all), else the choice of
+    // the account that signs in with their address (0043); Swedish when neither is known.
+    const locale = r.userId ? (accountLocales.get(r.userId) ?? defaultLocale) : await localeForEmail(r.email, db);
     const access = accessFor(r, m, shared, origin, starterName, locale);
     const email = renderSummaryEmail({
       locale,
