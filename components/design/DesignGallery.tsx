@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale, useTranslations } from "next-intl";
-import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import type { Locale } from "@/lib/i18n/config";
 import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState, type GoalOption } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
@@ -227,17 +227,20 @@ function PrivatConsentDemo({ contexts }: { contexts: { id: string; name: string 
   );
 }
 
-/** Consent step with a mic check that "hears" something a moment after it is started. */
-function MicCheckDemo() {
+/** Consent step: the tick starts the mic check, which "hears" something a moment later (open the settings to see it). */
+function MicCheckDemo({ settingsOpen = false, silent = false }: { settingsOpen?: boolean; silent?: boolean }) {
   const [level, setLevel] = useState<number | null>(null);
   return (
     <LiveDemo
       phase="consent"
+      settingsOpen={settingsOpen}
       micLevel={level}
       onMicCheck={() => {
         setLevel(0);
-        setTimeout(() => setLevel(0.62), 900);
+        if (!silent) setTimeout(() => setLevel(0.62), 900);
       }}
+      onMicCheckStop={() => setLevel(null)}
+      agenda={<AgendaDemoStep view={{ state: "none" }} />}
     />
   );
 }
@@ -252,39 +255,64 @@ const agendaGoals: GoalOption[] = [
   { id: "g1", label: "Mål: Fler medlemmar till vårens event", reason: "Inget nytt sedan 12 okt" },
 ];
 
-/** Consent step with the agenda step in one state; Använd / Skapa nytt dokument work locally (no Picker). */
-function AgendaDemo({ view, goals }: { view: AgendaViewState; goals?: GoalOption[] }) {
-  const off = view.state === "picker-off";
-  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off || goals ? { kind: "new" } : null);
+/** The agenda step in one state, with local state; Använd / Välj / Skapa nytt dokument work locally (no Picker). */
+function AgendaDemoStep({
+  view,
+  goals,
+  initial = { kind: "new" },
+  panelOpen,
+  inFolder = true,
+  eventTitle,
+  onChosen,
+}: {
+  view: AgendaViewState;
+  goals?: GoalOption[];
+  initial?: AgendaStepViewProps["chosen"];
+  panelOpen?: boolean;
+  inFolder?: boolean;
+  eventTitle?: string;
+  onChosen?: (chosen: AgendaStepViewProps["chosen"], transcript: boolean) => void;
+}) {
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(initial);
   const [formatValue, setFormatValue] = useState("id:f1");
   const [transcript, setTranscript] = useState(false);
   const [goalIds, setGoalIds] = useState<string[]>(goals ? [goals[0].id] : []);
+  useEffect(() => onChosen?.(chosen, transcript), [chosen, transcript, onChosen]);
   return (
-    <LiveDemo
-      phase="consent"
-      agenda={
-        <AgendaStepView
-          view={view}
-          formats={agendaFormats}
-          formatValue={formatValue}
-          chosen={chosen}
-          offerTranscript
-          transcriptInDoc={transcript}
-          onUseSuggestion={() => view.state === "suggestion" && setChosen({ kind: "agenda", name: view.suggestion.name })}
-          onPickDoc={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
-          onUseFolder={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
-          onNewDoc={() => setChosen({ kind: "new" })}
-          onFormatChange={setFormatValue}
-          onTranscriptChange={setTranscript}
-          goals={goals}
-          goalIds={goalIds}
-          onGoalChange={(id, on) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)))}
-        />
+    <AgendaStepView
+      view={view}
+      formats={agendaFormats}
+      formatValue={formatValue}
+      chosen={chosen}
+      offerTranscript
+      transcriptInDoc={transcript}
+      panelOpen={panelOpen}
+      inFolder={inFolder && view.state !== "folder-unreachable"}
+      eventTitle={eventTitle}
+      onUseSuggestion={() => view.state === "suggestion" && setChosen({ kind: "agenda", name: view.suggestion.name })}
+      onUsePrepared={() =>
+        view.state === "prepared" && setChosen({ kind: "agenda", name: view.prepared.name, prepared: { date: view.prepared.date, kind: view.prepared.kind } })
       }
-      agendaConfirmed={chosen !== null}
-      agendaDoc={chosen?.kind === "agenda" ? { transcriptInDoc: transcript } : null}
+      onPickDoc={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
+      onUseFolder={() => setChosen({ kind: "agenda", name: "Veckomöte 25/11" })}
+      onNewDoc={() => setChosen({ kind: "new" })}
+      onFormatChange={setFormatValue}
+      onTranscriptChange={setTranscript}
+      goals={goals}
+      goalIds={goalIds}
+      onGoalChange={(id, on) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)))}
     />
   );
+}
+
+/** The consent step with the agenda step in one state. */
+function AgendaDemo(props: Parameters<typeof AgendaDemoStep>[0]) {
+  const [agendaDoc, setAgendaDoc] = useState<{ transcriptInDoc: boolean } | null>(null);
+  const onChosen = useCallback(
+    (chosen: AgendaStepViewProps["chosen"], transcript: boolean) => setAgendaDoc(chosen?.kind === "agenda" ? { transcriptInDoc: transcript } : null),
+    [],
+  );
+  return <LiveDemo phase="consent" agenda={<AgendaDemoStep {...props} onChosen={onChosen} />} agendaDoc={agendaDoc} />;
 }
 
 /** A fictional Veckomöte draft: standing items, last week's open tasks, two recurring topics. */
@@ -932,22 +960,24 @@ const render: Record<string, () => ReactNode> = {
     </PublicChrome>
   ),
   "live-consent": () => <MicCheckDemo />,
-  "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" />,
-  "live-agenda-prepared": () => (
+  "live-consent-settings": () => <MicCheckDemo settingsOpen />,
+  "live-consent-silent": () => <MicCheckDemo silent settingsOpen />,
+  "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" agenda={<AgendaDemoStep view={{ state: "none" }} />} />,
+  "live-agenda-loading": () => <AgendaDemo view={{ state: "loading" }} inFolder={false} />,
+  "live-agenda-today": () => (
     <AgendaDemo
-      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote", accessible: true } }}
+      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-11-26", time: "18:00", kind: "veckomote" as const, accessible: true } }}
+      initial={{ kind: "agenda", name: "2026-11-26 18.00 Dagordning – Exempelföreningen", prepared: { date: "2026-11-26", kind: "veckomote" }, auto: true }}
     />
   ),
-  "live-agenda-prepared-picker": () => (
-    <AgendaDemo
-      view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote", accessible: false } }}
-    />
-  ),
+  "live-agenda-calendar": () => <AgendaDemo view={{ state: "none" }} eventTitle="Styrelsemöte vecka 48" />,
+  "live-agenda-prepared": () => <AgendaDemo view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote" as const, accessible: true } }} />,
+  "live-agenda-prepared-picker": () => <AgendaDemo view={{ state: "prepared", prepared: { docId: "d2", name: "2026-12-01 18.00 Dagordning – Exempelföreningen", date: "2026-12-01", time: "18:00", kind: "veckomote" as const, accessible: false } }} />,
   "live-agenda-suggestion": () => <AgendaDemo view={{ state: "suggestion", suggestion: { id: "d1", name: "Möte 25/11" } }} />,
-  "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
+  "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} panelOpen />,
   "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable", folderName: "Verksamhetsår 2026-2027" }} />,
-  "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} />,
-  "live-agenda-new-goals": () => <AgendaDemo view={{ state: "none" }} goals={agendaGoals} />,
+  "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} inFolder={false} panelOpen />,
+  "live-agenda-new-goals": () => <AgendaDemo view={{ state: "none" }} goals={agendaGoals} panelOpen />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (
     <LiveDemo
