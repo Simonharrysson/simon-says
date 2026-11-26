@@ -46,14 +46,22 @@ const norm = (s: string) => s.toLowerCase().normalize("NFC");
 const DAY = 24 * 3600 * 1000;
 const days = (a: string, b: string) => Math.round(Math.abs(Date.parse(a) - Date.parse(b)) / DAY);
 
+/**
+ * How strongly a proposed goal names a truth goal: 3 per distinct keyword in its title or earlier
+ * names, 1 per keyword only in its why; 0 unless the match is specific: at least 2 distinct
+ * keywords, or 1 keyword plus an evidence date that is a real mention of the truth goal. A
+ * single broad word ("medlemmar") can then never pin a spurious goal on a truth goal.
+ */
 function matchScore(goal: DigestGoal, truth: TruthGoal): number {
   const text = norm([goal.title, ...goal.earlierNames, goal.why].join(" | "));
   const title = norm([goal.title, ...goal.earlierNames].join(" | "));
-  // Title hits weigh more than hits only in the why.
-  return truth.keywords.reduce((n, k) => n + (title.includes(k) ? 3 : text.includes(k) ? 1 : 0), 0);
+  const hits = truth.keywords.filter((k) => text.includes(k));
+  const overlap = goal.evidence.some((e) => truth.mentions.includes(e.date));
+  if (hits.length === 0 || (hits.length < 2 && !overlap)) return 0;
+  return hits.reduce((n, k) => n + (title.includes(k) ? 3 : 1), 0) + (overlap ? 1 : 0);
 }
 
-/** Best truth goal for a proposed goal, or null when none (or a tie between two). */
+/** Best truth goal for a proposed goal, or null when none is specific enough (or two tie). */
 export function matchGoal(goal: DigestGoal, truths: TruthGoal[]): { truth: TruthGoal; score: number } | null {
   const scored = truths.map((t) => ({ truth: t, score: matchScore(goal, t) })).sort((a, b) => b.score - a.score);
   if (!scored.length || scored[0].score === 0) return null;

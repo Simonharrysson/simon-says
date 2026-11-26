@@ -131,5 +131,11 @@ describe("goals eval dry run", () => {
     const goal = { title: "Något helt annat", status: "current" as const, why: "Spelkaféet på biblioteket rullar.", earlierNames: [], firstMentioned: "", lastMentioned: "", evidence: [] };
     expect(matchGoal(goal, s.goals)?.truth.id).toBe("rutan-spelkafe");
     expect(matchGoal({ ...goal, why: "" }, s.goals)).toBeNull();
+    // One broad keyword is not enough on its own…
+    const broad = { ...goal, title: "Fler medlemmar i styrelsen", why: "" };
+    expect(matchGoal(broad, s.goals)).toBeNull();
+    // …unless its evidence is dated on a real mention of that goal.
+    const dated = { ...broad, evidence: [{ date: s.goals[0].mentions[1], text: "x" }] };
+    expect(matchGoal(dated, s.goals)?.truth.id).toBe("rutan-medlemmar");
   });
 });

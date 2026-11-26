@@ -13,7 +13,8 @@
  * extraction (what an admin gets). Every paid response is cached in .notes-replay/goals-cache/
  * by request hash (a rerun with an unchanged prompt costs $0; --fresh ignores the cache). Spend
  * goes to the ledger .notes-replay/spend-goals.json (--ledger); a call is refused when the ledger
- * plus its estimate would pass --budget (USD, default 2.5). Runs are sequential.
+ * plus its estimate would pass --budget (USD, default 2.5). Runs are sequential. --cache-only
+ * regrades saved answers and refuses any paid call.
  *
  * Reads ANTHROPIC_API_KEY from the environment or ~/simon-says-private/.env. Never prints it.
  */
@@ -56,6 +57,7 @@ function paidClient(budget: number): NotesClient {
               return JSON.parse(readFileSync(file, "utf8")) as BetaMessage;
             }
             // Output: the largest measured was 3 652 (digest) and ~400 (extraction); twice that as the worst case.
+            if (flag("cache-only")) throw new Error(`cache-only: no cached answer for ${key}`);
             const worst = estimateUsd(body, JSON.stringify(body).includes("historik") ? 8_000 : 1_500);
             const spent = ledgerTotal(LEDGER);
             if (spent + worst > budget) throw new Error(`budget: ledger $${spent.toFixed(4)} + estimate $${worst.toFixed(4)} > $${budget}`);
