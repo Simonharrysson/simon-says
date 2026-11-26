@@ -45,7 +45,7 @@ export function JoinView(props: JoinViewProps) {
               <p className="text-ink-2">Du är inbjuden till</p>
               <h1 className="text-[clamp(2rem,1.5rem+2vw,2.75rem)] wrap-anywhere">{props.orgName}</h1>
               <p className="text-ink-2">
-                Som medlem kan du starta möten och får tillgång till mötesdokument som skapas från och med nu.
+                Som medlem kan du starta möten och får tillgång till föreningens mötesdokument.
               </p>
             </div>
             <form action={props.join}>

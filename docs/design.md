@@ -148,8 +148,10 @@ it is deleted when they leave the org.
 
 - Permission: `drive.file` only (non-sensitive scope; no heavy Google review).
   It covers documents the app creates or the user picks via Google Picker.
-- Default: the service **creates a new Doc per meeting** in the user's Drive,
-  in an org folder. Option: pick an existing Doc (e.g. the org's running
+- Default: the service **creates a new Doc per meeting** in the förening's
+  meeting folder when the starter's grant can add to it (they picked the folder
+  once in the Picker), else in the starter's own folder "Simon Says – <förening>".
+  Named `<YYYY-MM-DD> <format title> – <förening>` (Testmöte marked). Option: pick an existing Doc (e.g. the org's running
   minutes Doc) via Picker.
 - Layout (tab 1 = notes, tab 2 = transcript, added with `addDocumentTab`):
 
@@ -246,8 +248,11 @@ by default; owned named range + keep-human-edits rule; ~45 s tick; usage caps;
 - **No full-audio upload in v1.** Only the short enrolment / recognition clips
   are stored (for voiceprints). Full audio returns with the Nano project.
   (Supersedes the "records audio locally, uploads at the end" line above.)
-- **Doc ownership:** the Doc lives in the Drive of whoever pressed Start; the
-  service shares it (writer) with all org members' Google accounts. The
+- **Doc ownership:** whoever pressed Start owns the Doc (in the meeting folder
+  or their own Drive); the service shares it (writer) with all org members'
+  Google accounts, and with members who join later (through the starter's grant,
+  recorded in `meeting_doc_shares`, 0030). Agenda Docs are the förening's own and
+  never shared by the service. The
   server stores that user's Google refresh token encrypted (Supabase Auth does
   not keep it). If it is revoked mid-meeting, transcription continues, the page
   shows "Doc paused — sign in again", and the backlog is written once fixed.
