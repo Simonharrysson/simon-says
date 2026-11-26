@@ -19,7 +19,8 @@ function leaves(tree: Tree, prefix = ""): Map<string, string> {
 
 /** Argument names ({name}, {count, plural, …}) and tag names (<link>) of an ICU message. */
 function shape(message: string): string[] {
-  const args = [...message.matchAll(/\{\s*([A-Za-z_][\w]*)\s*[,}]/g)].map((m) => `{${m[1]}}`);
+  // Not plural/select branches: "=0 {nyss}" and "one {möte}" are text, not arguments.
+  const args = [...message.matchAll(/(?<!(?:=\d+|zero|one|two|few|many|other)\s*)\{\s*([A-Za-z_][\w]*)\s*[,}]/g)].map((m) => `{${m[1]}}`);
   const tags = [...message.matchAll(/<([A-Za-z][\w]*)>/g)].map((m) => `<${m[1]}>`);
   return [...new Set([...args, ...tags])].sort();
 }

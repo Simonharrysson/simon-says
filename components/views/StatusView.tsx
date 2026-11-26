@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ListRow } from "@/components/ui/ListRow";
@@ -17,36 +18,23 @@ export interface StatusData {
   updatedAt: string;
 }
 
-const healthCopy: Record<StatusData["health"], { title: string; text: string; tone: "ok" | "alert" }> = {
-  ok: { title: "Allt fungerar", text: "Transkribering och anteckningar går som de ska.", tone: "ok" },
-  degraded: {
-    title: "Anteckningarna går långsamt",
-    text: "Transkriberingen fungerar, men det tar längre tid än vanligt innan anteckningarna syns i dokumenten.",
-    tone: "alert",
-  },
-  paused: {
-    title: "Tjänsten är pausad",
-    text: "Nya möten kan inte starta just nu. Pågående möten avslutas och anteckningarna blir klara.",
-    tone: "alert",
-  },
-};
+const healthTone: Record<StatusData["health"], "ok" | "alert"> = { ok: "ok", degraded: "alert", paused: "alert" };
 
 /** Public status page. `data` is null when the numbers could not be loaded. */
 export function StatusView({ data }: { data: StatusData | null }) {
-  const health = data ? healthCopy[data.health] : null;
+  const t = useTranslations("status");
+  const locale = useLocale();
+  const health = data ? { title: t(`health.${data.health}.title`), text: t(`health.${data.health}.text`), tone: healthTone[data.health] } : null;
   return (
     <div className="mx-auto w-full px-gutter max-w-[46rem] flex flex-col gap-8">
       <div className="flex flex-col gap-3">
-        <h1 className="text-2xl wrap-anywhere">Status</h1>
-        <p className="text-ink-2 max-w-[68ch]">
-          Simon Says skriver mötesanteckningar live i Google Docs åt föreningar i Linköping. Här syns vad som händer just
-          nu. Föreningar visas med namn bara om de själva valt det.
-        </p>
+        <h1 className="text-2xl wrap-anywhere">{t("title")}</h1>
+        <p className="text-ink-2 max-w-[68ch]">{t("intro")}</p>
       </div>
 
       {!data || !health ? (
-        <EmptyState title="Siffrorna kan inte hämtas just nu">
-          <p>Försök igen om en stund. Det påverkar inte pågående möten.</p>
+        <EmptyState title={t("unavailableTitle")}>
+          <p>{t("unavailableText")}</p>
         </EmptyState>
       ) : (
         <>
@@ -59,38 +47,35 @@ export function StatusView({ data }: { data: StatusData | null }) {
 
           <dl className="grid grid-cols-3 gap-4 max-[34rem]:grid-cols-1 [&>div]:border-t [&>div]:border-line [&>div]:pt-4 [&_dd]:mt-1 [&_dd]:font-mono [&_dd]:text-2xl [&_dd]:font-medium [&_dd]:tracking-[-0.02em] [&_dd]:tabular-nums [&_dt]:text-sm [&_dt]:text-ink-2">
             <div>
-              <dt>Möten just nu</dt>
+              <dt>{t("liveNow")}</dt>
               <dd>{data.liveCount}</dd>
             </div>
             <div>
-              <dt>Möten i veckan</dt>
-              <dd>{formatCount(data.meetingsThisWeek)}</dd>
+              <dt>{t("meetingsThisWeek")}</dt>
+              <dd>{formatCount(data.meetingsThisWeek, locale)}</dd>
             </div>
             <div>
-              <dt>Minuter i veckan</dt>
-              <dd>{formatCount(data.minutesThisWeek)}</dd>
+              <dt>{t("minutesThisWeek")}</dt>
+              <dd>{formatCount(data.minutesThisWeek, locale)}</dd>
             </div>
           </dl>
 
-          <Panel flush title="Pågår just nu" titleId="live-now">
+          <Panel flush title={t("inProgress")} titleId="live-now">
             {data.liveCount === 0 ? (
-              <p className="text-sm text-ink-3 px-6 pb-6">Inga möten pågår just nu.</p>
+              <p className="text-sm text-ink-3 px-6 pb-6">{t("noneLive")}</p>
             ) : data.liveMeetings.length === 0 ? (
-              <p className="text-sm text-ink-3 px-6 pb-6">
-                {data.liveCount === 1 ? "Ett möte pågår" : `${data.liveCount} möten pågår`}. Föreningarna har inte valt att
-                visas.
-              </p>
+              <p className="text-sm text-ink-3 px-6 pb-6">{t("liveHidden", { count: data.liveCount })}</p>
             ) : (
               <ul  aria-labelledby="live-now">
                 {data.liveMeetings.map((m) => (
                   <ListRow
                     key={m.id}
                     title={m.orgName}
-                    meta={`Startade ${formatClock(m.startedAt)}`}
+                    meta={t("started", { time: formatClock(m.startedAt, locale) })}
                     actions={
                       <>
                         <span className="font-mono tabular-nums text-sm text-ink-3">{formatElapsed(m.elapsedMs)}</span>
-                        <Badge tone="live">Pågår</Badge>
+                        <Badge tone="live">{t("live")}</Badge>
                       </>
                     }
                   />
@@ -98,10 +83,10 @@ export function StatusView({ data }: { data: StatusData | null }) {
               </ul>
             )}
             {data.liveCount> data.liveMeetings.length && data.liveMeetings.length> 0 && (
-              <p className="text-sm text-ink-3 px-6 pb-6">Och {data.liveCount - data.liveMeetings.length} till som inte visas med namn.</p>
+              <p className="text-sm text-ink-3 px-6 pb-6">{t("moreHidden", { count: data.liveCount - data.liveMeetings.length })}</p>
             )}
           </Panel>
-          <p className="text-sm text-ink-3">Uppdaterad {formatClock(data.updatedAt)}.</p>
+          <p className="text-sm text-ink-3">{t("updated", { time: formatClock(data.updatedAt, locale) })}</p>
         </>
       )}
     </div>

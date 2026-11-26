@@ -1,0 +1,5 @@
+{
+  "dateAtTime": "{day} kl. {time}",
+  "underAMinute": "under 1 min",
+  "ago": "{minutes, plural, =0 {nyss} other {för # min sedan}}"
+}

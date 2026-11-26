@@ -1,0 +1,80 @@
+{
+  "metaTitle": "Integritet",
+  "updated": "26 november 2026",
+  "draft": "Utkast · uppdaterad {date} · juridisk granskning återstår",
+  "title": "Integritet",
+  "lead": "Simon Says lyssnar på era möten. Här står vad det betyder: vad som skickas vart, vad som sparas, och hur ni tar bort det.",
+  "tocLabel": "Innehåll",
+  "toc": {
+    "kort": "Kort sagt",
+    "rummet": "I rummet",
+    "sparas": "Vad som sparas",
+    "mejl": "Mejl",
+    "vem": "Vilka som behandlar data",
+    "grund": "Rättslig grund",
+    "rattigheter": "Dina rättigheter",
+    "radera": "Radera",
+    "kontakt": "Kontakt"
+  },
+  "short": {
+    "audio": "Vi sparar ingen ljudinspelning. Ljudet går direkt från laptopen till transkriberingen och blir text medan ni pratar.",
+    "doc": "Anteckningarna hamnar i ett Google-dokument i Drive hos den som startade mötet. Alla föreningens medlemmar får redigeringsåtkomst till dokumentet (men kan inte dela det vidare).",
+    "kept": "Transkriptionen och anteckningarna finns också hos oss tills ni raderar mötet eller föreningen.",
+    "accounts": "Föreningens medlemmar som loggar in har ett konto. Alla andra som deltar i mötet finns bara som ett namn i föreningens personlista.",
+    "controller": "Personuppgiftsansvarig är <strong>Harrysson & Company AB</strong>."
+  },
+  "room": {
+    "consent": "Innan ett möte kan starta bekräftar den som håller i det att alla i rummet vet att mötet transkriberas och kan be om paus. Bekräftelsen sparas med mötet. Paus-knappen stoppar ljudet direkt; inget skickas förrän någon trycker Fortsätt.",
+    "transcript": "Föreningens admin väljer om hela transkriptionen ska delas i dokumentet (en egen flik) eller bara anteckningarna."
+  },
+  "stored": {
+    "signedInTitle": "För den som loggar in",
+    "nameEmail": "Namn och e-postadress från Google.",
+    "key": "En krypterad nyckel som låter oss skriva i dokumenten Simon Says själv skapat.",
+    "orgTitle": "För varje förening",
+    "orgBasics": "Namn, medlemmar, inbjudningslänk och personlistan (bara namn).",
+    "invites": "E-postadresser som en admin skriver in för att bjuda in någon används bara för att skicka inbjudan. De sparas med när den skickades och om personen har gått med, tills föreningen raderas. Inbjudan visar adminens namn, och svar på mejlet går till adminens inloggningsadress (Reply-To), så den som bjuds in ser den adressen.",
+    "meetings": "Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades. Transkriptionen och anteckningarna sparas tills mötet eller föreningen raderas.",
+    "usage": "Användningsposter: hur många sekunder ljud, hur mycket text till Claude och vad det kostade, per förening och dag. De används för gränsen på 20 timmar i månaden och för att stoppa missbruk.",
+    "createdLog": "En logg över vilket konto som skapat vilka föreningar (för gränsen på två per person).",
+    "summary": "Sammanfattning efter mötet: när ett möte är klart mejlar Simon Says besluten och uppgifterna till personer i föreningens personlista som har en e-postadress, som standard bara till dem som inte var med (admin kan välja alla, utvalda eller ingen). Aldrig till någon utanför personlistan, aldrig efter testmöten. Varje mejl har en länk för att avsluta prenumerationen. Vi sparar vem som fått sammanfattningen för vilket möte (inte innehållet); det försvinner med mötet, personen eller föreningen.",
+    "overview": "För fliken Översikt: rubrikerna på dagordningens punkter (utan namn) och de mål som föreningens admin har godkänt. Rubrikerna försvinner med mötet, målen med föreningen.",
+    "history": "Gamla protokoll som admin väljer att läsa in: texten skickas till Anthropic (Claude), som plockar ut datum, beslut, uppgifter (med roll, inte namn) och korta lägesrader. Bara de raderna sparas, aldrig dokumentets text; admin kan ta bort dem när som helst och de försvinner med föreningen.",
+    "drive": "Frivilligt, bara för admin och bara för att läsa in gamla protokoll: admin kan ge Simon Says läsrättighet till sin Google Drive. Den används för att visa adminens mappar och namnen på dokumenten i de mappar admin väljer; bara de protokoll admin kryssar i öppnas. Mappar och dokumentnamn sparas inte. Nyckeln för läsrättigheten sparas krypterad och separat från inloggningens, används bara för inläsningen och raderas automatiskt efter 24 timmar; admin kan också ta bort den direkt.",
+    "kept": "<strong>Användningsposterna och loggen över skapade föreningar finns kvar även när föreningen raderas.</strong> De innehåller inga mötesinnehåll, bara siffror och id:n. Användningsposterna sparas så länge tjänsten drivs, för att förhindra missbruk av den gratis tjänsten och för att kunna följa kostnaden över tid. När en förening raderas finns bara dess id kvar i posterna, inte namnet. Loggen över skapade föreningar sparas för att kunna hålla gränsen på två föreningar per person.",
+    "notTitle": "Det som inte sparas",
+    "notAudio": "Ljudet från mötet.",
+    "notDrive": "Något annat i din Google Drive, inte heller namnen på mappar och dokument som visas när admin läser in gamla protokoll.",
+    "notVoice": "Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först."
+  },
+  "mail": "Du bestämmer vilka mejl Simon Says skickar till dig. Under Konto kan du stänga av varje sorts mejl för sig, eller välja Inga mejl alls. Längst ner i varje mejl finns en länk till samma val som fungerar utan inloggning, även om du inte har något konto. Vi sparar bara dina val (och, om du saknar konto, adressen de gäller) så länge tjänsten drivs, så att ett nej fortsätter att gälla. Mejla oss om du vill att vi raderar dem.",
+  "processors": {
+    "service": "Tjänst",
+    "does": "Gör",
+    "goodToKnow": "Bra att veta",
+    "elevenlabs": { "what": "Gör om ljudet till text under mötet.", "note": "Loggar förfrågningar som standard; noll lagring kan kräva särskilt avtal. Behandlingen kan ske utanför EU. Ljudet skickas direkt från laptopen." },
+    "anthropic": { "what": "Skriver anteckningarna utifrån transkriptionen.", "note": "Får texten, inte ljudet. Behandlingen kan ske utanför EU." },
+    "google": { "what": "Inloggning, och dokumentet i Drive hos den som startar mötet.", "note": "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU." },
+    "supabase": { "what": "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "note": "Lagras inom EU." },
+    "vercel": { "what": "Kör webbplatsen och servern.", "note": "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar." },
+    "resend": { "what": "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, och mötessammanfattningar till personer i föreningens personlista.", "note": "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen." }
+  },
+  "legal": {
+    "intro": "Det här är vår nuvarande bedömning. En juridisk granskning återstår.",
+    "account": "<strong>Dig med konto:</strong> avtal (GDPR art. 6.1 b). Vi behöver dina uppgifter för att kunna driva tjänsten åt dig.",
+    "room": "<strong>Alla i rummet som transkriberas:</strong> berättigat intresse (art. 6.1 f). Föreningen har ett intresse av att dokumentera sina möten. Vi väger det mot er integritet genom beskedet i rummet och Paus-knappen. Du kan invända mot den som håller i mötet, eller mot oss."
+  },
+  "rights": "Du kan begära tillgång till uppgifter om dig, rättelse, radering, begränsning av behandlingen och dataportabilitet där det gäller, och du kan invända mot behandlingen. Mejla <mail>simon@harrysson.co</mail>. Du kan också klaga hos Integritetsskyddsmyndigheten, <imy>imy.se</imy>.",
+  "transferTitle": "Överföring utanför EU",
+  "transfer": "När data behandlas utanför EU bygger det, där det är aktuellt, på leverantörernas standardavtalsklausuler eller EU–USA-ramverket för dataskydd (Data Privacy Framework).",
+  "delete": {
+    "meeting": "<strong>Ett möte:</strong> den som startade det, eller en admin, raderar det under föreningen. Transkription, anteckningar och logg försvinner hos oss.",
+    "org": "<strong>En förening:</strong> en admin raderar den längst ner på föreningens sida. Allt under den försvinner, utom användningsposterna som beskrivs ovan.",
+    "account": "<strong>Ditt konto, namn, e-postadress och den krypterade Google-nyckeln:</strong> det finns ingen funktion för det i tjänsten ännu. Mejla <mail>simon@harrysson.co</mail> så raderar vi dem.",
+    "google": "<strong>Koppla bort Simon Says i Google:</strong> ta bort åtkomsten på <link>myaccount.google.com/connections</link>. Då slutar nyckeln fungera.",
+    "docs": "<strong>Google-dokumenten</strong> ligger kvar i Drive. De är era, och ni tar bort dem i Drive som vanligt. Varje medlem får redigeringsåtkomst till dokumenten för möten som startas medan hen är medlem. Tas en medlem bort ur föreningen, eller lämnar den, är dokument som redan delats fortfarande delade med hen tills ägaren tar bort delningen i Drive."
+  },
+  "statusTitle": "Statussidan",
+  "status": "Den offentliga statussidan visar antal möten som pågår, antal möten och minuter transkriberade den senaste veckan, och om tjänsten fungerar. En förening syns med namn bara om en admin kryssat i det i inställningarna.",
+  "contact": "Frågor, eller vill du veta vad vi har sparat om dig? Skriv till Harrysson & Company AB på <mail>simon@harrysson.co</mail>."
+}

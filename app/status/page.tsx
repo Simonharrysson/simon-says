@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { PublicShell } from "@/components/views/PublicShell";
 import { StatusView, type StatusData } from "@/components/views/StatusView";
 import { getEnv } from "@/lib/env";
 import { loadStatus } from "@/lib/status";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Status" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("status"))("metaTitle") };
+}
 
 // Public, no auth. Read with the service role on the server and cached for a minute.
 export const revalidate = 60;

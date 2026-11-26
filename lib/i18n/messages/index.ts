@@ -5,25 +5,53 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enPrivacy from "./en/privacy.json";
+import svPrivacy from "./sv/privacy.json";
+import enLanding from "./en/landing.json";
+import svLanding from "./sv/landing.json";
+import enStatus from "./en/status.json";
+import svStatus from "./sv/status.json";
+import enFormat from "./en/format.json";
+import svFormat from "./sv/format.json";
+import enJoin from "./en/join.json";
+import svJoin from "./sv/join.json";
+import enLogin from "./en/login.json";
+import svLogin from "./sv/login.json";
 import enAccount from "./en/account.json";
 import enCommon from "./en/common.json";
 import enMailPrefs from "./en/mailPrefs.json";
+import enNotices from "./en/notices.json";
 import svAccount from "./sv/account.json";
 import svCommon from "./sv/common.json";
 import svMailPrefs from "./sv/mailPrefs.json";
+import svNotices from "./sv/notices.json";
 
 export const sv = {
+  privacy: svPrivacy,
+  landing: svLanding,
+  status: svStatus,
+  format: svFormat,
+  join: svJoin,
+  login: svLogin,
   common: svCommon,
   account: svAccount,
   mailPrefs: svMailPrefs,
+  notices: svNotices,
 };
 
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  privacy: enPrivacy,
+  landing: enLanding,
+  status: enStatus,
+  format: enFormat,
+  join: enJoin,
+  login: enLogin,
   common: enCommon,
   account: enAccount,
   mailPrefs: enMailPrefs,
+  notices: enNotices,
 };
 
 export const messages: Record<Locale, Messages> = { sv, en };

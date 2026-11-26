@@ -1,0 +1,128 @@
+{
+  "login": {
+    "drive": {
+      "title": "Tick the box for Google Drive",
+      "text": "The box for Google Drive wasn't ticked. Without it we can't create the meeting document in your Drive. We only see the files Simon Says creates itself. Your invitation is still there."
+    },
+    "refresh": {
+      "title": "Google didn't send a key",
+      "text": "We didn't get permission to write in your documents while you're away from the computer. Signing in again usually fixes it."
+    },
+    "avbrutet": {
+      "title": "Sign-in was cancelled",
+      "text": "Nothing happened. You can try again whenever you like."
+    },
+    "start": {
+      "title": "Sign-in couldn't start",
+      "text": "Something went wrong on our side or at Google. Try again in a little while."
+    },
+    "kod": {
+      "title": "Sign-in didn't finish",
+      "text": "Google and we didn't agree this time. Try again."
+    }
+  },
+  "orgs": {
+    "limit": {
+      "text": "You can create at most two associations. Ask someone else to create it, or delete one you don't use."
+    },
+    "invalid": {
+      "text": "Enter a name (at most 100 characters)."
+    },
+    "inbjudan": {
+      "title": "The invite link is no longer valid",
+      "text": "Ask the person who invited you for a new link."
+    },
+    "raderad": {
+      "text": "The association is deleted. The Google Docs stay in Drive."
+    },
+    "lamnat": {
+      "text": "You have left the association. Documents already shared with you stay in your Drive."
+    }
+  },
+  "org": {
+    "namn": {
+      "text": "Enter a name (at most 100 characters)."
+    },
+    "personnamn": {
+      "text": "That name can't be used. A person's name may only have letters, spaces, hyphens, full stops and apostrophes, at most four words and 60 characters."
+    },
+    "rollnamn": {
+      "text": "That role can't be used. A role may only have letters, digits, spaces and the characters & / - . ', at most four words and 40 characters."
+    },
+    "roll-admin": {
+      "text": "Only an admin can change roles."
+    },
+    "sammanfattning": {
+      "text": "The summary setting couldn't be saved. Only an admin can change it."
+    },
+    "mote-forbidden": {
+      "text": "Only the person who started the meeting or an admin can delete it."
+    },
+    "mote-not_found": {
+      "text": "The meeting no longer exists."
+    },
+    "mote-active": {
+      "text": "End the meeting before you delete it."
+    },
+    "org-active": {
+      "text": "A meeting is in progress. End it before you delete the association."
+    },
+    "org-name_mismatch": {
+      "text": "The name didn't match. Type the association's name exactly to delete it."
+    },
+    "org-forbidden": {
+      "text": "Only admins can delete the association."
+    },
+    "org-not_found": {
+      "text": "The association no longer exists."
+    },
+    "avslutat": {
+      "text": "The meeting is ending. The notes will be finished in the document in a little while."
+    },
+    "avsluta-forbidden": {
+      "text": "Only an admin or the person who started the meeting can end it."
+    },
+    "avsluta-not_found": {
+      "text": "The meeting no longer exists."
+    },
+    "mote": {
+      "text": "The meeting is deleted. The Google Doc stays in Drive."
+    },
+    "medlem": {
+      "text": "The member is removed. Meeting documents already shared with them stay shared."
+    },
+    "medlem-last_admin": {
+      "text": "The association must have at least one admin. Make someone else an admin first – or delete the association if it won't be used any more."
+    },
+    "medlem-not_member": {
+      "text": "The person is no longer a member."
+    },
+    "medlem-forbidden": {
+      "text": "Only admins can remove members."
+    },
+    "medlem-not_found": {
+      "text": "The association no longer exists."
+    },
+    "admin-ny": {
+      "text": "The member is now an admin."
+    },
+    "admin-bort": {
+      "text": "The admin role is removed. The person stays on as a member."
+    },
+    "admin-last_admin": {
+      "text": "The association must have at least one admin. Make someone else an admin first."
+    },
+    "admin-forbidden": {
+      "text": "Only admins can change who is an admin."
+    },
+    "admin-not_member": {
+      "text": "The person is no longer a member."
+    },
+    "admin-not_found": {
+      "text": "The association no longer exists."
+    },
+    "admin-invalid": {
+      "text": "The role couldn't be changed. Reload the page and try again."
+    }
+  }
+}
