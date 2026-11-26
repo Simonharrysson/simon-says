@@ -15,7 +15,7 @@
     "fran": "Kalendern är frånkopplad. Vår kopia av åtkomsten är raderad."
   },
   "orgTitle": "Mötenas kalender",
-  "orgIntro": "Välj kalendern där föreningens möten ligger, till exempel en delad kalender. Medlemmar som har kopplat sin egen kalender och kan se den här ser de nästa mötena under Starta möte.",
+  "orgIntro": "Välj kalendern där föreningens möten ligger, till exempel en delad kalender. Medlemmar som har kopplat sin egen kalender och kan se den här ser de kommande mötena under Starta möte.",
   "orgConnectFirst": "Koppla din kalender först, så kan du välja bland dina kalendrar.",
   "orgUnavailable": "Vi kunde inte läsa dina kalendrar just nu. Försök igen om en liten stund.",
   "orgCurrent": "Vald nu: {name}",
@@ -23,7 +23,7 @@
   "none": "Ingen kalender",
   "filterLabel": "Bara händelser vars namn innehåller",
   "filterHint": "Valfritt, till exempel ”möte”. Tomt: alla händelser i kalendern.",
-  "save": "Spara",
+  "save": "Spara kalender",
   "saving": "Sparar …",
   "saved": "Sparat",
   "upcomingLabel": "Från kalendern",

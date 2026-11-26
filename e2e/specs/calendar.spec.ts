@@ -41,7 +41,7 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
   // Choose the shared calendar, only events whose name contains "möte".
   await settings.getByLabel("Kalender", { exact: true }).selectOption({ label: "Föreningens kalender" });
   await settings.getByLabel("Bara händelser vars namn innehåller").fill("möte");
-  await settings.getByRole("button", { name: "Spara", exact: true }).click();
+  await settings.getByRole("button", { name: "Spara kalender" }).click();
   await expect(settings.getByText("Sparat")).toBeVisible();
   const { data: saved } = await db.from("orgs").select("calendar_id, calendar_name, calendar_filter").eq("id", org.id).single();
   expect(saved).toEqual({ calendar_id: shared, calendar_name: "Föreningens kalender", calendar_filter: "möte" });

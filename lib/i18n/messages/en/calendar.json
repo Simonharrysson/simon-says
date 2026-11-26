@@ -15,7 +15,7 @@
     "fran": "The calendar is disconnected. Our copy of the access is deleted."
   },
   "orgTitle": "Meeting calendar",
-  "orgIntro": "Choose the calendar that holds the association's meetings, for example a shared calendar. Members who have connected their own calendar and can see this one see the next meetings under Start meeting.",
+  "orgIntro": "Choose the calendar that holds the association's meetings, for example a shared calendar. Members who have connected their own calendar and can see this one see the upcoming meetings under Start meeting.",
   "orgConnectFirst": "Connect your calendar first, then you can choose among your calendars.",
   "orgUnavailable": "We could not read your calendars right now. Try again in a little while.",
   "orgCurrent": "Chosen now: {name}",
@@ -23,7 +23,7 @@
   "none": "No calendar",
   "filterLabel": "Only events whose name contains",
   "filterHint": "Optional, for example “meeting”. Empty: every event in the calendar.",
-  "save": "Save",
+  "save": "Save calendar",
   "saving": "Saving …",
   "saved": "Saved",
   "upcomingLabel": "From the calendar",
