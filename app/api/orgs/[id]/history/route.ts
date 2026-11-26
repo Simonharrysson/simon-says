@@ -3,6 +3,7 @@ import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
 import { validDate } from "@/lib/history/extract-prompt";
 import { setProtocolDate } from "@/lib/history/store";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,13 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     console.error(`history: clear: ${error.message}`.slice(0, 200));
     return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
   }
+  // Finished imports go too (their file names with them); an open one keeps running.
+  const { error: jobsError } = await supabaseAdmin()
+    .from("history_import_jobs")
+    .delete()
+    .eq("org_id", id)
+    .in("status", ["done", "canceled", "failed"]);
+  if (jobsError) console.error(`history: clear jobs: ${jobsError.message}`.slice(0, 200));
   return NextResponse.json({ ok: true, removed: data ?? 0 }, { headers: noStore });
 }
 
