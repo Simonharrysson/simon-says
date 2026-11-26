@@ -3,7 +3,7 @@
   "title": "Logga in",
   "titleRetry": "Försök en gång till",
   "introJoining": "Logga in för att gå med i föreningen. Du kommer tillbaka till inbjudan direkt efteråt.",
-  "intro": "Du loggar in med ditt Google-konto. Mötesanteckningarna sparas i din egen Google Drive.",
+  "intro": "Du loggar in med ditt Google-konto. Mötesanteckningarna sparas i föreningens mötesmapp eller i din egen Google Drive.",
   "google": "Logga in med Google",
   "googleRetry": "Försök igen med Google",
   "onlyOwnDocs": "Vi får bara skapa och redigera <strong>de dokument Simon Says själv skapar</strong>. Resten av din Drive ser vi inte.",

@@ -19,5 +19,5 @@
   "orgsText": "People lists, invite links and transcription settings are under each association.",
   "orgsLink": "Your associations",
   "privacyTitle": "Privacy",
-  "privacyText": "Meeting documents live in your own Google Drive and are never deleted by us. Transcripts and notes stored with us are deleted when you delete the meeting or the association. Read more in the <link>privacy information</link>."
+  "privacyText": "Meeting documents live in Google Drive (the association's meeting folder or the starter's Drive) and are never deleted by us. Transcripts and notes stored with us are deleted when you delete the meeting or the association. Read more in the <link>privacy information</link>."
 }

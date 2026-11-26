@@ -19,5 +19,5 @@
   "orgsText": "Personlistor, inbjudningslänkar och inställningar för transkriptionen finns under varje förening.",
   "orgsLink": "Dina föreningar",
   "privacyTitle": "Integritet",
-  "privacyText": "Mötesdokumenten ligger i din egen Google Drive och raderas aldrig av oss. Transkriptioner och anteckningar hos oss raderas när du raderar mötet eller föreningen. Läs mer i <link>integritetsinformationen</link>."
+  "privacyText": "Mötesdokumenten ligger i Google Drive (föreningens mötesmapp eller startarens Drive) och raderas aldrig av oss. Transkriptioner och anteckningar hos oss raderas när du raderar mötet eller föreningen. Läs mer i <link>integritetsinformationen</link>."
 }
