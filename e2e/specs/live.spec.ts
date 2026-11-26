@@ -94,7 +94,11 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
 
   // Summary ("missed" mode, the default): Karin was not there and gets it; Anna was.
   const state = async () => (await db.from("meetings").select("summary_state").eq("id", meetingId).single()).data?.summary_state;
-  await expect.poll(async () => `${(await fake.mail(karin)).length} mail, summary_state ${await state()}`, { timeout: 30_000 }).toBe("1 mail, summary_state sent");
+  const voices = async () =>
+    JSON.stringify((await db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label, needs_confirm").eq("meeting_id", meetingId)).data);
+  await expect
+    .poll(async () => `${(await fake.mail(karin)).length} mail, summary_state ${await state()}`, { timeout: 30_000, message: `voices: ${await voices()}` })
+    .toBe("1 mail, summary_state sent");
   const [summary] = await fake.mail(karin);
   expect(summary.text).toContain(SCRIPTED.decision);
   expect(await fake.mail(anna)).toEqual([]);
