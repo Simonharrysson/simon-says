@@ -56,3 +56,6 @@ signed in on localhost. Then repeat the starred ones on prod with real ElevenLab
 - [ ] At the table: laptop on charger, lid open, consent said out loud, name round ("Jag heter …").
 - [ ] After: read the notes with the secretary — what was missing, what was wrong, what was noise. Write it into
       `docs/learnings.md`; that is the input for prompt tuning and for todo #1 (learn the förening's own format).
+
+## Voice enrolment spike (todo #5, Simon 2026-11-26: "once maximum")
+- Record two fictional speakers' name-round lines; in a new EL session, prepend both samples (silence-separated) before live audio; check diarization puts each sample's label on the matching live speaker. Measure accuracy over ≥5 sessions and the extra STT seconds. Decide go/no-go.

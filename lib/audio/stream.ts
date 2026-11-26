@@ -24,6 +24,7 @@
 //   we send speech is treated as dropped. `health` tells the page when something is stuck.
 import { parseEvent, toRuns, UNKNOWN_SPEAKER } from "@/lib/elevenlabs/events";
 import type { MergeIn, SegmentIn } from "@/lib/segments/types";
+import { PRESENCE_TOKEN_HEADER } from "@/lib/meetings/presence";
 import { pcm16ToBase64, rmsLevel, TARGET_RATE } from "./resample";
 
 export const BACKOFF_MS = [1000, 2000, 5000] as const;
@@ -52,6 +53,7 @@ const POST_BACKOFF_MIN_MS = 5000;
 const POST_BACKOFF_MAX_MS = 30_000;
 /** 401/403 on posts: wait this long before trying again (the user may sign in again). */
 const AUTH_BACKOFF_MS = 10_000;
+const PRESENCE_HEADER = PRESENCE_TOKEN_HEADER;
 export const TOKEN_TIMEOUT_MS = 15_000;
 /** Every other fetch (segments, heartbeat, pause) gives up after this long (C1). */
 export const FETCH_TIMEOUT_MS = 15_000;
@@ -90,7 +92,7 @@ const FATAL_EL_ERROR = /quota|terms|payment|billing|insufficient_funds|subscript
 /** Refusals from the token route that will not go away by retrying. */
 const TERMINAL_REFUSALS = new Set([
   "not_found",
-  "not_starter",
+  "not_member",
   "unauthenticated",
   "no_consent",
   "not_live",
@@ -149,6 +151,8 @@ export interface HeartbeatInfo {
   /** The session the server considers current (another tab may have taken over). */
   currentElSessionId?: string | null;
   status?: string;
+  /** Counted through the presence token: the sign-in cookie is gone (still ask to sign in). */
+  signedOut?: boolean;
 }
 
 /** The subset of the browser WebSocket the stream uses (also implemented by test fakes). */
@@ -246,6 +250,8 @@ export class LiveStream {
   /** Bumped for every socket; events from an older socket are ignored. */
   private generation = 0;
   private lastSessionId: string | null;
+  /** From the token route: lets heartbeats count while the sign-in cookie is gone (review I2). */
+  private presenceToken: string | null = null;
   private attempt = 0;
   private tokenFailures = 0;
   private limitWaits = 0;
@@ -391,14 +397,15 @@ export class LiveStream {
    * Stopp: the mic stops, the last audio is committed, trailing diarized events get up to
    * STOP_DRAIN_MS, then every pending run is posted. The caller then POSTs /end.
    */
-  async stop(opts: { autoStopped?: boolean; superseded?: boolean; reason?: string } = {}): Promise<void> {
+  async stop(opts: { autoStopped?: boolean; superseded?: boolean; ended?: boolean; reason?: string } = {}): Promise<void> {
     if (this.status.state === "stopped" || this.status.state === "stopping") return;
     this.setStatus({ ...this.status, state: "stopping" });
     this.o.audio.stop();
     this.clearReconnect();
     const socket = this.socket;
     // Superseded: another tab is listening to the same room now; don't wait for more of ours.
-    if (socket && socket.readyState === OPEN && !opts.superseded) {
+    // Ended: the server no longer takes runs, so waiting for the last ones only bills.
+    if (socket && socket.readyState === OPEN && !opts.superseded && !opts.ended) {
       this.commit();
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, STOP_DRAIN_MS);
@@ -439,6 +446,17 @@ export class LiveStream {
       if (this.pending > 0) await sleep(1000);
     }
     return this.pending;
+  }
+
+  /**
+   * The user signed in again in another tab (/inloggad): post the waiting runs and send a
+   * heartbeat now instead of after the auth backoff.
+   */
+  signedInAgain(): void {
+    if (!this.authLost) return;
+    this.postBackoffUntil = 0;
+    this.nextHeartbeatAt = 0;
+    void this.flush();
   }
 
   /** The server answered 401/403 to the last post: the queue waits for a new sign-in. */
@@ -620,7 +638,7 @@ export class LiveStream {
     const abort = new AbortController();
     const timeout = setTimeout(() => abort.abort(), TOKEN_TIMEOUT_MS);
     let res: Response;
-    let minted = null as { token: string; wsUrl: string; sessionId: string } | null;
+    let minted = null as { token: string; wsUrl: string; sessionId: string; presenceToken?: string } | null;
     try {
       res = await this.fetch(this.url("token"), {
         method: "POST",
@@ -643,6 +661,7 @@ export class LiveStream {
       // The server made this session current: remember it even if we no longer want it
       // (paused or stopped meanwhile), so the next mint closes it instead of getting 409.
       if (minted?.sessionId) this.lastSessionId = minted.sessionId;
+      if (typeof minted?.presenceToken === "string") this.presenceToken = minted.presenceToken;
       if (!this.active() || this.paused) return;
       if (!minted?.token || !minted.wsUrl || !minted.sessionId) {
         this.log("token: unreadable response");
@@ -998,13 +1017,14 @@ export class LiveStream {
     }
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
     const code = body?.error ?? `http_${res.status}`;
-    if (code === "not_starter") {
-      // Signed in as someone else than the meeting's starter: these runs can never be stored.
-      this.log(`segments: 403 not_starter; dropping ${this.queue.length} runs and stopping`);
+    if (code === "not_member" || (res.status === 404 && code === "not_found")) {
+      // Signed in with an account outside the förening (RLS hides the meeting: 404): these
+      // runs can never be stored.
+      this.log(`segments: ${res.status} ${code}; dropping ${this.queue.length} runs and stopping`);
       this.queue = [];
       this.merges = [];
       this.postFailingSince = null;
-      this.notStarter();
+      this.notMember();
       return;
     }
     if (res.status === 401 || res.status === 403) {
@@ -1051,14 +1071,14 @@ export class LiveStream {
     drop();
   }
 
-  /** This browser is signed in as someone else than the meeting's starter. */
-  private notStarter(): void {
-    if (this.status.state === "error" && this.status.refusal === "not_starter") return;
+  /** This browser is signed in with an account that is not a member of the meeting's förening. */
+  private notMember(): void {
+    if (this.status.state === "error" && this.status.refusal === "not_member") return;
     this.o.audio.stop();
     this.closeSocket();
     this.queue = [];
     this.merges = [];
-    this.fail("refused", "not_starter");
+    this.fail("refused", "not_member");
   }
 
   private postFailed(): void {
@@ -1075,15 +1095,23 @@ export class LiveStream {
     // token response was lost); the reconnect sorts that out (I1), so it is never "another tab".
     const expected = this.socket && this.socket.readyState === OPEN && !this.connecting ? this.socketSessionId : null;
     try {
-      const res = await this.fetch(this.url("heartbeat"), { method: "POST", signal: timeoutSignal(FETCH_TIMEOUT_MS) });
+      const res = await this.fetch(this.url("heartbeat"), {
+        method: "POST",
+        ...(this.presenceToken ? { headers: { [PRESENCE_HEADER]: this.presenceToken } } : {}),
+        signal: timeoutSignal(FETCH_TIMEOUT_MS),
+      });
       if (res.status === 409) {
         this.onNotLive();
         return;
       }
+      if (res.status === 404) {
+        this.meetingGone();
+        return;
+      }
       if (res.status === 401 || res.status === 403) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        if (body?.error === "not_starter") {
-          this.notStarter();
+        if (body?.error === "not_member") {
+          this.notMember();
           return;
         }
         this.authLost = true;
@@ -1092,7 +1120,9 @@ export class LiveStream {
       }
       if (!res.ok) return;
       const info = (await res.json()) as HeartbeatInfo;
-      this.authLost = false;
+      // Counted through the presence token: still signed out, keep asking to sign in.
+      this.authLost = info.signedOut === true;
+      if (this.authLost) this.watchdogs(Date.now());
       this.emit("heartbeat", info);
       if (info.stop) {
         void this.stop({ autoStopped: true, ...(info.reason ? { reason: info.reason } : {}) });
@@ -1114,7 +1144,16 @@ export class LiveStream {
   /** The meeting was ended elsewhere (server stop, another tab, admin). */
   private onNotLive(): void {
     if (this.status.state === "stopped" || this.status.state === "stopping") return;
-    void this.stop({ autoStopped: true });
+    // Ended on the server: close the ElevenLabs socket at once (it bills while open), no drain wait.
+    void this.stop({ autoStopped: true, ended: true });
+  }
+
+  /** The heartbeat finds no such meeting (deleted, or not visible to this account). */
+  private meetingGone(): void {
+    if (this.status.state === "error" && this.status.refusal === "meeting_gone") return;
+    this.o.audio.stop();
+    this.closeSocket();
+    this.fail("refused", "meeting_gone");
   }
 
   private async logPause(paused: boolean): Promise<void> {

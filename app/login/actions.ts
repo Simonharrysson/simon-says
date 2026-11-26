@@ -21,7 +21,7 @@ export async function signInWithGoogle(formData?: FormData): Promise<void> {
       redirectTo: callback,
       scopes: GOOGLE_SCOPES.join(" "),
       // offline + consent: Google returns a refresh token on every sign-in.
-      queryParams: { access_type: "offline", prompt: "consent" },
+      queryParams: { access_type: "offline", prompt: "consent select_account" },
     },
   });
   if (error || !data.url) redirect("/login?fel=start");
@@ -32,4 +32,11 @@ export async function signOut(): Promise<void> {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+/** Sign out and return to the same invite, so the person can pick another Google account. */
+export async function switchAccount(formData: FormData): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+  redirect(safeNextPath(formData.get("next")?.toString()));
 }

@@ -8,12 +8,13 @@ import { Label } from "@/components/ui/label";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { IconArrowRight, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconTrash } from "@/components/ui/icons";
+import { IconArrowRight, IconExternal, IconMic, IconPlay, IconPlus, IconRefresh, IconStop, IconTrash } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { MeetingStatus } from "@/lib/db/types";
 import { formatDateTime, formatDuration, formatMeetingDate, plural } from "@/lib/format";
+import { canEndFromOrgPage } from "@/lib/meetings/access";
 import { canResume, docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
 import type { Notice } from "@/lib/ui/messages";
 import { DocAccessButton } from "./DocAccessButton";
@@ -52,9 +53,8 @@ export interface OrgDetailViewProps {
   /** The meeting-format card (`FormatCard`), shown above the people panel. */
   formatCard?: ReactNode;
   /**
-   * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Shown only to the
-   * person who started it (only they can run it): running meetings and ones abandoned < 2 h ago.
-   * Hidden when absent.
+   * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
+   * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
    */
   liveMeetingHref?: (meetingId: string) => string;
   /**
@@ -70,13 +70,136 @@ export interface OrgDetailViewProps {
     setPersonRole?: FormAction;
     deletePerson: FormAction;
     deleteMeeting: FormAction;
+    /** Admins and the starter: end a live meeting (hidden `orgId`, `meetingId`). */
+    endMeeting?: FormAction;
     updateOrg: FormAction;
     deleteOrg: FormAction;
     /** Admins: remove a member (hidden `orgId`, `userId`). */
     removeMember?: FormAction;
     /** Leave the org yourself (hidden `orgId`). */
     leaveOrg?: FormAction;
+    /** Admins: make a member admin or take admin away (hidden `orgId`, `userId`, `role` = admin | member). */
+    setMemberRole?: FormAction;
   };
+}
+
+/**
+ * One row of the members panel. Admins can make others admin or take it away, and remove
+ * members; everyone can leave. The last admin is offered neither stepping down nor leaving
+ * (the DB refuses both too, migration 0031): the row says what to do instead.
+ */
+function MemberRow({
+  member: m,
+  me,
+  org,
+  isAdmin,
+  adminCount,
+  memberCount,
+  actions,
+}: {
+  member: { userId: string; email: string; role: "admin" | "member" };
+  me: boolean;
+  org: { id: string; name: string };
+  isAdmin: boolean;
+  adminCount: number;
+  memberCount: number;
+  actions: OrgDetailViewProps["actions"];
+}) {
+  const label = m.email || "Okänd medlem";
+  const lastAdmin = m.role === "admin" && adminCount <= 1;
+  const roleForm = (role: "admin" | "member") => ({ orgId: org.id, userId: m.userId, role });
+
+  let controls: ReactNode = null;
+  if (me) {
+    controls = lastAdmin ? (
+      memberCount > 1 && <span className="text-sm text-ink-3">Gör någon annan till admin först för att kunna lämna.</span>
+    ) : (
+      <>
+        {isAdmin && actions.setMemberRole && (
+          <ConfirmAction
+            action={actions.setMemberRole}
+            hidden={roleForm("member")}
+            trigger="Sluta vara admin"
+            triggerVariant="ghost"
+            title={`Sluta vara admin i ${org.name}?`}
+            description="Du blir vanlig medlem och kan fortfarande starta möten. Bara en admin kan göra dig till admin igen."
+            confirmLabel="Sluta vara admin"
+            pendingLabel="Sparar…"
+            confirmVariant="primary"
+          />
+        )}
+        {actions.leaveOrg && (
+          <ConfirmAction
+            action={actions.leaveOrg}
+            hidden={{ orgId: org.id }}
+            trigger="Lämna"
+            triggerVariant="ghost"
+            title={`Lämna ${org.name}?`}
+            description="Du ser inte längre föreningens möten och får inte nya mötesdokument. Dokument som redan delats med dig ligger kvar i din Drive. Du kan gå med igen via en inbjudningslänk."
+            confirmLabel="Lämna föreningen"
+            pendingLabel="Lämnar…"
+          />
+        )}
+      </>
+    );
+  } else if (isAdmin) {
+    controls = (
+      <>
+        {actions.setMemberRole &&
+          (m.role === "member" ? (
+            <ConfirmAction
+              action={actions.setMemberRole}
+              hidden={roleForm("admin")}
+              trigger="Gör till admin"
+              triggerVariant="ghost"
+              title={`Gör ${label} till admin?`}
+              description="Hen kan då ändra föreningens inställningar, ta bort medlemmar, radera möten och föreningen, och göra andra till admin. Du är fortfarande admin."
+              confirmLabel="Gör till admin"
+              pendingLabel="Sparar…"
+              confirmVariant="primary"
+            />
+          ) : (
+            <ConfirmAction
+              action={actions.setMemberRole}
+              hidden={roleForm("member")}
+              trigger="Ta bort som admin"
+              triggerVariant="ghost"
+              title={`Ta bort ${label} som admin?`}
+              description="Hen blir vanlig medlem och kan fortfarande starta möten."
+              confirmLabel="Ta bort som admin"
+              pendingLabel="Sparar…"
+              confirmVariant="primary"
+            />
+          ))}
+        {actions.removeMember && (
+          <ConfirmAction
+            action={actions.removeMember}
+            hidden={{ orgId: org.id, userId: m.userId }}
+            trigger="Ta bort"
+            triggerVariant="ghost"
+            title={`Ta bort ${label}?`}
+            description="Hen ser inte längre föreningens möten och får inte nya mötesdokument. Mötesdokument som redan delats med hen förblir delade – ta bort delningen i Google Drive om det behövs. Inbjudningslänken fungerar fortfarande, så skapa en ny länk om hen inte ska kunna gå med igen."
+            confirmLabel="Ta bort medlemmen"
+            pendingLabel="Tar bort…"
+          />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <li>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-6 [li:first-child>&]:border-t-0 min-h-11 py-2">
+        <span className="flex min-w-0 flex-1 basis-48 flex-col gap-[0.1rem]">
+          <span className="text-sm font-medium wrap-anywhere">{label}</span>
+          {(m.role === "admin" || me) && (
+            <span className="text-sm text-ink-3">{[m.role === "admin" ? "admin" : null, me ? "du" : null].filter(Boolean).join(" · ")}</span>
+          )}
+        </span>
+        {controls && <div className="ml-auto flex flex-wrap items-center justify-end gap-1">{controls}</div>}
+      </div>
+    </li>
+  );
 }
 
 export type OrgTab = "moten" | "oversikt";
@@ -115,7 +238,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
-  const running = liveMeetingHref && active && userId !== null && active.started_by === userId ? active : null;
+  // Any member may continue the running meeting from their own device (Meet-like presence).
+  const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
 
   return (
@@ -158,7 +282,11 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             <Banner tone="info" title="Ett möte pågår" live={false}>
               {access(active) !== "open" && active.started_by !== userId ? (
                 <div className="flex flex-col items-start gap-2">
-                  <p>Anteckningarna skrivs i mötesdokumentet. Ett nytt möte kan startas när det är avslutat.</p>
+                  <p>
+                    Anteckningarna skrivs i mötesdokumentet. Ett nytt möte kan startas när det är avslutat.
+                    {active.status === "live" &&
+                      " Är ingen kvar i mötet avslutas det av sig självt efter några minuter, och anteckningarna görs klara."}
+                  </p>
                   <DocAccessButton
                     meetingId={active.id}
                     docHref={docUrl(active.doc_id)}
@@ -174,6 +302,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
                     mötesdokumentet
                   </a>
                   . Ett nytt möte kan startas när det är avslutat.
+                  {active.status === "live" &&
+                    " Är ingen kvar i mötet avslutas det av sig självt efter några minuter, och anteckningarna görs klara."}
                 </p>
               )}
             </Banner>
@@ -193,6 +323,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             access={access}
             starter={starter}
             deleteMeeting={actions.deleteMeeting}
+            endMeeting={actions.endMeeting}
             liveMeetingHref={liveMeetingHref}
           />
           {formatCard}
@@ -228,52 +359,19 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           {members && (
             <Panel flush title="Medlemmar" titleId="members-title" actions={<span className="text-sm text-ink-3">{members.length}</span>}>
               <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">Kan logga in, starta möten och får tillgång till nya mötesdokument.</p>
-              <ul  aria-labelledby="members-title">
-                {members.map((m) => {
-                  const me = userId !== null && m.userId === userId;
-                  const label = m.email || "Okänd medlem";
-                  return (
-                    <li key={m.userId}>
-                      <div className="flex items-center gap-3 border-t border-line px-6 [li:first-child>&]:border-t-0 min-h-11 py-2">
-                        <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
-                          <span className="text-sm font-medium wrap-anywhere">{label}</span>
-                          {(m.role === "admin" || me) && (
-                            <span className="text-sm text-ink-3">{[m.role === "admin" ? "admin" : null, me ? "du" : null].filter(Boolean).join(" · ")}</span>
-                          )}
-                        </span>
-                        {me && actions.leaveOrg ? (
-                          <ConfirmAction
-                            action={actions.leaveOrg}
-                            hidden={{ orgId: org.id }}
-                            trigger="Lämna"
-                            triggerVariant="ghost"
-                            triggerSize="sm"
-                            title={`Lämna ${org.name}?`}
-                            description="Du ser inte längre föreningens möten och får inte nya mötesdokument. Dokument som redan delats med dig ligger kvar i din Drive. Du kan gå med igen via en inbjudningslänk."
-                            confirmLabel="Lämna föreningen"
-                            pendingLabel="Lämnar…"
-                          />
-                        ) : (
-                          isAdmin &&
-                          !me &&
-                          actions.removeMember && (
-                            <ConfirmAction
-                              action={actions.removeMember}
-                              hidden={{ orgId: org.id, userId: m.userId }}
-                              trigger="Ta bort"
-                              triggerVariant="ghost"
-                              triggerSize="sm"
-                              title={`Ta bort ${label}?`}
-                              description="Hen ser inte längre föreningens möten och får inte nya mötesdokument. Mötesdokument som redan delats med hen förblir delade – ta bort delningen i Google Drive om det behövs. Inbjudningslänken fungerar fortfarande, så skapa en ny länk om hen inte ska kunna gå med igen."
-                              confirmLabel="Ta bort medlemmen"
-                              pendingLabel="Tar bort…"
-                            />
-                          )
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
+              <ul aria-labelledby="members-title">
+                {members.map((m) => (
+                  <MemberRow
+                    key={m.userId}
+                    member={m}
+                    me={userId !== null && m.userId === userId}
+                    org={org}
+                    isAdmin={isAdmin}
+                    adminCount={members.filter((x) => x.role === "admin").length}
+                    memberCount={members.length}
+                    actions={actions}
+                  />
+                ))}
               </ul>
             </Panel>
           )}
@@ -329,6 +427,7 @@ function MeetingsPanel({
   isAdmin,
   userId,
   deleteMeeting,
+  endMeeting,
   liveMeetingHref,
   access,
   starter,
@@ -342,6 +441,7 @@ function MeetingsPanel({
   isAdmin: boolean;
   userId: string | null;
   deleteMeeting: FormAction;
+  endMeeting?: FormAction;
   liveMeetingHref?: (meetingId: string) => string;
 }) {
   return (
@@ -377,12 +477,25 @@ function MeetingsPanel({
                       </span>
                     </span>
                     <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
-                      {state === "active" && mine && liveMeetingHref && (
+                      {meeting.status === "live" && userId !== null && liveMeetingHref && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
                           Till mötet
                         </ButtonLink>
                       )}
-                      {meeting.status === "abandoned" && mine && liveMeetingHref && canResume(meeting) && (
+                      {meeting.status === "live" && endMeeting && canEndFromOrgPage(isAdmin ? "admin" : "member", mine) && (
+                        <ConfirmAction
+                          action={endMeeting}
+                          hidden={{ orgId, meetingId: meeting.id }}
+                          trigger="Avsluta mötet"
+                          triggerIcon={<IconStop size={16} />}
+                          triggerVariant="ghost"
+                          title="Avsluta mötet?"
+                          description="Inspelningen slutar och anteckningarna görs klara i dokumentet. Det som redan sagts finns kvar."
+                          confirmLabel="Avsluta mötet"
+                          pendingLabel="Avslutar…"
+                        />
+                      )}
+                      {meeting.status === "abandoned" && userId !== null && liveMeetingHref && canResume(meeting) && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} size="sm" icon={<IconPlay size={16} />}>
                           Fortsätt mötet
                         </ButtonLink>

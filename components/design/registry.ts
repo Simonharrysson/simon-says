@@ -17,6 +17,7 @@ export const designViews: DesignView[] = [
   { id: "orgs-empty", title: "Föreningar · tomt", group: "Sidor" },
   { id: "orgs", title: "Föreningar · med fel", group: "Sidor" },
   { id: "org-admin", title: "Förening · admin", group: "Sidor" },
+  { id: "org-admins", title: "Förening · två admins, överlämning", group: "Sidor" },
   { id: "format-card-admin", title: "Mötesformat · admin, ingen mötesmapp", group: "Sidor" },
   { id: "format-card-full", title: "Mötesformat · stadgarnas punkter, mapp vald", group: "Sidor" },
   { id: "format-card-picker-off", title: "Mötesformat · Google-väljaren av", group: "Sidor" },

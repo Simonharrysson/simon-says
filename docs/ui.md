@@ -283,26 +283,34 @@ the digits.
 ## Org page hooks for Task 7
 
 `OrgDetailView` takes `startMeetingHref?` and `liveMeetingHref?: (id) => string`. With the latter,
-the starter's running meeting gets "Till mötet" in the list and the header action becomes "Fortsätt mötet";
-the starter's meetings abandoned < 2 h ago get "Fortsätt mötet" in the list. Other members see no live
-links (only the starter can run a meeting).
+any member may continue the running meeting: it gets "Till mötet" in the list and the header action becomes
+"Fortsätt mötet"; meetings abandoned < 2 h ago get "Fortsätt mötet" in the list. Admins and the starter also get
+a ghost "Avsluta mötet" (`ConfirmAction`, `actions.endMeeting`) on a live row. A live meeting nobody is connected
+to ends by itself after a grace period (`lib/meetings/presence.ts`), like Meet.
 `startMeeting?: ReactNode` is the "Starta möte" panel (the page passes `StartMeetingForm`: a link to the live
 page's consent step `/meetings/ny/<orgId>`, plus the admins' Testmöte); while a meeting is live/ending it is
 replaced by an info banner with the Doc link.
 
 Members panel (final fix wave A2): each member's email with "admin" / "du". Admins get a ghost "Ta bort" per other
 member, everyone a ghost "Lämna" on their own row; both open a `ConfirmAction` dialog whose copy says that Docs
-already shared stay shared (and, for Ta bort, that the invite link still works until a new one is made). The last
-admin can't leave or be removed (the notice suggests deleting the förening instead).
+already shared stay shared (and, for Ta bort, that the invite link still works until a new one is made).
+Admin handover (todo #8, migration 0031): admins also get "Gör till admin" on members and "Ta bort som admin" on
+other admins, and "Sluta vara admin" on their own row while another admin exists; each opens a `ConfirmAction`
+with a primary (not red) confirm. The last admin's own row shows "Gör någon annan till admin först för att kunna
+lämna." instead of Lämna. The DB refuses demoting or removing the last admin on every path (`last_admin`); the
+notices say "Gör någon annan till admin först". Actions wrap under the email at phone width. `/design`:
+`org-admin` (last admin), `org-admins` (two admins).
 
 ## The live page (Task 7)
 
 Routes outside the `(app)` layout: `/meetings/ny/<orgId>` (consent step; Start asks for the mic from the click,
 then `POST /api/meetings` creates the Doc, the address becomes `/meetings/<id>` without a reload) and
-`/meetings/<id>` (starter only; live or abandoned < 2 h → "Fortsätt mötet", which `POST /resume`s and starts
+`/meetings/<id>` (any member; live or abandoned < 2 h → "Fortsätt mötet", or "Ta över här" while another tab
+records it, which `POST /resume`s and starts
 the mic from that click; ending → polls until done; done → ended). `LiveMeetingController` maps `LiveStream`
 (`lib/audio/stream.ts`) onto `LiveMeeting`; heartbeat answers feed `minutesLeft`, `docPaused` and
-`lastTickOkAt`.
+`lastTickOkAt`. "Logga in igen" opens `/login?next=/inloggad` in a new tab: that page says "close this tab"
+and pings the meeting tab (BroadcastChannel), so the sign-in never opens a second meeting tab (U8).
 
 Final fix wave: the first connection says "Ansluter…" (no banner); a paused meeting never shows the "Ljudet väntar"
 banner. The mic ring follows the real level (still when the mic hears nothing; opacity only with reduced motion), and
@@ -376,6 +384,11 @@ disabled and shows "Google-väljaren är inte inställd än."
   - the fixed items, each with a label, a type (Formalia / Må-runda / Från förra veckan / Ämne /
     Övrigt), "Sist", ↑ ↓ and **Ta bort**. Removing the Må-runda is valid: not every förening has one.
     The hint says so.
+  - with a Må-runda item: the checkbox "Dölj må-rundan i anteckningarna (experimentellt — kan ibland
+    dölja annat som sägs)", unchecked by default, with the hint "Utan bocken antecknas må-rundan som
+    de andra punkterna." Ticked, the format stores `hideCheckin: true` and its meetings mask the
+    Må-runda out of the notes. Unchecked (and for every format saved before), the Må-runda is an
+    ordinary item.
   - numbering (1. / § / none);
   - tasks heading on/off with group by role/person;
   - notes heading on/off;

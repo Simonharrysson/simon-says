@@ -36,6 +36,7 @@ import { updateNotes, type NotesClient, type UpdateNotesInput, type UpdateNotesR
 import type { NotesItem } from "@/lib/notes/schema";
 import { extractNames } from "@/lib/names/extract";
 import { pendingNameRounds, runNameRound, type ExtractFn } from "@/lib/names/round";
+import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/meetings/presence";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -52,7 +53,6 @@ export const TICK_FLOOR_SEC = 30;
 export const MAX_NEW_BLOCKS = 20;
 export const CONFLICT_RETRIES = 4;
 export const ALARM_AFTER_FAILED = 3;
-export const ABANDON_AFTER_SEC = 15 * 60;
 /** Default time an end may take (Ruling 27): a route has maxDuration 300 s. */
 export const END_BUDGET_MS = 240_000;
 /** End attempts (the end itself + cron retries) before ending without a final pass, with an alarm. */
@@ -1282,6 +1282,12 @@ export async function finishMeeting(
   }
 }
 
+/** Presence end: claim only while still no tab; `hadHeartbeat` as the sweep saw it. */
+export interface StaleBefore {
+  cutoff: () => Date;
+  hadHeartbeat: boolean;
+}
+
 /** `ending`: the final pass didn't go through yet; the meeting stays `ending` and the cron retries. */
 export type EndResult = "ended" | "ending" | "noop" | "not_found";
 
@@ -1293,7 +1299,7 @@ export type EndResult = "ended" | "ending" | "noop" | "not_found";
  */
 export async function endMeeting(
   meetingId: string,
-  opts: { abandon?: boolean; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: StaleBefore; deadlineAt?: Date; deps?: Partial<TickDeps> } = {},
 ): Promise<EndResult> {
   const claim = await claimEnd(meetingId, opts);
   if (claim !== "claimed") return claim;
@@ -1308,12 +1314,11 @@ export async function endMeeting(
  */
 export async function claimEnd(
   meetingId: string,
-  opts: { abandon?: boolean; deps?: Partial<TickDeps> } = {},
+  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: StaleBefore; deps?: Partial<TickDeps> } = {},
 ): Promise<"claimed" | "noop" | "not_found"> {
-  const now = (opts.deps?.now ?? (() => new Date()))();
-  const claimed = must(
-    "end: claim",
-    await db()
+  // `endedAt`: the presence end stamps when the last tab was heard from, not when the cron ran.
+  const now = opts.endedAt ?? (opts.deps?.now ?? (() => new Date()))();
+  let query = db()
       .from("meetings")
       .update({
         status: "ending",
@@ -1323,9 +1328,17 @@ export async function claimEnd(
         end_lease_until: null,
       })
       .eq("id", meetingId)
-      .eq("status", "live")
-      .select("id"),
-  ) as { id: string }[];
+      .eq("status", "live");
+  if (opts.staleBefore) {
+    // Presence end: only if still no tab, judged at the claim itself (review I1). A heartbeat
+    // that landed after the sweep read its snapshot (a laptop waking up) keeps it live.
+    // No heartbeat yet: it must still have none and have started before the cutoff.
+    const cutoff = opts.staleBefore.cutoff().toISOString();
+    query = opts.staleBefore.hadHeartbeat
+      ? query.lt("last_heartbeat_at", cutoff)
+      : query.is("last_heartbeat_at", null).lt("started_at", cutoff);
+  }
+  const claimed = must("end: claim", await query.select("id")) as { id: string }[];
   if (!claimed.length) {
     const exists = must("end: read", await db().from("meetings").select("id").eq("id", meetingId).maybeSingle());
     return exists ? "noop" : "not_found";
@@ -1338,6 +1351,9 @@ export async function claimEnd(
 
 export interface SweepSummary {
   sessionsClosed: number;
+  /** Ended because no tab was connected for PRESENCE_GRACE_SEC (status done, like Avsluta). */
+  autoEnded: number;
+  /** The same, but nothing was ever said: abandoned (a false start). */
   abandoned: number;
   finished: number;
   resumed: number;
@@ -1346,8 +1362,9 @@ export interface SweepSummary {
 
 /**
  * The cron (every 5 min): close expired ElevenLabs sessions; retry the end of meetings still
- * `ending` (Ruling 27); abandon live meetings without a heartbeat (or, never having had one, a
- * start) for 15 min; resume paused Docs whose owner signed in again; tick live meetings with
+ * `ending` (Ruling 27); end live meetings no tab has been connected to for PRESENCE_GRACE_SEC
+ * (lib/meetings/presence.ts): the normal end (final pass, done) when anything was said,
+ * abandoned when nothing was; resume paused Docs whose owner signed in again; tick live meetings with
  * segments left unticked. Every step runs within one deadline (`budgetMs`, default 250 s of the
  * route's 300 s) and no new work starts with less than a minute left. `orgId` limits the
  * meeting steps to one org (tests).
@@ -1359,7 +1376,7 @@ export async function finalizeSweep(
   const deadlineAt = new Date(deps.now().getTime() + (opts.budgetMs ?? 250_000));
   const left = () => deadlineAt.getTime() - deps.now().getTime() > SWEEP_MIN_LEFT_MS;
   const env = getEnv();
-  const summary: SweepSummary = { sessionsClosed: 0, abandoned: 0, finished: 0, resumed: 0, caughtUp: 0 };
+  const summary: SweepSummary = { sessionsClosed: 0, autoEnded: 0, abandoned: 0, finished: 0, resumed: 0, caughtUp: 0 };
   const scoped = <T extends { org_id: string }>(rows: T[]) => (opts.orgId ? rows.filter((r) => r.org_id === opts.orgId) : rows);
 
   try {
@@ -1385,8 +1402,7 @@ export async function finalizeSweep(
       await db().from("meetings").select("id, org_id, started_at, last_heartbeat_at, doc_paused_at, status").eq("status", "live"),
     ) as Pick<MeetingRow, "id" | "org_id" | "started_at" | "last_heartbeat_at" | "doc_paused_at" | "status">[],
   );
-  const stale = (m: (typeof live)[number]) =>
-    now - new Date(m.last_heartbeat_at ?? m.started_at).getTime() > ABANDON_AFTER_SEC * 1000;
+  const stale = (m: (typeof live)[number]) => presence(m, now) === "gone";
   for (const m of ending) {
     if (!left()) break;
     try {
@@ -1399,9 +1415,26 @@ export async function finalizeSweep(
   for (const m of live.filter(stale)) {
     if (!left()) break;
     try {
-      if ((await endMeeting(m.id, { abandon: true, deadlineAt, deps: opts.deps })) !== "noop") summary.abandoned++;
+      const speech = must(
+        "sweep: speech",
+        await db().from("segments").select("segment_index").eq("meeting_id", m.id).limit(1),
+      ) as unknown[];
+      const status = autoEndStatus(speech.length > 0);
+      const result = await endMeeting(m.id, {
+        abandon: status === "abandoned",
+        // done: ended when the last tab was heard from. abandoned: the claim time, so the 2 h
+        // "Fortsätt mötet" window and the shown duration are not cut short.
+        ...(status === "done" ? { endedAt: new Date(lastSeenMs(m)) } : {}),
+        staleBefore: {
+          cutoff: () => new Date(deps.now().getTime() - PRESENCE_GRACE_SEC * 1000),
+          hadHeartbeat: m.last_heartbeat_at !== null,
+        },
+        deadlineAt,
+        deps: opts.deps,
+      });
+      if (result !== "noop") summary[status === "done" ? "autoEnded" : "abandoned"]++;
     } catch (e) {
-      console.error(`sweep: abandon ${m.id}: ${errorText(e)}`);
+      console.error(`sweep: auto end ${m.id}: ${errorText(e)}`);
     }
   }
 

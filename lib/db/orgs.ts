@@ -58,11 +58,16 @@ export async function myRole(db: Db, orgId: string): Promise<OrgMemberRow["role"
     data: { user },
   } = await db.auth.getUser();
   if (!user) return null;
+  return memberRole(db, orgId, user.id);
+}
+
+/** A known user's role in an org (no second auth round trip), or null when not a member. */
+export async function memberRole(db: Db, orgId: string, userId: string): Promise<OrgMemberRow["role"] | null> {
   const { data, error } = await db
     .from("org_members")
     .select("role")
     .eq("org_id", orgId)
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) fail("myRole", error);
   return data?.role ?? null;
@@ -165,6 +170,22 @@ export async function removeMember(db: Db, orgId: string, userId: string): Promi
   if (error?.code === "42501") return "forbidden";
   if (error) fail("removeMember", error);
   return data as RemoveMemberResult;
+}
+
+/** ok | unchanged | not_member | last_admin (the org must keep an admin) | not_found | invalid | forbidden. */
+export type SetMemberRoleResult = "ok" | "unchanged" | "not_member" | "last_admin" | "not_found" | "invalid" | "forbidden";
+
+/** An admin makes a member admin, or takes admin away (migration 0031). The last admin stays. */
+export async function setMemberRole(
+  db: Db,
+  orgId: string,
+  userId: string,
+  role: "admin" | "member",
+): Promise<SetMemberRoleResult> {
+  const { data, error } = await db.rpc("set_member_role", { p_org_id: orgId, p_user_id: userId, p_role: role });
+  if (error?.code === "42501") return "forbidden";
+  if (error) fail("setMemberRole", error);
+  return data as SetMemberRoleResult;
 }
 
 /** Leave an org yourself; the last admin can't (0018). */

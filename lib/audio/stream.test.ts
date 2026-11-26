@@ -88,12 +88,12 @@ const json = (status: number, body?: unknown) => ({ status, body });
 
 function makeFetch() {
   const replies: Record<string, Reply[]> = { token: [], segments: [], heartbeat: [], pause: [] };
-  const calls: { path: string; body: any }[] = [];
+  const calls: { path: string; body: any; headers: Headers }[] = [];
   let sessions = 0;
   const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
     const path = url.split("/").at(-1)!;
     const body = init?.body ? JSON.parse(init.body as string) : undefined;
-    calls.push({ path, body });
+    calls.push({ path, body, headers: new Headers(init?.headers) });
     let reply = replies[path]?.shift();
     if (!reply) {
       if (path === "token") reply = json(200, { token: `tok${++sessions}`, wsUrl: "wss://fake/realtime?model_id=scribe_v3_live", sessionId: `s${sessions}` });
@@ -489,6 +489,52 @@ describe("LiveStream", () => {
     expect(t.of("segments").flatMap((c) => c.body.segments).map((r: { text: string }) => r.text)).toEqual(["mitt"]);
   });
 
+  it("signed out: heartbeats carry the presence token; a signedOut answer keeps asking to sign in (review I2)", async () => {
+    const t = setup();
+    const health: { authLost: boolean }[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    t.replies.token.push(json(200, { token: "tokP", wsUrl: "wss://fake/realtime?x=1", sessionId: "sP", presenceToken: "pres-1" }));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.replies.heartbeat.push(json(200, { warn: false, stop: false, currentElSessionId: "sP", signedOut: true }));
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    const beats = t.of("heartbeat");
+    expect(beats.at(-1)!.headers.get("x-presence-token")).toBe("pres-1");
+    expect(health.at(-1)?.authLost).toBe(true);
+    expect(t.stream.state.state).toBe("live");
+    // Signed in again: the next ordinary answer clears it.
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    expect(health.at(-1)?.authLost).toBe(false);
+  });
+
+  it("the meeting ended on the server (heartbeat 409): the ElevenLabs socket closes at once, no drain wait", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.replies.heartbeat.push(json(409, { error: "not_live" }));
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    expect(t.audio.stopped).toBe(true);
+    expect(t.sockets[0].readyState).not.toBe(1);
+    expect(t.sockets[0].sent.some((m) => m.commit === true)).toBe(false);
+  });
+
+  it("heartbeat 404: 'meeting_gone', not the wrong-account refusal", async () => {
+    const t = setup();
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.replies.heartbeat.push(json(404, { error: "not_found" }));
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_MS);
+    await settle();
+    expect(t.stream.state).toMatchObject({ state: "error", refusal: "meeting_gone" });
+    expect(t.audio.stopped).toBe(true);
+  });
+
   it("401 on segments keeps the runs and reports authLost until a post succeeds", async () => {
     const t = setup();
     const health: unknown[] = [];
@@ -685,11 +731,11 @@ describe("LiveStream", () => {
     expect(t.sockets).toHaveLength(1);
   });
 
-  it("403 not_starter on segments drops the runs and stops sending (not authLost)", async () => {
+  it("403 not_member on segments drops the runs and stops sending (not authLost)", async () => {
     const t = setup();
     const health: { authLost: boolean }[] = [];
     t.stream.on("health", (h) => health.push(h));
-    t.replies.segments.push(json(403, { error: "not_starter" }));
+    t.replies.segments.push(json(403, { error: "not_member" }));
     await t.stream.start();
     await settle();
     t.sockets[0].open();
@@ -697,7 +743,24 @@ describe("LiveStream", () => {
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
     await settle();
     expect(t.stream.pending).toBe(0);
-    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_starter" });
+    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_member" });
+    expect(t.audio.stopped).toBe(true);
+    expect(health.some((h) => h.authLost)).toBe(false);
+  });
+
+  it("404 on segments (an account outside the förening: RLS hides the meeting) stops the same way", async () => {
+    const t = setup();
+    const health: { authLost: boolean }[] = [];
+    t.stream.on("health", (h) => health.push(h));
+    t.replies.segments.push(json(404, { error: "not_found" }));
+    await t.stream.start();
+    await settle();
+    t.sockets[0].open();
+    t.sockets[0].emit(diarized(0, [["x", "s"]]));
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    await settle();
+    expect(t.stream.pending).toBe(0);
+    expect(t.stream.state).toMatchObject({ state: "error", refusal: "not_member" });
     expect(t.audio.stopped).toBe(true);
     expect(health.some((h) => h.authLost)).toBe(false);
   });

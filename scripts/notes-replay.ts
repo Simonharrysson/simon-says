@@ -47,6 +47,7 @@ async function main() {
     realtime: process.argv.includes("--realtime"),
     speed: Number(arg("speed") ?? 1),
     ...(expected.agenda ? { agenda: true as const } : {}),
+    hideCheckin: process.argv.includes("--hide-checkin"),
     onTick: (t) => {
       const u = t.usage;
       const spent = ledgerAdd(u.usd + (t.checkinUsd ?? 0));
@@ -68,7 +69,7 @@ async function main() {
   console.log(`churn per tick (plan metric, text, 'now' incl.): ${pct(r.churns)}  median ${(r.medianChurn * 100).toFixed(1)}%`);
   console.log(`strict churn per tick (text/owner/due/removals, 'now' excl.): ${pct(r.strictChurns)}  median ${(r.medianStrictChurn * 100).toFixed(1)}%`);
   console.log(`cache hit rate per tick: ${pct(r.log.map((l) => l.hit))}`);
-  const s = score(r.items, expected, ticksOf(r));
+  const s = score(r.items, expected, ticksOf(r), { hideCheckin: r.hideCheckin });
   console.log(`recall: ${s.found}/${s.total}`);
   for (const line of s.recall) console.log(`  ${line}`);
   console.log(`must_not hits (final): ${s.mustNot.length}/${expected.must_not?.length ?? 0}`);

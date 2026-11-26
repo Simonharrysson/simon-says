@@ -15,5 +15,11 @@ describe("notices", () => {
     }
     expect(orgNotice(undefined, "mote")?.tone).toBe("success");
     expect(orgNotice("unknown")).toBeNull();
+    for (const code of ["admin-last_admin", "admin-forbidden", "admin-not_member", "admin-not_found", "admin-invalid", "medlem-last_admin"]) {
+      expect(orgNotice(code)?.tone).toBe("danger");
+    }
+    expect(orgNotice(undefined, "admin-ny")?.tone).toBe("success");
+    expect(orgNotice(undefined, "admin-bort")?.tone).toBe("success");
+    expect(orgNotice("admin-last_admin")?.text).toContain("Gör någon annan till admin först");
   });
 });

@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { LiveMeetingController } from "@/components/live/LiveMeetingController";
 import { isUuid } from "@/lib/db/ids";
-import { getOrg } from "@/lib/db/orgs";
+import { getOrg, memberRole } from "@/lib/db/orgs";
 import type { MeetingStatus } from "@/lib/db/types";
 import { meetingTitle } from "@/lib/docs/create";
+import { canRunMeeting } from "@/lib/meetings/access";
+import { presence } from "@/lib/meetings/presence";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canResume, docUrl } from "@/lib/ui/meetings";
 
@@ -12,8 +14,8 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Möte", robots: { index: false, follow: false } };
 
 /**
- * The live meeting page (full-screen focus mode: outside the (app) layout). Only the person
- * who started the meeting runs it; other members go to the förening's page (Doc link there).
+ * The live meeting page (full-screen focus mode: outside the (app) layout). Any member of the
+ * förening may run (continue) the meeting here; one tab at a time records it.
  */
 export default async function MeetingPage({
   params,
@@ -34,14 +36,14 @@ export default async function MeetingPage({
   // As the user: RLS hides meetings of other orgs.
   const { data: m, error } = await db
     .from("meetings")
-    .select("id, org_id, started_by, status, started_at, ended_at, doc_id, current_el_session_id, last_tick_ok_at, doc_paused_at")
+    .select("id, org_id, started_by, status, started_at, ended_at, doc_id, current_el_session_id, last_tick_ok_at, doc_paused_at, last_heartbeat_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`meeting page: ${error.message}`);
   if (!m) notFound();
   const org = await getOrg(db, m.org_id);
   if (!org) notFound();
-  if (m.started_by !== user.id) redirect(`/orgs/${org.id}`);
+  if (!canRunMeeting(await memberRole(db, org.id, user.id))) redirect(`/orgs/${org.id}`);
 
   const status = m.status as MeetingStatus;
   // How many members the Doc couldn't be shared with at start (logged on the started event).
@@ -76,6 +78,8 @@ export default async function MeetingPage({
           resumable: canResume({ status, ended_at: m.ended_at }),
           lastTickOkAt: m.last_tick_ok_at,
           docPaused: m.doc_paused_at !== null,
+          // Another tab (maybe another member's laptop) is recording it right now.
+          connectedElsewhere: status === "live" && presence(m, Date.now()) === "connected",
           ...(m.ended_at ? { durationSeconds: (Date.parse(m.ended_at) - Date.parse(m.started_at)) / 1000 } : {}),
         }}
       />

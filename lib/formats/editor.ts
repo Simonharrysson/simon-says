@@ -28,6 +28,8 @@ export interface EditorState {
   signatures: string[];
   /** Agenda items the stadgar require (C1). */
   requiredItems: string[];
+  /** Hide the Må-runda from the notes (opt-in, experimental; default off). */
+  hideCheckin: boolean;
 }
 
 export const ROLE_NAMES: Record<ItemRole, string> = {
@@ -59,6 +61,7 @@ export function profileToEditor(p: FormatProfile): EditorState {
     notes: p.notesSection ? { on: true, label: p.notesSection.label } : { on: false, label: "Anteckningar" },
     signatures: [...(p.signatures ?? [])],
     requiredItems: [...p.requiredItems],
+    hideCheckin: p.hideCheckin === true,
   };
 }
 
@@ -138,6 +141,8 @@ export function editorToProfile(s: EditorState): { ok: true; profile: FormatProf
     tone: VECKOMOTE.tone,
     signatures: signatures.length ? signatures : null,
     requiredItems,
+    // Only stored when on, and only with a Må-runda item to hide.
+    ...(s.hideCheckin && s.items.some((i) => i.role === "checkin") ? { hideCheckin: true } : {}),
   });
   if (!parsed.success) return { ok: false, errors: ["Formatet är inte giltigt. Kontrollera fälten."] };
   return { ok: true, profile: parsed.data as FormatProfile };

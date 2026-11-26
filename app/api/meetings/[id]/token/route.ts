@@ -7,6 +7,9 @@ import { devWsOverride, mintToken, realtimeWsUrl } from "@/lib/elevenlabs/token"
 import { getEnv } from "@/lib/env";
 import { MAX_MINTS_PER_MEETING, mintSpacingSeconds } from "@/lib/limits";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { memberRole } from "@/lib/db/orgs";
+import { canRunMeeting } from "@/lib/meetings/access";
+import { issuePresenceToken } from "@/lib/meetings/presence-token";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +34,9 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 /**
  * Mint an ElevenLabs single-use token for the meeting's next transcription session.
  * Body: `{ "closingSessionId"?: string }` — the session whose socket just closed (reconnect).
- * Returns `{ token, wsUrl, sessionId }`; connect to `${wsUrl}&token=${token}`.
+ * Returns `{ token, wsUrl, sessionId, presenceToken }` (presenceToken: lib/meetings/presence-token); connect to `${wsUrl}&token=${token}`.
  *
- * Only the member who started the meeting, only while it is live and consent is confirmed,
+ * Any member of the förening (one tab at a time: a new session takes over), only while it is live and consent is confirmed,
  * at most one mint per 5 s and 14 per meeting, and only while every cap has time left. The
  * whole decision (lock, rate limit, caps, max duration) is made atomically in
  * claim_el_session. The session's max duration is least(time left, 1 h) (Ruling 39); the page
@@ -53,12 +56,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // As the user: RLS hides meetings of other orgs (404).
   const { data: meeting, error } = await supabase
     .from("meetings")
-    .select("id, started_by, is_test")
+    .select("id, org_id, is_test")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`token: meeting: ${error.message}`);
   if (!meeting) return fail("not_found", 404);
-  if (meeting.started_by !== user.id) return fail("not_starter", 403);
+  if (!canRunMeeting(await memberRole(supabase, meeting.org_id, user.id))) return fail("not_member", 403);
   // A Testmöte replays a fictional meeting through a seeded test session: never a live, billed one.
   if (meeting.is_test) return fail("test_meeting", 409);
   if (getEnv().KILL_SWITCH) return fail("kill_switch", 503);
@@ -133,5 +136,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  return NextResponse.json({ token, wsUrl: realtimeWsUrl(), sessionId }, { headers: noStore });
+  const presenceToken = issuePresenceToken(getEnv().TOKEN_ENC_KEY, meeting.id, user.id, Date.now());
+  return NextResponse.json({ token, wsUrl: realtimeWsUrl(), sessionId, presenceToken }, { headers: noStore });
 }

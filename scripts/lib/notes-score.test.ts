@@ -123,19 +123,27 @@ describe("agenda mode", () => {
     expect(s.followup).toEqual({ ok: 1, total: 2 });
     expect(scorePasses(s)).toBe(false);
   });
-  it("checkinLeaks: a Må-runda line in the notes, final or live, or an item under checkin/followup", () => {
-    expect(score(final(0), expected).checkinLeaks).toEqual([]);
-    expect(scorePasses(score(final(0), expected))).toBe(true);
+  it("checkinLeaks with Må-runda hiding on (opt-in): a Må-runda line in the notes, final or live, or an item under checkin/followup", () => {
+    const on = { hideCheckin: true };
+    expect(score(final(0), expected, [], on).checkinLeaks).toEqual([]);
+    expect(scorePasses(score(final(0), expected, [], on))).toBe(true);
     const leak = item("n30", "action", "Jag ska boka tandläkaren", "Bo Ek");
-    const s = score([...final(0), leak], expected);
+    const s = score([...final(0), leak], expected, [], on);
     expect(s.checkinLeaks.length).toBe(1);
     expect(scorePasses(s)).toBe(false);
-    const live = score(final(0), expected, [{ atMs: 45_000, items: [leak] }]);
+    const live = score(final(0), expected, [{ atMs: 45_000, items: [leak] }], on);
     expect(live.checkinLeaks.length).toBe(1);
-    const underCheckin = score([...final(0), { id: "n31", section: "note", text: "Alla mår bra.", anchor: "ag-1" }], expected);
+    const underCheckin = score([...final(0), { id: "n31", section: "note", text: "Alla mår bra.", anchor: "ag-1" }], expected, [], on);
     expect(underCheckin.checkinLeaks.length).toBe(1);
-    const underFollowup = score([...final(0), { id: "n32", section: "note", text: "Hyran.", anchor: "ag-2" }], expected);
+    const underFollowup = score([...final(0), { id: "n32", section: "note", text: "Hyran.", anchor: "ag-2" }], expected, [], on);
     expect(underFollowup.checkinLeaks.length).toBe(1);
+  });
+  it("checkinLeaks by default (hiding off): Må-runda content and items under it are ordinary notes; under followup still leaks", () => {
+    const leak = item("n30", "action", "Jag ska boka tandläkaren", "Bo Ek");
+    expect(score([...final(0), leak], expected).checkinLeaks).toEqual([]);
+    expect(score(final(0), expected, [{ atMs: 45_000, items: [leak] }]).checkinLeaks).toEqual([]);
+    expect(score([...final(0), { id: "n31", section: "note", text: "Alla mår bra.", anchor: "ag-1" }], expected).checkinLeaks).toEqual([]);
+    expect(score([...final(0), { id: "n32", section: "note", text: "Hyran.", anchor: "ag-2" }], expected).checkinLeaks.length).toBe(1);
   });
   it("v1 expected files: the new bars are empty and pass", () => {
     const s = score([item("n1", "decision", "Open day 15 March")], { decisions: [{ key: "D", text: "Open day 15 March", match: [["15"]] }] });

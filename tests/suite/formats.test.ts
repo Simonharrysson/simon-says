@@ -84,9 +84,9 @@ describe("feature: formats (document formats)", () => {
     offline.on = false;
   });
 
-  it("Veckomöte in the förening's agenda Doc: items under their agenda item, tasks by role, info table, avslutat; human text untouched", async () => {
+  it("Veckomöte in the förening's agenda Doc (Må-runda hiding opted in): items under their agenda item, tasks by role, info table, avslutat; human text untouched", async () => {
     const human = linesOf(fixtureDoc()).filter((l) => l !== "");
-    const sim = FormatSim.start({ id: "m-vecko", doc: fixtureDoc(), profile: VECKOMOTE, script: { notes: VECKOMOTE_SCRIPT }, people: PEOPLE });
+    const sim = FormatSim.start({ id: "m-vecko", doc: fixtureDoc(), profile: { ...VECKOMOTE, hideCheckin: true }, script: { notes: VECKOMOTE_SCRIPT }, people: PEOPLE });
     expect(sim.meeting.agenda_roles).toEqual({ "ag-1": "procedural", "ag-2": "checkin", "ag-3": "followup", "ag-4": "topic", "ag-5": "topic", "ag-6": "other" });
     await sim.tick(block([{ at: 1000, speaker: 0, text: "Sommarfesten blir lördag den 14 juni. Anna bokar Kårallen till fredag." }]));
     await sim.tick(block([{ at: 50_000, speaker: 1, text: "Kassan är tolv tusen. Erik skickar kallelsen." }]), { attendees: "Maja Holm, Anna Berg, Erik Lund", window: CLOSED });
@@ -133,6 +133,25 @@ describe("feature: formats (document formats)", () => {
     expect(sim.inputs[0].agenda?.people).toContainEqual({ name: "Anna Berg", role: "Kassör" });
     expect(sim.rows.find((r) => r.id === "n2")).toMatchObject({ kind: "task", anchor: "ag-4", owner_person_id: "p-1" });
     expect(sim.rows.find((r) => r.id === "n2-t")).toMatchObject({ anchor: "tasks", copy_of: "n2" });
+  });
+
+  it("Veckomöte by default (Må-runda hiding off): the Må-runda is an ordinary item, notes land under it, no Må-runda line", async () => {
+    const sim = FormatSim.start({
+      id: "m-vecko-off",
+      doc: fixtureDoc(),
+      profile: VECKOMOTE,
+      people: PEOPLE,
+      script: { notes: notesTicks([[{ op: "add", id: "x1", kind: "note", anchor: "ag-2", text: "Alla är på plats och laddade inför terminen" }]]) },
+    });
+    expect(sim.meeting.agenda_roles).toEqual({ "ag-1": "procedural", "ag-2": "procedural", "ag-3": "followup", "ag-4": "topic", "ag-5": "topic", "ag-6": "other" });
+    expect(tick.checkinAnchor(sim.meeting)).toBeNull();
+    await sim.tick(block([{ at: 1000, speaker: 0, text: "Alla är på plats och laddade inför terminen." }]));
+    // The engine reads the Må-runda as a plain item: no checkin role anywhere in its agenda.
+    expect(sim.inputs[0].agenda?.anchors.find((a) => a.key === "ag-2")).toMatchObject({ label: "Må-runda", role: "procedural" });
+    await sim.tick(null, { final: true });
+    const lines = linesOf(sim.doc);
+    expect(lines.slice(lines.indexOf("Må-runda"), lines.indexOf("Må-runda") + 3)).toEqual(["Må-runda", "– Alla är på plats och laddade inför terminen.", "Från förra veckan"]);
+    expect(lines).not.toContain("– Må-runda genomförd.");
   });
 
   it("Veckomöte without Må-runda (Anpassa format): a new Doc without the item, no Må-runda line, notes under Övriga punkter", async () => {

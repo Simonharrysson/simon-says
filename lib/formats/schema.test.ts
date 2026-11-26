@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FormatProfileSchema, parseProfile } from "./schema";
+import { FormatProfileSchema, hidesCheckin, meetingRoles, parseProfile } from "./schema";
 import { ENKEL, FORMAT_NAMES, STANDARD, STYRELSEPROTOKOLL, VECKOMOTE } from "./standard";
 
 describe("standard formats", () => {
@@ -94,5 +94,18 @@ describe("formatLabel (final review R3-I2)", () => {
     expect(formatLabel({ kind: "styrelseprotokoll", createdAt: at, custom: true, requiredCount: 3 })).toBe("Styrelseprotokoll med stadgarnas punkter (2026-11-25)");
     expect(formatLabel({ kind: "veckomote", createdAt: at, custom: true, requiredCount: 0 })).toBe("Veckomöte, anpassat (2026-11-25)");
     expect(formatLabel({ kind: "learned", createdAt: at, custom: true, requiredCount: 0 })).toBe("Eget (2026-11-25)");
+  });
+});
+
+describe("Må-runda hiding (opt-in)", () => {
+  const roles = { "ag-1": "procedural", "ag-2": "checkin", "ag-3": "followup", "ag-4": "topic" } as const;
+  it("is off for every standard format and for a stored profile without the flag", () => {
+    for (const p of Object.values(STANDARD)) expect(hidesCheckin(p)).toBe(false);
+    expect(hidesCheckin(parseProfile(JSON.parse(JSON.stringify(VECKOMOTE)))!)).toBe(false);
+  });
+  it("off: the Må-runda becomes an ordinary (procedural) item; on: the roles are kept", () => {
+    expect(meetingRoles(roles, VECKOMOTE)).toEqual({ ...roles, "ag-2": "procedural" });
+    expect(meetingRoles(roles, { hideCheckin: false })).toEqual({ ...roles, "ag-2": "procedural" });
+    expect(meetingRoles(roles, { ...VECKOMOTE, hideCheckin: true })).toEqual(roles);
   });
 });

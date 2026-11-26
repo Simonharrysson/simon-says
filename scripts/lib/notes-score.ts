@@ -54,7 +54,7 @@ export interface Expected {
   people?: { name: string; role: string | null }[];
   /** Agenda mode: last meeting's open tasks, pre-filled as c1…; `done` is what the meeting reports. */
   carried?: { id: string; owner: string; text: string; done: boolean }[];
-  /** Agenda mode: what was said in the Må-runda; none of it may reach the notes. */
+  /** Agenda mode: what was said in the Må-runda; with hiding on (opt-in) none of it may reach the notes. */
   checkin?: { match: Match };
   /**
    * Items that must NOT be in the notes: in one of `sections`, text plus owner matching `match`.
@@ -132,7 +132,10 @@ export interface Score {
   roles: { ok: number; total: number };
   /** Agenda mode: carried tasks whose final `done` is the expected one. */
   followup: { ok: number; total: number };
-  /** Agenda mode: Må-runda content in the final or any live notes, or items under a checkin/followup item. */
+  /**
+   * Agenda mode: items under a followup item; with Må-runda hiding on also Må-runda content in the
+   * final or any live notes, or items under the checkin item.
+   */
   checkinLeaks: string[];
 }
 
@@ -143,7 +146,7 @@ export interface TickItems {
   atMs: number;
 }
 
-export function score(items: NotesItem[], expected: Expected, ticks: TickItems[] = []): Score {
+export function score(items: NotesItem[], expected: Expected, ticks: TickItems[] = [], opts: { hideCheckin?: boolean } = {}): Score {
   let found = 0;
   let total = 0;
   const recall: string[] = [];
@@ -212,15 +215,16 @@ export function score(items: NotesItem[], expected: Expected, ticks: TickItems[]
     else wrong.push(`WRONG   ${c.id} done=${done}, want ${c.done}`);
   }
   recall.push(...wrong);
-  return { found, total, recall, mustNot, mustNotPersistent, mustNotLive, placement, roles, followup, checkinLeaks: checkinLeaks(items, expected, ticks) };
+  return { found, total, recall, mustNot, mustNotPersistent, mustNotLive, placement, roles, followup, checkinLeaks: checkinLeaks(items, expected, ticks, opts.hideCheckin) };
 }
 
 /**
  * Agenda mode: what must never be in the notes. Our carried items (pre-filled, never Claude's)
- * are skipped. The final notes and every live tick are searched: an item matching the Må-runda
- * `checkin.match`, or sitting under an agenda item whose role is checkin or followup.
+ * are skipped. The final notes and every live tick are searched: an item under the followup item
+ * and, only with Må-runda hiding on (opt-in), an item matching the Må-runda `checkin.match` or
+ * under the checkin item. With hiding off (the default) the Må-runda is an ordinary item.
  */
-export function checkinLeaks(items: NotesItem[], expected: Expected, ticks: TickItems[] = []): string[] {
+export function checkinLeaks(items: NotesItem[], expected: Expected, ticks: TickItems[] = [], hideCheckin = false): string[] {
   const roleOf = new Map((expected.agenda?.items ?? []).map((a) => [a.key, a.role]));
   const out: string[] = [];
   const seen = new Set<string>();
@@ -229,9 +233,9 @@ export function checkinLeaks(items: NotesItem[], expected: Expected, ticks: Tick
       if (i.carried) continue;
       const role = i.anchor ? roleOf.get(i.anchor) : undefined;
       const why =
-        expected.checkin && matches(`${i.text} ${i.owner ?? ""}`, expected.checkin.match)
+        hideCheckin && expected.checkin && matches(`${i.text} ${i.owner ?? ""}`, expected.checkin.match)
           ? "Må-runda content"
-          : role === "checkin" || role === "followup"
+          : (hideCheckin && role === "checkin") || role === "followup"
             ? `under ${role} item ${i.anchor}`
             : null;
       const key = `${i.id}|${i.text}|${why}`;

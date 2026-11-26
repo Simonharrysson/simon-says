@@ -1,7 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
 import {
@@ -17,11 +17,14 @@ import {
   removeMember,
   renamePerson,
   rotateInviteCode,
+  setMemberRole,
   setPersonRole,
   updateOrgSettings,
 } from "@/lib/db/orgs";
 import { shareOrgDocsWithNewMember } from "@/lib/docs/access";
 import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
+import { endFromOrgPage } from "@/lib/meetings/end-from-org";
+import { END_BUDGET_MS, finishMeeting } from "@/lib/meetings/tick";
 import { validRole } from "@/lib/people/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -129,6 +132,28 @@ export async function deleteMeetingAction(form: FormData): Promise<void> {
   redirect(`/orgs/${orgId}?${result === "deleted" ? "klart=mote" : `fel=mote-${result}`}`);
 }
 
+/**
+ * "Avsluta mötet" on a live meeting's row (admins and the starter). The final pass runs after
+ * the response; if this function dies first, the cron finishes it (status `ending`).
+ */
+export async function endMeetingAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const meetingId = field(form, "meetingId");
+  const db = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) redirect(`/login?next=/orgs/${orgId}`);
+  const result = isUuid(meetingId) ? await endFromOrgPage(db, user.id, meetingId) : "not_found";
+  if (result === "ending") {
+    const deadlineAt = new Date(Date.now() + END_BUDGET_MS);
+    after(() =>
+      finishMeeting(meetingId, { deadlineAt }).catch((e) => console.error(`end ${meetingId}: final pass failed: ${(e as Error).message}`)),
+    );
+  }
+  redirect(`/orgs/${orgId}?${result === "ending" || result === "noop" ? "klart=avslutat" : `fel=avsluta-${result}`}`);
+}
+
 export async function deleteOrgAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
@@ -151,6 +176,18 @@ export async function leaveOrgAction(form: FormData): Promise<void> {
   const result = await leaveOrg(db, orgId);
   if (result === "removed") redirect("/orgs?klart=lamnat");
   redirect(`/orgs/${orgId}?fel=medlem-${result}`);
+}
+
+/** Admins: make a member admin (`role=admin`) or take admin away (`role=member`). The DB keeps the last admin. */
+export async function setMemberRoleAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const userId = field(form, "userId");
+  const role = field(form, "role");
+  const db = await createSupabaseServerClient();
+  const result =
+    isUuid(userId) && (role === "admin" || role === "member") ? await setMemberRole(db, orgId, userId, role) : "invalid";
+  if (result === "ok" || result === "unchanged") redirect(`/orgs/${orgId}?klart=${role === "admin" ? "admin-ny" : "admin-bort"}`);
+  redirect(`/orgs/${orgId}?fel=admin-${result}`);
 }
 
 /** Admins: switch the org's meeting format (`choice` = standard kind or `id:<profile id>`). RLS-style check is in the DB function. */

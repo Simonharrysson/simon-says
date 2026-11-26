@@ -291,6 +291,16 @@ export function FormatEditor({ orgId, proposal, approveKind = "learned", showReq
               </Button>
             </div>
           </fieldset>
+          {hasCheckin && (
+            <Check
+              id="fe-hide-checkin"
+              title="Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)"
+              checked={state.hideCheckin}
+              onCheckedChange={(on) => set({ hideCheckin: on === true })}
+            >
+              Utan bocken antecknas må-rundan som de andra punkterna.
+            </Check>
+          )}
           {(showRequired || proposal.profile.requiredItems.length> 0) && (
             <TextList
               id="fe-required"

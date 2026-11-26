@@ -191,7 +191,9 @@ Närvarande: Simon, Anna, Erik
 ### Accounts, orgs, limits
 
 - Sign in with Google (Supabase Auth, Google provider, plus `drive.file`).
-- Org = name + invite link; members can start meetings; org admin = creator.
+- Org = name + invite link; members can start meetings; org admin = creator at first. Admins can
+  make other members admin (board turnover); an org always keeps at least one admin, and if the
+  last admin's account is deleted the oldest member becomes admin (migration 0031).
 - **Usage cap per org**: e.g. 20 h/month and max 4 h per meeting
   (auto-stop with a warning at 3h45). Global daily spend alarm emailed to Simon.
 - **Public queue/status page** shows live meetings and (later) the Nano queue,

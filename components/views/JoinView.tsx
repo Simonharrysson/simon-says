@@ -1,5 +1,5 @@
 import { Banner } from "@/components/ui/Banner";
-import { ButtonLink } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
 import { SubmitButton } from "@/components/ui/SubmitButton";
@@ -8,7 +8,7 @@ import { GoogleSignIn } from "./GoogleButton";
 export type JoinViewProps =
   | { state: "signed-out"; code: string; signIn: FormAction }
   | { state: "invalid" }
-  | { state: "ready"; code: string; orgName: string; join: FormAction };
+  | { state: "ready"; code: string; orgName: string; join: FormAction; email?: string; switchAccount?: FormAction };
 
 /** Invite landing. Joining is always a button press (POST), never a side effect of opening the link. */
 export function JoinView(props: JoinViewProps) {
@@ -54,6 +54,17 @@ export function JoinView(props: JoinViewProps) {
                 Gå med i {props.orgName}
               </SubmitButton>
             </form>
+            {props.email && props.switchAccount && (
+              <form action={props.switchAccount} className="flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
+                <input type="hidden" name="next" value={`/join/${props.code}`} />
+                <span>
+                  Du går med som <strong className="wrap-anywhere">{props.email}</strong>.
+                </span>
+                <Button type="submit" variant="ghost" size="sm">
+                  Byt konto
+                </Button>
+              </form>
+            )}
           </>
         )}
       </div>

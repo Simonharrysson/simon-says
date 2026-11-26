@@ -48,6 +48,7 @@ const { parseNotesTab } = await import("@/lib/docs/tab");
 const { planAnchoring, INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
 const { scanAgenda, newAgendaItems, adoptedAgendaRanges } = await import("@/lib/agenda/scan");
 const { VECKOMOTE } = await import("@/lib/formats/standard");
+const { meetingRoles } = await import("@/lib/formats/schema");
 const { buildRequest, anchorRoles } = await import("@/lib/notes/engine");
 const { CHECKIN_PLACEHOLDER } = await import("@/lib/notes/checkin");
 const { ensureStandardRow } = await import("@/lib/formats/store");
@@ -1045,20 +1046,73 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await events(id, "resumed")).toHaveLength(1);
   });
 
-  it("abandoned (no heartbeat for 15 min) finalized once; open session closed", async () => {
-    const { id, sessionId } = await meeting({ heartbeatAgoSec: 16 * 60 });
+  it("presence: no tab for 5 min ends it like Avsluta (done, final pass once, ended at the last heartbeat); session closed", async () => {
+    const { id, sessionId } = await meeting({ heartbeatAgoSec: 6 * 60 });
+    await say(id, sessionId, "hej", 1000);
+    const f = fakes();
+    const first = await tick.finalizeSweep({ deps: f.deps, orgId });
+    expect(first.autoEnded).toBeGreaterThanOrEqual(1);
+    await tick.finalizeSweep({ deps: f.deps, orgId });
+    const m = await read(id);
+    expect(m.status).toBe("done");
+    expect(m.end_status).toBe("done");
+    // ended_at is when the last tab was heard from, not when the cron ran.
+    expect(Math.abs(Date.parse(m.ended_at!) - Date.parse(m.last_heartbeat_at!))).toBeLessThan(1000);
+    expect(f.calls.filter((c) => c.final)).toHaveLength(1);
+    expect(f.headers.at(-1)).toMatch(/^Avslutat \d\d:\d\d$/);
+    expect(await events(id, "ended")).toHaveLength(1);
+    expect(await events(id, "abandoned")).toHaveLength(0);
+    const { data: s } = await adminClient().from("el_sessions").select("closed_at").eq("id", sessionId).single();
+    expect(s?.closed_at).not.toBeNull();
+  });
+
+  it("presence: nothing ever said → abandoned (the empty case, never a carry source)", async () => {
+    const { id } = await meeting({ heartbeatAgoSec: 6 * 60 });
+    const f = fakes();
+    const summary = await tick.finalizeSweep({ deps: f.deps, orgId });
+    expect(summary.abandoned).toBeGreaterThanOrEqual(1);
+    expect((await read(id)).status).toBe("abandoned");
+    expect(await events(id, "abandoned")).toHaveLength(1);
+  });
+
+  it("presence race: a heartbeat landing after the sweep's snapshot keeps the meeting live (review I1)", async () => {
+    const { id, sessionId } = await meeting({ heartbeatAgoSec: 6 * 60 });
+    await say(id, sessionId, "hej", 1000);
+    const f = fakes();
+    const cutoff = { cutoff: () => new Date(Date.now() - 5 * 60_000), hadHeartbeat: true };
+    // The sweep saw it stale; then the laptop woke up and its heartbeat landed.
+    await adminClient().from("meetings").update({ last_heartbeat_at: new Date().toISOString() }).eq("id", id);
+    expect(await tick.endMeeting(id, { staleBefore: cutoff, deps: f.deps })).toBe("noop");
+    const m = await read(id);
+    expect(m.status).toBe("live");
+    expect(m.ended_at).toBeNull();
+    expect(f.calls.filter((c) => c.final)).toHaveLength(0);
+    // Still stale at the claim: it ends.
+    await adminClient().from("meetings").update({ last_heartbeat_at: new Date(Date.now() - 6 * 60_000).toISOString() }).eq("id", id);
+    expect(await tick.endMeeting(id, { staleBefore: cutoff, deps: f.deps })).toBe("ended");
+    expect((await read(id)).status).toBe("done");
+  });
+
+  it("presence race: no heartbeat yet counts from the start (fresh start → no claim)", async () => {
+    const { id } = await meeting({ heartbeatAgoSec: null });
+    const f = fakes();
+    // started_at is 10 min ago in meeting(); a cutoff before it means "started recently".
+    expect(await tick.claimEnd(id, { staleBefore: { cutoff: () => new Date(Date.now() - 20 * 60_000), hadHeartbeat: false }, deps: f.deps })).toBe("noop");
+    expect(await tick.claimEnd(id, { abandon: true, staleBefore: { cutoff: () => new Date(Date.now() - 60_000), hadHeartbeat: false }, deps: f.deps })).toBe("claimed");
+    const m = await read(id);
+    expect(m.status).toBe("ending");
+    // Abandoned: ended_at is the claim time (the 2 h resume window starts now).
+    expect(Date.now() - Date.parse(m.ended_at!)).toBeLessThan(60_000);
+  });
+
+  it("presence: within the grace period (4 min without a tab) the meeting stays live", async () => {
+    const { id, sessionId } = await meeting({ heartbeatAgoSec: 4 * 60 });
     await say(id, sessionId, "hej", 1000);
     const f = fakes();
     await tick.finalizeSweep({ deps: f.deps, orgId });
-    await tick.finalizeSweep({ deps: f.deps, orgId });
     const m = await read(id);
-    expect(m.status).toBe("abandoned");
-    expect(m.ended_at).not.toBeNull();
-    expect(f.calls.filter((c) => c.final)).toHaveLength(1);
-    expect(f.headers.at(-1)).toMatch(/^Avslutat \d\d:\d\d$/);
-    expect(await events(id, "abandoned")).toHaveLength(1);
-    const { data: s } = await adminClient().from("el_sessions").select("closed_at").eq("id", sessionId).single();
-    expect(s?.closed_at).not.toBeNull();
+    expect(m.status).toBe("live");
+    expect(m.ended_at).toBeNull();
   });
 
   it("ending twice is a no-op", async () => {
@@ -1245,7 +1299,9 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
   const OPEN = { startMs: null, endMs: null, closed: false, failures: 0 };
 
   /** A format meeting on the anchored fixture Doc, as startMeeting leaves it (info-tid row saved). */
-  async function formatMeeting(opts: { window?: typeof OPEN | null; status?: "live" | "ending"; prerender?: NoteItemRow[]; isTest?: boolean } = {}) {
+  async function formatMeeting(
+    opts: { window?: typeof OPEN | null; status?: "live" | "ending"; prerender?: NoteItemRow[]; isTest?: boolean; roles?: Record<string, import("@/lib/db/types").ItemRole> } = {},
+  ) {
     const admin = adminClient();
     const id = randomUUID();
     const { doc, plan } = anchoredDoc(id);
@@ -1268,7 +1324,7 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
       layout: "format",
       format_profile_id: profileId,
       is_test: opts.isTest ?? false,
-      agenda_roles: ROLES,
+      agenda_roles: opts.roles ?? ROLES,
       checkin_window: opts.window === undefined ? null : opts.window,
     });
     if (error) throw new Error(error.message);
@@ -1494,6 +1550,30 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
       { state: "open", startMs: 2000, endMs: null },
       { state: "closed", startMs: 2000, endMs: 5000 },
     ]);
+  });
+
+  it("Må-runda hiding off (the default start): no detector call, nothing masked, notes land under the Må-runda", async () => {
+    // As startMeeting leaves a meeting whose format has no hideCheckin (every format by default).
+    const roles = meetingRoles(ROLES, VECKOMOTE);
+    expect(roles["ag-2"]).toBe("procedural");
+    const { id, sessionId, doc } = await formatMeeting({ roles, window: null });
+    await say(id, sessionId, "Jag mår bra idag", 1000);
+    await say(id, sessionId, "Lite trött men på plats", 2000);
+    const f = fakes(doc, {
+      detect: () => ({ startMs: 1000, endMs: null }),
+      answer: (input) => [...input.items, { id: "n1", section: "note", text: "Alla är på plats", anchor: "ag-2" }],
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.detects).toHaveLength(0);
+    const blocks = f.calls[0].transcriptBlocks.join("\n");
+    expect(blocks).toMatch(/mår bra/);
+    expect(blocks).toMatch(/trött/);
+    expect(blocks).not.toContain(CHECKIN_PLACEHOLDER);
+    expect(f.calls[0].agenda?.anchors.find((a) => a.key === "ag-2")).toMatchObject({ label: "Må-runda", role: "procedural" });
+    expect(linesOf(doc)).toContain("– Alla är på plats.");
+    expect((await read(id)).checkin_window).toBeNull();
+    expect((await noteRows(id)).map((r) => r.id)).not.toContain("checkin-done");
+    expect(await events(id, "checkin")).toEqual([]);
   });
 
   it("a detector failing 3 ticks in a row closes the window (nothing masked)", async () => {

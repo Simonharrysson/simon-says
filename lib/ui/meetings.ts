@@ -27,7 +27,10 @@ export function docUrl(docId: string): string {
   return `https://docs.google.com/document/d/${encodeURIComponent(docId)}/edit`;
 }
 
-/** An abandoned meeting can be continued for this long after it was ended by the cron. */
+/**
+ * An abandoned meeting (a false start or a failed start; one with speech ends as done, see
+ * lib/meetings/presence.ts) can be continued for this long after it ended.
+ */
 export const RESUME_WINDOW_MS = 2 * 3600 * 1000;
 
 /** Whether "Fortsätt mötet" is offered: live, or abandoned < 2 h ago (the resume route decides). */

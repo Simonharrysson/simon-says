@@ -10,7 +10,7 @@ import { itemRangeName, planRender, renderedRows, toNotesItem } from "@/lib/docs
 import { skeletonRequests, skeletonTableFill } from "@/lib/docs/skeleton";
 import { parseNotesTab, type NotesTab } from "@/lib/docs/tab";
 import { LEARN_SYSTEM_PROMPT } from "@/lib/formats/learn-prompt";
-import type { FormatProfile } from "@/lib/formats/schema";
+import { meetingRoles, type FormatProfile } from "@/lib/formats/schema";
 import { rolesFromSkeleton, skeletonBlocks } from "@/lib/formats/skeleton";
 import { STADGAR_SYSTEM_PROMPT } from "@/lib/formats/stadgar";
 import { paragraphsWithRanges } from "@/lib/google/docs";
@@ -224,7 +224,8 @@ export class FormatSim extends Sim {
     const scan = scanAgenda(withoutEarlierLines(tab), opts.profile);
     const plan = planAnchoring(scan, tab, { meetingId: opts.id, profile: opts.profile, startedAt });
     applyDoc(opts.doc, plan.requests);
-    const roles = opts.roles ?? fuzzyRoles(scan.items, opts.profile.fixedAgendaItems);
+    // As the start: the Må-runda keeps its checkin role only when the format opts in (meetingRoles).
+    const roles = meetingRoles(opts.roles ?? fuzzyRoles(scan.items, opts.profile.fixedAgendaItems), opts.profile);
     const meeting = {
       id: opts.id,
       org_id: opts.orgId ?? "o",

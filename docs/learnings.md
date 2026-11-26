@@ -511,3 +511,9 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - **Not measured with real Google yet (controller):** (1) starter picks the meeting folder, starts, and the Doc
   appears there; (2) the same with a folder another member owns; (3) a shared-drive meeting folder; (4)
   permissions.create through the starter's refresh token for a member who joined later. Folders picked before 0030 show "mötesmapp vald" until an admin picks them once more.
+
+## 2026-11-26 · Må-runda hiding is opt-in (Simon's ruling)
+
+- Simon: "I don't think it's very easy for you to tell what's Må-runda and what's not … it has to be 10 out of 10, you have to just transcribe everything." The detector's precision (never hiding real discussion) was never measured, only leaks.
+- Now off by default for every format (standard, learned, stored). `FormatProfile.hideCheckin` (absent = off, stored only when true; no migration). At the start `meetingRoles` turns a checkin item into a procedural one when off, so the meeting has no checkin role and no `checkin_window`: no detector call, no masking, no hidden Doc text, notes may land under the item, and it stays out of the dashboard's recurring topics.
+- Opt-in: "Anpassa format" → "Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)". The masking code path is unchanged behind it. `notes-eval --hide-checkin` replays it; without the flag the Må-runda content bar is off.

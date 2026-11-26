@@ -18,6 +18,18 @@ describe("format editor", () => {
     expect(ok(profileToEditor(p))).toEqual({ ...p, kind: "learned" });
   });
 
+  it("Må-runda hiding: off for every standard format, stored only when ticked and a Må-runda item exists", () => {
+    const s = profileToEditor(VECKOMOTE);
+    expect(s.hideCheckin).toBe(false);
+    expect(ok(s)).not.toHaveProperty("hideCheckin");
+    const on = ok({ ...s, hideCheckin: true });
+    expect(on.hideCheckin).toBe(true);
+    expect(profileToEditor(on).hideCheckin).toBe(true);
+    expect(parseProfile(JSON.parse(JSON.stringify(on)))?.hideCheckin).toBe(true);
+    // Without a Må-runda item there is nothing to hide.
+    expect(ok({ ...s, hideCheckin: true, items: s.items.filter((i) => i.role !== "checkin") })).not.toHaveProperty("hideCheckin");
+  });
+
   it("two Må-runda items → error", () => {
     const s = profileToEditor(VECKOMOTE);
     s.items.push({ label: "Hur mår vi?", role: "checkin", last: false });

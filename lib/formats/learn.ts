@@ -63,8 +63,11 @@ export function forceLearned(raw: unknown, kind: "learned" | "styrelseprotokoll"
       return item;
     });
   }
+  const { hideCheckin, ...rest } = obj;
   const parsed = FormatProfileSchema.safeParse({
-    ...obj,
+    ...rest,
+    // Må-runda hiding is opt-in: stored only when true (absent = off).
+    ...(hideCheckin === true ? { hideCheckin: true } : {}),
     fixedAgendaItems: items,
     kind,
     tone: VECKOMOTE.tone,
@@ -99,7 +102,7 @@ export async function proposeFormat(
       return { ok: false, error: "error" };
     }
     // Required items come from the stadgar, never from minutes.
-    const profile = forceLearned({ ...res.value.profile, requiredItems: [] });
+    const profile = forceLearned({ ...res.value.profile, requiredItems: [], hideCheckin: undefined });
     if (!profile) {
       console.error("format learn: proposed profile is invalid");
       return { ok: false, error: "malformed" };

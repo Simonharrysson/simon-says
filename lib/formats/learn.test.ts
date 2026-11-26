@@ -173,6 +173,11 @@ describe("proposeFormat", () => {
 });
 
 describe("forceLearned", () => {
+  it("Må-runda hiding is stored only when true", () => {
+    expect(forceLearned({ ...VECKOMOTE, hideCheckin: false })).not.toHaveProperty("hideCheckin");
+    expect(JSON.stringify(forceLearned({ ...VECKOMOTE }))).not.toContain("hideCheckin");
+    expect(forceLearned({ ...VECKOMOTE, hideCheckin: true })?.hideCheckin).toBe(true);
+  });
   it("forces kind and style on an edited profile", () => {
     const p = forceLearned({ ...VECKOMOTE, kind: "enkel", decisionPrefix: "X", tone: "short" });
     expect(p).toMatchObject({ kind: "learned", decisionPrefix: "Beslut:", tone: "full-sentences" });

@@ -594,7 +594,7 @@ describe("agenda mode: §-numbered board minutes (C2)", () => {
   const formatBlock = (tail: string) => tail.slice(tail.indexOf("<format>"), tail.indexOf("</format>"));
 
   it("the system prompt is untouched: the board-minutes rule lives in the tail only", () => {
-    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("00a1c66112970ec4b8dac74c03efb72abcacfd5cf9ecf7f9ae9918b2eb00caaf");
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("1ee93e4bd3bc71944046fdfcb7ec944da64257f051d874882614ea4ec0e12d51");
     expect(AGENDA_SYSTEM_PROMPT).not.toContain("§-numbered");
   });
 
