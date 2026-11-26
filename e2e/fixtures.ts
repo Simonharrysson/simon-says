@@ -47,7 +47,12 @@ export async function guardContext(context: BrowserContext, blocked: string[], n
     const url = new URL(route.request().url());
     const redirectTo = new URL(url.searchParams.get("redirect_to") ?? `${APP_URL}/auth/callback`);
     let location: string;
-    if (nextLogin.cancel) {
+    if (redirectTo.searchParams.get("atkomst") === "drive") {
+      // The protocol import's drive.readonly consent, as the signed-in admin (login_hint).
+      const email = url.searchParams.get("login_hint") ?? nextLogin.email ?? "";
+      const next = redirectTo.searchParams.get("next") ?? "/";
+      location = `${APP_URL}/api/e2e/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}&drive=1`;
+    } else if (nextLogin.cancel) {
       redirectTo.searchParams.set("error", "access_denied");
       location = redirectTo.toString();
     } else {
@@ -88,6 +93,46 @@ export interface SeededOrg {
   name: string;
   inviteCode: string;
   url: string;
+}
+
+/**
+ * A finished (or live) meeting written as the server would leave it, with its Doc in the fake and
+ * the given note rows (e.g. an open task for "Från förra veckan").
+ */
+export async function seedMeeting(
+  db: SupabaseClient,
+  org: SeededOrg,
+  opts: { startedBy?: string; status?: "live" | "ending" | "done" | "abandoned"; daysAgo?: number; items?: { section: "decision" | "action"; text: string; owner?: string }[] } = {},
+): Promise<{ id: string; docId: string }> {
+  const startedBy = await ensureUser(db, opts.startedBy ?? ADMIN_EMAIL);
+  const started = new Date(Date.now() - (opts.daysAgo ?? 7) * 86_400_000);
+  const doc = await fake.createDoc({ name: `${started.toISOString().slice(0, 10)} Mötesprotokoll – ${org.name}`, owner: opts.startedBy ?? ADMIN_EMAIL });
+  const status = opts.status ?? "done";
+  const meeting = must(
+    "seed meeting",
+    await db
+      .from("meetings")
+      .insert({
+        org_id: org.id,
+        started_by: startedBy,
+        doc_id: doc.id,
+        notes_tab_id: "t.0",
+        status,
+        started_at: started.toISOString(),
+        consent_confirmed_at: started.toISOString(),
+        ...(status === "done" || status === "abandoned" ? { ended_at: new Date(started.getTime() + 3_600_000).toISOString() } : {}),
+        ...(status === "live" ? { last_heartbeat_at: new Date().toISOString() } : {}),
+      })
+      .select("id")
+      .single(),
+  ) as { id: string };
+  if (opts.items?.length) {
+    must(
+      "seed items",
+      await db.from("note_items").insert(opts.items.map((it, i) => ({ meeting_id: meeting.id, id: `n${i + 1}`, section: it.section, text: it.text, owner: it.owner ?? null, position: i }))),
+    );
+  }
+  return { id: meeting.id, docId: doc.id };
 }
 
 /** The fake services' control API. */
