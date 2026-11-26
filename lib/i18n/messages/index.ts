@@ -5,6 +5,8 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enLive from "./en/live.json";
+import svLive from "./sv/live.json";
 import enOnboarding from "./en/onboarding.json";
 import svOnboarding from "./sv/onboarding.json";
 import enPrepare from "./en/prepare.json";
@@ -57,6 +59,7 @@ import svMailPrefs from "./sv/mailPrefs.json";
 import svNotices from "./sv/notices.json";
 
 export const sv = {
+  live: svLive,
   onboarding: svOnboarding,
   prepare: svPrepare,
   drive: svDrive,
@@ -87,6 +90,7 @@ export const sv = {
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  live: enLive,
   onboarding: enOnboarding,
   prepare: enPrepare,
   drive: enDrive,

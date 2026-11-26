@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { formatElapsed } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ export function MeetingTimer({
   limitMs?: number;
   size?: "md" | "lg";
 }) {
+  const t = useTranslations("live");
   const share = Math.min(1, Math.max(0, elapsedMs / limitMs));
   const warn = limitMs - elapsedMs <= 15 * 60 * 1000;
   return (
@@ -29,7 +31,7 @@ export function MeetingTimer({
           paused && "text-ink-3",
         )}
         role="timer"
-        aria-label={`Mötestid ${formatElapsed(elapsedMs)}`}
+        aria-label={t("timer", { time: formatElapsed(elapsedMs) })}
       >
         {formatElapsed(elapsedMs)}
       </span>

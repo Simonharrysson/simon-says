@@ -1,3 +1,6 @@
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
+
 // One status for the live page. Badge, mic ring, partial text, Doc card and banners are all
 // derived from it, so the screen can never say two different things at once.
 
@@ -49,7 +52,8 @@ export interface LiveStatus {
   doc: DocHealth;
 }
 
-export function liveStatus(input: LiveStatusInput): LiveStatus {
+export function liveStatus(input: LiveStatusInput, locale: Locale = defaultLocale): LiveStatus {
+  const t = translator(locale);
   const { phase, connection, firstConnect = false, docPaused = false, staleMinutes = null, minutesLeft = null } = input;
   const connected = connection === "ok";
 
@@ -64,25 +68,25 @@ export function liveStatus(input: LiveStatusInput): LiveStatus {
   const base = { banners, doc };
 
   if (phase === "error") {
-    return { ...base, kind: "error", tone: "alert", label: "Stannat", detail: "behöver dig", listening: false, partial: "silent", canPause: false };
+    return { ...base, kind: "error", tone: "alert", label: t("live.status.error"), detail: t("live.status.errorDetail"), listening: false, partial: "silent", canPause: false };
   }
   if (phase === "ending") {
-    return { ...base, kind: "ending", tone: "waiting", label: "Avslutar…", detail: null, listening: false, partial: "silent", canPause: false };
+    return { ...base, kind: "ending", tone: "waiting", label: t("live.status.ending"), detail: null, listening: false, partial: "silent", canPause: false };
   }
   if (phase === "paused") {
-    return { ...base, kind: "paused", tone: "paused", label: "Pausat", detail: "inget ljud skickas", listening: false, partial: "paused", canPause: true };
+    return { ...base, kind: "paused", tone: "paused", label: t("live.status.paused"), detail: t("live.status.pausedDetail"), listening: false, partial: "paused", canPause: true };
   }
   if (!connected) {
     return {
       ...base,
       kind: "reconnecting",
       tone: "waiting",
-      label: firstConnect ? "Ansluter…" : "Ansluter igen…",
+      label: firstConnect ? t("live.status.connecting") : t("live.status.reconnecting"),
       detail: null,
       listening: false,
       partial: "last-heard",
       canPause: true,
     };
   }
-  return { ...base, kind: "live", tone: "live", label: "Transkriberar", detail: null, listening: true, partial: "live", canPause: true };
+  return { ...base, kind: "live", tone: "live", label: t("live.status.live"), detail: null, listening: true, partial: "live", canPause: true };
 }

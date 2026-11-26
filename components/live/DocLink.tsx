@@ -1,3 +1,4 @@
+import { useLocale, useTranslations } from "next-intl";
 import { IconDoc, IconExternal } from "@/components/ui/icons";
 import { formatAgo, formatClock } from "@/lib/format";
 import type { DocHealth } from "@/lib/ui/live-status";
@@ -25,20 +26,22 @@ export function DocLink({
   /** Doc not created yet (meeting starting). */
   pending?: boolean;
 }) {
+  const t = useTranslations("live.doc");
+  const locale = useLocale();
   let tone = "rail";
   let meta: string;
-  if (pending) meta = "Skapas…";
+  if (pending) meta = t("creating");
   else if (health === "paused") {
     tone = "red";
-    meta = "Pausat — logga in igen";
+    meta = t("paused");
   } else if (health === "stale") {
     meta = lastUpdatedAt
-      ? `Senast uppdaterat ${formatClock(lastUpdatedAt)} · vi försöker igen automatiskt`
-      : "Inte uppdaterat än · vi försöker igen automatiskt";
+      ? t("staleAt", { time: formatClock(lastUpdatedAt, locale) })
+      : t("staleNone");
   } else if (lastUpdatedAt) {
     tone = "green";
-    meta = `Uppdaterat ${updatedMinutesAgo != null ? formatAgo(updatedMinutesAgo) : `kl. ${formatClock(lastUpdatedAt)}`}`;
-  } else meta = "Första anteckningarna kommer inom en minut";
+    meta = t("updated", { when: updatedMinutesAgo != null ? formatAgo(updatedMinutesAgo, locale) : t("at", { time: formatClock(lastUpdatedAt, locale) }) });
+  } else meta = t("first");
 
   const inner = (
     <>
@@ -53,7 +56,7 @@ export function DocLink({
       </span>
       {url && (
         <span className="inline-flex items-center gap-1 text-sm font-semibold text-blue">
-          Öppna
+          {t("open")}
           <IconExternal size={16} />
         </span>
       )}
@@ -62,7 +65,7 @@ export function DocLink({
   return url && !pending ? (
     <a className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg bg-surface px-6 py-4 text-ink no-underline shadow-panel transition-[box-shadow,transform] duration-200 ease-out hover:no-underline hover:shadow-[0_0_0_1px_var(--rail)]" href={url} target="_blank" rel="noopener noreferrer">
       {inner}
-      <span className="sr-only">(Google-dokument, öppnas i ny flik)</span>
+      <span className="sr-only">{t("newTab")}</span>
     </a>
   ) : (
     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-lg bg-surface px-6 py-4 text-ink no-underline shadow-panel transition-[box-shadow,transform] duration-200 ease-out opacity-70" aria-busy={pending || undefined}>

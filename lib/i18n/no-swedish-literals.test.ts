@@ -47,20 +47,6 @@ const NOT_YET = new Set<string>([
   "app/api/orgs/[id]/onboarding/formats/route.ts",
   "app/api/orgs/[id]/onboarding/stadgar/route.ts",
   "app/api/orgs/[id]/prepare/route.ts",
-  "components/live/AgendaStep.tsx",
-  "components/live/ConsentStep.tsx",
-  "components/live/DocLink.tsx",
-  "components/live/LiveBanners.tsx",
-  "components/live/LiveDialog.tsx",
-  "components/live/LiveMeeting.tsx",
-  "components/live/LiveMeetingController.tsx",
-  "components/live/MeetingControls.tsx",
-  "components/live/MeetingEnded.tsx",
-  "components/live/MeetingTimer.tsx",
-  "components/live/NameRound.tsx",
-  "components/live/PartialStrip.tsx",
-  "components/live/ResumeMeeting.tsx",
-  "components/live/SpeakerList.tsx",
 ]);
 
 /** Literals that may appear anywhere (proper nouns, Doc-bound values, technical tokens). */

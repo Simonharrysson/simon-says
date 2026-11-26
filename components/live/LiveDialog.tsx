@@ -76,6 +76,3 @@ export const LiveDialog = forwardRef<
     </Dialog>
   );
 });
-
-export const stopCopy =
-  "Ljudet stängs av och anteckningarna får en sista genomgång. Det tar ungefär en minut. Det du redan ser i dokumentet ligger kvar.";

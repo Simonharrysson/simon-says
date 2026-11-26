@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
@@ -9,21 +11,6 @@ import { cn } from "@/lib/utils";
 
 export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | null;
 
-const startErrors: Record<Exclude<StartError, null>, { title: string; text: string }> = {
-  "mic-denied": {
-    title: "Mikrofonen är blockerad",
-    text: "Klicka på hänglåset eller mikrofonikonen i adressfältet, välj Tillåt och tryck Starta igen.",
-  },
-  "mic-missing": {
-    title: "Hittar ingen mikrofon",
-    text: "Kontrollera att datorn har en mikrofon som är på, och att ingen annan app använder den.",
-  },
-  "start-failed": { title: "Mötet kunde inte starta", text: "Något gick fel hos oss. Försök igen om en liten stund." },
-  limit: {
-    title: "Månadens tid är slut",
-    text: "Föreningen har använt sina 20 timmar den här månaden. Tiden fylls på den 1:a.",
-  },
-};
 
 /** The banner for a start error; `text` replaces the default explanation (e.g. the server's own message). */
 export function StartErrorBanner({
@@ -35,7 +22,8 @@ export function StartErrorBanner({
   text?: string | null;
   action?: ReactNode;
 }) {
-  const problem = startErrors[error];
+  const t = useTranslations("live.consent.errors");
+  const problem = { title: t(`${error}.title`), text: t(`${error}.text`) };
   return (
     <Banner tone="danger" icon={error.startsWith("mic") ? <IconMicOff /> : undefined} title={problem.title} action={action}>
       {text ?? problem.text}
@@ -87,6 +75,7 @@ export function ConsentStep({
   /** After an agenda_* start error: "Skapa nytt dokument i stället" in the error banner. */
   onNewDocInstead?: () => void;
 }) {
+  const t = useTranslations("live.consent");
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
   const testing = micLevel != null;
@@ -102,47 +91,47 @@ export function ConsentStep({
       <div className="flex flex-col gap-1">
         <p className="text-ink-2">{orgName}</p>
         <h1 id={`${id}-title`} className="text-2xl">
-          Innan ni börjar
+          {t("title")}
         </h1>
       </div>
 
       <ul className="flex list-dash flex-col gap-2 pl-[1.1rem] text-sm text-ink-2 marker:text-ink-3">
-        <li>Laptopen lyssnar med sin egen mikrofon. Ställ den mitt på bordet.</li>
+        <li>{t("laptop")}</li>
         {agendaDoc ? (
           <li>
-            Anteckningarna skrivs i den valda dagordningen
-            {agendaDoc.transcriptInDoc ? ", med hela transkriptet i en egen flik." : ". Transkriptet läggs inte i dokumentet."}
+            {t("agendaDoc")}
+            {agendaDoc.transcriptInDoc ? t("agendaWithTranscript") : t("agendaNoTranscript")}
           </li>
         ) : (
           <li>
-            Anteckningarna skrivs i ett nytt Google-dokument i din Drive och delas med föreningens medlemmar
-            {shareTranscript ? ", med hela transkriptionen i en egen flik." : ". Transkriptionen delas inte."}
+            {t("newDoc")}
+            {shareTranscript ? t("newWithTranscript") : t("newNoTranscript")}
           </li>
         )}
-        <li>Paus stoppar ljudet direkt.</li>
-        <li>Låt locket vara öppet och sätt i laddaren – stängs locket slutar laptopen lyssna.</li>
+        <li>{t("pause")}</li>
+        <li>{t("lid")}</li>
       </ul>
 
       {(onMicCheck || testing) && (
         <div className="flex min-h-11 flex-wrap items-center gap-3 text-sm">
-          <span className="font-semibold">Mikrofon</span>
+          <span className="font-semibold">{t("mic")}</span>
           {testing ? (
             <>
-              <span className="inline-flex h-5 items-end gap-[3px]" role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={bars} aria-label="Ljudnivå">
+              <span className="inline-flex h-5 items-end gap-[3px]" role="meter" aria-valuemin={0} aria-valuemax={5} aria-valuenow={bars} aria-label={t("level")}>
                 {["h-[30%]", "h-[45%]", "h-[60%]", "h-[80%]", "h-full"].map((height, i) => (
                   <span key={height} className={cn("w-[6px] rounded-[2px]", height, i < bars ? "bg-green" : "bg-line")} />
                 ))}
               </span>
               <span className={heard ? "font-semibold text-green" : "text-ink-2"} aria-hidden="true">
-                {heard ? "Hör dig" : "Hör inget än. Säg något."}
+                {heard ? t("hear") : t("hearNothing")}
               </span>
               <span className="sr-only" aria-live="polite">
-                {everHeard ? "Mikrofonen fungerar, vi hör dig." : "Testar mikrofonen. Säg något."}
+                {everHeard ? t("works") : t("testing")}
               </span>
             </>
           ) : (
             <Button icon={<IconMic size={18} />} onClick={onMicCheck}>
-              Testa mikrofonen
+              {t("test")}
             </Button>
           )}
         </div>
@@ -155,7 +144,7 @@ export function ConsentStep({
           action={
             onNewDocInstead ? (
               <Button size="sm" onClick={onNewDocInstead}>
-                Skapa nytt dokument i stället
+                {t("newDocInstead")}
               </Button>
             ) : undefined
           }
@@ -170,7 +159,7 @@ export function ConsentStep({
         htmlFor={`${id}-ok`}
       >
         <Checkbox id={`${id}-ok`} tone="green" checked={confirmed} onCheckedChange={(on) => setConfirmed(on === true)} disabled={starting} />
-        <span>Alla i rummet vet att mötet transkriberas och kan be om paus</span>
+        <span>{t("everyone")}</span>
       </label>
 
       {agenda}
@@ -185,11 +174,11 @@ export function ConsentStep({
         onClick={onStart}
         aria-describedby={!confirmed || !agendaConfirmed ? `${id}-why` : undefined}
       >
-        {starting ? "Startar…" : "Starta mötet"}
+        {starting ? t("starting") : t("start")}
       </Button>
       {(!confirmed || !agendaConfirmed) && (
         <p id={`${id}-why`} className="-mt-4 text-center text-xs text-ink-3">
-          {!confirmed ? "Kryssa i rutan ovan först." : "Välj dagordning eller skapa ett nytt dokument först."}
+          {!confirmed ? t("tickFirst") : t("agendaFirst")}
         </p>
       )}
     </section>

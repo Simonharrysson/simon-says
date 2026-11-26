@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { IconMic, IconMicOff, IconPause } from "@/components/ui/icons";
 import { tailText } from "@/lib/format";
 import type { PartialMode } from "@/lib/ui/live-status";
@@ -21,16 +22,17 @@ export function PartialStrip({
   level?: number | null;
 }) {
   // rms of speech is roughly 0.05–0.3: stretch it so normal talk fills the ring.
+  const t = useTranslations("live.partial");
   const ring = Math.max(0, Math.min(1, (level ?? 0) * 4));
   const icon =
     mode === "paused" ? <IconPause size={18} /> : mode === "silent" ? <IconMicOff size={18} /> : <IconMic size={18} />;
   const fixed =
-    mode === "paused" ? "Pausat. Inget ljud skickas." : mode === "silent" ? "Inget ljud skickas just nu." : !text ? "Lyssnar…" : null;
+    mode === "paused" ? t("paused") : mode === "silent" ? t("silent") : !text ? t("listening") : null;
   return (
     <section
       className="grid grid-cols-[auto_1fr] items-center gap-4 rounded-lg bg-board px-4 py-3 shadow-[inset_0_0_0_1px_var(--line)]"
       data-mode={mode}
-      aria-label="Det mikrofonen hör just nu"
+      aria-label={t("label")}
     >
       <span
         className={cn(
@@ -58,7 +60,7 @@ export function PartialStrip({
           ) : (
             <span>
               {tailText(text, 120)}
-              {mode === "last-heard" && <span className="italic"> (senaste vi hörde)</span>}
+              {mode === "last-heard" && <span className="italic">{t("lastHeard")}</span>}
             </span>
           )}
         </p>

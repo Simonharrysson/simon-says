@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
+
 import { useRef, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
@@ -112,6 +114,7 @@ export interface LiveNotice {
  * full-screen focus mode: no app navigation, only "← Tillbaka".
  */
 export function LiveMeeting(p: LiveMeetingProps) {
+  const locale = useLocale();
   const leave = p.onLeave ?? (() => window.location.assign(p.orgHref));
 
   if (p.phase === "consent" || p.phase === "starting") {
@@ -171,7 +174,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
     );
   }
 
-  const status = liveStatus(p);
+  const status = liveStatus(p, locale);
   const ending = status.kind === "ending";
   const nameRound = p.phase === "name-round";
 
@@ -316,6 +319,7 @@ function BackLink({
   /** Sound is (meant to be) going out right now: leaving stops it. */
   listening?: boolean;
 }) {
+  const t = useTranslations("live.meeting");
   const dialog = useRef<LiveDialogHandle>(null);
   return (
     <>
@@ -329,23 +333,21 @@ function BackLink({
         }}
       >
         <IconArrowLeft size={18} aria-hidden="true" />
-        <span className="sr-only">Tillbaka till </span>
+        <span className="sr-only">{t("backTo")}</span>
         {label}
       </a>
       {confirm && (
         <LiveDialog
           ref={dialog}
           id="leave"
-          title={listening ? "Mötet pågår — lämna sidan?" : "Mötet är inte avslutat — lämna sidan?"}
-          stayLabel="Stanna kvar"
-          confirmLabel="Lämna sidan"
+          title={listening ? t("leaveLive") : t("leaveNotEnded")}
+          stayLabel={t("stay")}
+          confirmLabel={t("leave")}
           confirmVariant="secondary"
           stayVariant="primary"
           onConfirm={() => onLeave?.()}
         >
-          {listening
-            ? "Lämnar du sidan slutar laptopen lyssna, men mötet avslutas inte. Du kan fortsätta det från föreningens sida."
-            : "Mötet avslutas inte när du lämnar sidan. Du kan fortsätta det, eller avsluta det, från föreningens sida."}
+          {listening ? t("leaveLiveText") : t("leaveText")}
         </LiveDialog>
       )}
     </>
@@ -353,9 +355,8 @@ function BackLink({
 }
 
 function PrivacyNote() {
+  const t = useTranslations("live.meeting");
   return (
-    <p className="mt-4 text-center text-sm text-ink-3">
-      Ingen ljudinspelning sparas. Läs mer i <a href="/integritet">integritetsinformationen</a>.
-    </p>
+    <p className="mt-4 text-center text-sm text-ink-3">{t.rich("privacy", { link: (chunks) => <a href="/integritet">{chunks}</a> })}</p>
   );
 }

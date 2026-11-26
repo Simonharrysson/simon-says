@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ export function SpeakerList({
   people: PersonOption[];
   onAssign: (speaker: SpeakerKey, choice: SpeakerChoice) => void;
 }) {
+  const t = useTranslations("live.speakers");
   const [editing, setEditing] = useState<string | null>(null);
   const unknown = speakers.filter((s) => !s.displayName || s.needsConfirm).length;
 
@@ -32,14 +35,14 @@ export function SpeakerList({
     <section className="flex flex-col overflow-hidden rounded-lg bg-surface shadow-panel" aria-labelledby="speakers-title">
       <div className="flex items-center justify-between gap-3 px-6 py-4">
         <h2 id="speakers-title" className="text-lg tracking-[-0.02em]">
-          Talare
+          {t("title")}
         </h2>
         {unknown > 0 && (
-          <Badge tone="info">{unknown} att bekräfta</Badge>
+          <Badge tone="info">{t("toConfirm", { count: unknown })}</Badge>
         )}
       </div>
       {speakers.length === 0 ? (
-        <p className="px-6 pb-6 text-sm text-ink-3">Talarna dyker upp här när de börjar prata.</p>
+        <p className="px-6 pb-6 text-sm text-ink-3">{t("empty")}</p>
       ) : (
         <ul>
           {speakers.map((speaker) => {
@@ -58,7 +61,7 @@ export function SpeakerList({
                           {speaker.needsConfirm && "?"}
                         </>
                       ) : (
-                        "Vem är detta?"
+                        t("who")
                       )}
                     </span>
                   </span>
@@ -73,16 +76,16 @@ export function SpeakerList({
                           })
                         }
                       >
-                        Stämmer
+                        {t("correct")}
                       </Button>
                     )}
                     {speaker.displayName ? (
                       <Button variant="ghost" iconOnly icon={<IconPencil size={16} />} onClick={toggle} aria-expanded={open}>
-                        {`Byt namn på ${speaker.label}`}
+                        {t("rename", { label: speaker.label })}
                       </Button>
                     ) : (
-                      <Button onClick={toggle} aria-expanded={open} aria-label={open ? `Stäng namnvalet för ${speaker.label}` : `Välj namn för ${speaker.label}`}>
-                        {open ? "Stäng" : "Välj"}
+                      <Button onClick={toggle} aria-expanded={open} aria-label={open ? t("closePicker", { label: speaker.label }) : t("pickFor", { label: speaker.label })}>
+                        {open ? t("close") : t("pick")}
                       </Button>
                     )}
                   </span>
@@ -115,10 +118,11 @@ function SpeakerPicker({
   people: PersonOption[];
   onPick: (choice: SpeakerChoice) => void;
 }) {
+  const t = useTranslations("live.speakers");
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   return (
-    <div className="flex flex-col gap-2 pt-2" role="group" aria-label={`Välj namn för ${speaker.label}`}>
+    <div className="flex flex-col gap-2 pt-2" role="group" aria-label={t("pickFor", { label: speaker.label })}>
       <div className="flex flex-wrap gap-2">
         {people.map((person) => (
           <button
@@ -133,7 +137,7 @@ function SpeakerPicker({
         ))}
         {!adding && (
           <button type="button" className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink transition-colors duration-120 hover:border-ink-3 hover:bg-sunk", "border-dashed text-ink-2")} onClick={() => setAdding(true)}>
-            <IconPlus size={14} /> Någon annan
+            <IconPlus size={14} /> {t("someoneElse")}
           </button>
         )}
       </div>
@@ -148,20 +152,20 @@ function SpeakerPicker({
         >
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <Label className="sr-only" htmlFor={`new-${speaker.elSessionId}-${speaker.speakerLabel}`}>
-              Namn
+              {t("name")}
             </Label>
             <Input
               id={`new-${speaker.elSessionId}-${speaker.speakerLabel}`}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Namn"
+              placeholder={t("name")}
               maxLength={100}
               autoFocus
               autoComplete="off"
             />
           </div>
           <Button type="submit" variant="primary" disabled={!name.trim()}>
-            Spara
+            {t("save")}
           </Button>
         </form>
       )}
