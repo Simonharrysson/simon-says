@@ -27,7 +27,8 @@ export interface OverviewGoal {
 export type GoalsPhase =
   | { phase: "idle" }
   | { phase: "proposing" }
-  | { phase: "error"; message: string }
+  /** `warning`: the daily limit (429), which resets by itself. */
+  | { phase: "error"; message: string; tone?: "warning" }
   | { phase: "editor"; goals: OverviewGoal[]; explanation?: string };
 
 export interface OverviewViewProps {
@@ -116,7 +117,11 @@ function GoalsPanel({
       const res = await fetch(`/api/orgs/${orgId}/goals/propose`, { method: "POST" });
       const json = (await res.json().catch(() => null)) as { goals?: OverviewGoal[]; explanation?: string; message?: string } | null;
       if (!res.ok || !json?.goals) {
-        setView({ phase: "error", message: json?.message ?? "Simon Says kunde inte föreslå mål. Försök igen." });
+        setView({
+          phase: "error",
+          message: json?.message ?? "Simon Says kunde inte föreslå mål. Försök igen.",
+          ...(res.status === 429 ? { tone: "warning" as const } : {}),
+        });
         return;
       }
       setView({ phase: "editor", goals: json.goals, explanation: json.explanation });
@@ -160,7 +165,7 @@ function GoalsPanel({
               <Spinner className="align-[-0.125em]" /> Simon Says läser besluten och punkterna från era möten …
             </p>
           )}
-          {view.phase === "error" && <Banner tone="danger">{view.message}</Banner>}
+          {view.phase === "error" && <Banner tone={view.tone ?? "danger"}>{view.message}</Banner>}
           {goals.length > 0 ? (
             <ol className="flex flex-col gap-3" aria-labelledby="goals-title">
               {goals.map((g, i) => (

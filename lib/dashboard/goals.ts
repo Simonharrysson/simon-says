@@ -77,7 +77,8 @@ export async function proposeGoals(input: { orgId: string; summary: GoalsInput }
       user: buildGoalsUserText(input.summary),
       jsonSchema: GOALS_JSON_SCHEMA,
       schema: AnswerSchema,
-      maxTokens: 8000,
+      // 3–5 short goals and two sentences: well under 1000 tokens.
+      maxTokens: 2000,
       orgId: input.orgId,
       client: opts.client,
     });

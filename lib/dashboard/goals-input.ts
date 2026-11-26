@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isDecision } from "@/lib/meetings/summary";
+import { scrubNames } from "./names";
 import { countedMeetings, itemLabel, openTasks, recurringTopics, underCheckin, type DashInput } from "./overview";
 
 // What "Föreslå mål" sends Claude (pure, so the privacy rules are tested without a call): the
@@ -8,12 +9,16 @@ import { countedMeetings, itemLabel, openTasks, recurringTopics, underCheckin, t
 // texts become "en person".
 
 export const MIN_MEETINGS = 3;
+/** "Föreslå mål" at most 3 times per förening per 24 h (0028 claim_goal_proposal). */
+export const GOALS_RATE_LIMITED = "Du har bett om förslag tre gånger i dag. Försök igen i morgon.";
 export const MAX_DECISIONS = 60;
 export const MAX_TASKS = 30;
 const MAX_TEXT = 200;
 export const MAX_GOALS = 5;
 export const GOAL_TITLE_MAX = 80;
 export const GOAL_WHY_MAX = 240;
+
+export { scrubNames };
 
 export interface GoalsInput {
   meetings: number;
@@ -22,18 +27,6 @@ export interface GoalsInput {
   topics: { label: string; meetings: number; decisions: number }[];
   decisions: { month: string; item: string | null; text: string }[];
   openTasks: { since: string; text: string }[];
-}
-
-const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** Replaces each person's full name, then each name part (≥ 2 letters, also genitive), with "en person". */
-export function scrubNames(text: string, names: string[]): string {
-  const parts = [...new Set(names.flatMap((n) => [n.trim(), ...n.trim().split(/\s+/)]).filter((p) => p.length >= 2))].sort(
-    (a, b) => b.length - a.length,
-  );
-  let out = text;
-  for (const p of parts) out = out.replace(new RegExp(`(?<![\\p{L}])${escape(p)}s?(?![\\p{L}])`, "giu"), "en person");
-  return out;
 }
 
 const clip = (s: string) => {
@@ -53,9 +46,12 @@ export function goalsInput(orgId: string, input: DashInput, now: Date): GoalsInp
     .map((r) => ({ r, m: byId.get(r.meeting_id)! }))
     .sort((a, b) => b.m.started_at.localeCompare(a.m.started_at) || a.r.position - b.r.position)
     .slice(0, MAX_DECISIONS)
-    .map(({ r, m }) => ({ month: m.started_at.slice(0, 7), item: itemLabel(m, r.anchor), text: text(r.text) }));
+    .map(({ r, m }) => {
+      const item = itemLabel(m, r.anchor);
+      return { month: m.started_at.slice(0, 7), item: item && text(item), text: text(r.text) };
+    });
   const topics = recurringTopics(orgId, input).map((t) => ({
-    label: t.label,
+    label: text(t.label),
     meetings: t.meetings,
     decisions: t.months.reduce((n, m) => n + m.decisions.length, 0),
   }));

@@ -55,6 +55,18 @@ describe.skipIf(!hasLocalSupabase)("goals routes", () => {
     expect(m.proposeGoals).toHaveBeenCalledTimes(1);
   });
 
+  it("propose: at most 3 per förening per 24 h; the 4th gets 429 and no Claude call", async () => {
+    m.db = admin.db;
+    // The previous test used one; two more go through.
+    for (let i = 0; i < 2; i++) expect((await callPropose(orgId)).status).toBe(200);
+    const limited = await callPropose(orgId);
+    expect(limited.status).toBe(429);
+    expect((await limited.json()).message).toBe("Du har bett om förslag tre gånger i dag. Försök igen i morgon.");
+    expect(m.proposeGoals).toHaveBeenCalledTimes(2);
+    const { count } = await adminClient().from("goal_proposals").select("*", { count: "exact", head: true }).eq("org_id", orgId);
+    expect(count).toBe(3);
+  });
+
   it("approve: admin stores, member denied, bad input refused", async () => {
     m.db = admin.db;
     expect((await callApprove(orgId, { goals: [{ title: " Fler spelkvällar ", why: "" }] })).status).toBe(200);

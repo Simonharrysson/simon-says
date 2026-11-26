@@ -351,6 +351,9 @@ const render: Record<string, () => ReactNode> = {
   ),
   "org-overview": () => <OverviewDemo />,
   "org-overview-goals": () => <OverviewDemo goalsPhase={{ phase: "editor", ...demoProposal }} />,
+  "org-overview-limit": () => (
+    <OverviewDemo goalsPhase={{ phase: "error", tone: "warning", message: "Du har bett om förslag tre gånger i dag. Försök igen i morgon." }} />
+  ),
   "org-overview-empty": () => (
     <AppChrome>
       <OrgDetailView

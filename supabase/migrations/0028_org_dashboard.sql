@@ -1,7 +1,7 @@
 -- Org dashboard (todo #2, docs/superpowers/specs/2026-11-26-org-dashboard-proposal.md):
 -- agenda item labels on meetings, and the förening's approved goals.
 -- Strictly additive and backward compatible with the deployed code: one new column with a default
--- (old code never names it), a new table and two new functions.
+-- (old code never names it), two new tables and three new functions.
 
 -- ---------------------------------------------------------------------------------------------
 -- meetings.agenda_labels: `ag-<n>` → the agenda item's label, as scanned from the Doc at start
@@ -90,3 +90,47 @@ $$;
 
 revoke all on function public.set_org_goals(uuid, jsonb) from public, anon, authenticated;
 grant execute on function public.set_org_goals(uuid, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- goal_proposals: one row per "Föreslå mål" (a Claude call). At most 3 per förening per 24 h, so
+-- one admin can never use up the global daily Claude cap that live notes depend on. Rows hold no
+-- content (org, who, when); older than 7 days they are removed by the next claim.
+
+create table public.goal_proposals (
+  id bigint generated always as identity primary key,
+  org_id uuid not null references public.orgs on delete cascade,
+  requested_by uuid references auth.users on delete set null,
+  at timestamptz not null default now()
+);
+create index goal_proposals_org_idx on public.goal_proposals (org_id, at desc);
+
+alter table public.goal_proposals enable row level security;
+revoke all on table public.goal_proposals from anon, authenticated, service_role;
+grant select, insert, update, delete on table public.goal_proposals to service_role;
+
+-- Admins only: claims one of the org's 3 proposals per 24 h. True = go ahead (the row is written),
+-- false = the limit is reached. Locks the org row, so concurrent claims cannot both get the last one.
+create function public.claim_goal_proposal(p_org_id uuid)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  if not public.is_org_admin(p_org_id) then
+    raise exception 'only org admins can ask for goals' using errcode = '42501';
+  end if;
+  perform 1 from public.orgs o where o.id = p_org_id for update;
+  delete from public.goal_proposals where org_id = p_org_id and at < now() - interval '7 days';
+  select count(*) into v_count from public.goal_proposals
+   where org_id = p_org_id and at > now() - interval '24 hours';
+  if v_count >= 3 then
+    return false;
+  end if;
+  insert into public.goal_proposals (org_id, requested_by) values (p_org_id, auth.uid());
+  return true;
+end;
+$$;
+
+revoke all on function public.claim_goal_proposal(uuid) from public, anon, authenticated;
+grant execute on function public.claim_goal_proposal(uuid) to authenticated;

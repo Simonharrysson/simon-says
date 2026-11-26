@@ -49,6 +49,19 @@ describe.skipIf(!hasLocalSupabase)("org dashboard (0028)", () => {
     expect(await listGoals(member.db, orgId)).toHaveLength(1);
   });
 
+  it("claim_goal_proposal: admins only, 3 per 24 h, the table is closed to users", async () => {
+    const denied = await member.db.rpc("claim_goal_proposal", { p_org_id: orgId });
+    expect(denied.error?.code).toBe("42501");
+    const results: unknown[] = [];
+    for (let i = 0; i < 4; i++) results.push((await admin.db.rpc("claim_goal_proposal", { p_org_id: orgId })).data);
+    expect(results).toEqual([true, true, true, false]);
+    const asAdmin = await admin.db.from("goal_proposals").select("id").eq("org_id", orgId);
+    expect(asAdmin.error).not.toBeNull();
+    // Older than 24 h no longer counts.
+    await adminClient().from("goal_proposals").update({ at: new Date(Date.now() - 25 * 3600_000).toISOString() }).eq("org_id", orgId);
+    expect((await admin.db.rpc("claim_goal_proposal", { p_org_id: orgId })).data).toBe(true);
+  });
+
   it("merge_agenda_labels: service role only, merges keys", async () => {
     const { meetingId } = await seedMeeting(orgId, admin.id);
     const denied = await admin.db.rpc("merge_agenda_labels", { p_meeting_id: meetingId, p_labels: { "ag-1": "x" } });
