@@ -5,22 +5,25 @@ import { requestDriveAccess } from "@/app/(app)/orgs/drive-access";
 import { PickerError, usePicker, type PickedFile } from "@/components/google/Picker";
 import { Banner } from "@/components/ui/Banner";
 import { Button, Spinner } from "@/components/ui/button";
-import { IconCheck, IconGoogle } from "@/components/ui/icons";
+import { IconGoogle } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { DriveFolder, ImportFile } from "@/lib/history/drive-list";
 import { formatUsd, MAX_IMPORT_DOCS } from "@/lib/history/limits";
+import { DIRECT_CONCURRENCY, type ImportMode, type JobProposal, type JobView } from "@/lib/history/progress";
 import { plural } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { FileStep, FolderStep } from "./DriveSteps";
+import { ImportProgress, type FinishedImport } from "./ImportProgress";
 
 // "Läs in gamla protokoll" on the Översikt's goals card (todo #7): the admin gives Simon Says
 // read access to their Drive once (incremental consent, drive.readonly, only here) → ticks the
 // folders with the protocols → ticks the meetings in them (Simon Says' own Docs, templates and
 // already imported ones are marked) → sees what it costs and that the TEXT goes to Claude →
-// confirm → one request per meeting with a progress list → corrects dates that came from a
-// file's creation date → the caller asks for goals. An admin who says no to the read access can
+// confirm → an import job (0036): up to 20 meetings read directly, a few at a time; more go to
+// Claude in one batch at half price and the server carries on if the page closes
+// (ImportProgress shows either from the database) → corrects dates that came from a file's
+// creation date → goals (the caller asks for them, or opens the batch's stored proposal). An admin who says no to the read access can
 // still pick Docs one by one in the Google Picker (the old flow).
 
 /** What the page knows for the import: the admin's grant and the förening's meeting folder. */
@@ -37,6 +40,8 @@ export type EstimateDoc = { docId: string; sections: number } | { docId: string;
 export interface ImportEstimate {
   docs: EstimateDoc[];
   protocols: number;
+  /** Up to DIRECT_MAX meetings: read directly; more: one Anthropic batch at half price. */
+  mode: ImportMode;
   importUsd: number;
   digestUsd: number;
   totalUsd: number;
@@ -58,8 +63,10 @@ export type ImportPhase =
   | { phase: "picker" }
   | { phase: "estimating"; files: ImportDoc[]; back: Back }
   | { phase: "confirm"; files: ImportDoc[]; estimate: ImportEstimate; back: Back }
-  | { phase: "importing"; jobs: Job[] }
-  | { phase: "dates"; fileDated: FileDated[]; result: ImportResult }
+  /** An import job (0036): its progress, from the database. `autoRun`: just confirmed (direct reads now). */
+  | { phase: "job"; job: JobView; autoRun?: boolean }
+  | { phase: "starting"; protocols: number; mode: ImportMode }
+  | { phase: "dates"; fileDated: FileDated[]; then: () => void }
   | { phase: "error"; message: string; back: Back };
 
 /** A Doc to import: from the Picker, or from the folder browser with the listing's signed ticket. */
@@ -71,16 +78,6 @@ export interface ImportDoc {
 
 /** Where "Tillbaka" goes from the cost step. */
 type Back = { phase: "files"; folders: DriveFolder[]; subfolders: boolean } | { phase: "picker" };
-
-export interface Job {
-  docId: string;
-  ticket?: string;
-  section: number;
-  sections: number;
-  label: string;
-  state: "waiting" | "reading" | "done" | "failed";
-  message?: string;
-}
 
 export interface ImportResult {
   imported: number;
@@ -117,7 +114,9 @@ export function HistoryImport({
   access,
   consent,
   initial,
+  demoNow,
   onDone,
+  onProposal,
   onCancel,
 }: {
   orgId: string;
@@ -126,7 +125,11 @@ export function HistoryImport({
   consent?: "ok" | "nej" | "fel" | "konto";
   /** /design only. */
   initial?: ImportPhase;
+  /** /design only: a fixed clock for the progress view (no requests). */
+  demoNow?: number;
   onDone: (result: ImportResult) => void;
+  /** A batch import's stored goals proposal (the cron ran the digest once). */
+  onProposal: (proposal: JobProposal, notice: string) => void;
   onCancel: () => void;
 }) {
   const picker = usePicker();
@@ -173,63 +176,69 @@ export function HistoryImport({
     await estimate(files, { phase: "picker" });
   };
 
-  const run = async (files: ImportDoc[], e: ImportEstimate) => {
-    const jobs: Job[] = e.docs.flatMap((d) => {
+  const run = async (files: ImportDoc[], e: ImportEstimate, back: Back) => {
+    const docs = e.docs.flatMap((d) => {
       if (!("sections" in d)) return [];
       const file = files.find((f) => f.id === d.docId);
-      const name = file?.name ?? "Dokument";
-      return Array.from({ length: d.sections }, (_, section) => ({
-        docId: d.docId,
-        ...(file?.ticket ? { ticket: file.ticket } : {}),
-        section,
-        sections: d.sections,
-        label: d.sections > 1 ? `${name}, möte ${section + 1} av ${d.sections}` : name,
-        state: "waiting" as const,
-      }));
+      return [{ docId: d.docId, name: file?.name ?? "Dokument", sections: d.sections }];
     });
-    let done = 0;
-    let failed = 0;
-    let stopped: string | null = null;
-    const fileDated: FileDated[] = [];
-    const show = () => setView({ phase: "importing", jobs: jobs.map((j) => ({ ...j })) });
-    for (const j of jobs) {
-      j.state = "reading";
-      show();
-      try {
-        const res = await fetch(`/api/orgs/${orgId}/history/import`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ docId: j.docId, section: j.section, sections: j.sections, ...(j.ticket ? { ticket: j.ticket } : {}) }),
-        });
-        const json = (await res.json().catch(() => null)) as { error?: string; message?: string; protocolId?: string; date?: string; dateFrom?: string } | null;
-        if (res.ok) {
-          done++;
-          j.state = "done";
-          if (json?.dateFrom === "file" && json.protocolId && json.date) fileDated.push({ protocolId: json.protocolId, label: j.label, date: json.date });
-        } else {
-          failed++;
-          j.state = "failed";
-          j.message = json?.message;
-          // These stop every further meeting too: no point in trying the rest.
-          if (res.status === 429 || res.status === 503 || json?.error === "google_auth_lost") {
-            stopped = json?.message ?? "Inläsningen stoppades. Försök igen senare.";
-            break;
-          }
-        }
-      } catch {
-        failed++;
-        j.state = "failed";
-        j.message = "Vi nådde inte servern.";
+    const picked = files.filter((f) => docs.some((d) => d.docId === f.id));
+    setView({ phase: "starting", protocols: e.protocols, mode: e.mode });
+    try {
+      const res = await fetch(`/api/orgs/${orgId}/history/jobs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          docs,
+          ...(picked.length && picked.every((f) => f.ticket) ? { tickets: Object.fromEntries(picked.map((f) => [f.id, f.ticket])) } : {}),
+        }),
+      });
+      const json = (await res.json().catch(() => null)) as { job?: JobView; message?: string } | null;
+      if (!res.ok || !json?.job) {
+        setView({ phase: "error", message: json?.message ?? "Inläsningen kunde inte startas. Försök igen.", back });
+        return;
       }
+      setView({ phase: "job", job: json.job, autoRun: true });
+    } catch {
+      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen.", back });
     }
-    show();
-    const result = { imported: done, failed, stopped };
-    if (fileDated.length) setView({ phase: "dates", fileDated, result });
-    else onDone(result);
   };
 
-  if (view.phase === "dates") return <FileDates orgId={orgId} items={view.fileDated} onDone={() => onDone(view.result)} />;
-  if (view.phase === "importing") return <Progress jobs={view.jobs} />;
+  /** Dates from a file's creation date are checked first, then the goals. */
+  const afterImport = (r: FinishedImport, next: () => void) => {
+    if (r.fileDated.length) setView({ phase: "dates", fileDated: r.fileDated, then: next });
+    else next();
+  };
+  const summary = (r: FinishedImport) =>
+    [r.imported ? `${plural(r.imported, "protokoll", "protokoll")} inlästa.` : "", r.failed ? `${plural(r.failed, "protokoll", "protokoll")} gick inte att läsa.` : ""]
+      .filter(Boolean)
+      .join(" ");
+
+  if (view.phase === "dates") return <FileDates orgId={orgId} items={view.fileDated} onDone={view.then} />;
+  if (view.phase === "job") {
+    return (
+      <ImportProgress
+        key={view.job.id}
+        orgId={orgId}
+        initial={view.job}
+        autoRun={view.autoRun}
+        now={demoNow}
+        onFinished={(r) => afterImport(r, () => onDone({ imported: r.imported, failed: r.failed, stopped: r.stopped }))}
+        onProposal={(proposal, r) => afterImport(r, () => onProposal(proposal, summary(r)))}
+        onClose={onCancel}
+      />
+    );
+  }
+  if (view.phase === "starting") {
+    return (
+      <p className="text-sm text-ink-3" role="status" aria-live="polite">
+        <Spinner className="align-[-0.125em]" />{" "}
+        {view.mode === "batch"
+          ? `Simon Says öppnar ${plural(view.protocols, "protokoll", "protokoll")} och skickar dem till Claude i en omgång … Det tar upp till en minut.`
+          : "Startar inläsningen …"}
+      </p>
+    );
+  }
 
   if (view.phase === "folders") {
     return (
@@ -310,12 +319,23 @@ export function HistoryImport({
           </Banner>
         )}
         <PrivacyNote />
+        {e.mode === "batch" ? (
+          <p className="text-sm text-ink-2 max-w-[68ch]">
+            Så många protokoll skickas till Claude <strong>i en omgång</strong>, till halva priset. De flesta omgångar är klara
+            inom en timme, alla inom ett dygn. Du kan stänga sidan under tiden; resultatet och förslaget på mål väntar här.
+          </p>
+        ) : (
+          <p className="text-sm text-ink-2 max-w-[68ch]">
+            Simon Says läser {Math.min(DIRECT_CONCURRENCY, e.protocols)} protokoll åt gången, ungefär en halv minut vardera. Låt sidan vara öppen tills det är klart.
+          </p>
+        )}
         <p className="text-sm text-ink-3">
-          Kostnad för Simon Says: {formatUsd(e.totalUsd)} (läsa protokollen {formatUsd(e.importUsd)}, förslag på mål över hela historiken {formatUsd(e.digestUsd)}).
+          Kostnad för Simon Says: {formatUsd(e.totalUsd)} (läsa protokollen {formatUsd(e.importUsd)}
+          {e.mode === "batch" ? ", halva priset" : ""}, förslag på mål över hela historiken {formatUsd(e.digestUsd)}).
           Sedan föreslår Simon Says mål, och du godkänner dem innan någon annan ser dem.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="primary" disabled={e.protocols === 0} onClick={() => run(view.files, e)}>
+          <Button variant="primary" disabled={e.protocols === 0} onClick={() => run(view.files, e, view.back)}>
             {`Läs in ${plural(e.protocols, "protokoll", "protokoll")}`}
           </Button>
           <Button variant="ghost" onClick={() => goBack(view.back)}>
@@ -388,45 +408,6 @@ export function HistoryImport({
           Avbryt
         </Button>
       </div>
-    </div>
-  );
-}
-
-const JOB_STATE: Record<Job["state"], string> = { waiting: "Väntar", reading: "Läser …", done: "Inläst", failed: "Gick inte" };
-
-/** One row per meeting: waiting, reading, read or failed (with the server's reason). */
-function Progress({ jobs }: { jobs: Job[] }) {
-  const finished = jobs.filter((j) => j.state === "done" || j.state === "failed").length;
-  const failed = jobs.filter((j) => j.state === "failed").length;
-  const pct = jobs.length ? Math.round((finished / jobs.length) * 100) : 0;
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-ink-2" role="status" aria-live="polite">
-        {finished < jobs.length ? (
-          <>
-            <Spinner className="align-[-0.125em]" /> Läser {Math.min(finished + 1, jobs.length)} av {jobs.length} protokoll … Låt sidan vara öppen.
-          </>
-        ) : (
-          `Klart: ${plural(finished - failed, "protokoll", "protokoll")} inlästa.`
-        )}
-      </p>
-      <div className="h-2 w-full max-w-[28rem] overflow-hidden rounded-full bg-sunk" aria-hidden>
-        <div className="h-full rounded-full bg-ink-2 transition-[width] duration-300" style={{ width: `${pct}%` }} />
-      </div>
-      <ol className="max-h-[22rem] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface" aria-label="Protokoll">
-        {jobs.map((j) => (
-          <li key={`${j.docId}-${j.section}`} className="flex items-start gap-3 border-t border-line px-3 py-2 first:border-t-0">
-            <span className="mt-0.5 grid size-5 flex-none place-content-center" aria-hidden>
-              {j.state === "reading" ? <Spinner /> : j.state === "done" ? <IconCheck size={16} strokeWidth={2.25} className="text-green" /> : null}
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className={cn("text-sm wrap-anywhere", j.state === "waiting" && "text-ink-3")}>{j.label}</span>
-              {j.state === "failed" && j.message && <span className="text-xs text-ink-3">{j.message}</span>}
-            </span>
-            <span className={cn("flex-none text-xs", j.state === "done" ? "text-green" : j.state === "failed" ? "text-red" : "text-ink-3")}>{JOB_STATE[j.state]}</span>
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }

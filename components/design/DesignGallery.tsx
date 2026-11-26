@@ -34,6 +34,7 @@ import { StatusView } from "@/components/views/StatusView";
 import { STYRELSEPROTOKOLL, VECKOMOTE } from "@/lib/formats/standard";
 import { orgNotice, orgsNotice } from "@/lib/ui/messages";
 import { demoGoals, demoOverview, demoProposal, emptyOverview, OVERVIEW_NOW } from "./overview-demo";
+import { IMPORT_DEMO_NOW, largeDigesting, largeDone, largeRunning, largeStarted, smallFailed, smallRunning } from "./import-demo";
 import { designViews, type DesignGroup } from "./registry";
 
 // Everything below is fake, illustrative data. No real people, orgs or ids.
@@ -502,19 +503,26 @@ const render: Record<string, () => ReactNode> = {
   "org-overview-import-files": () => (
     <OverviewDemo goalsPhase={{ phase: "import", initial: { phase: "files", folders: [{ id: "1DemoFolderAAAA", name: "Styrelsen" }], subfolders: true, initialFiles: demoImportFiles } }} />
   ),
-  "org-overview-import-progress": () => (
+  "org-overview-import-progress": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: smallRunning, autoRun: true } }} />,
+  "org-overview-import-paused": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: smallRunning } }} />,
+  "org-overview-import-failed": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: smallFailed } }} />,
+  "org-overview-import-batch-confirm": () => (
     <OverviewDemo
       goalsPhase={{
         phase: "import",
         initial: {
-          phase: "importing",
-          jobs: demoImportFiles.files
-            .filter((f) => f.status === "ready")
-            .map((f, i) => ({ docId: f.id, section: 0, sections: 1, label: f.name, state: i < 2 ? "done" : i === 2 ? "reading" : "waiting" })),
+          phase: "confirm",
+          files: demoImportFiles.files.map((f) => ({ id: f.id, name: f.name })),
+          estimate: { docs: demoImportFiles.files.map((f) => ({ docId: f.id, sections: 24 })), protocols: 120, mode: "batch", importUsd: 1.92, digestUsd: 0.31, totalUsd: 2.23 },
+          back: { phase: "picker" },
         },
       }}
     />
   ),
+  "org-overview-import-batch-start": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: largeStarted } }} />,
+  "org-overview-import-batch-running": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: largeRunning } }} />,
+  "org-overview-import-batch-digesting": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: largeDigesting } }} />,
+  "org-overview-import-batch-done": () => <OverviewDemo goalsPhase={{ phase: "import", demoNow: IMPORT_DEMO_NOW, initial: { phase: "job", job: largeDone } }} />,
   "org-overview-limit": () => (
     <OverviewDemo goalsPhase={{ phase: "error", tone: "warning", message: "Du har bett om förslag tre gånger i dag. Försök igen i morgon." }} />
   ),

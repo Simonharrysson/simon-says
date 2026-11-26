@@ -6,6 +6,9 @@ import { OrgDetailView, type OrgTab } from "@/components/views/OrgDetailView";
 import { OverviewView } from "@/components/views/OverviewView";
 import { listGoals, loadOverview, type OrgGoal } from "@/lib/dashboard/load";
 import { historySummary } from "@/lib/history/store";
+import { currentJobId, jobView } from "@/lib/history/jobs";
+import { isOpen, type JobView } from "@/lib/history/progress";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Overview } from "@/lib/dashboard/overview";
 import { isUuid } from "@/lib/db/ids";
 import { appCreatedFlags, sharedMeetingIds } from "@/lib/docs/access";
@@ -79,6 +82,18 @@ async function safeOverview(
   }
 }
 
+/** The import the admin's Översikt shows (0036): open, or finished and not yet closed. Never breaks the page. */
+async function safeImportJob(orgId: string): Promise<JobView | null> {
+  try {
+    const admin = supabaseAdmin();
+    const jobId = await currentJobId(admin, orgId);
+    return jobId ? await jobView(admin, jobId) : null;
+  } catch (err) {
+    console.error("org page: import job unavailable", (err as Error)?.message);
+    return null;
+  }
+}
+
 /** Has the user live read access for the protocol import (0034)? A read failure counts as no. */
 async function safeDriveReadonly(userId: string): Promise<boolean> {
   try {
@@ -129,6 +144,8 @@ export default async function OrgPage({
   // The protocol import (admins, Översikt): has this admin's grant drive.readonly (the
   // incremental consent)? Read only here, for the import; never required anywhere else.
   const driveReadonly = isAdmin && tab === "oversikt" && userResult.data.user ? await safeDriveReadonly(userResult.data.user.id) : false;
+  // Service role, so only after the role check above said admin.
+  const importJob = isAdmin && tab === "oversikt" ? await safeImportJob(id) : null;
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
@@ -168,7 +185,8 @@ export default async function OrgPage({
                 email: userResult.data.user?.email ?? null,
                 meetingFolder: org.meeting_folder_id ? { id: org.meeting_folder_id, name: org.meeting_folder_name ?? "Föreningens mötesmapp" } : null,
               }}
-              initialGoalsPhase={isAdmin && openImport === "1" ? { phase: "import", consent: importBack } : undefined}
+              importJob={importJob}
+              initialGoalsPhase={isAdmin && openImport === "1" && !(importJob && isOpen(importJob.status)) ? { phase: "import", consent: importBack } : undefined}
             />
           ) : undefined,
       }}

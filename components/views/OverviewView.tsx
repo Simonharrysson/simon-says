@@ -13,6 +13,7 @@ import { Panel, panelFootClass, panelIntroClass, panelPadClass } from "@/compone
 import { formatDay, formatMonth, formatWeeks, matchesQuery } from "@/lib/dashboard/format";
 import type { Overview } from "@/lib/dashboard/overview";
 import type { GoalSuggestion } from "@/lib/history/digest-input";
+import type { JobView } from "@/lib/history/progress";
 import { HistoryImport, type ImportAccess, type ImportPhase, type ImportResult } from "./HistoryImport";
 import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,7 @@ export type GoalsPhase =
   | { phase: "error"; message: string; tone?: "warning" }
   | { phase: "editor"; goals: OverviewGoal[]; explanation?: string; suggestions?: GoalSuggestion[]; notice?: string }
   /** "Läs in gamla protokoll" (todo #7). `consent`: back from Google's drive.readonly consent. */
-  | { phase: "import"; initial?: ImportPhase; consent?: "ok" | "nej" | "fel" | "konto" };
+  | { phase: "import"; initial?: ImportPhase; consent?: "ok" | "nej" | "fel" | "konto"; demoNow?: number };
 
 export interface OverviewViewProps {
   orgId: string;
@@ -52,6 +53,8 @@ export interface OverviewViewProps {
   importAccess?: ImportAccess;
   /** For dates ("24 nov" vs "24 nov 2025"); /design passes a fixed one. */
   now?: Date;
+  /** Admins: an import that is running, or finished and not yet closed (0036); shown in the goals card. */
+  importJob?: JobView | null;
 }
 
 const LONG_OPEN_WEEKS = 4;
@@ -62,7 +65,7 @@ const MAX_GOALS = 5;
 const rowClass = "border-t border-line px-6 py-3";
 const metaClass = "mt-0.5 text-sm text-ink-3";
 
-export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0, loadError, initialGoalsPhase, importAccess, now = new Date() }: OverviewViewProps) {
+export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0, loadError, initialGoalsPhase, importAccess, importJob, now = new Date() }: OverviewViewProps) {
   if (loadError) {
     return (
       <Banner tone="danger" title="Översikten kunde inte laddas" live={false}>
@@ -78,7 +81,7 @@ export function OverviewView({ orgId, isAdmin, overview, goals, historyCount = 0
           ? "Översikten fylls på när föreningen har haft sitt första möte med Simon Says."
           : `Bygger på ${plural(o.meetingCount, "avslutat möte", "avslutade möten")}${o.firstMeeting ? ` sedan ${formatDay(o.firstMeeting, now)}` : ""}. Testmöten räknas inte.`}
       </p>
-      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} historyCount={historyCount} initial={initialGoalsPhase} importAccess={importAccess} />
+      <GoalsPanel orgId={orgId} isAdmin={isAdmin} goals={goals} meetingCount={o.meetingCount} historyCount={historyCount} initial={initialGoalsPhase ?? (isAdmin && importJob ? { phase: "import", initial: { phase: "job", job: importJob } } : undefined)} importAccess={importAccess} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <OpenTasksPanel overview={o} now={now} />
@@ -209,8 +212,16 @@ function GoalsPanel({
           access={importAccess}
           consent={view.consent}
           initial={view.initial}
+          demoNow={view.demoNow}
           onDone={imported}
-          onCancel={() => setView({ phase: "idle" })}
+          onProposal={(proposal, notice) => {
+            router.refresh();
+            setView({ phase: "editor", goals: proposal.goals, explanation: proposal.explanation, suggestions: proposal.others, notice });
+          }}
+          onCancel={() => {
+            router.refresh();
+            setView({ phase: "idle" });
+          }}
         />
       ) : view.phase === "editor" ? (
         <GoalsEditor
