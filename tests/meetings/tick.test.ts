@@ -48,6 +48,7 @@ const { parseNotesTab } = await import("@/lib/docs/tab");
 const { planAnchoring, INITIAL_LIVE_LINE } = await import("@/lib/agenda/anchor");
 const { scanAgenda, newAgendaItems, adoptedAgendaRanges } = await import("@/lib/agenda/scan");
 const { VECKOMOTE } = await import("@/lib/formats/standard");
+const { meetingRoles } = await import("@/lib/formats/schema");
 const { buildRequest, anchorRoles } = await import("@/lib/notes/engine");
 const { CHECKIN_PLACEHOLDER } = await import("@/lib/notes/checkin");
 const { ensureStandardRow } = await import("@/lib/formats/store");
@@ -1298,7 +1299,9 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
   const OPEN = { startMs: null, endMs: null, closed: false, failures: 0 };
 
   /** A format meeting on the anchored fixture Doc, as startMeeting leaves it (info-tid row saved). */
-  async function formatMeeting(opts: { window?: typeof OPEN | null; status?: "live" | "ending"; prerender?: NoteItemRow[]; isTest?: boolean } = {}) {
+  async function formatMeeting(
+    opts: { window?: typeof OPEN | null; status?: "live" | "ending"; prerender?: NoteItemRow[]; isTest?: boolean; roles?: Record<string, import("@/lib/db/types").ItemRole> } = {},
+  ) {
     const admin = adminClient();
     const id = randomUUID();
     const { doc, plan } = anchoredDoc(id);
@@ -1321,7 +1324,7 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
       layout: "format",
       format_profile_id: profileId,
       is_test: opts.isTest ?? false,
-      agenda_roles: ROLES,
+      agenda_roles: opts.roles ?? ROLES,
       checkin_window: opts.window === undefined ? null : opts.window,
     });
     if (error) throw new Error(error.message);
@@ -1547,6 +1550,30 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
       { state: "open", startMs: 2000, endMs: null },
       { state: "closed", startMs: 2000, endMs: 5000 },
     ]);
+  });
+
+  it("Må-runda hiding off (the default start): no detector call, nothing masked, notes land under the Må-runda", async () => {
+    // As startMeeting leaves a meeting whose format has no hideCheckin (every format by default).
+    const roles = meetingRoles(ROLES, VECKOMOTE);
+    expect(roles["ag-2"]).toBe("procedural");
+    const { id, sessionId, doc } = await formatMeeting({ roles, window: null });
+    await say(id, sessionId, "Jag mår bra idag", 1000);
+    await say(id, sessionId, "Lite trött men på plats", 2000);
+    const f = fakes(doc, {
+      detect: () => ({ startMs: 1000, endMs: null }),
+      answer: (input) => [...input.items, { id: "n1", section: "note", text: "Alla är på plats", anchor: "ag-2" }],
+    });
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.detects).toHaveLength(0);
+    const blocks = f.calls[0].transcriptBlocks.join("\n");
+    expect(blocks).toMatch(/mår bra/);
+    expect(blocks).toMatch(/trött/);
+    expect(blocks).not.toContain(CHECKIN_PLACEHOLDER);
+    expect(f.calls[0].agenda?.anchors.find((a) => a.key === "ag-2")).toMatchObject({ label: "Må-runda", role: "procedural" });
+    expect(linesOf(doc)).toContain("– Alla är på plats.");
+    expect((await read(id)).checkin_window).toBeNull();
+    expect((await noteRows(id)).map((r) => r.id)).not.toContain("checkin-done");
+    expect(await events(id, "checkin")).toEqual([]);
   });
 
   it("a detector failing 3 ticks in a row closes the window (nothing masked)", async () => {

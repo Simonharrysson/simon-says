@@ -13,7 +13,7 @@ import { logEvent } from "@/lib/db/events";
 import { memberEmails } from "@/lib/db/members";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { CheckinWindow, ItemRole, MeetingEventKind, MeetingRow, NoteItemRow } from "@/lib/db/types";
-import { parseProfile, type FormatProfile } from "@/lib/formats/schema";
+import { meetingRoles, parseProfile, type FormatProfile } from "@/lib/formats/schema";
 import { rolesFromSkeleton } from "@/lib/formats/skeleton";
 import { STANDARD } from "@/lib/formats/standard";
 import { ensureStandardRow, orgDefaultFormat } from "@/lib/formats/store";
@@ -191,7 +191,8 @@ export async function startMeeting(
   if ("ok" in setup) return setup;
 
   const anchor = setup.anchor;
-  const agendaRoles: Record<string, ItemRole> = anchor?.agendaRoles ?? {};
+  // The Må-runda is hidden only when the format opts in (meetingRoles); else it is an ordinary item.
+  const agendaRoles: Record<string, ItemRole> = meetingRoles(anchor?.agendaRoles ?? {}, format.profile);
   const checkinWindow: CheckinWindow | null = Object.values(agendaRoles).includes("checkin")
     ? { startMs: null, endMs: null, closed: false, failures: 0 }
     : null;

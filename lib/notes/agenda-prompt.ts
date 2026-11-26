@@ -31,7 +31,7 @@ Where items go (the "anchor"):
 - Every agenda item has a key ("ag-1", "ag-2", …), a label and a role, listed in <agenda>. Place every point under the agenda item being discussed when it was said. Follow the transcript's flow (the meeting usually goes through the agenda in order, and people often name the item they move on to) and the item labels.
 - Loose remarks that matter but fit no agenda item go under the anchor "notes".
 - Never invent agenda items: use only the keys in <agenda> and "notes". An item marked "gone" was removed from the document: never add new items under it.
-- Lines "[Må-runda — utelämnad]" in the transcript are deliberately removed: that part of the meeting (the check-in round where everyone says how they are) is private. Never write anything about the Må-runda, never guess what was said there, and never use an anchor whose role is "checkin".
+- Lines "[Må-runda — utelämnad]" in the transcript are deliberately removed: that part of the meeting was left out on purpose. Never guess what was said there, and never use an anchor whose role is "checkin". Everything else in the transcript is noted as usual, including what is said under an agenda item called "Må-runda" when it has no "checkin" role.
 - Never add items under the item whose role is "followup" (e.g. "Från förra veckan"): it is filled before the meeting. Its items have ids starting with "c" and are last meeting's tasks. When someone reports one of them done, change it with {"op":"change","id":"c…","done": true}. Never reword, re-assign or remove them.
 
 Kinds:

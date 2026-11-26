@@ -429,10 +429,11 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
       transcript_tab_id: null,
       header_range: `ss-${json.meetingId}-header`,
       header_rendered: "Simon Says antecknar live · uppdaterad –",
-      agenda_roles: AGENDA_ROLES,
+      // Må-runda hiding is off by default: the matched Må-runda is an ordinary item, no window.
+      agenda_roles: { ...AGENDA_ROLES, "ag-2": "procedural" },
       is_test: false,
       format_profile_id: null,
-      checkin_window: { startMs: null, endMs: null, closed: false, failures: 0 },
+      checkin_window: null,
     });
     expect(Object.keys(row.section_ranges).sort()).toEqual(["ag-1", "ag-2", "ag-3", "ag-4", "ag-5", "ag-6", "notes", "tasks"]);
     // info-tid from anchoring is saved with its range, so the final pass can write "18:05–19:10".
@@ -565,6 +566,22 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
       anchored(input.meetingId, "t.0", { "ag-1": "procedural", "ag-2": "topic" }),
     );
     expect((await agendaCall()).status).toBe(200);
+    expect(insertedRow().checkin_window).toBeNull();
+  });
+
+  it("a format with Må-runda hiding on (opt-in) keeps the checkin role and opens the detector window", async () => {
+    m.profiles = [{ id: "pdef", org_id: ORG, kind: "learned", profile: { ...VECKOMOTE, kind: "learned", hideCheckin: true }, is_default: true }];
+    expect((await agendaCall()).status).toBe(200);
+    expect(insertedRow()).toMatchObject({
+      agenda_roles: AGENDA_ROLES,
+      checkin_window: { startMs: null, endMs: null, closed: false, failures: 0 },
+    });
+  });
+
+  it("the org default Veckomöte (stored without the flag): Må-runda hiding is off", async () => {
+    m.profiles = [{ id: "pdef", org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: true }];
+    expect((await agendaCall()).status).toBe(200);
+    expect(Object.values(insertedRow().agenda_roles)).not.toContain("checkin");
     expect(insertedRow().checkin_window).toBeNull();
   });
 

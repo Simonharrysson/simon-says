@@ -25,6 +25,12 @@ export interface FormatProfile {
   tone: "full-sentences";
   signatures: string[] | null;
   requiredItems: string[];
+  /**
+   * Hide the Må-runda from the notes (detector + masking). Opt-in and experimental: the detector's
+   * precision is not proven, so it may hide real discussion. Absent (every stored profile from
+   * before) = off. Written only when true.
+   */
+  hideCheckin?: boolean;
 }
 
 const label = z.string().trim().min(1).max(80);
@@ -52,6 +58,7 @@ export const FormatProfileSchema = z
     tone: z.literal("full-sentences"),
     signatures: z.array(label).max(8).nullable(),
     requiredItems: z.array(label).max(15),
+    hideCheckin: z.boolean().optional(),
   })
   .superRefine((p, ctx) => {
     const keys = new Set<string>();
@@ -70,4 +77,18 @@ export const FormatProfileSchema = z
 export function parseProfile(json: unknown): FormatProfile | null {
   const r = FormatProfileSchema.safeParse(json);
   return r.success ? (r.data as FormatProfile) : null;
+}
+
+/** The format hides the Må-runda from the notes (opt-in, see `FormatProfile.hideCheckin`). */
+export const hidesCheckin = (p: Pick<FormatProfile, "hideCheckin">): boolean => p.hideCheckin === true;
+
+/**
+ * The agenda roles a meeting stores. With hiding off (the default) a Må-runda item becomes an
+ * ordinary item (role "procedural": notes may land under it, still not a dashboard topic), so
+ * there is no checkin role in the meeting: no detector call, no masking, no hidden Doc text, no
+ * ban on notes under it. With hiding on the roles are kept as matched.
+ */
+export function meetingRoles(roles: Record<string, ItemRole>, profile: Pick<FormatProfile, "hideCheckin">): Record<string, ItemRole> {
+  if (hidesCheckin(profile)) return roles;
+  return Object.fromEntries(Object.entries(roles).map(([k, r]) => [k, r === "checkin" ? "procedural" : r]));
 }
