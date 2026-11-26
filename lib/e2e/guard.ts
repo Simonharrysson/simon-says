@@ -52,3 +52,14 @@ export function e2eGoogleRoot(source: Source = process.env): string | undefined 
   if (!LOOPBACK.has(url.hostname)) throw new Error("E2E_GOOGLE_ROOT must be a loopback URL");
   return root.endsWith("/") ? root : `${root}/`;
 }
+
+/**
+ * The fake mail provider (`E2E_MAIL_URL`, a Resend-compatible POST endpoint on loopback), or
+ * undefined: the real provider. Ignored outside the e2e mode, like `e2eGoogleRoot`.
+ */
+export function e2eMailUrl(source: Source = process.env): string | undefined {
+  const url = source.E2E_MAIL_URL;
+  if (!url || !e2eMode(source)) return undefined;
+  if (!LOOPBACK.has(new URL(url).hostname)) throw new Error("E2E_MAIL_URL must be a loopback URL");
+  return url;
+}

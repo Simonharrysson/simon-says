@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { e2eGoogleRoot, e2eMode, e2eRefusal } from "./guard";
+import { e2eGoogleRoot, e2eMailUrl, e2eMode, e2eRefusal } from "./guard";
 
 const on = { E2E_TEST_MODE: "1", NODE_ENV: "development", SUPABASE_URL: "http://127.0.0.1:54321" };
 
@@ -34,5 +34,13 @@ describe("e2eGoogleRoot", () => {
 
   it("refuses a non-loopback root", () => {
     expect(() => e2eGoogleRoot({ ...on, E2E_GOOGLE_ROOT: "https://example.com/" })).toThrow(/loopback/);
+  });
+});
+
+describe("e2eMailUrl", () => {
+  it("sends mail to the fake only in the e2e mode", () => {
+    expect(e2eMailUrl({ ...on, E2E_MAIL_URL: "http://127.0.0.1:4010/resend/emails" })).toBe("http://127.0.0.1:4010/resend/emails");
+    expect(e2eMailUrl({ ...on, NODE_ENV: "production", E2E_MAIL_URL: "http://127.0.0.1:4010/resend/emails" })).toBeUndefined();
+    expect(() => e2eMailUrl({ ...on, E2E_MAIL_URL: "https://api.resend.com/emails" })).toThrow(/loopback/);
   });
 });
