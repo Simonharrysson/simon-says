@@ -24,9 +24,10 @@ import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { messageUsage, NOTES_MODEL, PRICES, type NotesClient } from "@/lib/notes/engine";
-import { allSeries } from "./lib/goals-fixtures";
+import { allSeries, type BuiltSeries } from "./lib/goals-fixtures";
+import { hardSeries } from "./lib/goals-fixtures-hard";
 import { flawedDigest, perfectDigest, perfectExtraction, scriptedClient } from "./lib/goals-scripted";
-import { digestDetails, extractTable, runDigest, runExtraction, summarize, totalsTable, truthHistory, type DigestRun, type ExtractRun } from "./lib/goals-eval";
+import { digestDetails, extractTable, runDigest, runExtraction, seriesDocs, summarize, totalsTable, truthHistory, type DigestRun, type ExtractRun } from "./lib/goals-eval";
 import { apiKey, ledgerAdd, ledgerTotal } from "./lib/notes-run";
 
 const arg = (name: string) => {
@@ -92,8 +93,14 @@ function printDigest(label: string, runs: DigestRun[]) {
 
 const FREE = { input_tokens: 0, output_tokens: 0 };
 
+/** --set clean (4 föreningar), hard (2, real-looking minutes) or all (default). */
+function seriesSet(): BuiltSeries[] {
+  const set = arg("set") ?? "all";
+  return set === "clean" ? allSeries() : set === "hard" ? hardSeries() : [...allSeries(), ...hardSeries()];
+}
+
 async function dry() {
-  const series = allSeries();
+  const series = seriesSet();
   const perfect: DigestRun[] = [];
   const flawed: DigestRun[] = [];
   for (const s of series) {
@@ -115,7 +122,7 @@ async function paid() {
   const budget = Number(arg("budget") ?? 2.5);
   const stage = arg("stage") ?? "digest";
   const only = arg("only")?.split(",");
-  const series = allSeries().filter((s) => !only || only.includes(s.slug));
+  const series = seriesSet().filter((s) => !only || only.includes(s.slug));
   const label = arg("label") ?? stage;
   const outDir = join(OUT, `${label}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
   mkdirSync(outDir, { recursive: true });
@@ -134,9 +141,15 @@ async function paid() {
     const pick = arg("protocols")?.split(",").map(Number);
     const ex: ExtractRun[] = [];
     for (const s of series) {
-      for (const p of s.protocols.filter((x) => !pick || pick.includes(x.index))) {
-        console.log(`extract ${s.slug}#${p.index} (${p.text.length} chars)`);
-        ex.push(await runExtraction(s, p, client));
+      const docs = seriesDocs(s);
+      if (!docs.ok) {
+        console.log(`${s.slug}: running Doc NOT split (${docs.reason})`);
+        continue;
+      }
+      if (s.runningDoc) console.log(`${s.slug}: one running Doc, split into ${docs.parts.length} meetings`);
+      for (const part of docs.parts.filter((x) => !pick || pick.includes(x.protocol.index))) {
+        console.log(`extract ${s.slug}#${part.protocol.index} (${part.text.length} chars)`);
+        ex.push(await runExtraction(s, part.protocol, client, part));
       }
     }
     console.log("\n=== PAID extraction");

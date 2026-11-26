@@ -28,6 +28,8 @@ export interface FixtureEvent {
   kind: "decision" | "task" | "report";
   /** Swedish text; `{ordf}` etc. is a role placeholder (a first name in the protocol, the role in the truth). */
   text: string;
+  /** Hard set: the line exactly as the sloppy protocol writes it (placeholders allowed); `text` stays the clean truth. */
+  doc?: string;
   owner?: string;
   done?: boolean;
 }
@@ -48,7 +50,10 @@ export interface FixtureGoal {
 export interface FixtureSeries {
   slug: string;
   name: string;
-  style: "a" | "b" | "c";
+  /** a–c: the clean set's house styles; d: sloppy Swedish bullets; e: English-mixed bullets. */
+  style: "a" | "b" | "c" | "d" | "e";
+  /** Hard set: the whole series is kept in ONE running Doc (the eval splits it like the import does). */
+  runningDoc?: boolean;
   dates: string[];
   roles: FixtureRole[];
   /** Other attendees (never task owners). */
@@ -97,6 +102,8 @@ export interface BuiltSeries {
   lastDate: string;
   /** Agenda items of the routine lines (Ekonomi …): not graded in the extraction. */
   routineTopics: string[];
+  /** The series is one running Doc: its text is every protocol's text, in order. */
+  runningDoc: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -108,7 +115,7 @@ const addDays = (iso: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-function dates(start: string, count: number, cadence: number, breaks: Record<number, number> = {}): string[] {
+export function dates(start: string, count: number, cadence: number, breaks: Record<number, number> = {}): string[] {
   const out: string[] = [];
   let d = start;
   for (let i = 0; i < count; i++) {
@@ -722,6 +729,45 @@ function render(series: FixtureSeries, i: number, events: FixtureEvent[]): { tit
     return { title: `Styrelsemöte ${longDate(date)}`, text: lines.join("\n") };
   }
 
+  const line = (e: FixtureEvent) => (e.doc ? fill(series, e.doc, i, "doc") : null);
+
+  if (series.style === "d") {
+    // Sloppy Swedish: lower-case item labels with a colon, bullets, abbreviations, NO date in the body (only in the Doc title).
+    lines.push(`närv: ${present.map((p) => firstName(p)).slice(0, 4).join(", ")}${i % 3 === 0 ? " + 2 nya" : ""}`, "");
+    for (const label of items) {
+      lines.push(`${label.toLowerCase()}:`);
+      for (const e of events.filter((x) => x.item === label)) {
+        const raw = line(e);
+        if (raw) lines.push(`- ${raw}`);
+        else if (e.kind === "report") lines.push(`- ${text(e)}`);
+        else if (e.kind === "decision") lines.push(`- beslut: ${text(e)}`);
+        else lines.push(`- ${owner(e)} ${text(e).charAt(0).toLowerCase()}${text(e).slice(1)}${e.done ? " (klart)" : ""}`);
+      }
+      lines.push("");
+    }
+    lines.push("övr: -");
+    return { title: `${series.name.split(" ").at(-1)} mtg ${shortDate(date)}`, text: lines.join("\n") };
+  }
+
+  if (series.style === "e") {
+    // English-mixed, as an international association writes: every meeting starts with a dated heading (a running Doc).
+    const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const heading = `Board meeting ${Number(date.slice(8, 10))} ${MON[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+    lines.push(heading, `Present: ${present.map((p) => firstName(p)).join(", ")}`, "");
+    for (const label of items) {
+      lines.push(`* ${label}`);
+      for (const e of events.filter((x) => x.item === label)) {
+        const raw = line(e);
+        if (raw) lines.push(`  - ${raw}`);
+        else if (e.kind === "report") lines.push(`  - ${text(e)}`);
+        else if (e.kind === "decision") lines.push(`  - ${i % 2 ? "Beslut" : "Decision"}: ${text(e)}`);
+        else lines.push(`  - AP ${owner(e)}: ${text(e)}${e.done ? " (done)" : ""}`);
+      }
+    }
+    lines.push("", "AOB: nothing");
+    return { title: `${series.name} – board minutes`, text: lines.join("\n") };
+  }
+
   lines.push(`Ridån styrelsemöte ${shortDate(date)}`, "", `Närv: ${present.map((p) => firstName(p)).join(", ")}`, "");
   for (const label of items) {
     lines.push(label.toUpperCase());
@@ -797,7 +843,9 @@ export function buildSeries(series: FixtureSeries): BuiltSeries {
     allNames: [...new Set([...series.roles.flatMap((r) => r.holders.map((h) => h.name)), ...series.extras])],
     lastDate,
     routineTopics: [...new Set(series.dates.flatMap((_, i) => series.routine(i).map((e) => e.item)))],
+    runningDoc: Boolean(series.runningDoc),
   };
 }
 
+/** The clean set (4 föreningar). The hard set is in goals-fixtures-hard.ts. */
 export const allSeries = (): BuiltSeries[] => SERIES.map(buildSeries);

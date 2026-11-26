@@ -5,6 +5,7 @@
 
 import { digestGoals } from "@/lib/history/digest";
 import { finalizeGoals } from "@/lib/history/digest-input";
+import { splitProtocols } from "@/lib/history/doc-text";
 import { extractProtocol } from "@/lib/history/extract";
 import type { NotesClient, NotesUsage } from "@/lib/notes/engine";
 import type { HistoryMeeting } from "@/lib/history/types";
@@ -61,8 +62,26 @@ export interface ExtractRun {
   usage: NotesUsage | null;
 }
 
-export async function runExtraction(series: BuiltSeries, p: FixtureProtocol, client: NotesClient): Promise<ExtractRun> {
-  const res = await extractProtocol({ orgId: null, title: p.title, text: p.text, people: series.people }, { client, checkSpend: false });
+/**
+ * The Docs an admin would pick for the series: one per protocol, or (running Doc) ONE Doc with
+ * every protocol, split like the import does. Each part names the protocol it should be.
+ */
+export function seriesDocs(series: BuiltSeries): { ok: true; parts: { protocol: FixtureProtocol; title: string; text: string }[] } | { ok: false; reason: string } {
+  if (!series.runningDoc) return { ok: true, parts: series.protocols.map((p) => ({ protocol: p, title: p.title, text: p.text })) };
+  const docTitle = series.protocols[0].title;
+  const split = splitProtocols(docTitle, [{ title: "", text: series.protocols.map((p) => p.text).join("\n\n") }]);
+  if (!split.ok) return { ok: false, reason: split.reason };
+  if (split.sections.length !== series.protocols.length) return { ok: false, reason: `split into ${split.sections.length}, want ${series.protocols.length}` };
+  return { ok: true, parts: split.sections.map((sec, k) => ({ protocol: series.protocols[k], title: sec.title, text: sec.text })) };
+}
+
+export async function runExtraction(
+  series: BuiltSeries,
+  p: FixtureProtocol,
+  client: NotesClient,
+  doc: { title: string; text: string } = { title: p.title, text: p.text },
+): Promise<ExtractRun> {
+  const res = await extractProtocol({ orgId: null, title: doc.title, text: doc.text, people: series.people }, { client, checkSpend: false });
   if (!res.ok) return { slug: series.slug, index: p.index, ok: false, error: res.error, grade: null, history: null, usd: res.usage?.usd ?? 0, usage: res.usage };
   // A protocol without a date would fall back to the file's date in the product; here the truth's.
   const meeting: HistoryMeeting = { date: res.protocol.date ?? p.date, source: "import", items: res.protocol.items };

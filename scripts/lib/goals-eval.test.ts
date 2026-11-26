@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allSeries, monthsBetween, FIXTURE_STALE_MONTHS } from "./goals-fixtures";
+import { hardSeries } from "./goals-fixtures-hard";
+import { seriesDocs } from "./goals-eval";
 import { flawedDigest, perfectDigest, perfectExtraction, scriptedClient } from "./goals-scripted";
 import { runDigest, runExtraction, summarize, truthHistory } from "./goals-eval";
 import { gradeExtraction, matchGoal } from "./goals-grade";
@@ -9,6 +11,8 @@ import { gradeExtraction, matchGoal } from "./goals-grade";
 
 const FREE = { input_tokens: 0, output_tokens: 0 };
 const series = allSeries();
+// The dry run covers the hard set too.
+const every = [...series, ...hardSeries()];
 
 describe("goals fixtures", () => {
   it("4 föreningar, 15–30 protocols each, every status class and every hard case present", () => {
@@ -55,6 +59,21 @@ describe("goals fixtures", () => {
     expect(series.some((s) => s.protocols.some((p) => p.truth.source === "simonsays"))).toBe(true);
   });
 
+  it("the hard set: real-looking minutes; Bländaren's body never holds a date; Kompassen is one running Doc that splits back into its meetings", () => {
+    const [bl, ko] = hardSeries();
+    for (const p of bl.protocols) expect(p.text).not.toMatch(/20\d\d|\d+\/\d+-\d\d/);
+    expect(ko.runningDoc).toBe(true);
+    const docs = seriesDocs(ko);
+    expect(docs.ok && docs.parts.map((x) => x.protocol.date)).toEqual(ko.protocols.map((p) => p.date));
+    for (const s of hardSeries()) {
+      for (const g of s.goals) {
+        const quiet = monthsBetween(g.lastMentioned, s.lastDate) > FIXTURE_STALE_MONTHS;
+        if (g.status === "stale") expect(quiet).toBe(true);
+        if (g.status === "current") expect(quiet).toBe(false);
+      }
+    }
+  });
+
   it("report-only achievements have no decision in the achieving protocol", () => {
     for (const s of series) {
       for (const g of s.goals.filter((x) => x.tags.includes("report-only"))) {
@@ -70,7 +89,7 @@ describe("goals fixtures", () => {
 describe("goals eval dry run", () => {
   it("a perfect scripted digest scores 100 % on every measure", async () => {
     const runs = [];
-    for (const s of series) runs.push(await runDigest(s, truthHistory(s), scriptedClient([perfectDigest(s)], FREE)));
+    for (const s of every) runs.push(await runDigest(s, truthHistory(s), scriptedClient([perfectDigest(s)], FREE)));
     const { raw, guarded } = summarize(runs);
     for (const t of [raw, guarded]) {
       expect(t.statusOk).toBe(t.goals);
@@ -83,12 +102,12 @@ describe("goals eval dry run", () => {
 
   it("the flawed scripted digest: every planted fault is caught, and the code guard fixes only the stale slip", async () => {
     const runs = [];
-    for (const s of series) runs.push(await runDigest(s, truthHistory(s), scriptedClient([flawedDigest(s)], FREE)));
+    for (const s of every) runs.push(await runDigest(s, truthHistory(s), scriptedClient([flawedDigest(s)], FREE)));
     const { raw, guarded } = summarize(runs);
     const cls = (t: typeof raw, s: string) => t.classes.find((c) => c.status === s)!;
-    const n = series.length;
-    const withTag = (tag: string) => series.filter((x) => x.goals.some((g) => g.tags.includes(tag as never))).length;
-    // The first dropped goal left out in each series.
+    const n = every.length;
+    const withTag = (tag: string) => every.filter((x) => x.goals.some((g) => g.tags.includes(tag as never))).length;
+    // The first dropped goal left out in each every.
     expect(raw.found).toBe(raw.goals - n);
     expect(cls(raw, "dropped").found).toBe(cls(raw, "dropped").truth - n);
     // The first stale goal called current: wrong raw, fixed by the guard.
@@ -105,7 +124,7 @@ describe("goals eval dry run", () => {
   });
 
   it("scripted extraction of every protocol: dates right, all lines recalled, no name stored", async () => {
-    for (const s of series) {
+    for (const s of every) {
       for (const p of s.protocols) {
         const r = await runExtraction(s, p, scriptedClient([perfectExtraction(p, s.allNames)], FREE));
         expect(r.ok).toBe(true);
@@ -117,7 +136,7 @@ describe("goals eval dry run", () => {
   });
 
   it("the extraction grader catches a name, a wrong date and a missing line", () => {
-    const s = series[0];
+    const s = every[0];
     const p = s.protocols[9];
     const items = p.truth.items.filter((i) => i.kind !== "report").map((i) => (i.kind === "decision" ? { ...i, text: `${i.text} enligt Hedvig` } : i));
     const g = gradeExtraction(p.truth, { date: "2025-01-01", items }, s.allNames);
@@ -127,7 +146,7 @@ describe("goals eval dry run", () => {
   });
 
   it("matching: a goal named only by its why still matches; a tie between two goals stays unmatched", () => {
-    const s = series[0];
+    const s = every[0];
     const goal = { title: "Något helt annat", status: "current" as const, why: "Spelkaféet på biblioteket rullar.", earlierNames: [], firstMentioned: "", lastMentioned: "", evidence: [] };
     expect(matchGoal(goal, s.goals)?.truth.id).toBe("rutan-spelkafe");
     expect(matchGoal({ ...goal, why: "" }, s.goals)).toBeNull();
