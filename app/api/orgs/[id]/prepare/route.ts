@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiT } from "@/lib/i18n/api";
+import { apiT, localizeMessage, requestLocale } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
 import { isMeetingType, PrepareBodySchema } from "@/lib/prepare/draft";
 import { loadDraft, savePrepared } from "@/lib/prepare/prepare";
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!isMeetingType(type)) return fail("bad_request", 400, t("api.invalidMeetingType"));
   try {
     const res = await loadDraft(db, id, type, date);
-    if (!res.ok) return fail(res.error, res.status, res.message);
+    if (!res.ok) return fail(res.error, res.status, localizeMessage(res.message, requestLocale(request)));
     return NextResponse.json(res.draft, { headers: noStore });
   } catch (err) {
     console.error(`prepare: draft: ${(err as Error).message}`);
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!parsed.success) return fail("bad_request", 400, t("api.invalidAgenda"));
   try {
     const res = await savePrepared(db, user, id, parsed.data);
-    if (!res.ok) return fail(res.error, res.status, res.message);
+    if (!res.ok) return fail(res.error, res.status, localizeMessage(res.message, requestLocale(request)));
     const { ok: _ok, ...body } = res;
     return NextResponse.json(body, { headers: noStore });
   } catch (err) {

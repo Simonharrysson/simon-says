@@ -1,5 +1,5 @@
 import { after, NextResponse, type NextRequest } from "next/server";
-import { apiT } from "@/lib/i18n/api";
+import { apiT, localizeMessage, requestLocale } from "@/lib/i18n/api";
 import type { Translator } from "@/lib/i18n/translator";
 import type { OAuth2Client } from "google-auth-library";
 import { isUuid } from "@/lib/db/ids";
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
   } else {
     result = await startMeeting(supabase, user, orgId, "test_started");
   }
-  if (!result.ok) return fail(result.error, result.status, result.message);
+  if (!result.ok) return fail(result.error, result.status, localizeMessage(result.message, requestLocale(request)));
 
   let sessionId: string;
   try {

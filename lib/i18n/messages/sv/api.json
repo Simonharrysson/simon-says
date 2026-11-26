@@ -117,5 +117,13 @@
   "libCannotEdit": "Ditt Google-konto kan inte redigera dokumentet. Be den som äger det att dela det med dig, eller skapa ett nytt dokument.",
   "libNoAgenda": "Vi hittade ingen dagordning i dokumentet (en lista under ”Agenda” eller ”Dagordning”). Skapa ett nytt dokument i stället?",
   "libManyAgendas": "Dokumentet har flera dagordningar (flera möten i samma dokument). Välj ett dokument med bara det här mötet, eller skapa ett nytt dokument.",
-  "libAuthLostStart": "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen, så kan du starta mötet."
+  "libAuthLostStart": "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen, så kan du starta mötet.",
+  "libAgendaNeedsItem": "Dagordningen behöver minst en punkt.",
+  "libDatePassed": "Datumet har redan varit. Välj dagens datum eller ett senare.",
+  "libDateInvalid": "Datumet är ogiltigt.",
+  "libAgendaNoAccess": "Ditt Google-konto kommer inte åt dagordningen. Be den som förberedde mötet att ändra den.",
+  "libAgendaHeld": "Mötet har redan hållits i den här dagordningen. Välj ett annat datum för nästa möte.",
+  "libAgendaBusy": "Någon annan uppdaterar dagordningen just nu. Försök igen om en liten stund.",
+  "futureDate": "Ange ett datum som inte ligger i framtiden.",
+  "protocolNotFound": "Protokollet finns inte."
 }

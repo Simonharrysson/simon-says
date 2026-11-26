@@ -60,9 +60,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const body = (await request.json().catch(() => null)) as { protocolId?: unknown; date?: unknown } | null;
   const protocolId = body?.protocolId;
   const date = typeof body?.date === "string" ? validDate(body.date) : null;
-  if (typeof protocolId !== "string" || !isUuid(protocolId) || !date) return fail("bad_request", 400, "Ange ett datum som inte ligger i framtiden.");
+  if (typeof protocolId !== "string" || !isUuid(protocolId) || !date) return fail("bad_request", 400, t("api.futureDate"));
   const res = await setProtocolDate(db, id, protocolId, date);
   if (res.code === "42501") return fail("forbidden", 403, t("api.historyEditAdminsOnly"));
-  if (!res.ok) return fail("not_found", 404, "Protokollet finns inte.");
+  if (!res.ok) return fail("not_found", 404, t("api.protocolNotFound"));
   return NextResponse.json({ ok: true, date }, { headers: noStore });
 }

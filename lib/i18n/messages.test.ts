@@ -72,9 +72,9 @@ describe("message catalogs", () => {
 });
 
 describe("lib messages localized at the route boundary", () => {
-  // lib/meetings/start.ts and lib/formats/stadgar-file.ts answer in Swedish; the routes translate
+  // lib/meetings/start.ts, lib/formats/stadgar-file.ts and lib/prepare/prepare.ts answer in Swedish; the routes translate
   // them by looking the text up in the api catalog (localizeMessage). Every such text must be there.
-  const files = ["lib/meetings/start.ts", "lib/formats/stadgar-file.ts"];
+  const files = ["lib/meetings/start.ts", "lib/formats/stadgar-file.ts", "lib/prepare/prepare.ts"];
   it("every Swedish failure text in them has an English version", () => {
     const missing: string[] = [];
     for (const f of files) {

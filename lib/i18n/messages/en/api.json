@@ -117,5 +117,13 @@
   "libCannotEdit": "Your Google account can't edit the document. Ask its owner to share it with you, or create a new document.",
   "libNoAgenda": "We found no agenda in the document (a list under “Agenda” or “Dagordning”). Create a new document instead?",
   "libManyAgendas": "The document has several agendas (several meetings in one document). Choose a document with only this meeting, or create a new document.",
-  "libAuthLostStart": "The connection to your Google account has expired. Sign out and in again, and you can start the meeting."
+  "libAuthLostStart": "The connection to your Google account has expired. Sign out and in again, and you can start the meeting.",
+  "libAgendaNeedsItem": "The agenda needs at least one item.",
+  "libDatePassed": "That date has passed. Choose today or a later date.",
+  "libDateInvalid": "The date is invalid.",
+  "libAgendaNoAccess": "Your Google account can't reach the agenda. Ask the person who prepared the meeting to change it.",
+  "libAgendaHeld": "The meeting has already been held in this agenda. Choose another date for the next meeting.",
+  "libAgendaBusy": "Someone else is updating the agenda right now. Try again in a little while.",
+  "futureDate": "Enter a date that isn't in the future.",
+  "protocolNotFound": "The minutes don't exist."
 }

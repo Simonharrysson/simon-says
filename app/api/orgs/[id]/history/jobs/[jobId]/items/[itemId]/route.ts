@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const guard = await requireAdmin(id, t);
   if (!guard.ok) return guard.reply;
   const itemNo = Number(itemId);
-  if (!isUuid(jobId) || !Number.isSafeInteger(itemNo) || itemNo < 1) return fail("not_found", 404, "Protokollet finns inte.");
+  if (!isUuid(jobId) || !Number.isSafeInteger(itemNo) || itemNo < 1) return fail("not_found", 404, t("api.protocolNotFound"));
   const admin = supabaseAdmin();
 
   const job = await loadJob(admin, jobId).catch(() => null);
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .eq("id", itemNo)
     .eq("job_id", jobId)
     .maybeSingle();
-  if (error || !item) return fail("not_found", 404, "Protokollet finns inte.");
+  if (error || !item) return fail("not_found", 404, t("api.protocolNotFound"));
 
   const now = Date.now();
   const stale = item.state === "reading" && (!item.started_at || now - Date.parse(item.started_at) > STALE_READING_MS);
