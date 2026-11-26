@@ -20,7 +20,9 @@ import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
-import { followupKey, planCarried, planInsert, planItemRanges, planReprepare, prepKey, prepMeeting, type DocLine } from "./doc";
+import { followupKey, planCarried, planItemRanges, prepKey, prepMeeting, type DocLine } from "./doc";
+import { runReprepare } from "./reprepare";
+import { preparedDocState } from "./stale";
 import {
   buildDraft,
   droppedSources,
@@ -201,7 +203,21 @@ export async function savePrepared(
     : [];
 
   try {
-    if (existing) return await update(auth, orgId, existing, items, desired, dropped, src, body);
+    if (existing) {
+      // Its Doc is gone (trashed, or deleted: the preparer's own grant no longer sees it): the
+      // stored agenda is dropped and a new Doc is made for the date.
+      const state = preparedDocState(await checkAgendaDoc(auth, existing.doc_id), existing.prepared_by === user.id);
+      if (state === "no_access") {
+        return failed("prepared_no_access", 403, "Ditt Google-konto kommer inte åt dagordningen. Be den som förberedde mötet att ändra den.");
+      }
+      if (state === "gone") {
+        const { error } = await supabaseAdmin().from("prepared_agendas").delete().eq("id", existing.id).eq("org_id", orgId);
+        if (error) throw new Error(`stale delete: ${error.message}`);
+        console.info(`prepare: ${existing.id} dropped (its Doc is gone)`);
+        return await create(auth, user, org, items, desired, dropped, src, body, existing.kind);
+      }
+      return await update(auth, orgId, existing, items, desired, dropped, src, body);
+    }
     return await create(auth, user, org, items, desired, dropped, src, body, type);
   } catch (err) {
     if (err instanceof GoogleAuthLostError) return authLost();
@@ -331,44 +347,27 @@ async function update(
   src: Sources,
   body: PrepareBody,
 ): Promise<SaveResult> {
-  const access = await checkAgendaDoc(auth, existing.doc_id);
-  if (!access.ok) {
-    return failed(
-      "prepared_no_access",
-      403,
-      access.error === "trashed"
-        ? "Dagordningen ligger i papperskorgen i Google Drive. Återställ den, eller välj ett annat datum."
-        : "Ditt Google-konto kommer inte åt dagordningen. Be den som förberedde mötet att ändra den.",
-    );
-  }
   const key = prepKey(existing.id);
-  const step1 = await guarded(auth, existing.doc_id, existing.tab_id, (tab) => {
-    const p = planReprepare(tab, src.profile, key, existing.doc_lines, existing.carried, items);
-    return { requests: p.requests, value: p };
-  });
-  let lines = step1.lines;
-  for (const id of step1.inserts) {
-    const placed = await guarded(auth, existing.doc_id, existing.tab_id, (tab) => {
-      const ins = planInsert(tab, src.profile, key, lines, items, id);
-      return { requests: ins?.requests ?? [], value: ins?.line ?? null };
-    });
-    if (placed) lines = [...lines, placed];
-  }
-  const carried = await writeCarried(auth, existing.doc_id, existing.tab_id, key, lines, items, existing.carried, desired, src, step1.mode === "rewrite");
-  const { error } = await supabaseAdmin()
-    .from("prepared_agendas")
-    .update({
-      meeting_time: body.time ?? null,
+  const db = supabaseAdmin();
+  const save = async (patch: Record<string, unknown>) => {
+    const { error } = await db.from("prepared_agendas").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", existing.id).eq("org_id", orgId);
+    if (error) throw new Error(`update: ${error.message}`);
+  };
+  const res = await runReprepare(
+    { step: (plan) => guarded(auth, existing.doc_id, existing.tab_id, plan), save },
+    {
+      key,
+      docId: existing.doc_id,
+      tabId: existing.tab_id,
+      profile: src.profile,
+      ownerLabel: src.ownerLabel,
+      lines: existing.doc_lines,
+      carried: existing.carried,
       items,
-      doc_lines: lines,
-      carried,
-      dropped,
-      source_meeting_id: src.prevId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", existing.id)
-    .eq("org_id", orgId);
-  if (error) throw new Error(`update: ${error.message}`);
-  console.info(`prepare: updated ${existing.id} (${step1.mode}, inserts ${step1.inserts.length}, carried ${carried.length})`);
-  return { ok: true, docUrl: docUrl(existing.doc_id), docName: existing.doc_name, date: existing.meeting_date, created: false, reordered: step1.mode === "rewrite" };
+      desired,
+    },
+  );
+  await save({ meeting_time: body.time ?? null, items, dropped, source_meeting_id: src.prevId });
+  console.info(`prepare: updated ${existing.id} (${res.mode}, inserts ${res.inserts}, carried ${res.carried.length})`);
+  return { ok: true, docUrl: docUrl(existing.doc_id), docName: existing.doc_name, date: existing.meeting_date, created: false, reordered: res.mode === "rewrite" };
 }

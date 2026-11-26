@@ -1,8 +1,8 @@
-import { scanAgenda, withoutEarlierLines, type AgendaScan } from "@/lib/agenda/scan";
+import { itemAt, scanAgenda, withoutEarlierLines, type AgendaScan } from "@/lib/agenda/scan";
 import type { ItemRole, MeetingRow, NoteItemRow } from "@/lib/db/types";
 import { planFormatRender } from "@/lib/docs/format-render";
 import { currentItems, diffHumanEdits, itemSpan, ownedSpan, renderedRows, toNotesItem, type RenderPlan } from "@/lib/docs/notes";
-import { paraInTable, type NotesTab, type Paragraph } from "@/lib/docs/tab";
+import { OBJECT, paraInTable, paraStyle, type NotesTab, type Paragraph } from "@/lib/docs/tab";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { replaceRange, type DocsRequest } from "@/lib/google/docs";
 import type { DraftItem } from "./draft";
@@ -134,7 +134,18 @@ export function planReprepare(
   const deleted =
     stored.some((l) => states.get(l.id)!.state === "gone") ||
     carried.some((r) => !r.deleted_by_human && r.range_name && !itemSpan(tab, r.range_name));
-  const pure = reg !== null && !deleted && regionParas.every((p) => p.text.trim() === "" || ourSpans.includes(p.start));
+  // Anything but our lines and blank paragraphs (a human's text, a table, an image or page break
+  // (OBJECT in the text), or an element that is no paragraph at all: a gap in the paragraphs, e.g. a
+  // section break or a table of contents) makes the region the humans' too: merge only.
+  const tableIn = reg !== null && (tab.tables ?? []).some((t) => t.start < reg.limit && t.end > reg.start);
+  let covered = reg?.start ?? 0;
+  for (const p of regionParas) {
+    if (p.start !== covered) break;
+    covered = p.end;
+  }
+  const contiguous = reg !== null && covered === reg.limit;
+  const pure =
+    reg !== null && !deleted && !tableIn && contiguous && regionParas.every((p) => (p.text.trim() === "" && !p.text.includes(OBJECT)) || ourSpans.includes(p.start));
 
   if (pure && reg) {
     const numbered = profile.numbering === "numbered";
@@ -151,6 +162,7 @@ export function planReprepare(
     let at = reg.start;
     texts.forEach((text, n) => {
       const end = at + text.length;
+      // The new paragraphs were split off the tasks heading: our own style, never the heading's.
       requests.push({
         updateParagraphStyle: {
           range: { tabId: tab.tabId, startIndex: at, endIndex: end },
@@ -158,6 +170,15 @@ export function planReprepare(
           fields: "namedStyleType",
         },
       });
+      if (text.length) {
+        requests.push({
+          updateTextStyle: {
+            range: { tabId: tab.tabId, startIndex: at, endIndex: end },
+            textStyle: { bold: false, italic: false, underline: false, strikethrough: false },
+            fields: "bold,italic,underline,strikethrough",
+          },
+        });
+      }
       const range = itemRange(key, n + 1);
       requests.push({ createNamedRange: { name: range, range: { tabId: tab.tabId, startIndex: at, endIndex: end } } });
       lines.push({ id: on[n].id, key: `ag-${n + 1}`, range, text });
@@ -236,8 +257,22 @@ export function planInsert(
   } else {
     const prev = on.slice(0, pos).reverse().map(present).find((p): p is Paragraph => p !== null);
     if (!prev) return null;
-    start = prev.end;
-    requests.push({ insertText: { text: `\n${text}`, location: { tabId: tab.tabId, index: prev.end - 1 } } });
+    // After the previous item's whole block (never between "Från förra veckan" and its lines).
+    const item = itemAt(scanAgenda(tab, profile), prev.start);
+    const blockEnd = item ? item.blocks[item.blocks.length - 1].limit : prev.end;
+    const tail = tab.paragraphs.filter((x) => !paraInTable(x) && x.start >= prev.start && x.start < blockEnd && x.text.trim() !== "").at(-1) ?? prev;
+    start = tail.end;
+    requests.push({ insertText: { text: `\n${text}`, location: { tabId: tab.tabId, index: tail.end - 1 } } });
+    if (tail !== prev) {
+      // Split off a sub-line: take the item's own paragraph style, no indent.
+      requests.push({
+        updateParagraphStyle: {
+          range: { tabId: tab.tabId, startIndex: start, endIndex: start + text.length },
+          paragraphStyle: { namedStyleType: paraStyle(prev), indentStart: { magnitude: 0, unit: "PT" }, indentFirstLine: { magnitude: 0, unit: "PT" } },
+          fields: "namedStyleType,indentStart,indentFirstLine",
+        },
+      });
+    }
   }
   requests.push({ createNamedRange: { name: range, range: { tabId: tab.tabId, startIndex: start, endIndex: start + text.length } } });
   const { start: _s, ...line } = lineOf(start);
@@ -281,4 +316,43 @@ export function planCarried(
     return want ? { ...r, owner_person_id: want.owner_person_id } : r;
   });
   return { plan, rows: out };
+}
+
+/**
+ * Before preparing again (idempotent after a step that wrote the Doc but was not saved): our item
+ * ranges the stored lines lack are adopted when their text is a draft item's line (so the item is
+ * never inserted twice); our carried ranges no stored row has are removed, their paragraph too
+ * while it is exactly the range's text (ours, untouched).
+ */
+export function planReconcile(
+  tab: NotesTab,
+  profile: FormatProfile,
+  key: string,
+  stored: DocLine[],
+  carried: NoteItemRow[],
+  items: DraftItem[],
+): { requests: DocsRequest[]; lines: DocLine[] } {
+  const on = items.filter((i) => i.on);
+  const lines = [...stored];
+  const known = new Set([...stored.map((l) => l.range), ...carried.map((r) => r.range_name).filter(Boolean)]);
+  const dels: { index: number; requests: DocsRequest[] }[] = [];
+  for (const name of tab.ranges.keys()) {
+    if (!name.startsWith(`ss-${key}-`) || known.has(name)) continue;
+    const span = itemSpan(tab, name);
+    const rest = name.slice(`ss-${key}-`.length);
+    if (/^ag-\d+$/.test(rest)) {
+      if (!span) continue;
+      const pos = on.findIndex((i, n) => !lines.some((l) => l.id === i.id) && itemText(profile, i.label, n + 1) === span.paraText);
+      if (pos >= 0) lines.push({ id: on[pos].id, key: rest, range: name, text: span.paraText });
+      continue;
+    }
+    if (!/^c\d+$/.test(rest)) continue;
+    const reqs: DocsRequest[] = [{ deleteNamedRange: { name, tabsCriteria: { tabIds: [tab.tabId] } } }];
+    if (span && !span.ambiguous && span.rangeText === span.paraText) {
+      reqs.push({ deleteContentRange: { range: { tabId: tab.tabId, startIndex: span.paraStart, endIndex: span.paraEnd } } });
+    }
+    dels.push({ index: span?.paraStart ?? 0, requests: reqs });
+  }
+  dels.sort((a, b) => b.index - a.index);
+  return { requests: dels.flatMap((d) => d.requests), lines };
 }
