@@ -128,7 +128,8 @@ test("auto-end like Meet: no tab heard from, the cron ends the meeting; unsure a
   const { data } = await db.from("meetings").select("status, ended_at").eq("id", meetingId).single();
   expect(data?.status).toBe("done");
   await expect.poll(() => fake.docText(docId), { timeout: 30_000 }).toMatch(/Avslutat \d{2}:\d{2}/);
-  // The name round was skipped: unnamed voices, so "missed" can't know who was there. Nobody is mailed.
+  // Nobody in the list could be heard (the server's own name round names no one): unnamed
+  // voices, so "missed" can't know who was there. Nobody is mailed.
   await expect
     .poll(async () => (await db.from("meetings").select("summary_state").eq("id", meetingId).single()).data?.summary_state, { timeout: 30_000 })
     .toBe("uncertain");

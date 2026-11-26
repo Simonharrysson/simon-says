@@ -78,7 +78,13 @@ function answer(kind: ClaudeKind, text: string): unknown {
       // (one person heard as two voices): speaker_3 gets no name of its own (two labels with one
       // name are rightly asked about, and a second name would conflict with the merge).
       const labels = [...new Set(text.match(/S\d+-speaker_\d+/g) ?? [])];
-      const nameOf = (label: string) => (label.endsWith("speaker_3") ? undefined : SCRIPTED.names[Number(label.split("_").at(-1))]);
+      // Only names of the förening's known people are "heard": a förening without them keeps its
+      // voices unnamed (attendance unsure).
+      const known = text.split("<transcript>")[0];
+      const nameOf = (label: string) => {
+        const name = label.endsWith("speaker_3") ? undefined : SCRIPTED.names[Number(label.split("_").at(-1))];
+        return name && known.includes(name) ? name : undefined;
+      };
       return { speakers: labels.filter((l) => nameOf(l)).map((speaker) => ({ speaker, name: nameOf(speaker), needs_confirm: false })) };
     }
     case "checkin":
