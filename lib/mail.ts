@@ -9,6 +9,10 @@ export interface MailMessage {
   to: string;
   subject: string;
   text: string;
+  /** Optional HTML part (the text part stays the fallback). */
+  html?: string;
+  /** Optional Reply-To, e.g. the person who sent an invite. */
+  replyTo?: string;
 }
 
 export interface Mailer {
@@ -25,7 +29,14 @@ export function resendMailer(apiKey: string, from: string, fetchFn: typeof fetch
         const res = await fetchFn("https://api.resend.com/emails", {
           method: "POST",
           headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-          body: JSON.stringify({ from, to: [message.to], subject: message.subject, text: message.text }),
+          body: JSON.stringify({
+            from,
+            to: [message.to],
+            subject: message.subject,
+            text: message.text,
+            ...(message.html ? { html: message.html } : {}),
+            ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+          }),
           signal: AbortSignal.timeout(10_000),
         });
         if (!res.ok) {
