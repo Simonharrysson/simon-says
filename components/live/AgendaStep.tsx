@@ -316,7 +316,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
         />
       )}
 
-      {p.formats.length > 1 && !(p.chosen?.kind === "agenda" && p.chosen.prepared) && (
+      {p.formats.length > 1 && !(p.chosen?.kind === "agenda" && p.chosen.prepared) && !(p.chosen === null && p.view.state === "prepared") && (
         <div className="flex max-w-[22rem] flex-col gap-1">
           <Label htmlFor={`${id}-format`}>Format</Label>
           <NativeSelect

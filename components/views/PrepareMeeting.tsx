@@ -132,7 +132,7 @@ export function PrepareMeetingView(p: PrepareMeetingViewProps) {
           <IconArrowLeft size={16} />
           {p.orgName}
         </a>
-        <h1 className="text-2xl" ref={headingRef} tabIndex={-1}>
+        <h1 className="text-2xl focus:outline-none" ref={headingRef} tabIndex={-1}>
           {p.phase.step === "done" ? "Dagordningen är klar" : "Förbered möte"}
         </h1>
         <Steps step={p.phase.step} />
