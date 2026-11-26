@@ -63,16 +63,3 @@ export function cleanEmail(raw: unknown): string | null {
   const e = raw.trim().toLowerCase();
   return e.length >= 3 && e.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) ? e : null;
 }
-
-/** A mailto: link with the invite, so the admin sends it from their own mail (Simon Says sends no mail). */
-export function inviteMailto(to: string, orgName: string, inviteUrl: string, name?: string | null): string {
-  const subject = `Välkommen till ${orgName} i Simon Says`;
-  const body = [
-    `Hej${name ? ` ${name.split(" ")[0]}` : ""}!`,
-    "",
-    `Vi använder Simon Says för anteckningarna på våra möten i ${orgName}. Öppna länken och logga in med Google, så kommer du med:`,
-    "",
-    inviteUrl,
-  ].join("\n");
-  return `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-}
