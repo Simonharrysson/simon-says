@@ -125,6 +125,8 @@ export function summaryContent(
 
 /** What a task lacks; a human-edited line lacks what it still shows as a placeholder. */
 function lacks(r: SummaryItem): TaskField[] {
+  // Från förra veckan: nothing here can complete them (they are last meeting's), so never nag.
+  if (r.carried_from_id != null) return [];
   if (r.locked) return TASK_FIELDS.filter((f) => r.text.includes(PLACEHOLDER[f]));
   return missingFields({ owner: r.owner ?? undefined, due: r.due ?? undefined, doneWhen: r.done_when ?? undefined });
 }

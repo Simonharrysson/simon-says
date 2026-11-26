@@ -524,10 +524,13 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   fixture `fixtures/notes/concrete-tasks`, **$0.037** (ledger `.notes-replay/spend.json` of the
   concrete-tasks worktree, total $0.037). done_when 3/3: said at once → "hyresavtalet är påskrivet"; said a
   minute later → the same task changed (no duplicate); never said → empty (not invented). Recall 4/4,
-  must_not 0. The run shows FAIL only on churn (16.3 % > 15 %): a 2-minute fixture with four items, where
-  the "now" line and one task reworded once weigh heavily; not about done_when.
+  must_not 0. The run shows FAIL only on churn (16.3 % > 15 %): the saved per-tick ops show the two
+  churning ticks are the "now" line changing topic (no task text was rewritten; the later Klart när
+  came as a field-only change). A 2-minute fixture with few items makes one "now" change weigh 12–20 %.
+  Not in the suite's paid list.
 - Avsluta answers are stored on `meetings.task_answers` with the end claim and applied by the final pass
-  after Claude's ops (so the final tidy-up can't undo them, and a cron retry still has them). A
+  after Claude's ops (so the final tidy-up can't overwrite the fields, and a cron retry still has them).
+  If the final pass removes or merges an answered task, that answer is dropped with it. A
   human-edited (locked) task is never written; it counts as complete when its line no longer shows a
   placeholder.
 - Overdue is derived, never stored in `due`: `note_items.due_date` is `due` resolved against the meeting's

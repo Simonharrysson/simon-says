@@ -124,10 +124,11 @@ export async function sendMeetingSummaries(
   if (m.is_test) {
     state = "test";
   } else {
-    const org = must("summary: org", await db.from("orgs").select("name, summary_mode, require_task_fields").eq("id", m.org_id).maybeSingle()) as {
+    const org = must("summary: org", await db.from("orgs").select("*").eq("id", m.org_id).maybeSingle()) as {
       name: string;
       summary_mode: SummaryMode | null;
       require_task_fields?: boolean;
+      kind?: string;
     } | null;
     if (!org) return null;
     orgName = org.name;

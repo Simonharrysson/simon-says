@@ -244,6 +244,8 @@ export function resolveDue(due: string | null | undefined, ref: Date | string): 
   m = /(?:^|\s)(\d{1,2})\/(\d{1,2})(?:$|\s)/.exec(t);
   if (m) return nearYear(refDay, Number(m[2]), Number(m[1]));
   if (/\b(imorgon|i morgon|tomorrow)\b/.test(t)) return addDays(refDay, 1);
+  // "nästa fredag", "fredag om två veckor", "varje fredag": not the first Friday after the meeting.
+  if (/(?:^|\s)(nästa|next|vecka|veckan|veckor|week|weeks|om|in|varje|every|efter|after)(?:$|\s)/.test(t)) return null;
   for (const word of t.split(" ")) {
     const wd = WEEKDAYS.find(([re]) => re.test(word))?.[1];
     if (wd === undefined) continue;

@@ -94,6 +94,7 @@ describe("concrete tasks in the summary (0047)", () => {
     item({ id: "n1", section: "action", kind: "task", text: "Boka lokal", owner: "Erik", due: "fredag", due_date: "2026-11-27", done_when: "kontraktet är påskrivet" }),
     item({ id: "n2", section: "action", kind: "task", text: "Betala hyran", owner: "Kassör" }),
     item({ id: "n3", section: "action", kind: "task", text: "☐ Anna: Ringa (måndag) – (klart när?)", locked: true }),
+    item({ id: "c1", section: "action", kind: "task", text: "Gammal uppgift", carried_from_id: "n9", carried_from_meeting: "m0" }),
   ];
 
   it("deadline, Klart när and overdue (deadline day before the e-mail's day)", () => {
@@ -103,7 +104,8 @@ describe("concrete tasks in the summary (0047)", () => {
   });
 
   it("what each task lacks, only when the förening requires it (a locked line: its placeholders)", () => {
-    expect(summaryContent(rows, { requireFields: true }).tasks.map((t) => t.missing)).toEqual([[], ["due", "doneWhen"], ["doneWhen"]]);
-    expect(summaryContent(rows).tasks.map((t) => t.missing)).toEqual([[], [], []]);
+    // A carried task (Från förra veckan) is never nagged about: nothing in this meeting completes it.
+    expect(summaryContent(rows, { requireFields: true }).tasks.map((t) => t.missing)).toEqual([[], ["due", "doneWhen"], ["doneWhen"], []]);
+    expect(summaryContent(rows).tasks.map((t) => t.missing)).toEqual([[], [], [], []]);
   });
 });

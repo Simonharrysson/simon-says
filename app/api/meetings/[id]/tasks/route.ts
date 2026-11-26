@@ -27,12 +27,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   if (!meeting) return fail("not_found", 404);
   const [rows, org] = await Promise.all([
     supabase.from("note_items").select("*").eq("meeting_id", id),
-    supabase.from("orgs").select("require_task_fields").eq("id", meeting.org_id).maybeSingle(),
+    // "*": taskMode also reads the space kind once there is one (orgs.kind).
+    supabase.from("orgs").select("*").eq("id", meeting.org_id).maybeSingle(),
   ]);
   if (rows.error) throw new Error(`tasks: rows: ${rows.error.message}`);
   if (org.error) throw new Error(`tasks: org: ${org.error.message}`);
   return NextResponse.json(
-    { mode: taskMode(org.data as { require_task_fields?: boolean } | null), tasks: meetingTasks((rows.data ?? []) as NoteItemRow[]) },
+    { mode: taskMode(org.data as { require_task_fields?: boolean; kind?: string } | null), tasks: meetingTasks((rows.data ?? []) as NoteItemRow[]) },
     { headers: noStore },
   );
 }

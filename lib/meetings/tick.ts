@@ -631,7 +631,8 @@ async function loadContext(meeting: MeetingRow) {
       .select("el_session_id, speaker_label, display_name, person_id, merged_into_label")
       .eq("meeting_id", meeting.id),
     db().from("note_items").select("*").eq("meeting_id", meeting.id).order("section").order("position"),
-    db().from("orgs").select("name, require_task_fields").eq("id", meeting.org_id).maybeSingle(),
+    // "*": taskMode also reads the space kind once there is one (orgs.kind, Privat).
+    db().from("orgs").select("*").eq("id", meeting.org_id).maybeSingle(),
   ]);
   return {
     segments,
@@ -639,7 +640,7 @@ async function loadContext(meeting: MeetingRow) {
     speakers: must("tick: speakers", speakers) as SpeakerRead[],
     rows: must("tick: note items", rows) as NoteItemRow[],
     orgName: (must("tick: org", org) as { name: string } | null)?.name ?? "Föreningen",
-    taskMode: taskMode(must("tick: org", org) as { require_task_fields?: boolean } | null),
+    taskMode: taskMode(must("tick: org", org) as { require_task_fields?: boolean; kind?: string } | null),
   };
 }
 
