@@ -450,3 +450,7 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - The suite found that `resolveOwner` did not stem a role's definite form ending in -e ("PR-ansvarige"). Fixed in lib/people/roles.ts.
 - In the name round, a heard first name that several people in the förening share ("Anna" with two Annas) is kept as heard and marked `needsConfirm`, so the live page shows "Anna?" (lib/names/extract.ts `matchKnown`).
 - Paid tier: `npm run suite -- --paid --budget 1.50` runs `notes-eval --only veckomote-a,styrelse-ekdala,owner-styles,veckomote-b,boardgames` on `.notes-replay/spend-formats.json`. The budget is what this run may add: the ledger cap passed on is the total so far plus the budget. `--paid-from <dir>` scores a saved run for $0. The new fixture `owner-styles` names task owners in every way (full name, first name, role, "jag", English, outside the people list), with filler and a false start.
+
+## Feature suite — first paid run (2026-11-26, controller)
+
+- `npm run suite -- --paid --budget 1.50`: free tier PASS on all 5 features; paid PASS on all 5 fixtures — veckomote-a, styrelse-ekdala (place 10/11), owner-styles (roles 6/6, every way of naming an owner), veckomote-b (followup 4/4), boardgames. $0.53 this run ($1.14/h); ledger .notes-replay/spend-formats.json total $1.27.
