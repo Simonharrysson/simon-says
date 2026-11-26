@@ -178,6 +178,8 @@ export interface ExtractGrade {
   /** Stored texts that still hold a name of someone in the series. */
   nameLeaks: string[];
   missing: string[];
+  /** After the Claude judge (paid runs, --judge): the lines still missing; the rest were there in other words or another language. */
+  judgedMissing?: string[];
 }
 
 const STOP = new Set(["att", "och", "för", "till", "med", "som", "den", "det", "har", "på", "av", "en", "ett", "vi", "är", "nu", "om", "i", "de", "från"]);

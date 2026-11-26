@@ -27,7 +27,7 @@ import { messageUsage, NOTES_MODEL, PRICES, type NotesClient } from "@/lib/notes
 import { allSeries, type BuiltSeries } from "./lib/goals-fixtures";
 import { hardSeries } from "./lib/goals-fixtures-hard";
 import { flawedDigest, perfectDigest, perfectExtraction, scriptedClient } from "./lib/goals-scripted";
-import { digestDetails, extractTable, runDigest, runExtraction, seriesDocs, summarize, totalsTable, truthHistory, type DigestRun, type ExtractRun } from "./lib/goals-eval";
+import { digestDetails, extractTable, judgeExtraction, judgedRecall, runDigest, runExtraction, seriesDocs, summarize, totalsTable, truthHistory, type DigestRun, type ExtractRun } from "./lib/goals-eval";
 import { apiKey, ledgerAdd, ledgerTotal } from "./lib/notes-run";
 
 const arg = (name: string) => {
@@ -152,10 +152,16 @@ async function paid() {
         ex.push(await runExtraction(s, part.protocol, client, part));
       }
     }
+    if (flag("judge")) {
+      let judgeUsd = 0;
+      for (const r of ex) judgeUsd += await judgeExtraction(r, client);
+      console.log(`judge: $${judgeUsd.toFixed(4)}`);
+    }
     console.log("\n=== PAID extraction");
     console.log(extractTable(ex));
-    for (const r of ex.filter((x) => x.grade && (x.grade.missing.length || x.grade.nameLeaks.length || !x.grade.dateOk))) {
-      console.log(`${r.slug}#${r.index}: ${[...r.grade!.missing, ...r.grade!.nameLeaks.map((n) => `NAME ${n}`), ...(r.grade!.dateOk ? [] : [`DATE ${r.history?.date}`])].join(" | ")}`);
+    if (flag("judge")) console.log(judgedRecall(ex));
+    for (const r of ex.filter((x) => x.grade && ((x.grade.judgedMissing ?? x.grade.missing).length || x.grade.nameLeaks.length || !x.grade.dateOk))) {
+      console.log(`${r.slug}#${r.index}: ${[...(r.grade!.judgedMissing ?? r.grade!.missing), ...r.grade!.nameLeaks.map((n) => `NAME ${n}`), ...(r.grade!.dateOk ? [] : [`DATE ${r.history?.date}`])].join(" | ")}`);
     }
     writeFileSync(join(outDir, "extract.json"), JSON.stringify(ex, null, 2));
     if (stage === "e2e") {

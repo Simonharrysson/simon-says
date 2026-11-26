@@ -7,7 +7,9 @@ import { digestGoals } from "@/lib/history/digest";
 import { finalizeGoals } from "@/lib/history/digest-input";
 import { splitProtocols } from "@/lib/history/doc-text";
 import { extractProtocol } from "@/lib/history/extract";
+import { z } from "zod";
 import type { NotesClient, NotesUsage } from "@/lib/notes/engine";
+import { oneShot } from "@/lib/notes/oneshot";
 import type { HistoryMeeting } from "@/lib/history/types";
 import type { BuiltSeries, FixtureProtocol } from "./goals-fixtures";
 import { gradeExtraction, gradeSeries, totals, type ExtractGrade, type SeriesGrade, type Totals } from "./goals-grade";
@@ -160,4 +162,53 @@ export function extractTable(runs: ExtractRun[]): string {
     `$${runs.reduce((n, r) => n + r.usd, 0).toFixed(4)}`,
   ]);
   return table(["protocol", "date", "decisions", "tasks", "reports", "names", "$"], body);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Claude as judge, only where the lexical check fails: a wanted line the extraction holds in
+// other words or another language (the prompt asks for Swedish; the English-mixed fixtures'
+// truth is partly English). One call per protocol with misses; never used for goals.
+
+const JUDGE_SYSTEM = `You check an extraction from a meeting protocol. You get WANTED lines (what a perfect extraction holds) and EXTRACTED lines (what was stored). For each wanted line, answer true if its meaning is present in the extracted lines, in any wording or language (Swedish or English), possibly split over two lines or merged with another; false if it is missing or its meaning changed (e.g. done vs not done, decided vs only proposed). Answer exactly one boolean per wanted line, in order.`;
+
+const JudgeSchema = z.object({ present: z.array(z.boolean()) });
+
+export async function judgeExtraction(run: ExtractRun, client: NotesClient): Promise<number> {
+  const g = run.grade;
+  if (!g || !g.missing.length || !run.history) return 0;
+  const wanted = g.missing.map((m, k) => `${k + 1}. ${m}`).join("\n");
+  const got = run.history.items
+    .filter((i) => i.kind !== "topic")
+    .map((i) => `- ${i.kind}: ${i.text}${i.done === true ? " [done]" : ""}`)
+    .join("\n");
+  const res = await oneShot({
+    label: "goals eval judge",
+    system: JUDGE_SYSTEM,
+    user: `WANTED:\n${wanted}\n\nEXTRACTED:\n${got}\n\nOne boolean per wanted line (${g.missing.length}).`,
+    jsonSchema: { type: "object", additionalProperties: false, required: ["present"], properties: { present: { type: "array", items: { type: "boolean" } } } },
+    schema: JudgeSchema,
+    maxTokens: 4000,
+    effort: "low",
+    orgId: null,
+    client,
+    checkSpend: false,
+  });
+  if (!res.ok || res.value.present.length !== g.missing.length) {
+    g.judgedMissing = g.missing;
+    return res.usage?.usd ?? 0;
+  }
+  g.judgedMissing = g.missing.filter((_, k) => !res.value.present[k]);
+  return res.usage.usd;
+}
+
+/** Recall per kind after the judge: lexical hits plus the missing lines the judge found present. */
+export function judgedRecall(runs: ExtractRun[]): string {
+  const ok = runs.filter((r) => r.grade);
+  const parts = (["decisions", "tasks", "reports"] as const).map((key) => {
+    const prefix = `${key.slice(0, -1)}:`;
+    const total = ok.reduce((n, r) => n + r.grade![key].total, 0);
+    const still = ok.reduce((n, r) => n + (r.grade!.judgedMissing ?? r.grade!.missing).filter((m) => m.startsWith(prefix)).length, 0);
+    return `${key} ${total - still}/${total}`;
+  });
+  return `after the judge: ${parts.join(", ")}`;
 }
