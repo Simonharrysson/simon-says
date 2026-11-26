@@ -12,6 +12,9 @@ import { loadOnboarding } from "@/lib/onboarding/store";
 import { resumeStep, stepFromNumber, type OnboardingState } from "@/lib/onboarding/steps";
 import { appOrigin } from "@/lib/origin";
 import { boardRows } from "@/lib/people/board";
+import type { InviteRow } from "@/lib/invites/rules";
+import { inviterNameFor, listInvites } from "@/lib/invites/send";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -35,13 +38,15 @@ export default async function OnboardingPage({ params, searchParams }: { params:
   if (role === null) notFound();
   if (role !== "admin") redirect(`/orgs/${id}`);
 
-  const [state, people, members, format, history, user] = await Promise.all([
+  // Service role for the invites: only after the admin check above.
+  const [state, people, members, format, history, user, invites] = await Promise.all([
     loadOnboarding(db, id),
     listPeople(db, id),
     orgMemberList(id).catch((): OrgMember[] => []),
     orgDefaultFormat(db, id),
     historySummary(db, id).catch(() => ({ count: 0 })),
     db.auth.getUser(),
+    listInvites(supabaseAdmin(), id).catch((): InviteRow[] => []),
   ]);
   const s = state ?? EMPTY;
   const step = steg === "klart" ? "klart" : (stepFromNumber(steg) ?? resumeStep(s) ?? "klart");
@@ -60,6 +65,8 @@ export default async function OnboardingPage({ params, searchParams }: { params:
       board={boardRows(people, members)}
       inviteUrl={`${appOrigin()}/join/${org.invite_code}`}
       myEmail={user.data.user?.email?.toLowerCase() ?? null}
+      invites={invites}
+      inviterName={inviterNameFor(people.find((x) => x.member_user_id === user.data.user?.id)?.name, user.data.user?.user_metadata)}
       pickerEnabled={pickerEnabled(getEnv())}
       format={{ kind: format.id ? format.profile.kind : null, name: format.profile.kind === "learned" ? "ert eget format" : FORMAT_NAMES[format.profile.kind], profile: format.id ? format.profile : null }}
       stadgarSaved={{ styrelse: Boolean(org.styrelse_format_id), arsmote: Boolean(org.arsmote_format_id) }}

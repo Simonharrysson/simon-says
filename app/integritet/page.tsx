@@ -12,7 +12,7 @@ const processors: [string, string, string][] = [
   ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
   ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."],
-  ["Resend", "Skickar e-post: driftlarm till oss, och mötessammanfattningar till personer i föreningens personlista.", "En sammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."],
+  ["Resend", "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, och mötessammanfattningar till personer i föreningens personlista.", "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."],
 ];
 
 export default function PrivacyPage() {
@@ -74,6 +74,12 @@ export default function PrivacyPage() {
           <h3>För varje förening</h3>
           <ul>
             <li>Namn, medlemmar, inbjudningslänk och personlistan (bara namn).</li>
+            <li>
+              E-postadresser som en admin skriver in för att bjuda in någon används bara för att skicka inbjudan. De sparas
+              med när den skickades och om personen har gått med, tills föreningen raderas.
+              Inbjudan visar adminens namn, och svar på mejlet går till adminens inloggningsadress (Reply-To), så den som
+              bjuds in ser den adressen.
+            </li>
             <li>
               Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.
               Transkriptionen och anteckningarna sparas tills mötet eller föreningen raderas.

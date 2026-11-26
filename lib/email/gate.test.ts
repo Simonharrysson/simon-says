@@ -4,7 +4,7 @@ import ts from "typescript";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import type { Mailer, MailMessage } from "@/lib/mail";
-import { checkEmailGate, mayEmail, sendUserMail } from "./prefs";
+import { checkEmailGate, mayEmail, sendUserMail, sendUserMailDetailed } from "./prefs";
 
 const fakeDb = (answer: { data?: unknown; error?: { message: string } | null }) => {
   const calls: unknown[] = [];
@@ -47,6 +47,14 @@ describe("the e-mail gate", () => {
     expect(await mayEmail({ email: "anna@example.com" }, "invite", fakeDb({ data: null }).db)).toBe(false);
   });
 
+  it("sendUserMailDetailed passes an uncertain outcome through; sendUserMail calls it failed", async () => {
+    const mailer: Mailer = { send: async () => false, sendWithOutcome: async () => "uncertain" };
+    const msg = { subject: "S", text: "T" };
+    expect(await sendUserMailDetailed(mailer, { email: "a@example.com" }, "invite", msg, fakeDb({ data: true }).db)).toBe("uncertain");
+    expect(await sendUserMail(mailer, { email: "a@example.com" }, "invite", msg, fakeDb({ data: true }).db)).toBe("failed");
+    expect(await sendUserMailDetailed(mailer, { email: "a@example.com" }, "invite", msg, fakeDb({ data: false }).db)).toBe("opted_out");
+  });
+
   it("sendUserMail sends only when allowed", async () => {
     const yes = fakeMailer();
     const msg = { subject: "S", text: "T" };
@@ -68,7 +76,7 @@ describe("the e-mail gate", () => {
 });
 
 // Every mail to a user must pass the gate. The TypeScript checker finds every call of
-// Mailer.send (whatever the variable is called) and every string naming api.resend.com; each must
+// Mailer.send / sendWithOutcome (whatever the variable is called) and every string naming api.resend.com; each must
 // sit in a function on this list. A new user-facing sender goes through sendUserMail() (or calls
 // checkEmailGate() first and is added here with a reason).
 const SEND_ALLOWED: Record<string, string> = {
@@ -76,7 +84,7 @@ const SEND_ALLOWED: Record<string, string> = {
   "lib/alarm.ts#checkSpendAlarm": "operator mail to ALARM_EMAIL",
   "lib/meetings/tick.ts#alarmIfNeeded": "operator mail to ALARM_EMAIL",
   "lib/meetings/tick.ts#finishMeeting": "operator mail to ALARM_EMAIL",
-  "lib/email/prefs.ts#sendUserMail": "the gate",
+  "lib/email/prefs.ts#sendUserMailDetailed": "the gate (sendUserMail calls it)",
 };
 const RESEND_ALLOWED: Record<string, string> = {
   "lib/mail.ts#resendMailer": "the provider adapter",
@@ -126,7 +134,7 @@ describe("mail call sites", () => {
       if (!sf.fileName.startsWith(root) || sf.fileName.includes("node_modules")) continue;
       const rel = relative(root, sf.fileName);
       const visit = (node: ts.Node) => {
-        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "send") {
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && (node.expression.name.text === "send" || node.expression.name.text === "sendWithOutcome")) {
           const decl = checker.getResolvedSignature(node)?.getDeclaration();
           if (decl && decl.getSourceFile() === mailFile) {
             sendCalls++;

@@ -10,6 +10,7 @@ export interface DesignView {
 
 import { onboardingViews } from "./onboarding-views";
 import { summaryViews } from "./summary-views";
+import { inviteViews } from "./invite-views";
 
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
@@ -74,6 +75,7 @@ export const designViews: DesignView[] = [
   { id: "status", title: "Status · med data", group: "Sidor" },
   ...onboardingViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...summaryViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...inviteViews.map((v) => ({ ...v, group: "Sidor" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
   { id: "live-mic-denied", title: "Före start · mikrofonen blockerad", group: "Mötet live" },
   { id: "live-agenda-prepared", title: "Före start · förberedd dagordning", group: "Mötet live" },

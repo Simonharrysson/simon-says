@@ -6,13 +6,15 @@ import { Button, ButtonLink, Spinner } from "@/components/ui/button";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Check, Field, hintClass } from "@/components/ui/Field";
-import { IconCheck, IconExternal, IconFolder, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
+import { IconCheck, IconFolder, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { plural } from "@/lib/format";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
 import { LOGO_TYPES } from "@/lib/orgs/logo";
-import { inviteMailto, type BoardRow } from "@/lib/people/board";
+import { formatDateTime } from "@/lib/format";
+import { STATUS_LABEL, type InviteRow } from "@/lib/invites/rules";
+import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
 import { OrgLogo } from "./OrgLogo";
 
@@ -160,6 +162,10 @@ export interface BoardStepProps {
   onRemove: (personId: string) => Promise<string | null>;
   /** The signed-in admin's own e-mail, to say "du" on their row. */
   myEmail?: string | null;
+  /** Invites sent by e-mail (0038): each invited person's row says how theirs went. */
+  invites?: InviteRow[];
+  /** "Bjud in via mejl" (`InviteByEmail`), under the list when someone has an e-mail. */
+  inviteEmail?: ReactNode;
 }
 
 export function BoardStep(p: BoardStepProps) {
@@ -203,7 +209,7 @@ export function BoardStep(p: BoardStepProps) {
                     onEditExisting={setEditing}
                   />
                 ) : (
-                  <BoardRowView row={row} invite={{ orgName: p.orgName, inviteUrl: p.inviteUrl }} me={Boolean(p.myEmail && (row.member?.email ?? "").toLowerCase() === p.myEmail)} onEdit={() => setEditing(key)} onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined} />
+                  <BoardRowView row={row} invite={p.invites?.find((i) => i.email === row.email?.toLowerCase())} me={Boolean(p.myEmail && (row.member?.email ?? "").toLowerCase() === p.myEmail)} onEdit={() => setEditing(key)} onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined} />
                 )}
               </li>
             );
@@ -218,19 +224,31 @@ export function BoardStep(p: BoardStepProps) {
 
       {invited.length > 0 && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-ink-2">
-            Simon Says skickar ingen e-post åt er. Skicka länken själv – från din e-post med knappen
-            <span className="font-medium"> Skicka inbjudan</span>, eller i styrelsens chatt. Den som loggar in med adressen ni
-            skrev kopplas till sitt namn här.
-          </p>
-          <CopyField id={`${id}-invite`} value={p.inviteUrl} label="Inbjudningslänk" />
+          {p.inviteEmail ? (
+            <>
+              <span className="text-sm font-medium">Bjud in via mejl</span>
+              <p className="text-sm text-ink-2">
+                Simon Says skickar ett mejl med föreningens länk till adresserna. Den som loggar in med adressen ni skrev
+                kopplas till sitt namn här.
+              </p>
+              {p.inviteEmail}
+              <CopyField id={`${id}-invite`} value={p.inviteUrl} label="Eller dela länken själv" />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-ink-2">
+                Dela länken med dem, t.ex. i styrelsens chatt. Den som loggar in med adressen ni skrev kopplas till sitt namn här.
+              </p>
+              <CopyField id={`${id}-invite`} value={p.inviteUrl} label="Inbjudningslänk" />
+            </>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function statusLine(row: BoardRow, me: boolean): ReactNode {
+function statusLine(row: BoardRow, me: boolean, invite?: InviteRow): ReactNode {
   if (row.status === "account") {
     return (
       <>
@@ -241,11 +259,19 @@ function statusLine(row: BoardRow, me: boolean): ReactNode {
       </>
     );
   }
-  if (row.status === "invited") return <span className="wrap-anywhere">Inbjuden · {row.email}</span>;
+  if (row.status === "invited") {
+    const sent = invite?.lastSentAt ?? invite?.acceptedAt;
+    return (
+      <span className="wrap-anywhere">
+        {row.email}
+        {invite ? ` · Inbjudan: ${STATUS_LABEL[invite.status].toLowerCase()}${sent ? ` ${formatDateTime(sent)}` : ""}` : " · ingen inbjudan skickad än"}
+      </span>
+    );
+  }
   return "Bara namn – lägg till e-post om hen ska kunna starta möten";
 }
 
-function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me: boolean; invite: { orgName: string; inviteUrl: string }; onEdit: () => void; onRemove?: () => Promise<string | null> }) {
+function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me: boolean; invite?: InviteRow; onEdit: () => void; onRemove?: () => Promise<string | null> }) {
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const display = row.name ?? row.email ?? "Okänd";
@@ -260,12 +286,7 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
             {row.name ?? <span className="text-ink-3">Namn saknas</span>}
             {row.role && <span className="font-normal text-ink-2"> · {row.role}</span>}
           </span>
-          <span className="text-sm text-ink-3">{statusLine(row, me)}</span>
-          {row.status === "invited" && row.email && (
-            <span className="mt-1">
-              <InviteButton email={row.email} name={row.name} orgName={invite.orgName} inviteUrl={invite.inviteUrl} />
-            </span>
-          )}
+          <span className="text-sm text-ink-3">{statusLine(row, me, invite)}</span>
           {!row.personId && (
             <span className="mt-2">
               <Button variant="secondary" size="sm" icon={<IconPlus size={16} />} onClick={onEdit}>
@@ -300,17 +321,6 @@ function BoardRowView({ row, me, invite, onEdit, onRemove }: { row: BoardRow; me
       </div>
       {error && <Note tone="danger">{error}</Note>}
     </div>
-  );
-}
-
-/** "Skicka inbjudan": opens the admin's own mail with the invite link (filled in by the container). */
-function InviteButton({ email, name, orgName, inviteUrl }: { email: string; name: string | null; orgName: string; inviteUrl: string }) {
-  const ctx = { orgName, inviteUrl };
-  return (
-    <a className="-ml-2 inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-sm font-medium text-blue no-underline hover:bg-blue-wash max-md:min-h-11" href={inviteMailto(email, ctx.orgName, ctx.inviteUrl, name)}>
-      Skicka inbjudan
-      <IconExternal size={14} />
-    </a>
   );
 }
 

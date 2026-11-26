@@ -539,9 +539,10 @@ Inställningar links to the guide.
 2. **Styrelsen**: ONE list (`boardRows`, `lib/people/board.ts`): people (name, role) plus members
    nobody has named yet ("Namn saknas" + Lägg till namn). An e-mail invites (`set_person_email`):
    the person is linked to the member account with that address now or when they join
-   (`org_members` trigger). Simon Says sends no mail: "Skicka inbjudan" opens the admin's own mail
-   (`mailto:`) with the invite link; the link is also shown to copy. Status line: "Har konto" (green)
-   · "Inbjuden · e-post" · "Bara namn". The Personer panel shows the same line.
+   (`org_members` trigger). Under the list, "Bjud in via mejl" (below) sends the invite e-mail; a
+   button fills in the people with an e-mail not invited yet. The link is also shown to copy. Status
+   line: "Har konto" (green) · "e-post · Inbjudan: skickad <datum>" / "ingen inbjudan skickad än" ·
+   "Bara namn". The Personer panel shows "Inbjuden · e-post".
 3. **Mötesmapp**: the existing folder Picker (`useMeetingFolderPicker`).
 4. **Så brukar ni ha möten**: Veckomöte (förvalt; Fortsätt makes it the default when the förening
    has none), "Som våra gamla protokoll" (the existing `LearnFormatView`), or "Behåll …" when a
@@ -594,3 +595,37 @@ for access. Footer: "Ändra vilka som får sammanfattningar" (admins) · **Avslu
 page, `k=meeting_summary`); headers from `listUnsubscribeHeaders` (one-click `POST /api/mejl/avsluta`). Logs and the `summary` event hold counts only.
 `/design`: `org-summary-*`, `summary-email*` and `org-admin`. Screenshots:
 `emails/summary/shoot.sh` (desktop/phone, light/dark, into `.superpowers/meeting-summary/`).
+
+## Bjud in via mejl (migration 0038)
+
+Admins type or paste addresses (comma, semicolon or new line; "Namn <adress>" works) in the Bjud in
+panel on the förening page and in Kom igång → Styrelsen (`InviteByEmail`). The hint counts valid
+addresses, marks members ("är redan medlem") and what isn't e-mail. "Visa mejlet" previews the e-mail
+(React, never injected HTML). "Skicka N inbjudningar" → `POST /api/orgs/<id>/invites`; each address
+gets a line: Skickat (green) · Redan medlem · Ogiltig adress · Misslyckades + Försök igen · Redan
+inbjuden · limits. "Skickade inbjudningar" lists every invite (Skickad · Misslyckades · Har gått med,
+with time) with "Skicka igen", once per address per 24 h ("Igen <tid>" after). The link to copy stays
+under it ("Eller dela länken själv").
+
+The e-mail is design A, "Calm Geist" (`lib/invites/email.ts`; reference rendering
+`emails/invite/a.html` + `a.txt`, screenshots with `emails/invite/shoot.sh`): wordmark, one card,
+"Gå med i <förening>", one paragraph, one black button with the förening's join link, the link as
+text, and the footer "Du får det här mejlet för att <namn> lade till din adress … Väntade du dig inte
+mejlet kan du strunta i det". Subject "<namn> bjuder in dig till <förening> på Simon Says"; Reply-To
+is the admin. Two other directions were considered and dropped: B, a warmer letter with the
+förening's initial and a "what you get" list, and C, a richer card with steps and a preview of a
+meeting Doc. A was chosen as the calmest and closest to the app.
+
+Limits (`claim_invite_send`): 50 per förening and 200 per admin in 24 h; members are skipped; the
+invite turns "Har gått med" when someone joins with that confirmed address. No addresses in logs.
+A förening or inviter name that looks like a link or address (`looksLikeLink`: `://`, `www.`, `@`,
+`x.se`) is refused with a sentence asking to rename it (the form says so up front); every dot in a
+name gets a zero-width non-joiner in the e-mail, and the subject is cut at 80 characters. The form
+sends 10 addresses per request (two at a time, no new send after 40 s: "Hann inte skickas"). A
+timeout or 5xx is "Osäkert – kan ha skickats"; Försök igen reuses the send's Resend Idempotency-Key,
+so it can't arrive twice. Sends hung in `sending` for 5 min are swept to `uncertain` by the import cron.
+Every invite goes through the mail-settings gate (0039, `sendUserMailDetailed`, category
+`invite`), checked before `claim_invite_send` so an address that said no uses no quota: its line says
+"Vill inte ha mejl" (no retry). Each e-mail carries the recipient's own settings link
+(`emailPrefsUrl`) in the footer and List-Unsubscribe headers.
+`/design`: `invite-email*`.

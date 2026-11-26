@@ -67,12 +67,30 @@ export async function sendUserMail(
   message: Omit<MailMessage, "to">,
   db: SupabaseClient = supabaseAdmin(),
 ): Promise<UserMailResult> {
+  const result = await sendUserMailDetailed(mailer, recipient, category, message, db);
+  return result === "uncertain" ? "failed" : result;
+}
+
+/**
+ * sendUserMail, telling "no answer from the provider" (`uncertain`: a timeout or 5xx, it may have
+ * gone out) from a refusal, when the mailer can (Mailer.sendWithOutcome). For senders that retry
+ * with an Idempotency-Key (invites, 0038).
+ */
+export async function sendUserMailDetailed(
+  mailer: Mailer,
+  recipient: Recipient & { email: string },
+  category: EmailCategory,
+  message: Omit<MailMessage, "to">,
+  db: SupabaseClient = supabaseAdmin(),
+): Promise<UserMailResult | "uncertain"> {
   const gate = await checkEmailGate(recipient, category, db);
   if (gate === "opted_out" || gate === "invalid") return gate;
   if (!cleanEmail(recipient.email)) return "invalid";
   if (gate === "unknown") return "failed";
   try {
-    return (await mailer.send({ ...message, to: recipient.email })) ? "sent" : "failed";
+    const mail = { ...message, to: recipient.email };
+    if (mailer.sendWithOutcome) return await mailer.sendWithOutcome(mail);
+    return (await mailer.send(mail)) ? "sent" : "failed";
   } catch (e) {
     console.error(`mail: send failed (${category}): ${(e as Error).name}`);
     return "failed";

@@ -11,43 +11,62 @@ export interface MailMessage {
   text: string;
   /** Optional HTML part (the text part stays the fallback). */
   html?: string;
+  /** Optional Reply-To, e.g. the person who sent an invite. */
+  replyTo?: string;
+  /** Optional Resend Idempotency-Key: a retry with the same key is never delivered twice (24 h). */
+  idempotencyKey?: string;
   /** Extra headers, e.g. List-Unsubscribe (lib/email/token.ts listUnsubscribeHeaders). */
   headers?: Record<string, string>;
 }
 
+/** sent: the provider took it · failed: it did not · uncertain: no answer (timeout, 5xx), may have gone out. */
+export type MailOutcome = "sent" | "failed" | "uncertain";
+
 export interface Mailer {
   /** True when the message was handed to the mail provider. */
   send(message: MailMessage): Promise<boolean>;
+  /** Optional: the same, telling a refusal from no answer. */
+  sendWithOutcome?(message: MailMessage): Promise<MailOutcome>;
 }
 
 export const DEFAULT_MAIL_FROM = "Simon Says <noreply@harrysson.co>";
 
 export function resendMailer(apiKey: string, from: string, fetchFn: typeof fetch = fetch): Mailer {
-  return {
-    async send(message) {
-      try {
-        const res = await fetchFn("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-          body: JSON.stringify({
-            from,
-            to: [message.to],
-            subject: message.subject,
-            text: message.text,
-            ...(message.html ? { html: message.html } : {}),
-            ...(message.headers ? { headers: message.headers } : {}),
-          }),
-          signal: AbortSignal.timeout(10_000),
-        });
-        if (!res.ok) {
-          console.error(`mail: Resend answered ${res.status} for "${message.subject}"`);
-          return false;
-        }
-        return true;
-      } catch (e) {
-        console.error(`mail: send failed for "${message.subject}": ${(e as Error).name}`);
-        return false;
+  async function sendWithOutcome(message: MailMessage): Promise<MailOutcome> {
+    try {
+      const res = await fetchFn("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+          ...(message.idempotencyKey ? { "idempotency-key": message.idempotencyKey } : {}),
+        },
+        body: JSON.stringify({
+          from,
+          to: [message.to],
+          subject: message.subject,
+          text: message.text,
+          ...(message.html ? { html: message.html } : {}),
+          ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+          ...(message.headers ? { headers: message.headers } : {}),
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) {
+        console.error(`mail: Resend answered ${res.status} for "${message.subject}"`);
+        return res.status >= 500 ? "uncertain" : "failed";
       }
+      return "sent";
+    } catch (e) {
+      console.error(`mail: send failed for "${message.subject}": ${(e as Error).name}`);
+      // A timeout or a dropped connection: Resend may have taken it.
+      return "uncertain";
+    }
+  }
+  return {
+    sendWithOutcome,
+    async send(message) {
+      return (await sendWithOutcome(message)) === "sent";
     },
   };
 }
