@@ -9,7 +9,7 @@ export type MeetingType = "veckomote" | "styrelsemote" | "arsmote";
 export const MEETING_TYPES: { type: MeetingType; name: string; hint: string }[] = [
   { type: "veckomote", name: "Veckomöte", hint: "Det vanliga mötet. Följer upp förra veckans uppgifter." },
   { type: "styrelsemote", name: "Styrelsemöte", hint: "Med paragrafer, justerare och underskrifter." },
-  { type: "arsmote", name: "Årsmöte", hint: "Föreningens årsmöte med standarddagordningen." },
+  { type: "arsmote", name: "Årsmöte", hint: "Föreningens årsmöte, med dagordningen från era stadgar eller standarden." },
 ];
 
 export const isMeetingType = (v: unknown): v is MeetingType => MEETING_TYPES.some((t) => t.type === v);

@@ -56,7 +56,7 @@ export function preparedTitle(orgName: string, date: string, time: string | null
  * default; else its own Styrelsemöte / Årsmöte format from the stadgar (onboarding, 0035);
  * else the standard.
  */
-async function formatForType(orgId: string, type: MeetingType): Promise<{ id: string | null; profile: FormatProfile }> {
+export async function formatForType(orgId: string, type: MeetingType): Promise<{ id: string | null; profile: FormatProfile }> {
   const def = await orgDefaultFormat(supabaseAdmin(), orgId);
   const k = def.profile.kind;
   if (def.id && ((type === "veckomote" && (k === "veckomote" || k === "learned")) || (type === "styrelsemote" && k === "styrelseprotokoll"))) return def;

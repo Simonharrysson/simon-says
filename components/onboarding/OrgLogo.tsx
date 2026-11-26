@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-const sizes = { sm: "size-9 text-sm rounded-md", md: "size-12 text-lg rounded-lg", lg: "size-28 text-4xl rounded-xl" } as const;
+const sizes = { sm: "size-9 text-sm rounded-md", md: "size-12 text-lg rounded-lg", lg: "size-28 text-4xl rounded-lg" } as const;
 
 /**
  * The förening's logo, or its first letter on ink when it has none. Shown only on the förening

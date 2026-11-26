@@ -585,6 +585,8 @@ function PeoplePanel({
   isAdmin: boolean;
   actions: OrgDetailViewProps["actions"];
 }) {
+  // Members nobody has named yet (0035): shown here too, so the list holds everyone (audit U3).
+  const unnamed = (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId));
   return (
     <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length}</span>}>
       <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
@@ -608,7 +610,7 @@ function PeoplePanel({
           Lägg till
         </SubmitButton>
       </form>
-      {people.length === 0 ? (
+      {people.length === 0 && unnamed.length === 0 ? (
         <div className="px-6 pb-6">
           <EmptyState title="Inga personer än">
             <p>Lägg till de som brukar vara med. Det går också bra att låta namnrundan i första mötet fylla på listan.</p>
@@ -626,6 +628,22 @@ function PeoplePanel({
               setPersonRole={isAdmin ? actions.setPersonRole : undefined}
               deletePerson={actions.deletePerson}
             />
+          ))}
+          {unnamed.map((m) => (
+            <li key={m.userId}>
+              <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
+                <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
+                <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+                  <span className="font-medium wrap-anywhere">{m.email}</span>
+                  <span className="text-sm text-ink-3">Har konto, men inget namn i listan</span>
+                </span>
+                {isAdmin && (
+                  <a className={buttonVariants({ size: "sm" })} href={`/orgs/${orgId}/kom-igang?steg=2`}>
+                    Koppla till namn
+                  </a>
+                )}
+              </div>
+            </li>
           ))}
         </ul>
       )}

@@ -84,7 +84,9 @@ export async function addBoardPersonAction(orgId: string, input: BoardInput, mem
   const row: Record<string, unknown> = { org_id: orgId, name: v.name };
   if (memberUserId && isUuid(memberUserId)) row.member_user_id = memberUserId;
   const { data, error } = await db.from("people").insert(row).select("id").single();
-  if (error?.code === "23505") return fail(`${v.name} finns redan i listan.`);
+  if (error?.code === "23505") {
+    return fail(memberUserId ? `${v.name} finns redan i listan. Ändra ${v.name} och skriv in e-postadressen, så kopplas kontot dit.` : `${v.name} finns redan i listan.`);
+  }
   if (error || !data) return fail("Personen kunde inte läggas till. Försök igen.");
   const id = data.id as string;
   if (v.role && !(await setPersonRole(db, id, v.role))) return fail("Rollen kunde inte sparas. Försök igen.");

@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
+import { Onboarding } from "@/components/onboarding/Onboarding";
 import { OnboardingShell, StepFooter, type ShellStep } from "@/components/onboarding/OnboardingShell";
 import { BoardStep, DoneStep, FolderStep, FormatStep, HistoryStep, LogoStep, VoicesStep, type StadgarPhase, type WeeklyChoice } from "@/components/onboarding/steps";
 import { LearnFormatView } from "@/components/views/FormatEditor";
@@ -137,6 +138,21 @@ const orgActions: OrgDetailViewProps["actions"] = {
 };
 
 export const onboardingRender: Record<string, () => ReactNode> = {
+  // The real container (server actions answer "not admin" here; navigation still works).
+  "onboarding-live": () => (
+    <Onboarding
+      org={{ id: ORG_ID, name: ORG, logoUpdatedAt: null, folderSet: false, folderName: null }}
+      initialStep="namn"
+      state={{ done: [], skipped: [], completedAt: null, dismissedAt: null }}
+      board={boardRows}
+      inviteUrl={INVITE}
+      myEmail="anna.berg@example.com"
+      pickerEnabled={false}
+      format={{ kind: null, name: "Enkel", profile: null }}
+      stadgarSaved={{ styrelse: false, arsmote: false }}
+      historyCount={0}
+    />
+  ),
   "onboarding-1": () => <LogoDemo withLogo={false} />,
   "onboarding-1-logo": () => <LogoDemo withLogo />,
   "onboarding-2-empty": () => <BoardDemo rows={[]} />,

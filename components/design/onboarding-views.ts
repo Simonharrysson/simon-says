@@ -1,6 +1,7 @@
 // The Kom igång states in the /design gallery (rendered by onboarding-demo.tsx).
 
 export const onboardingViews = [
+  { id: "onboarding-live", title: "Kom igång · hela flödet (klickbart)" },
   { id: "onboarding-1", title: "Kom igång · 1. namn och logga" },
   { id: "onboarding-1-logo", title: "Kom igång · 1. logga uppladdad" },
   { id: "onboarding-2-empty", title: "Kom igång · 2. styrelsen, tom" },

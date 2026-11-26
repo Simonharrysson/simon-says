@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Banner } from "@/components/ui/Banner";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { LearnFormatView, useFormatFlow } from "@/components/views/FormatEditor";
 import { useMeetingFolderPicker } from "@/components/views/useMeetingFolderPicker";
@@ -60,6 +61,7 @@ export function Onboarding(p: OnboardingProps) {
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [state, setState] = useState(p.state);
   const [busy, setBusy] = useState(false);
+  const [formatError, setFormatError] = useState<string | null>(null);
 
   // 1. Namn och logga
   const [name, setName] = useState(p.org.name);
@@ -256,15 +258,22 @@ export function Onboarding(p: OnboardingProps) {
               onSkip={() => finish("format", "skipped")}
               nextDisabled={stadgar.phase === "reading" || stadgar.phase === "saving" || flow.view.phase === "proposing"}
               onNext={async () => {
+                setFormatError(null);
                 if (choice === "veckomote") {
                   setBusy(true);
-                  await fetch(`/api/orgs/${orgId}/onboarding/formats`, {
+                  const res = await fetch(`/api/orgs/${orgId}/onboarding/formats`, {
                     method: "POST",
                     headers: { "content-type": "application/json" },
                     body: JSON.stringify({ weekly: true }),
                   }).catch(() => null);
+                  if (!res?.ok) {
+                    setBusy(false);
+                    const json = (await res?.json().catch(() => null)) as { message?: string } | null;
+                    return setFormatError(json?.message ?? "Veckomötet kunde inte sparas. Försök igen.");
+                  }
                 }
-                await finish("format", "done");
+                // "Som våra gamla protokoll" without approving a learned format: nothing chosen yet.
+                await finish("format", choice === "learn" ? "skipped" : "done");
               }}
             />
           }
@@ -298,6 +307,11 @@ export function Onboarding(p: OnboardingProps) {
             onStadgarSave={saveStadgar}
             onStadgarCancel={() => setStadgar({ phase: "idle" })}
           />
+          {formatError && (
+            <Banner tone="danger" live={false}>
+              {formatError}
+            </Banner>
+          )}
         </OnboardingShell>
       );
     case "protokoll":
@@ -306,7 +320,7 @@ export function Onboarding(p: OnboardingProps) {
           {...shell}
           footer={<StepFooter busy={busy} onBack={back} onSkip={() => finish("protokoll", "skipped")} onNext={() => finish("protokoll", p.historyCount > 0 ? "done" : "skipped")} />}
         >
-          <HistoryStep importHref={`/orgs/${orgId}/protokoll`} historyCount={p.historyCount} onOpen={() => void stepAction(orgId, "protokoll", "done")} />
+          <HistoryStep importHref={`/orgs/${orgId}/protokoll`} historyCount={p.historyCount} />
         </OnboardingShell>
       );
     case "roster":

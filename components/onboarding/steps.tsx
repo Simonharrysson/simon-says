@@ -81,13 +81,13 @@ export function LogoStep(p: LogoStepProps) {
             disabled={p.busy}
             aria-describedby={`${id}-hint`}
             className={cn(
-              "group relative grid size-32 flex-none cursor-pointer place-items-center rounded-xl transition-[box-shadow,transform] duration-200 ease-out",
+              "group relative grid size-32 flex-none cursor-pointer place-items-center rounded-lg transition-[box-shadow,transform] duration-200 ease-out",
               p.logoUrl ? "shadow-panel" : "border border-dashed border-rail bg-surface hover:border-control",
               over && "scale-[1.02] border-blue shadow-[0_0_0_3px_var(--blue-wash)]",
             )}
           >
             {p.logoUrl ? (
-              <OrgLogo name={p.orgName} src={p.logoUrl} size="lg" className="size-32 rounded-xl" />
+              <OrgLogo name={p.orgName} src={p.logoUrl} size="lg" className="size-32 rounded-lg" />
             ) : (
               <span className="flex flex-col items-center gap-2 px-3 text-center text-xs text-ink-3">
                 <OrgLogo name={p.orgName} size="md" className="opacity-90" />
@@ -95,7 +95,7 @@ export function LogoStep(p: LogoStepProps) {
               </span>
             )}
             {p.busy && (
-              <span className="absolute inset-0 grid place-items-center rounded-xl bg-surface/80">
+              <span className="absolute inset-0 grid place-items-center rounded-lg bg-surface/80">
                 <Spinner className="text-xl text-ink-2" />
               </span>
             )}
@@ -702,10 +702,10 @@ export function VoicesStep(p: VoicesStepProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel">
-        <p className="font-medium">Ingen behöver spela in något.</p>
+        <p className="font-medium">Simon Says lär sig rösterna från namnrundan i ert första möte — ingen behöver spela in något.</p>
         <p className="text-sm text-ink-2">
-          I ert första möte säger alla sitt namn i namnrundan, som vanligt. Den meningen blir rösten Simon Says
-          känner igen – en gång, aldrig mer. Från andra mötet står namnen där direkt.
+          Alla säger sitt namn i namnrundan, som vanligt. Den meningen blir rösten Simon Says känner igen – en
+          gång, aldrig mer. Från andra mötet står namnen där direkt.
         </p>
         <p className="text-sm text-ink-3">
           Funktionen testas fortfarande och slås på senare. En röst är känslig information, så den sparas bara för den

@@ -53,7 +53,7 @@ export function OnboardingShell(p: OnboardingShellProps) {
             <OrgLogo name={p.orgName} src={p.logoUrl} size="sm" className="size-6 rounded-[5px] text-2xs" />
             <span className="wrap-anywhere">{p.orgName}</span>
           </a>
-          <a className="text-sm text-ink-3 no-underline hover:text-ink" href={p.orgHref}>
+          <a className="inline-flex min-h-11 items-center text-sm text-ink-3 no-underline hover:text-ink md:min-h-0" href={p.orgHref}>
             Fortsätt senare
           </a>
         </div>
@@ -107,7 +107,7 @@ function Progress({ step, done, skipped, onGo }: { step: ShellStep; done: StepId
         return (
           <li key={s.id} aria-current={here ? "step" : undefined}>
             {onGo ? (
-              <button type="button" onClick={() => onGo(s.id)} className="block w-full cursor-pointer rounded-sm py-1 hover:[&>span:first-child]:opacity-70">
+              <button type="button" onClick={() => onGo(s.id)} className="block w-full cursor-pointer rounded-sm py-1 hover:[&>span:first-child]:opacity-70 max-md:min-h-11">
                 {bar}
               </button>
             ) : (
