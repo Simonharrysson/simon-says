@@ -15,7 +15,7 @@ vi.mock("@/lib/db/claude-usage", () => ({
 
 const { proposeGoals, GOALS_SYSTEM_PROMPT } = await import("./goals");
 const { goalsInput, scrubNames, GoalsSchema, MAX_DECISIONS } = await import("./goals-input");
-const { safeAgendaLabels } = await import("./safe-labels");
+const { safeAgendaLabels, storableLabel, hasInnerName } = await import("./safe-labels");
 const { safeItemLabel, firstNames } = await import("@/lib/formats/structure");
 
 const ORG = "00000000-0000-4000-8000-000000000001";
@@ -146,6 +146,16 @@ describe("goalsInput", () => {
   });
 });
 
+describe("goalsInput: labels are scrubbed too", () => {
+  it("a topic label or a decision's item label holding a surname never reaches the input", () => {
+    const meetings = INPUT.meetings.map((m) => ({ ...m, agenda_labels: { ...m.agenda_labels, "ag-2": "Kasks budget" } }));
+    const g = goalsInput(ORG, { ...INPUT, meetings }, NOW)!;
+    expect(g.topics.map((t) => t.label)).toEqual(["en person budget"]);
+    expect(g.decisions.every((d) => d.item === "en person budget")).toBe(true);
+    expect(JSON.stringify(g)).not.toContain("Kask");
+  });
+});
+
 describe("scrubNames", () => {
   it("full names, name parts and genitives; not inside other words", () => {
     expect(scrubNames("Ada Kask och Adas kompis Bo", ["Ada Kask", "Bo Tärn"])).toBe("en person och en person kompis en person");
@@ -240,5 +250,16 @@ describe("safeAgendaLabels", () => {
       (l) => safeItemLabel(l, names),
     );
     expect(labels).toEqual({ "ag-1": "Ekonomi", "ag-5": "Kommande event" });
+  });
+
+  it("storableLabel: no surname or full name of the org's people, no capitalised word after the first (guests)", () => {
+    const all = ["Ada Kask", "Bo Tärn"];
+    const safe = (l: string) => safeItemLabel(l, firstNames(all));
+    const keep = ["Ekonomi", "Kommande event", "Frågor till IT", "Må-runda"];
+    const drop = ["Kasks rapport", "Rapport från Tärn", "Rapport från Elin", "Möte med Kårstyrelsen", "Ada Kask", "Adas punkt"];
+    for (const l of keep) expect([l, storableLabel(l, all, safe)]).toEqual([l, true]);
+    for (const l of drop) expect([l, storableLabel(l, all, safe)]).toEqual([l, false]);
+    expect(hasInnerName("Rapport från Elin")).toBe(true);
+    expect(hasInnerName("Elins rapport")).toBe(false);
   });
 });
