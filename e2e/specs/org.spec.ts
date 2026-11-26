@@ -107,11 +107,27 @@ test("Testmöte menu: Utan dagordning starts a replay, Avsluta mötet ends it fr
   await expect.poll(async () => (await db.from("meetings").select("status").eq("id", m!.id).single()).data?.status, { timeout: 60_000 }).toBe("done");
 });
 
-test("an unknown förening shows one 404 inside the signed-in layout", async ({ page }) => {
-  await page.goto("/orgs/00000000-0000-4000-8000-000000000001");
+test("an unknown förening is a real 404 with one header for a signed-in user", async ({ page }) => {
+  const res = await page.goto("/orgs/00000000-0000-4000-8000-000000000001");
+  expect(res?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
   // One header, one <main>, no "Logga in" for someone signed in.
   await expect(page.getByRole("main")).toHaveCount(1);
   await expect(page.getByRole("link", { name: "Logga in" })).toHaveCount(0);
   await expectAccessible(page);
+  expect((await page.goto("/orgs/inte-ett-id/forbered"))?.status()).toBe(404);
+});
+
+test.describe("signed out", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("a förening page sends to the login first, and back after signing in", async ({ page, seedOrg, nextLogin }) => {
+    const org = await seedOrg();
+    await page.goto(`${org.url}?flik=oversikt`);
+    await expect(page).toHaveURL(new RegExp(`/login\\?next=${encodeURIComponent(org.url)}$`));
+    nextLogin.email = "admin@e2e.test";
+    await page.getByRole("button", { name: "Logga in med Google" }).click();
+    await expect(page).toHaveURL(new RegExp(`${org.url}$`));
+    await expect(page.getByText("Du är admin")).toBeVisible();
+  });
 });

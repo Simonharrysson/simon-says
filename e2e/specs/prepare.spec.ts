@@ -20,18 +20,24 @@ test("Förbered möte: Från förra veckan and a typed-but-not-added point reach
   await expectAccessible(page);
 
   // Typed, never added.
-  await page.getByLabel("Lägg till punkt").fill("Fest på universitetet");
+  await page.getByLabel("Lägg till punkt").fill("Rekrytering");
   await page.getByRole("button", { name: "Skapa dagordning" }).click();
   await expect(page.getByText("Dokumentet är skapat")).toBeVisible();
 
   const [doc] = await fake.files(`Dagordning – ${org.name}`);
   expect(doc, "the agenda Doc in Drive").toBeTruthy();
   const text = await fake.docText(doc.id);
-  expect(text).toContain("Fest på universitetet");
+  expect(text).toContain("Rekrytering");
   expect(text).toContain("Boka lokal till hackathonet");
   expect(text).toContain("Från förra veckan");
 
-  // The förening page names the next meeting.
+  // Simon's "Rekrytering" bug: the typed point stays on the agenda when it is opened again.
   await page.getByRole("link", { name: `Till ${org.name}` }).click();
   await expect(page.getByText("Nästa möte")).toBeVisible();
+  await page.getByRole("link", { name: "Ändra", exact: true }).click();
+  await page.getByRole("button", { name: "Ta fram dagordningen" }).click();
+  await expect(page.getByText("Du ändrar en förberedd dagordning")).toBeVisible();
+  const labels = await page.getByRole("list", { name: "Dagordning" }).getByRole("textbox").evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+  expect(labels).toContain("Rekrytering");
+  expect(await fake.docText(doc.id)).toContain("Rekrytering");
 });

@@ -175,6 +175,11 @@ export const fake = {
     const q = new URLSearchParams({ ...(kind ? { kind } : {}), ...(contains ? { contains } : {}) });
     return (await (await fetch(`${FAKE_URL}/__e2e/claude/calls?${q}`)).json()) as { kind: string; text: string }[];
   },
+  /** Mail sent through the fake provider, optionally to one address. */
+  async mail(to?: string) {
+    const q = to ? `?to=${encodeURIComponent(to)}` : "";
+    return (await (await fetch(`${FAKE_URL}/__e2e/mail${q}`)).json()) as { to: string[]; subject: string; text: string; html?: string; reply_to?: string; headers?: Record<string, string> }[];
+  },
   async problems() {
     return (await (await fetch(`${FAKE_URL}/__e2e/problems`)).json()) as { at: string; what: string }[];
   },
@@ -205,7 +210,7 @@ export interface Fixtures {
   nextLogin: NextLogin;
   db: SupabaseClient;
   /** A fresh förening with the given admin (default: the shared signed-in admin) and members. */
-  seedOrg: (opts?: { name?: string; admin?: string; members?: string[]; people?: string[] }) => Promise<SeededOrg>;
+  seedOrg: (opts?: { name?: string; admin?: string; members?: string[]; people?: (string | { name: string; email?: string })[] }) => Promise<SeededOrg>;
   /** A unique test address. */
   newEmail: (label: string) => string;
   /** A second browser (own cookies) signed in as `email`, guarded like the main one. */
@@ -239,7 +244,7 @@ export const test = base.extend<Fixtures>({
       const rows = [{ org_id: org.id, user_id: adminId, role: "admin" }];
       for (const m of opts.members ?? []) rows.push({ org_id: org.id, user_id: await ensureUser(db, m), role: "member" });
       must("seed members", await db.from("org_members").insert(rows));
-      if (opts.people?.length) must("seed people", await db.from("people").insert(opts.people.map((p) => ({ org_id: org.id, name: p }))));
+      if (opts.people?.length) must("seed people", await db.from("people").insert(opts.people.map((p) => (typeof p === "string" ? { org_id: org.id, name: p } : { org_id: org.id, name: p.name, email: p.email ?? null }))));
       return { id: org.id, name, inviteCode: org.invite_code, url: `/orgs/${org.id}` };
     });
   },
