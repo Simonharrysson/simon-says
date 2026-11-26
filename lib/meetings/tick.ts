@@ -1386,17 +1386,12 @@ export async function claimEnd(
  */
 export async function saveLateTaskAnswers(meetingId: string, answers: TaskAnswer[], now: Date = new Date()): Promise<boolean> {
   if (!answers.length) return true;
-  const saved = must(
-    "end: late answers",
-    await db()
-      .from("meetings")
-      .update({ task_answers: answers })
-      .eq("id", meetingId)
-      .eq("status", "ending")
-      .or(`end_lease_until.is.null,end_lease_until.lt."${now.toISOString()}"`)
-      .select("id"),
-  ) as { id: string }[];
-  return saved.length > 0;
+  // Two guarded updates (no lease, or an expired one) rather than one or-filter: each is atomic.
+  const update = () => db().from("meetings").update({ task_answers: answers }).eq("id", meetingId).eq("status", "ending");
+  const free = must("end: late answers", await update().is("end_lease_until", null).select("id")) as { id: string }[];
+  if (free.length) return true;
+  const expired = must("end: late answers", await update().lt("end_lease_until", now.toISOString()).select("id")) as { id: string }[];
+  return expired.length > 0;
 }
 
 // ---------------------------------------------------------------------------------------------
