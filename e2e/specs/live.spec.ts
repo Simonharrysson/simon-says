@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { SCRIPTED } from "../fakes/claude";
+import { SCRIPTED } from "../fakes/scripted";
 import { APP_URL } from "../env";
 import { expect, expectAccessible, fake, test, type SeededOrg } from "../fixtures";
 

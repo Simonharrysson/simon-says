@@ -22,6 +22,11 @@ const TEST_DOMAIN = "@e2e.test";
  * and redirects to `next` like the callback does. `&drive=1` stands in for the protocol import's
  * drive.readonly consent instead: it also stores the import token and returns `next?drive=ok`.
  */
+const failed = (what: string, message: string | undefined) => {
+  console.error(`e2e login: ${what}: ${message}`);
+  return NextResponse.json({ error: `${what}: ${message}` }, { status: 500 });
+};
+
 export async function GET(request: NextRequest) {
   if (!e2eMode()) return new NextResponse(null, { status: 404 });
   const email = (request.nextUrl.searchParams.get("email") ?? "").trim().toLowerCase();
@@ -29,22 +34,28 @@ export async function GET(request: NextRequest) {
   const next = safeNextPath(request.nextUrl.searchParams.get("next"));
 
   // A magic link verified on the server: a new session in the same httpOnly cookies the callback
-  // sets, without touching the password or any other session of the user.
+  // sets, without touching the user's password or other sessions. Fallback: a one-time password.
   const admin = supabaseAdmin();
+  const supabase = await createSupabaseServerClient();
+  let userId: string | undefined;
   let link = await admin.auth.admin.generateLink({ type: "magiclink", email });
   if (link.error) {
-    // First use: create the (confirmed) user, then the link.
     const created = await admin.auth.admin.createUser({ email, email_confirm: true });
-    if (created.error && !/already/i.test(created.error.message)) return NextResponse.json({ error: `create: ${created.error.message}` }, { status: 500 });
+    if (created.error && !/already/i.test(created.error.message)) return failed("create", created.error.message);
     link = await admin.auth.admin.generateLink({ type: "magiclink", email });
   }
+  userId = link.data.user?.id;
   const tokenHash = link.data.properties?.hashed_token;
-  const userId = link.data.user?.id;
-  if (link.error || !tokenHash || !userId) return NextResponse.json({ error: `link: ${link.error?.message}` }, { status: 500 });
-
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
-  if (error) return NextResponse.json({ error: `verify: ${error.message}` }, { status: 500 });
+  const verified = tokenHash ? await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash }) : null;
+  if (!verified || verified.error || !userId) {
+    console.warn(`e2e login: magic link failed (${link.error?.message ?? verified?.error?.message ?? "no token"}), using a password`);
+    if (!userId) return failed("link", link.error?.message);
+    const password = `e2e-${crypto.randomUUID()}`;
+    const upd = await admin.auth.admin.updateUserById(userId, { password });
+    if (upd.error) return failed("password", upd.error.message);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return failed("sign-in", error.message);
+  }
   await storeGoogleToken(userId, `e2e-refresh:${email}`, GOOGLE_SCOPES.join(" "));
   if (request.nextUrl.searchParams.get("drive") === "1") {
     await storeImportToken(userId, `e2e-refresh:${email}`, IMPORT_SCOPES.join(" "));

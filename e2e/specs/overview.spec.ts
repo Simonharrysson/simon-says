@@ -1,4 +1,4 @@
-import { SCRIPTED } from "../fakes/claude";
+import { SCRIPTED } from "../fakes/scripted";
 import { expect, expectAccessible, fake, seedMeeting, test } from "../fixtures";
 
 // Översikt: goals proposed by (scripted) Claude and approved; the protocol import's small path

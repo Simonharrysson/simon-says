@@ -10,6 +10,9 @@ import { AGENDA_SYSTEM_PROMPT } from "@/lib/notes/agenda-prompt";
 import { CHECKIN_SYSTEM_PROMPT } from "@/lib/notes/checkin";
 import { SYSTEM_PROMPT } from "@/lib/notes/prompt";
 import { readBody, send } from "./google";
+import { SCRIPTED } from "./scripted";
+
+export { SCRIPTED };
 
 // The fake Claude behind the e2e app (ANTHROPIC_BASE_URL): POST /v1/messages, streamed (SSE) like
 // the SDK's `beta.messages.stream()` expects. Calls are told apart by their system prompt, as
@@ -30,18 +33,6 @@ const KINDS: [string, ClaudeKind][] = [
   [DIGEST_SYSTEM_PROMPT, "digest"],
   [ROLES_SYSTEM_PROMPT, "roles"],
 ];
-
-/** What the scripted notes write: the e2e specs look for these lines in the Doc fake. */
-export const SCRIPTED = {
-  decision: "Hackathonet blir den 14 februari",
-  action: "Maila Kårallen om lokalen",
-  now: "Budget för hackathonet",
-  goals: [
-    { title: "Fler medlemmar till våren", why: "Styrelsen vill växa inför vårens evenemang." },
-    { title: "Ett hackathon i februari", why: "Det har tagits upp på flera möten." },
-  ],
-  names: ["Anna Berg", "Erik Lund", "Lisa Holm", "Omar Said"],
-};
 
 export interface ClaudeCall {
   at: string;

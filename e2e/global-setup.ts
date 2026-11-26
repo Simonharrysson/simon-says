@@ -26,7 +26,8 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   const ctx = await request.newContext({ baseURL: APP_URL });
   const started = Date.now();
   // Signed in, so the app pages compile their real code paths (not just the login redirect).
-  await ctx.get(`/api/e2e/login?email=${encodeURIComponent(ADMIN_EMAIL)}&next=/orgs`, { maxRedirects: 0 });
+  const login = await ctx.get(`/api/e2e/login?email=${encodeURIComponent(ADMIN_EMAIL)}&next=/orgs`, { maxRedirects: 0 });
+  if (login.status() !== 307 && login.status() !== 302) throw new Error(`e2e: admin sign-in failed: ${login.status()} ${await login.text()}`);
   await Promise.all(WARM.map((path) => ctx.get(path, { timeout: 180_000, failOnStatusCode: false }).catch(() => null)));
   console.log(`e2e: routes warm in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   mkdirSync(dirname(STORAGE_ADMIN), { recursive: true });
