@@ -34,6 +34,8 @@ export interface BatchClient {
       retrieve(id: string): PromiseLike<MessageBatch>;
       cancel(id: string): PromiseLike<MessageBatch>;
       results(id: string): PromiseLike<AsyncIterable<MessageBatchIndividualResponse>>;
+      /** Removes an ENDED batch and its results at Anthropic (after they are saved). */
+      delete(id: string): PromiseLike<unknown>;
     };
   };
 }

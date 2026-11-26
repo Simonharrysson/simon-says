@@ -13,7 +13,7 @@ vi.mock("@/lib/db/usage", () => ({ dayUsd: async () => 0 }));
 vi.mock("@/lib/db/claude-usage", () => ({ recordClaudeUsage: async (orgId: string, u: { usd: number }) => void usage.push({ orgId, usd: u.usd }) }));
 vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 
-const { advanceJob, cancelJob, createBatchJob, createDirectJob, currentJobId, failStaleSubmits, jobView, loadJob } = await import("@/lib/history/jobs");
+const { advanceJob, bookItemUsage, cancelJob, createBatchJob, createDirectJob, currentJobId, failStaleSubmits, jobView, loadJob, MAX_POLL_ERRORS } = await import("@/lib/history/jobs");
 const { scriptedClient } = await import("@/scripts/lib/goals-scripted");
 
 type Result = MessageBatchIndividualResponse["result"];
@@ -27,6 +27,11 @@ function fakeBatches() {
     canceled: false,
     results: new Map<string, Result>(),
     resultsCalls: 0,
+    /** Throw after yielding this many results (a run that dies midway). */
+    throwAfter: null as number | null,
+    /** retrieve() rejects (Anthropic keeps failing). */
+    retrieveFails: false,
+    deleted: [] as string[],
   };
   const batch = (): MessageBatch =>
     ({
@@ -43,7 +48,14 @@ function fakeBatches() {
           s.status = "in_progress";
           return batch();
         },
-        retrieve: async () => batch(),
+        retrieve: async () => {
+          if (s.retrieveFails) throw new Error("InternalServerError: 500");
+          return batch();
+        },
+        delete: async (id: string) => {
+          s.deleted.push(id);
+          return { id, type: "message_batch_deleted" };
+        },
         cancel: async () => {
           s.canceled = true;
           s.status = "canceling";
@@ -52,8 +64,12 @@ function fakeBatches() {
         results: async () => {
           s.resultsCalls++;
           const all = [...s.results.entries()].map(([custom_id, result]) => ({ custom_id, result }) as MessageBatchIndividualResponse);
+          const stopAt = s.throwAfter;
           return (async function* () {
-            yield* all;
+            for (const [k, r] of all.entries()) {
+              if (stopAt !== null && k >= stopAt) throw new Error("function timed out");
+              yield r;
+            }
           })();
         },
       },
@@ -157,6 +173,8 @@ describe.skipIf(!hasLocalSupabase)("protocol import jobs (0036)", () => {
       ["skipped", "own_doc"],
     ]);
     expect(view.items[3]).toMatchObject({ date: "2025-08-20", dateFrom: "file" });
+    // The results are saved: the batch is deleted at Anthropic.
+    expect(fake.s.deleted).toEqual(["msgbatch_fake1"]);
     expect(view.costUsd).toBeGreaterThan(0);
     expect(usage).toHaveLength(1);
     expect(usage[0].orgId).toBe(orgId);
@@ -226,7 +244,7 @@ describe.skipIf(!hasLocalSupabase)("protocol import jobs (0036)", () => {
     });
     if (!created.ok) throw new Error(created.error);
     const job = (await loadJob(db, created.jobId))!;
-    expect(await cancelJob(db, job, fake.client)).toBe(true);
+    expect(await cancelJob(db, job, fake.client)).toBe("canceling");
     expect(fake.s.canceled).toBe(true);
     expect((await loadJob(db, created.jobId))!.status).toBe("canceling");
     const ids = fake.s.created[0].requests.map((r) => r.custom_id);
@@ -277,7 +295,7 @@ describe.skipIf(!hasLocalSupabase)("protocol import jobs (0036)", () => {
     expect(old.status).toBe("canceled");
     expect(old.items.map((i) => i.reason)).toEqual(["replaced", "replaced"]);
     const fake = fakeBatches();
-    expect(await cancelJob(db, (await loadJob(db, second.jobId))!, fake.client)).toBe(true);
+    expect(await cancelJob(db, (await loadJob(db, second.jobId))!, fake.client)).toBe("canceled");
     const view = (await jobView(db, second.jobId))!;
     expect(view.status).toBe("canceled");
     expect(view.items.map((i) => [i.state, i.reason])).toEqual([
@@ -323,5 +341,80 @@ describe.skipIf(!hasLocalSupabase)("protocol import jobs (0036)", () => {
     const view = (await jobView(db, orphan as string))!;
     expect(view).toMatchObject({ status: "failed", failure: "submit" });
     expect(view.items[0]).toMatchObject({ state: "failed", reason: "error" });
+  });
+
+  const freshOrgDay = async () => {
+    const db = adminClient();
+    await db.from("history_import_jobs").update({ status: "done", finished_at: new Date().toISOString() }).eq("org_id", orgId).in("status", ["running", "canceling", "digesting"]);
+    await db.from("history_import_jobs").update({ created_at: new Date(Date.now() - 25 * 3_600_000).toISOString() }).eq("org_id", orgId);
+  };
+  const threeParts = (doc: string) =>
+    [0, 1, 2].map((k) => ({ docId: doc, section: k, sections: 3, label: `Dokument 1, möte ${k + 1} av 3`, part: part("§1 x", `2025-0${k + 4}-01`) }));
+
+  it("a run that dies while saving: the next run saves the rest and books every item exactly once", async () => {
+    const db = adminClient();
+    await freshOrgDay();
+    usage.length = 0;
+    const fake = fakeBatches();
+    const created = await createBatchJob(db, fake.client, { orgId, userId: admin.id, viaListing: false, estimateUsd: 0.2, spendRoom: 10, items: threeParts("doc-rutan-llll") });
+    if (!created.ok) throw new Error(created.error);
+    const ids = fake.s.created[0].requests.map((r) => r.custom_id);
+    fake.s.status = "ended";
+    ids.forEach((id, k) => fake.s.results.set(id, succeeded(answer(`2025-0${k + 4}-01`, `Beslut ${k}`))));
+    fake.s.throwAfter = 1;
+    await expect(advanceJob(db, created.jobId, { client: fake.client, force: true })).rejects.toThrow("timed out");
+    let view = (await jobView(db, created.jobId))!;
+    expect(view.items.map((i) => i.state)).toEqual(["done", "reading", "reading"]);
+    expect(usage).toHaveLength(0);
+    // The lease was released by its holder: the next run goes on at once.
+    fake.s.throwAfter = null;
+    expect(await advanceJob(db, created.jobId, { client: fake.client, force: true })).toBe("saved:2");
+    view = (await jobView(db, created.jobId))!;
+    expect(view.items.map((i) => i.state)).toEqual(["done", "done", "done"]);
+    const booked = usage.reduce((n, u) => n + u.usd, 0);
+    const { data: rows } = await db.from("history_import_items").select("usd, booked").eq("job_id", created.jobId);
+    const items = (rows ?? []) as { usd: number; booked: boolean }[];
+    expect(items.every((r) => r.booked)).toBe(true);
+    expect(booked).toBeCloseTo(items.reduce((n, r) => n + Number(r.usd), 0), 4);
+    expect(view.costUsd).toBeCloseTo(booked, 4);
+    expect(await bookItemUsage(db, { id: created.jobId, org_id: orgId })).toBeCloseTo(booked, 4);
+    expect(usage.reduce((n, u) => n + u.usd, 0)).toBeCloseTo(booked, 4);
+  });
+
+  it("a batch that cannot be followed fails after repeated poll errors or 25 h; its meetings can be tried again", async () => {
+    const db = adminClient();
+    await freshOrgDay();
+    const fake = fakeBatches();
+    const created = await createBatchJob(db, fake.client, { orgId, userId: admin.id, viaListing: false, estimateUsd: 0.2, spendRoom: 10, items: threeParts("doc-rutan-mmmm") });
+    if (!created.ok) throw new Error(created.error);
+    fake.s.retrieveFails = true;
+    for (let k = 1; k < MAX_POLL_ERRORS; k++) expect(await advanceJob(db, created.jobId, { client: fake.client, force: true })).toBe("poll_error");
+    expect(await advanceJob(db, created.jobId, { client: fake.client, force: true })).toBe("lost");
+    const view = (await jobView(db, created.jobId))!;
+    expect(view).toMatchObject({ status: "failed", failure: "lost" });
+    expect(view.items.every((i) => i.state === "failed" && i.reason === "error")).toBe(true);
+
+    // Polls that succeed but never end: failed once older than any batch can be.
+    await freshOrgDay();
+    const fake2 = fakeBatches();
+    const old = await createBatchJob(db, fake2.client, { orgId, userId: admin.id, viaListing: false, estimateUsd: 0.2, spendRoom: 10, items: threeParts("doc-rutan-nnnn") });
+    if (!old.ok) throw new Error(old.error);
+    expect(await advanceJob(db, old.jobId, { client: fake2.client, force: true })).toBe("polled");
+    expect(await advanceJob(db, old.jobId, { client: fake2.client, force: true, now: new Date(Date.now() + 26 * 3_600_000) })).toBe("lost");
+    expect((await loadJob(db, old.jobId))!.status).toBe("failed");
+  });
+
+  it("cancel after Anthropic already ended the batch: nothing is cancelled, the results are saved", async () => {
+    const db = adminClient();
+    await freshOrgDay();
+    const fake = fakeBatches();
+    const created = await createBatchJob(db, fake.client, { orgId, userId: admin.id, viaListing: false, estimateUsd: 0.2, spendRoom: 10, items: threeParts("doc-rutan-oooo") });
+    if (!created.ok) throw new Error(created.error);
+    const ids = fake.s.created[0].requests.map((r) => r.custom_id);
+    fake.s.status = "ended";
+    ids.forEach((id, k) => fake.s.results.set(id, succeeded(answer(`2025-0${k + 4}-01`, `Beslut ${k}`))));
+    expect(await cancelJob(db, (await loadJob(db, created.jobId))!, fake.client)).toBe("ended");
+    expect(fake.s.canceled).toBe(false);
+    expect((await loadJob(db, created.jobId))!.status).toBe("digesting");
   });
 });

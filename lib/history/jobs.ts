@@ -43,6 +43,7 @@ interface JobRow {
   batch_id: string | null;
   counts: BatchCounts | null;
   polled_at: string | null;
+  poll_errors: number;
   proposal: JobProposal | null;
   proposal_error: string | null;
   failure: string | null;
@@ -73,7 +74,7 @@ interface ItemRow {
 }
 
 const JOB_COLUMNS =
-  "id, org_id, created_by, mode, status, via_listing, total, estimate_usd, cost_usd, batch_id, counts, polled_at, proposal, proposal_error, failure, created_at, ended_at, finished_at, seen_at";
+  "id, org_id, created_by, mode, status, via_listing, total, estimate_usd, cost_usd, batch_id, counts, polled_at, poll_errors, proposal, proposal_error, failure, created_at, ended_at, finished_at, seen_at";
 const ITEM_COLUMNS =
   "id, position, drive_file_id, section, sections, label, state, reason, heading_date, date_inferred, file_date, protocol_id, meeting_date, date_from, attempts, started_at, finished_at";
 
@@ -242,13 +243,23 @@ async function must<T extends { error: { message: string } | null }>(q: PromiseL
 // ---------------------------------------------------------------------------------------------
 // Advancing a batch job
 
-async function lease(db: SupabaseClient, jobId: string, seconds: number): Promise<boolean> {
+/** The lease token, or null when another worker holds the job. */
+async function lease(db: SupabaseClient, jobId: string, seconds: number): Promise<string | null> {
   const { data, error } = await db.rpc("lease_history_import_job", { p_job_id: jobId, p_seconds: seconds });
   if (error) throw new Error(`import job: lease: ${error.message}`);
-  return data === true;
+  return typeof data === "string" ? data : null;
 }
 
-const release = (db: SupabaseClient, jobId: string) => db.from("history_import_jobs").update({ lease_until: null }).eq("id", jobId);
+/** Gives the lease back, only by its holder (a slower worker whose lease expired cannot). */
+async function release(db: SupabaseClient, jobId: string, token: string): Promise<void> {
+  const { error } = await db.rpc("release_history_import_job", { p_job_id: jobId, p_token: token });
+  if (error) console.error(`import job: release: ${error.message}`.slice(0, 200));
+}
+
+/** After this many failed polls in a row (about an hour of cron runs) the job fails. */
+export const MAX_POLL_ERRORS = 12;
+/** Anthropic ends every batch within 24 h; a job still waiting after this has lost its batch. */
+export const MAX_BATCH_AGE_MS = 25 * 3_600_000;
 
 export interface AdvanceOptions {
   client: BatchClient;
@@ -268,37 +279,109 @@ export async function advanceJob(db: SupabaseClient, jobId: string, opts: Advanc
   if (job.status === "running" || job.status === "canceling") {
     if (!job.batch_id) return "skip";
     if (!opts.force && job.polled_at && now.getTime() - Date.parse(job.polled_at) < POLL_MS) return "recent";
-    const batch = await opts.client.messages.batches.retrieve(job.batch_id);
-    await must(db.from("history_import_jobs").update({ counts: countsOf(batch), polled_at: now.toISOString() }).eq("id", jobId));
-    if (batch.processing_status !== "ended") return "polled";
-    if (!(await lease(db, jobId, SAVE_LEASE_S))) return "leased";
+    let batch;
     try {
-      return await saveResults(db, job, opts.client, now);
+      batch = await opts.client.messages.batches.retrieve(job.batch_id);
+    } catch (err) {
+      console.error(`import job: poll: ${(err as Error).message}`.slice(0, 200));
+      const errors = ((await loadJob(db, jobId))?.poll_errors ?? 0) + 1;
+      await db.from("history_import_jobs").update({ poll_errors: errors, polled_at: now.toISOString() }).eq("id", jobId);
+      if (errors >= MAX_POLL_ERRORS || now.getTime() - Date.parse(job.created_at) > MAX_BATCH_AGE_MS) {
+        await failLostBatch(db, job, now);
+        return "lost";
+      }
+      return "poll_error";
+    }
+    await must(db.from("history_import_jobs").update({ counts: countsOf(batch), polled_at: now.toISOString(), poll_errors: 0 }).eq("id", jobId));
+    if (batch.processing_status !== "ended") {
+      if (now.getTime() - Date.parse(job.created_at) > MAX_BATCH_AGE_MS) {
+        await failLostBatch(db, job, now);
+        return "lost";
+      }
+      return "polled";
+    }
+    const token = await lease(db, jobId, SAVE_LEASE_S);
+    if (!token) return "leased";
+    try {
+      return await saveResults(db, job, opts.client, now, token);
     } finally {
-      await release(db, jobId);
+      await release(db, jobId, token);
     }
   }
   if (job.status === "digesting" && opts.digest) {
-    if (!(await lease(db, jobId, DIGEST_LEASE_S))) return "leased";
+    const token = await lease(db, jobId, DIGEST_LEASE_S);
+    if (!token) return "leased";
     try {
-      return await runDigest(db, job, opts.notesClient, now);
+      return await runDigest(db, job, opts.notesClient, now, token);
     } finally {
-      await release(db, jobId);
+      await release(db, jobId, token);
     }
   }
   return "skip";
 }
 
-async function saveResults(db: SupabaseClient, job: JobRow, client: BatchClient, now: Date): Promise<string> {
+/**
+ * A batch we can no longer follow (Anthropic keeps failing, or it is older than any batch can
+ * be): the job fails, its unread meetings fail with "Försök igen" (the direct path), and its
+ * estimate stops counting against the day's room. What was saved and booked stays.
+ */
+async function failLostBatch(db: SupabaseClient, job: JobRow, now: Date): Promise<void> {
+  const at = now.toISOString();
+  const { data } = await db
+    .from("history_import_jobs")
+    .update({ status: "failed", failure: "lost", finished_at: at, ended_at: at })
+    .eq("id", job.id)
+    .in("status", ["running", "canceling"])
+    .select("id");
+  if (!data?.length) return;
+  await db.from("history_import_items").update({ state: "failed", reason: "error", finished_at: at }).eq("job_id", job.id).in("state", ["waiting", "reading"]);
+  console.error("import job: batch lost, job failed");
+}
+
+/**
+ * Books every finished item's cost on the org's usage ledger exactly once (the item's `booked`
+ * flag flips in the same update that reads it), so a run that died midway is booked by the next
+ * one and nothing twice. Returns the job's total for the saved items.
+ */
+export async function bookItemUsage(db: SupabaseClient, job: Pick<JobRow, "id" | "org_id">): Promise<number> {
+  const { data, error } = await db
+    .from("history_import_items")
+    .update({ booked: true })
+    .eq("job_id", job.id)
+    .eq("booked", false)
+    .not("usd", "is", null)
+    .select("usd, input_tokens, output_tokens");
+  if (error) throw new Error(`import job: book: ${error.message}`);
+  const rows = (data ?? []) as { usd: number | string; input_tokens: number | null; output_tokens: number | null }[];
+  const u: NotesUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0 };
+  for (const r of rows) {
+    u.usd += Number(r.usd);
+    u.input += r.input_tokens ?? 0;
+    u.output += r.output_tokens ?? 0;
+  }
+  if (u.usd > 0 || u.input > 0) {
+    try {
+      await recordClaudeUsage(job.org_id, u);
+    } catch (e) {
+      console.error(`import job: usage: ${(e as Error).message}`.slice(0, 200));
+    }
+  }
+  const { data: all, error: sumError } = await db.from("history_import_items").select("usd").eq("job_id", job.id).not("usd", "is", null);
+  if (sumError) throw new Error(`import job: cost: ${sumError.message}`);
+  return ((all ?? []) as { usd: number | string }[]).reduce((n, r) => n + Number(r.usd), 0);
+}
+
+async function saveResults(db: SupabaseClient, job: JobRow, client: BatchClient, now: Date, token: string): Promise<string> {
+  // A run that died midway left saved items unbooked: book them first.
+  await bookItemUsage(db, job);
   const items = new Map((await loadItems(db, job.id)).map((i) => [i.id, i]));
   const people = await orgPeople(db, job.org_id);
-  const total: NotesUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0 };
   let saved = 0;
-  const finish = async (item: ItemRow, patch: Record<string, unknown>) => {
+  const finish = async (item: ItemRow, patch: Record<string, unknown>, u: NotesUsage | null) => {
     // The transition out of 'reading' is the idempotency point: only one worker gets the row.
     const { data, error } = await db
       .from("history_import_items")
-      .update({ ...patch, finished_at: now.toISOString() })
+      .update({ ...patch, usd: u?.usd ?? 0, input_tokens: u?.input ?? 0, output_tokens: u?.output ?? 0, finished_at: now.toISOString() })
       .eq("id", item.id)
       .eq("state", "reading")
       .select("id");
@@ -311,23 +394,13 @@ async function saveResults(db: SupabaseClient, job: JobRow, client: BatchClient,
     const item = id === null ? undefined : items.get(id);
     if (!item || item.state !== "reading") continue;
     const out = readBatchResult(r.result, people, now);
-    const usd = out.usage?.usd ?? 0;
-    const add = (u: NotesUsage | null) => {
-      if (!u) return;
-      total.input += u.input;
-      total.output += u.output;
-      total.cacheRead += u.cacheRead;
-      total.cacheWrite += u.cacheWrite;
-      total.usd += u.usd;
-    };
     if (!out.ok) {
-      const skipped = out.reason === "canceled";
-      if (await finish(item, { state: skipped ? "skipped" : "failed", reason: out.reason, usd })) add(out.usage);
+      await finish(item, { state: out.reason === "canceled" ? "skipped" : "failed", reason: out.reason }, out.usage);
       continue;
     }
     const when = protocolDate(out.protocol.date, item.heading_date, item.date_inferred, item.file_date, now);
     if (!when) {
-      if (await finish(item, { state: "failed", reason: "no_date", usd })) add(out.usage);
+      await finish(item, { state: "failed", reason: "no_date" }, out.usage);
       continue;
     }
     const { data: protocolId, error } = await db.rpc("save_history_protocol_as", {
@@ -342,38 +415,32 @@ async function saveResults(db: SupabaseClient, job: JobRow, client: BatchClient,
     });
     if (error) {
       console.error(`import job: save: ${error.message}`.slice(0, 200));
-      if (await finish(item, { state: "failed", reason: "save_failed", usd })) add(out.usage);
+      await finish(item, { state: "failed", reason: "save_failed" }, out.usage);
       continue;
     }
-    if (await finish(item, { state: "done", reason: null, protocol_id: protocolId, meeting_date: when.date, date_from: when.dateFrom, usd })) {
-      add(out.usage);
-      saved++;
-    }
+    if (await finish(item, { state: "done", reason: null, protocol_id: protocolId, meeting_date: when.date, date_from: when.dateFrom }, out.usage)) saved++;
   }
   // A request Anthropic never reported back (should not happen): failed, retryable.
   await db.from("history_import_items").update({ state: "failed", reason: "error", finished_at: now.toISOString() }).eq("job_id", job.id).eq("state", "reading");
 
-  if (total.usd > 0 || total.input > 0) {
-    try {
-      await recordClaudeUsage(job.org_id, total);
-    } catch (e) {
-      console.error(`import job: usage: ${(e as Error).message}`.slice(0, 200));
-    }
-  }
+  const cost = await bookItemUsage(db, job);
+  const { count: done } = await db.from("history_import_items").select("id", { count: "exact", head: true }).eq("job_id", job.id).eq("state", "done");
+  // The status as it is now (the admin may have cancelled while results were being saved).
+  const current = (await loadJob(db, job.id))?.status ?? job.status;
   // A cancelled batch keeps what was already read, without a digest (the admin stopped it).
-  const status: JobStatus = job.status === "canceling" ? "canceled" : saved > 0 ? "digesting" : "done";
-  await must(
-    db
-      .from("history_import_jobs")
-      .update({
-        status,
-        cost_usd: Number(job.cost_usd) + total.usd,
-        ended_at: now.toISOString(),
-        ...(status === "digesting" ? {} : { finished_at: now.toISOString() }),
-      })
-      .eq("id", job.id),
-  );
-  console.info(`import job: ${saved} protocols saved, $${total.usd.toFixed(4)} (batch price), → ${status}`);
+  const status: JobStatus = current === "canceling" ? "canceled" : (done ?? 0) > 0 ? "digesting" : "done";
+  // Only while this worker holds the lease and the job is still at this step.
+  const { data: moved } = await db
+    .from("history_import_jobs")
+    .update({ status, cost_usd: cost, ended_at: now.toISOString(), ...(status === "digesting" ? {} : { finished_at: now.toISOString() }) })
+    .eq("id", job.id)
+    .eq("lease_token", token)
+    .in("status", ["running", "canceling"])
+    .select("id");
+  if (!moved?.length) return "superseded";
+  // Privacy: the batch's results (cleaned and saved now) are deleted at Anthropic.
+  await Promise.resolve(client.messages.batches.delete(job.batch_id!)).catch((e: Error) => console.error(`import job: delete batch: ${e.message}`.slice(0, 200)));
+  console.info(`import job: ${saved} protocols saved, $${cost.toFixed(4)} (batch price), → ${status}`);
   return `saved:${saved}`;
 }
 
@@ -399,9 +466,17 @@ export function fitHistory(history: HistoryMeeting[], max = MAX_HISTORY_CHARS): 
   return { history: history.slice(history.length - keep), trimmed: history.length - keep };
 }
 
-async function runDigest(db: SupabaseClient, job: JobRow, notesClient: NotesClient | undefined, now: Date): Promise<string> {
+async function runDigest(db: SupabaseClient, job: JobRow, notesClient: NotesClient | undefined, now: Date, token: string): Promise<string> {
+  // Only while this worker holds the lease and the job is still digesting.
   const finishWith = (patch: Record<string, unknown>) =>
-    must(db.from("history_import_jobs").update({ status: "done", finished_at: now.toISOString(), ...patch }).eq("id", job.id));
+    must(
+      db
+        .from("history_import_jobs")
+        .update({ status: "done", finished_at: now.toISOString(), ...patch })
+        .eq("id", job.id)
+        .eq("lease_token", token)
+        .eq("status", "digesting"),
+    );
   let merged: HistoryMeeting[];
   let names: string[];
   try {
@@ -447,18 +522,27 @@ async function runDigest(db: SupabaseClient, job: JobRow, notesClient: NotesClie
 // ---------------------------------------------------------------------------------------------
 // Cancelling
 
-/** Batch: asks Anthropic to stop (results already done are still saved). Direct: stops at once. */
-export async function cancelJob(db: SupabaseClient, job: JobRow, client: BatchClient): Promise<boolean> {
+/**
+ * Batch: asks Anthropic to stop (results already done are still saved). If Anthropic has
+ * already ended the batch, nothing is cancelled: its results are saved now and the goals are
+ * proposed as usual ("ended"). Direct: stops at once.
+ */
+export async function cancelJob(db: SupabaseClient, job: JobRow, client: BatchClient): Promise<"canceling" | "canceled" | "ended" | false> {
   const now = new Date().toISOString();
   if (job.mode === "batch" && job.status === "running" && job.batch_id) {
+    const current = await client.messages.batches.retrieve(job.batch_id);
+    if (current.processing_status === "ended") {
+      await advanceJob(db, job.id, { client, force: true });
+      return "ended";
+    }
     const batch = await client.messages.batches.cancel(job.batch_id);
     await must(db.from("history_import_jobs").update({ status: "canceling", counts: countsOf(batch), polled_at: now }).eq("id", job.id).eq("status", "running"));
-    return true;
+    return "canceling";
   }
   if (job.mode === "direct" && job.status === "running") {
     await must(db.from("history_import_items").update({ state: "skipped", reason: "canceled", finished_at: now }).eq("job_id", job.id).eq("state", "waiting"));
     await must(db.from("history_import_jobs").update({ status: "canceled", finished_at: now }).eq("id", job.id).eq("status", "running"));
-    return true;
+    return "canceled";
   }
   return false;
 }
