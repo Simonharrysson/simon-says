@@ -467,3 +467,8 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
   start that took over the winner's line must hand it back (restore the text, re-create A), not delete it. Handing back and
   deleting our own mid-Doc paragraph with its newline are both accepted (the heading before it keeps HEADING_2).
   `test/docsim.ts` now drops a range whose text is all deleted.
+
+## Meeting formats — learn-and-approve on prod (2026-11-26, controller)
+
+- Prod (v1 7c71803 minus the held Geist design) in Simon's test förening with a NEW fictional Veckomöte agenda Doc (check-agenda-render build; no real minutes): "Lär Simon Says ert format" opened the real Google Picker (Picker key works on simonsays.harrysson.co), the pick was read, Claude proposed the right structure (info table, agenda Godkänn dagordning → Övrigt, tasks heading, Anteckningar) with a quality note, "Godkänn och använd" stored it as the default (`kind learned`, schema keys only, labels only) and set the meeting folder from the Doc's parent. Switching back to Enkel with "Byt" works and keeps the learned row choosable ("Eget (2026-11-26)").
+- Still for Simon: the same flow on Hook & Look's real Mall/old minutes, and the folder listing under drive.file with a folder he didn't create through Simon Says (A11 Step 6).
