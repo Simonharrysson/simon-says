@@ -12,6 +12,11 @@
 --   50 sends per förening and 200 per admin in a rolling 24 h (attempts, delivered or not);
 --   2 delivered e-mails per address in a rolling 24 h: the invite and one "Skicka igen".
 -- A failed send can be tried again right away (it delivered nothing), within the first two.
+--
+-- Each send carries a Resend Idempotency-Key (`idem_key`): invite id + how many sends of it have
+-- a definite outcome. A send whose outcome is unknown (timeout: 'uncertain', or left 'sending' by
+-- a crash and swept after 5 minutes) is retried with the SAME key, so Resend never delivers it
+-- twice; after a definite 'sent' or 'failed' the next send gets a new key.
 
 create table public.org_invites (
   id uuid primary key default gen_random_uuid(),
@@ -21,8 +26,9 @@ create table public.org_invites (
   ),
   invited_by uuid references auth.users on delete set null,
   -- sending: claimed, the e-mail is on its way · sent: Resend took it · failed: it did not ·
-  -- accepted: someone with this confirmed address joined the förening.
-  status text not null default 'sending' check (status in ('sending', 'sent', 'failed', 'accepted')),
+  -- uncertain: no answer (timeout); a retry reuses the key · accepted: someone with this
+  -- confirmed address joined the förening.
+  status text not null default 'sending' check (status in ('sending', 'sent', 'failed', 'uncertain', 'accepted')),
   last_attempt_at timestamptz not null default now(),
   last_sent_at timestamptz,
   accepted_at timestamptz,
@@ -37,8 +43,9 @@ create table public.org_invite_sends (
   org_id uuid not null references public.orgs on delete cascade,
   sent_by uuid references auth.users on delete set null,
   at timestamptz not null default now(),
-  -- null while sending; true: Resend took it; false: it did not.
-  ok boolean
+  -- null while sending; then sent | failed | uncertain (no answer: may have been delivered).
+  outcome text check (outcome in ('sent', 'failed', 'uncertain')),
+  idem_key text not null
 );
 create index org_invite_sends_org_idx on public.org_invite_sends (org_id, at);
 create index org_invite_sends_user_idx on public.org_invite_sends (sent_by, at);
@@ -54,7 +61,7 @@ grant select, insert, update, delete on table public.org_invite_sends to service
 -- Claims one send before the e-mail goes out. p_resend: the admin pressed "Skicka igen" (or
 -- "Försök igen"); without it an address delivered in the last 24 h is `already_invited`.
 -- Returns jsonb {"result": ok | forbidden | invalid | member | already_invited | resend_limit |
--- org_limit | user_limit | busy, "send_id"?, "next_at"?}.
+-- org_limit | user_limit | busy, "send_id"?, "idem_key"?, "next_at"?}.
 create function public.claim_invite_send(
   p_org_id uuid, p_user_id uuid, p_email text, p_resend boolean,
   p_org_limit integer, p_user_limit integer, p_address_limit integer
@@ -68,6 +75,8 @@ declare
   v_recent integer;
   v_oldest timestamptz;
   v_send bigint;
+  v_seq integer;
+  v_key text;
 begin
   if not exists (select 1 from public.org_members m where m.org_id = p_org_id and m.user_id = p_user_id and m.role = 'admin') then
     return jsonb_build_object('result', 'forbidden');
@@ -92,7 +101,7 @@ begin
       return jsonb_build_object('result', 'busy');
     end if;
     select count(*), min(s.at) into v_recent, v_oldest from public.org_invite_sends s
-    where s.invite_id = v_invite.id and s.ok and s.at > now() - interval '24 hours';
+    where s.invite_id = v_invite.id and s.outcome = 'sent' and s.at > now() - interval '24 hours';
     if v_recent > 0 and not p_resend then
       return jsonb_build_object('result', 'already_invited');
     end if;
@@ -113,28 +122,51 @@ begin
   on conflict (org_id, email) do update
     set invited_by = excluded.invited_by, status = 'sending', last_attempt_at = now(), accepted_at = null
   returning * into v_invite;
-  insert into public.org_invite_sends (invite_id, org_id, sent_by) values (v_invite.id, p_org_id, p_user_id)
-  returning id into v_send;
-  return jsonb_build_object('result', 'ok', 'send_id', v_send);
+  select count(*) into v_seq from public.org_invite_sends s where s.invite_id = v_invite.id and s.outcome in ('sent', 'failed');
+  insert into public.org_invite_sends (invite_id, org_id, sent_by, idem_key)
+  values (v_invite.id, p_org_id, p_user_id, 'invite-' || v_invite.id::text || '-' || v_seq::text)
+  returning id, idem_key into v_send, v_key;
+  return jsonb_build_object('result', 'ok', 'send_id', v_send, 'idem_key', v_key);
 end;
 $$;
 
--- Records how a claimed send went. An invite accepted meanwhile stays accepted.
-create function public.finish_invite_send(p_send_id bigint, p_ok boolean)
+-- Records how a claimed send went (sent | failed | uncertain). An invite accepted meanwhile stays accepted.
+create function public.finish_invite_send(p_send_id bigint, p_outcome text)
 returns void
 language plpgsql volatile security definer set search_path = ''
 as $$
 declare
   v_invite uuid;
 begin
-  update public.org_invite_sends set ok = p_ok where id = p_send_id and ok is null returning invite_id into v_invite;
+  if p_outcome not in ('sent', 'failed', 'uncertain') then
+    raise exception 'unknown outcome' using errcode = '22023';
+  end if;
+  update public.org_invite_sends set outcome = p_outcome where id = p_send_id and outcome is null returning invite_id into v_invite;
   if v_invite is null then
     return;
   end if;
   update public.org_invites
-  set status = case when status = 'accepted' then status when p_ok then 'sent' else 'failed' end,
-      last_sent_at = case when p_ok then now() else last_sent_at end
+  set status = case when status = 'accepted' then status else p_outcome end,
+      last_sent_at = case when p_outcome = 'sent' then now() else last_sent_at end
   where id = v_invite;
+end;
+$$;
+
+-- Cron (every 5 min): sends left 'sending' for 5 minutes (the function died) become 'uncertain',
+-- so the admin can try again (with the same Idempotency-Key). Returns how many.
+create function public.sweep_stale_invite_sends()
+returns integer
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_n integer;
+begin
+  update public.org_invite_sends set outcome = 'uncertain'
+  where outcome is null and at < now() - interval '5 minutes';
+  update public.org_invites set status = 'uncertain'
+  where status = 'sending' and last_attempt_at < now() - interval '5 minutes';
+  get diagnostics v_n = row_count;
+  return v_n;
 end;
 $$;
 
@@ -142,16 +174,16 @@ $$;
 create function public.org_invite_list(p_org_id uuid)
 returns table (
   email text, status text, last_sent_at timestamptz, accepted_at timestamptz,
-  recent_sends integer, next_resend_at timestamptz
+  recent_sends integer, next_resend_at timestamptz, last_attempt_at timestamptz
 )
 language sql stable security definer set search_path = ''
 as $$
   select i.email, i.status, i.last_sent_at, i.accepted_at,
-    coalesce(r.n, 0)::integer, r.oldest + interval '24 hours'
+    coalesce(r.n, 0)::integer, r.oldest + interval '24 hours', i.last_attempt_at
   from public.org_invites i
   left join lateral (
     select count(*) as n, min(s.at) as oldest from public.org_invite_sends s
-    where s.invite_id = i.id and s.ok and s.at > now() - interval '24 hours'
+    where s.invite_id = i.id and s.outcome = 'sent' and s.at > now() - interval '24 hours'
   ) r on true
   where i.org_id = p_org_id
   order by i.last_attempt_at desc
@@ -159,10 +191,12 @@ as $$
 $$;
 
 revoke all on function public.claim_invite_send(uuid, uuid, text, boolean, integer, integer, integer) from public, anon, authenticated;
-revoke all on function public.finish_invite_send(bigint, boolean) from public, anon, authenticated;
+revoke all on function public.finish_invite_send(bigint, text) from public, anon, authenticated;
+revoke all on function public.sweep_stale_invite_sends() from public, anon, authenticated;
 revoke all on function public.org_invite_list(uuid) from public, anon, authenticated;
 grant execute on function public.claim_invite_send(uuid, uuid, text, boolean, integer, integer, integer) to service_role;
-grant execute on function public.finish_invite_send(bigint, boolean) to service_role;
+grant execute on function public.finish_invite_send(bigint, text) to service_role;
+grant execute on function public.sweep_stale_invite_sends() to service_role;
 grant execute on function public.org_invite_list(uuid) to service_role;
 
 -- Someone joins: the invite to their CONFIRMED address (trimmed, lowercased) is accepted. An
