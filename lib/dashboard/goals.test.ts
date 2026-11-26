@@ -67,7 +67,6 @@ const INPUT: DashInput = {
     row("mt", "d5", "decision", "TESTMÖTE-beslut"),
     row("m3", "t1", "task", "Boka rum för prova-på-kvällen"),
   ],
-  speakers: [{ meeting_id: "m1", el_session_id: "s", speaker_label: "0", person_id: "p-ada", display_name: "Ada Kask" }],
   people: [
     { id: "p-ada", name: "Ada Kask", role: "Kassör" },
     { id: "p-bo", name: "Bo Tärn", role: null },

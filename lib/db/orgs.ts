@@ -13,7 +13,7 @@ type Db = SupabaseClient;
 export type DeleteResult = "deleted" | "not_found" | "forbidden" | "name_mismatch" | "active";
 
 const ACTIVE = ["live", "ending"];
-export type CreateOrgResult = { ok: true; id: string } | { ok: false; reason: "limit" | "invalid" };
+export type CreateOrgResult = { ok: true; id: string } | { ok: false; reason: "limit" | "cap" | "invalid" };
 
 function fail(what: string, error: { message: string }): never {
   throw new Error(`${what}: ${error.message}`);
@@ -36,12 +36,18 @@ export async function listMyOrgs(db: Db): Promise<(OrgRow & { role: OrgMemberRow
   }));
 }
 
-export async function createOrg(db: Db, name: string): Promise<CreateOrgResult> {
+/**
+ * `exemptFor`: a user id whose limits are skipped (ADMIN_EMAILS). The row is then inserted with
+ * `db` = the service-role client, which the limit trigger lets through (see 0041).
+ */
+export async function createOrg(db: Db, name: string, exemptFor?: string): Promise<CreateOrgResult> {
   const trimmed = name.trim();
   if (trimmed.length < 1 || trimmed.length > 100) return { ok: false, reason: "invalid" };
-  const { data, error } = await db.from("orgs").insert({ name: trimmed }).select("id").single();
+  const row: { name: string; created_by?: string } = exemptFor ? { name: trimmed, created_by: exemptFor } : { name: trimmed };
+  const { data, error } = await db.from("orgs").insert(row).select("id").single();
   if (error) {
     if (error.message.includes("org limit reached")) return { ok: false, reason: "limit" };
+    if (error.message.includes("org creation cap reached")) return { ok: false, reason: "cap" };
     fail("createOrg", error);
   }
   return { ok: true, id: data.id };
@@ -210,7 +216,7 @@ export async function leaveOrg(db: Db, orgId: string): Promise<RemoveMemberResul
 /**
  * Delete an org and everything under it (cascade). Admins only, no live meeting; the caller
  * must type the org's exact name. The Google Docs stay in their owners' Drive. Its usage rows
- * and its entry in org_creations stay (caps and the 2-org limit).
+ * and its entry in org_creations stay (caps and the lifetime creation cap).
  */
 export async function deleteOrg(db: Db, orgId: string, confirmName: string): Promise<DeleteResult> {
   const org = await getOrg(db, orgId);

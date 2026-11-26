@@ -24,6 +24,7 @@ export function loginError(code: string | undefined, locale: Locale = defaultLoc
 
 const orgsTones: Record<string, Notice["tone"]> = {
   limit: "danger",
+  cap: "danger",
   invalid: "danger",
   inbjudan: "danger",
   raderad: "success",
