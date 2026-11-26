@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { ItemRole } from "@/lib/db/types";
 
-export type FormatKind = "veckomote" | "styrelseprotokoll" | "enkel" | "learned";
+export type FormatKind = "veckomote" | "styrelseprotokoll" | "enkel" | "learned" | "arsmote";
 
 export interface FixedItem {
   key: string;
@@ -45,7 +45,7 @@ const fixedItem = z.object({
 
 export const FormatProfileSchema = z
   .object({
-    kind: z.enum(["veckomote", "styrelseprotokoll", "enkel", "learned"]),
+    kind: z.enum(["veckomote", "styrelseprotokoll", "enkel", "learned", "arsmote"]),
     title: label,
     infoTable: z.array(label).max(8).nullable(),
     agendaHeading: label.nullable(),

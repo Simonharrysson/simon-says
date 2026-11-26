@@ -14,7 +14,7 @@ const fail = (error: string, status: number, message: string) =>
   NextResponse.json({ error, message }, { status, headers: noStore });
 
 const DOC_ID = /^[A-Za-z0-9_-]{10,200}$/;
-const KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
+const KINDS = ["veckomote", "styrelseprotokoll", "arsmote", "enkel"] as const;
 
 /** The optional start options of the body; null when one is present but malformed. */
 function startOptions(body: Record<string, unknown>): StartOptions | null {

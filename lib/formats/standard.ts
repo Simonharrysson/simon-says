@@ -69,13 +69,48 @@ export const ENKEL: FormatProfile = {
   requiredItems: [],
 };
 
-export const STANDARD = { veckomote: VECKOMOTE, styrelseprotokoll: STYRELSEPROTOKOLL, enkel: ENKEL } as const;
+// Årsmöte (todo #6, design 2026-11-26): the standard agenda of a förening's annual meeting. The
+// förening's own stadgar-derived agenda is onboarding (todo #5); "Lägg in punkter från
+// stadgarna" can still add their required items to a version of this one later. No followup item.
+export const ARSMOTE: FormatProfile = {
+  kind: "arsmote",
+  title: "Årsmötesprotokoll",
+  infoTable: ["Datum", "Tid", "Plats", "Närvarande"],
+  agendaHeading: "Dagordning",
+  fixedAgendaItems: [
+    { key: "open", label: "Mötets öppnande", role: "procedural" },
+    { key: "chair", label: "Val av mötesordförande", role: "procedural" },
+    { key: "secretary", label: "Val av mötessekreterare", role: "procedural" },
+    { key: "adjuster", label: "Val av justerare", role: "procedural" },
+    { key: "notice", label: "Fråga om mötet är stadgeenligt utlyst", role: "procedural" },
+    { key: "report", label: "Verksamhetsberättelse", role: "other" },
+    { key: "finance", label: "Ekonomisk berättelse", role: "other" },
+    { key: "audit", label: "Revisionsberättelse", role: "other" },
+    { key: "discharge", label: "Fråga om ansvarsfrihet för styrelsen", role: "other" },
+    { key: "election", label: "Val av styrelse", role: "other" },
+    { key: "motions", label: "Motioner och propositioner", role: "other" },
+    { key: "other", label: "Övriga frågor", role: "other", position: "last" },
+    { key: "close", label: "Mötets avslutande", role: "procedural", position: "last" },
+  ],
+  numbering: "paragraph",
+  tasksSection: { label: "Att göra", groupBy: "role" },
+  notesSection: null,
+  decisionPrefix: "Beslut:",
+  taskStyle: "role-first",
+  tone: "full-sentences",
+  signatures: ["Mötesordförande", "Mötessekreterare", "Justerare"],
+  requiredItems: [],
+};
+
+export const STANDARD = { veckomote: VECKOMOTE, styrelseprotokoll: STYRELSEPROTOKOLL, enkel: ENKEL, arsmote: ARSMOTE } as const;
+export type StandardKind = keyof typeof STANDARD;
 
 export const FORMAT_NAMES: Record<FormatKind, string> = {
   veckomote: "Veckomöte",
   styrelseprotokoll: "Styrelseprotokoll",
   enkel: "Enkel",
   learned: "Eget",
+  arsmote: "Årsmöte",
 };
 
 /** A saved format's display name: the standard name; "(date)" for learned and custom versions (R3-I2). */

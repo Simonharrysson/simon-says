@@ -27,7 +27,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { docUrl } from "@/lib/ui/meetings";
 
-export type StandardKind = "veckomote" | "styrelseprotokoll" | "enkel";
+export type { StandardKind } from "@/lib/formats/standard";
+import type { StandardKind } from "@/lib/formats/standard";
 
 export interface StartOptions {
   /** Agenda mode: the förening's own agenda Doc (picked by the starter). Absent: a new Doc (fallback). */

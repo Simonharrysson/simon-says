@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FormatProfileSchema, hidesCheckin, meetingRoles, parseProfile } from "./schema";
-import { ENKEL, FORMAT_NAMES, STANDARD, STYRELSEPROTOKOLL, VECKOMOTE } from "./standard";
+import { ARSMOTE, ENKEL, FORMAT_NAMES, STANDARD, STYRELSEPROTOKOLL, VECKOMOTE } from "./standard";
+import { skeletonBlocks } from "./skeleton";
 
 describe("standard formats", () => {
   it.each([
@@ -13,8 +14,19 @@ describe("standard formats", () => {
   });
 
   it("STANDARD maps kinds to the constants, with names", () => {
-    expect(STANDARD).toEqual({ veckomote: VECKOMOTE, styrelseprotokoll: STYRELSEPROTOKOLL, enkel: ENKEL });
+    expect(STANDARD).toEqual({ veckomote: VECKOMOTE, styrelseprotokoll: STYRELSEPROTOKOLL, enkel: ENKEL, arsmote: ARSMOTE });
     expect(FORMAT_NAMES.learned).toBe("Eget");
+    expect(FORMAT_NAMES.arsmote).toBe("Årsmöte");
+  });
+
+  it("Årsmöte is a valid profile with the design's standard agenda, § numbered, no Från förra veckan", () => {
+    expect(parseProfile(ARSMOTE)).toEqual(ARSMOTE);
+    expect(ARSMOTE.fixedAgendaItems.some((i) => i.role === "followup")).toBe(false);
+    const items = skeletonBlocks(ARSMOTE).filter((b) => b.type === "item").map((b) => (b as { text: string }).text);
+    expect(items[0]).toBe("§1 Mötets öppnande");
+    expect(items).toContain("§5 Fråga om mötet är stadgeenligt utlyst");
+    expect(items.at(-2)).toBe("§13 Övriga frågor");
+    expect(items.at(-1)).toBe("§14 Mötets avslutande");
   });
 
   it("Styrelseprotokoll is complete: 8 fixed items, § numbering, prefix and tone set", () => {
