@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   deliver: true,
 }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
+vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 vi.mock("@/lib/origin", () => ({ appOrigin: () => "https://app.test" }));
 vi.mock("@/lib/mail", () => ({
   defaultMailer: () => ({
