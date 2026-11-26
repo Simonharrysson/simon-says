@@ -67,6 +67,8 @@ export interface OrgDetailViewProps {
   summarySettings?: ReactNode;
   /** Admins: "Om oss" (`OrgProfileForm`, 0044), in Inställningar. */
   profileSettings?: ReactNode;
+  /** Admins: "Mötenas kalender" (`OrgCalendarForm`, 0046), in Inställningar. */
+  calendarSettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
    * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
@@ -251,7 +253,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, profileSettings, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, profileSettings, calendarSettings, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
@@ -419,6 +421,11 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             {profileSettings && (
               <div id="om-oss" className="mt-6 scroll-mt-6 border-t border-line pt-6">
                 {profileSettings}
+              </div>
+            )}
+            {calendarSettings && (
+              <div id="kalender" className="mt-6 scroll-mt-6 border-t border-line pt-6">
+                {calendarSettings}
               </div>
             )}
             {summarySettings && (

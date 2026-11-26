@@ -129,6 +129,8 @@ export const PrepareBodySchema = z.object({
     .regex(/^[0-2]\d:[0-5]\d$/)
     .nullable()
     .optional(),
+  /** The calendar event it was prepared from (todo #14): its title goes into the Doc's name. */
+  eventTitle: z.string().max(300).nullable().optional(),
   items: z
     .array(
       z.object({

@@ -37,6 +37,15 @@ import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
 import { dismissAction, saveProfileAction } from "./kom-igang/actions";
+import { OrgCalendarForm } from "@/components/calendar/OrgCalendarForm";
+import { calendarResult } from "@/components/calendar/CalendarConnect";
+import type { StartCalendar } from "@/components/views/StartMeetingForm";
+import { isNow, stockholmDateTime, type CalendarInfo } from "@/lib/calendar/events";
+import { myCalendars, orgUpcoming, safeCalendarConnected, type UpcomingState } from "@/lib/calendar/load";
+import type { Notice } from "@/lib/ui/messages";
+import type { Locale } from "@/lib/i18n/config";
+import { messages } from "@/lib/i18n/messages";
+import { requestCalendarAccess, saveOrgCalendarAction } from "../../calendar-actions";
 import { OrgProfileForm } from "@/components/views/OrgProfileForm";
 import {
   addPersonAction,
@@ -135,17 +144,36 @@ async function safeMembers(orgId: string): Promise<OrgMember[] | undefined> {
   }
 }
 
+/** The `?kalender=` result of "Koppla kalender" (from the start card or Inställningar) as the page notice. */
+function calendarNotice(raw: string | undefined, locale: Locale): Notice | null {
+  const result = calendarResult(raw);
+  if (!result) return null;
+  return { tone: result === "ok" || result === "fran" ? "success" : "danger", text: messages[locale].calendar.result[result], code: `kalender-${result}` };
+}
+
+/** The start card's calendar part (todo #14), from the viewer's own grant. Undefined: no calendar chosen. */
+function startCalendar(upcoming: UpcomingState): StartCalendar | undefined {
+  const now = new Date();
+  if (upcoming.state === "none") return undefined;
+  if (upcoming.state === "disconnected") return { state: "disconnected", connect: requestCalendarAccess };
+  if (upcoming.state === "unavailable") return { state: "unavailable" };
+  return {
+    state: "ok",
+    events: upcoming.events.map((e) => ({ id: e.id, title: e.title, ...stockholmDateTime(e.start), now: isNow(e, now) })),
+  };
+}
+
 export default async function OrgPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string }>;
 }) {
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("org");
-  const { fel, klart, flik, import: openImport, drive } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive, kalender } = await searchParams;
   const tab: OrgTab = flik === "oversikt" ? "oversikt" : "moten";
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
@@ -173,6 +201,16 @@ export default async function OrgPage({
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   const invites = isAdmin ? await safeInvites(id) : [];
+  // The calendar (todo #14), meetings tab only: the viewer's own grant reads the förening's calendar;
+  // an admin also gets their own calendars to choose from. Best effort, never breaks the page.
+  const calendarConnected = me && tab === "moten" ? await safeCalendarConnected(me) : false;
+  const [upcoming, adminCalendars]: [UpcomingState, CalendarInfo[] | null] =
+    me && tab === "moten"
+      ? await Promise.all([
+          !org.calendar_id ? { state: "none" as const } : calendarConnected ? orgUpcoming(me, org) : { state: "disconnected" as const },
+          isAdmin && calendarConnected ? myCalendars(me) : null,
+        ])
+      : [{ state: "none" }, null];
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
   const docAccess = docAccessFor(
@@ -198,7 +236,7 @@ export default async function OrgPage({
       }
       docAccess={docAccess}
       viewerEmail={userResult.data.user?.email ?? null}
-      notice={orgNotice(fel, klart, locale)}
+      notice={orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale)}
       tabs={{
         active: tab,
         href: (t) => (t === "oversikt" ? `/orgs/${org.id}?flik=oversikt` : `/orgs/${org.id}`),
@@ -222,6 +260,18 @@ export default async function OrgPage({
           ) : undefined,
       }}
       profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
+      calendarSettings={
+        isAdmin ? (
+          <OrgCalendarForm
+            orgId={org.id}
+            connected={calendarConnected}
+            calendars={adminCalendars?.map((c) => ({ id: c.id, name: c.name })) ?? null}
+            current={{ id: org.calendar_id ?? null, name: org.calendar_name ?? null, filter: org.calendar_filter ?? null }}
+            save={saveOrgCalendarAction}
+            connect={requestCalendarAccess}
+          />
+        ) : undefined
+      }
       summarySettings={
         isAdmin ? (
           <SummarySettingsForm
@@ -260,6 +310,7 @@ export default async function OrgPage({
           orgId={org.id}
           showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
           prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
+          calendar={startCalendar(upcoming)}
         />}
       actions={{
         rotateInvite: rotateInviteAction,

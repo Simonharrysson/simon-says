@@ -76,6 +76,10 @@ export interface OrgRow {
   website_url?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
+  /** 0046: the förening's meeting calendar (Google id, name as chosen, title filter); null = none. Never logged. */
+  calendar_id?: string | null;
+  calendar_name?: string | null;
+  calendar_filter?: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -149,6 +153,8 @@ export interface MeetingRow {
   /** 0037: null = summary not handled yet; else why it is done. */
   summary_state?: SummaryState | null;
   summary_at?: string | null;
+  /** 0046: the calendar event the meeting matched at start ({ title, expected, declined }: lib/calendar/events.ts). */
+  calendar_event?: unknown;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

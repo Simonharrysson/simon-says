@@ -122,3 +122,17 @@ export async function meetingEventForStart(input: {
     return null;
   }
 }
+
+/** One event of the förening's calendar (Förbered möte from the list), with the user's grant; null on any failure. */
+export async function orgEvent(userId: string, org: OrgCalendar, eventId: string): Promise<CalendarEvent | null> {
+  if (!org.calendar_id || !EVENT_ID.test(eventId)) return null;
+  try {
+    return await (await userCalendarApi(userId, 4000)).getEvent(org.calendar_id, eventId);
+  } catch (err) {
+    if (!(err instanceof CalendarAccessMissingError)) console.warn("calendar: event unavailable", (err as Error)?.message);
+    return null;
+  }
+}
+
+/** Google event ids (base32hex, plus "_" and a recurrence suffix): a sanity bound for URLs. */
+export const EVENT_ID = /^[A-Za-z0-9_-]{1,1024}$/;

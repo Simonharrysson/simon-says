@@ -1,4 +1,5 @@
 import "server-only";
+import { cleanTitle } from "@/lib/calendar/events";
 import { randomUUID } from "node:crypto";
 import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -49,9 +50,13 @@ const failed = (error: string, status: number, message: string): PrepareFailure 
 const authLost = () => failed("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
 const googleDown = () => failed("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
 
-/** The file name: `2026-12-03 18.00 Dagordning – <förening>` (time when given), as the protocol naming. */
-export function preparedTitle(orgName: string, date: string, time: string | null | undefined): string {
-  return `${date}${time ? ` ${time.replace(":", ".")}` : ""} Dagordning – ${orgName.trim()}`;
+/**
+ * The file name: `2026-12-03 18.00 Dagordning – <förening>` (time when given), as the protocol
+ * naming; prepared from a calendar event, its title before the förening's name.
+ */
+export function preparedTitle(orgName: string, date: string, time: string | null | undefined, eventTitle?: string | null): string {
+  const title = cleanTitle(eventTitle);
+  return `${date}${time ? ` ${time.replace(":", ".")}` : ""} Dagordning – ${title ? `${title} – ` : ""}${orgName.trim()}`;
 }
 
 /**
@@ -362,7 +367,7 @@ async function create(
   const formatId = src.formatId ?? (await ensureStandardRow(org.id, standardKindOf(type)));
   const me = (user.email ?? "").toLowerCase();
   const members = (await orgMemberList(org.id)).filter((m) => m.userId !== user.id && m.email && m.email.toLowerCase() !== me);
-  const title = preparedTitle(org.name, body.date, body.time);
+  const title = preparedTitle(org.name, body.date, body.time, body.eventTitle);
   const on = items.filter((i) => i.on);
   const doc = await createFormatDoc(auth, {
     meetingId: key,
