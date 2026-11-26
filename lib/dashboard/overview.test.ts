@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { attendance, buildOverview, countedMeetings, openTasks, recentDecisions, recurringTopics, type DashInput, type DashItem, type DashMeeting } from "./overview";
+import { attendance, buildOverview, countedMeetings, importedSummary, openTasks, recentDecisions, recurringTopics, type DashInput, type DashItem, type DashMeeting } from "./overview";
+import type { HistoryItem, HistoryMeeting } from "@/lib/history/types";
 
 // Fictional förening: "Brädspelsföreningen Tärningen". No real people or content.
 
@@ -132,7 +133,7 @@ describe("openTasks", () => {
 });
 
 describe("recentDecisions", () => {
-  it("newest first with the agenda label; the last 12 months; Testmöte and Må-runda left out", () => {
+  it("newest first with the agenda label, older years too; Testmöte and Må-runda left out", () => {
     const meetings = [...input().meetings, meeting("old", "2025-09-01"), meeting("mt", "2026-11-21", { is_test: true })];
     const items = [
       decision("m1", "d1", "Medlemsavgiften blir 100 kr"),
@@ -143,17 +144,18 @@ describe("recentDecisions", () => {
       decision("m2", "d6", "Utan punkt", "ag-9"),
       item("m2", "d7", { section: "decision", kind: "decision", text: "Kopia", copy_of: "d6" }),
     ];
-    expect(recentDecisions(ORG, input({ meetings, items }), NOW).map((d) => [d.text, d.item, d.date.slice(0, 10)])).toEqual([
+    expect(recentDecisions(ORG, input({ meetings, items })).map((d) => [d.text, d.item, d.date.slice(0, 10)])).toEqual([
       ["Spelkvällen flyttas till torsdagar", "Spelkväll", "2026-11-19"],
       ["Utan punkt", null, "2026-10-29"],
       ["Medlemsavgiften blir 100 kr", "Ekonomi", "2026-10-01"],
+      ["Gammalt beslut", "Ekonomi", "2025-09-01"],
     ]);
   });
 
   it("legacy rows without a kind count by section; meetings before 0028 have no label", () => {
     const meetings = [meeting("v1", "2026-11-01", { agenda_labels: {}, agenda_roles: {} })];
     const items = [item("v1", "x1", { kind: null, section: "decision", text: "Gammalt format", anchor: null })];
-    expect(recentDecisions(ORG, input({ meetings, items }), NOW)).toEqual([{ key: "v1:x1", text: "Gammalt format", date: "2026-11-01T17:00:00Z", item: null }]);
+    expect(recentDecisions(ORG, input({ meetings, items }))).toEqual([{ key: "v1:x1", text: "Gammalt format", date: "2026-11-01T17:00:00Z", item: null }]);
   });
 });
 
@@ -233,6 +235,70 @@ describe("buildOverview", () => {
       decisions: [],
       topics: [],
       attendance: { meetings: 0, people: [] },
+      imported: { count: 0, first: null, last: null, tasks: 0 },
     });
+  });
+});
+
+// Imported old protocols (lib/history): already name-scrubbed, no attendance, tasks only counted.
+const hi = (kind: HistoryItem["kind"], text: string, topic: string | null = null, over: Partial<HistoryItem> = {}): HistoryItem => ({
+  kind,
+  text,
+  topic,
+  owner: null,
+  done: null,
+  ...over,
+});
+const protocol = (date: string, items: HistoryItem[]): HistoryMeeting => ({ date, source: "import", items });
+const history = [
+  protocol("2024-10-08", [hi("topic", "Ekonomi"), hi("topic", "Spelkafé"), hi("decision", "Kassan flyttas till ny bank", "Ekonomi"), hi("task", "Ringa banken", "Ekonomi", { owner: "Kassör", done: false })]),
+  protocol("2026-10-01", [hi("decision", "Spelkaféet blir varannan fredag", "spelkafé"), hi("decision", "Utan punkt"), hi("task", "Boka lokal", "Spelkafé", { done: true })]),
+];
+
+describe("imported protocols in the Översikt", () => {
+  it("decisions: merged newest first, marked imported, topic as the item; the same day own first", () => {
+    const items = [decision("m1", "d1", "Medlemsavgiften blir 100 kr"), decision("m3", "d2", "Nya tärningar köps in")];
+    const rows = recentDecisions(ORG, input({ items }), undefined, history);
+    expect(rows.map((d) => [d.text, d.item, d.date.slice(0, 10), Boolean(d.imported)])).toEqual([
+      ["Nya tärningar köps in", "Ekonomi", "2026-11-19", false],
+      ["Medlemsavgiften blir 100 kr", "Ekonomi", "2026-10-01", false],
+      ["Spelkaféet blir varannan fredag", "spelkafé", "2026-10-01", true],
+      ["Utan punkt", null, "2026-10-01", true],
+      ["Kassan flyttas till ny bank", "Ekonomi", "2024-10-08", true],
+    ]);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length);
+  });
+
+  it("recurring topics count imported protocols (topic lines and the topics lines sit under) with their decisions", () => {
+    const meetings = [meeting("m1", "2026-10-29")];
+    const items = [decision("m1", "d1", "Budgeten godkänns")];
+    const topics = recurringTopics(ORG, input({ meetings, items }), history);
+    expect(topics.map((t) => [t.label, t.meetings, t.lastSeen.slice(0, 10)])).toEqual([
+      ["Ekonomi", 2, "2026-10-29"],
+      ["Spelkafé", 2, "2026-10-01"],
+    ]);
+    expect(topics[0].months).toEqual([
+      { month: "2026-10", decisions: ["Budgeten godkänns"] },
+      { month: "2024-10", decisions: ["Kassan flyttas till ny bank"] },
+    ]);
+    // Spelkväll is on one own meeting only.
+    expect(topics.some((t) => t.label === "Spelkväll")).toBe(false);
+  });
+
+  it("imported tasks are never open, only counted; attendance unchanged; the summary has the span", () => {
+    const o = buildOverview(ORG, { meetings: [], items: [], speakers: [], people }, NOW, history);
+    expect(o.openTasks).toEqual([]);
+    expect(o.attendance.meetings).toBe(0);
+    expect(o.meetingCount).toBe(0);
+    expect(o.imported).toEqual({ count: 2, first: "2024-10-08", last: "2026-10-01", tasks: 2 });
+    expect(o.decisions).toHaveLength(3);
+    expect(importedSummary([])).toEqual({ count: 0, first: null, last: null, tasks: 0 });
+  });
+
+  it("a Testmöte stays out even with imported protocols", () => {
+    const meetings = [meeting("mt", "2026-11-20", { is_test: true })];
+    const o = buildOverview(ORG, input({ meetings, items: [decision("mt", "x", "Testbeslut")] }), NOW, history);
+    expect(o.meetingCount).toBe(0);
+    expect(o.decisions.some((d) => d.text === "Testbeslut")).toBe(false);
   });
 });

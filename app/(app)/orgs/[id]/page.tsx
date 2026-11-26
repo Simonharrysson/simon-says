@@ -65,6 +65,7 @@ const EMPTY_OVERVIEW: Overview = {
   decisions: [],
   topics: [],
   attendance: { meetings: 0, people: [] },
+  imported: { count: 0, first: null, last: null, tasks: 0 },
 };
 export const metadata: Metadata = { title: "Förening" };
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadImportedHistory } from "@/lib/history/store";
 import { buildOverview, type DashInput, type DashItem, type DashMeeting, type DashPerson, type DashSpeaker, type Overview } from "./overview";
 
 // Reads the org dashboard's rows with the caller's client (the page passes the user's, so RLS
@@ -69,8 +70,16 @@ export async function loadOverviewInput(db: SupabaseClient, orgId: string): Prom
   return { meetings, items, speakers, people };
 }
 
+/** The Översikt: own meetings and imported old protocols (a failed history read only leaves those out). */
 export async function loadOverview(db: SupabaseClient, orgId: string, now = new Date()): Promise<Overview> {
-  return buildOverview(orgId, await loadOverviewInput(db, orgId), now);
+  const [input, imported] = await Promise.all([
+    loadOverviewInput(db, orgId),
+    loadImportedHistory(db, orgId).catch((err: Error) => {
+      console.error("overview: imported protocols unavailable", err?.message);
+      return [];
+    }),
+  ]);
+  return buildOverview(orgId, input, now, imported);
 }
 
 export interface OrgGoal {

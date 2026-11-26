@@ -80,6 +80,7 @@ export const demoOverview: Overview = {
       { personId: "p4", name: "Simon", attended: 0, lastSeen: null },
     ],
   },
+  imported: { count: 0, first: null, last: null, tasks: 0 },
 };
 
 export const demoGoals: OverviewGoal[] = [
@@ -101,4 +102,5 @@ export const emptyOverview: Overview = {
   decisions: [],
   topics: [],
   attendance: { meetings: 0, people: [] },
+  imported: { count: 0, first: null, last: null, tasks: 0 },
 };

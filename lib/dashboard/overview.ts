@@ -2,6 +2,7 @@ import type { ItemRole, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/t
 import { normLabel } from "@/lib/agenda/scan";
 import { isCopy, isDecision, isTask, type ChainItem } from "@/lib/meetings/summary";
 import { resolveSpeaker } from "@/lib/segments/resolve";
+import type { HistoryMeeting } from "@/lib/history/types";
 
 // The org dashboard's views 1–4 ("Översikt" tab), pure over rows (decisions in
 // docs/superpowers/specs/2026-11-26-org-dashboard-proposal.md, "Builder decisions"):
@@ -10,6 +11,9 @@ import { resolveSpeaker } from "@/lib/segments/resolve";
 // - decisions: newest first, with the agenda item's stored label;
 // - recurring topics: topic labels in ≥ 2 counted meetings, decisions per month;
 // - attendance: who was heard and named, per person.
+// Imported old protocols (lib/history, 0032) count in the decisions and the recurring topics
+// (marked as imported); their tasks are history, only counted, never open; they have no attendance.
+// Their items were name-scrubbed when stored.
 // `loadOverview` (./load.ts) reads the rows with the caller's (RLS) client.
 
 export interface DashMeeting {
@@ -70,6 +74,8 @@ export interface DecisionRow {
   text: string;
   date: string;
   item: string | null;
+  /** From an imported old protocol, not a meeting with Simon Says. */
+  imported?: boolean;
 }
 
 export interface TopicMonth {
@@ -106,13 +112,21 @@ export interface Overview {
   decisions: DecisionRow[];
   topics: Topic[];
   attendance: Attendance;
+  /** Imported old protocols: how many, the first and last date (YYYY-MM-DD) and their task lines. */
+  imported: ImportedSummary;
+}
+
+export interface ImportedSummary {
+  count: number;
+  first: string | null;
+  last: string | null;
+  tasks: number;
 }
 
 export const NO_OWNER = "Utan ansvarig";
 const WEEK_MS = 7 * 24 * 3600 * 1000;
-/** Decisions shown: the last 12 months, newest first, at most this many. */
-export const DECISION_LIMIT = 200;
-const DECISION_WINDOW_MS = 365 * 24 * 3600 * 1000;
+/** Decisions shown: newest first, own and imported, at most this many. */
+export const DECISION_LIMIT = 400;
 /** Roles that sit on every agenda and say nothing as topics. */
 const NOT_TOPICS = new Set<ItemRole>(["procedural", "checkin", "followup", "other"]);
 const key = (meetingId: string, id: string) => `${meetingId}\u0000${id}`;
@@ -210,45 +224,79 @@ export function openTasks(orgId: string, input: DashInput, now: Date): TaskGroup
   );
 }
 
-export function recentDecisions(orgId: string, input: DashInput, now: Date, limit = DECISION_LIMIT): DecisionRow[] {
+/** An imported protocol's date (YYYY-MM-DD) as a timestamp: midday UTC, the same day in Stockholm. */
+export const importedAt = (date: string) => `${date.slice(0, 10)}T12:00:00Z`;
+
+const monthOf = (iso: string) => iso.slice(0, 7);
+const cleanLabel = (s: string | null | undefined) => (typeof s === "string" && s.trim() ? s.trim() : null);
+
+/** Every decision, own meetings and imported protocols merged, newest first (the same day: own first). */
+export function recentDecisions(orgId: string, input: DashInput, limit = DECISION_LIMIT, imported: HistoryMeeting[] = []): DecisionRow[] {
   const { byId, items } = scoped(orgId, input);
-  const from = now.getTime() - DECISION_WINDOW_MS;
-  return items
-    .filter(isDecision)
-    .map((r) => ({ r, m: byId.get(r.meeting_id)! }))
-    .filter(({ m }) => Date.parse(m.started_at) >= from)
-    .sort((a, b) => b.m.started_at.localeCompare(a.m.started_at) || a.r.position - b.r.position || a.r.id.localeCompare(b.r.id))
+  type Row = { row: DecisionRow; at: number; order: number; tie: string };
+  const own: Row[] = items.filter(isDecision).map((r) => {
+    const m = byId.get(r.meeting_id)!;
+    return { row: { key: `${m.id}:${r.id}`, text: r.text, date: m.started_at, item: itemLabel(m, r.anchor) }, at: Date.parse(m.started_at), order: r.position, tie: r.id };
+  });
+  const old: Row[] = imported.flatMap((m, p) =>
+    m.items.flatMap((it, k) =>
+      it.kind === "decision"
+        ? [{ row: { key: `import:${p}:${k}`, text: it.text, date: importedAt(m.date), item: cleanLabel(it.topic), imported: true }, at: Date.parse(importedAt(m.date)), order: k, tie: "" }]
+        : [],
+    ),
+  );
+  return [...own, ...old]
+    .sort((a, b) => b.at - a.at || Number(Boolean(a.row.imported)) - Number(Boolean(b.row.imported)) || a.order - b.order || a.tie.localeCompare(b.tie))
     .slice(0, limit)
-    .map(({ r, m }) => ({ key: `${m.id}:${r.id}`, text: r.text, date: m.started_at, item: itemLabel(m, r.anchor) }));
+    .map((r) => r.row);
 }
 
-export function recurringTopics(orgId: string, input: DashInput): Topic[] {
+/**
+ * Topic labels on the agenda of ≥ 2 meetings, own and imported (an imported protocol's topics: its
+ * topic lines and the topics its other lines sit under), with the decisions under each per month.
+ */
+export function recurringTopics(orgId: string, input: DashInput, imported: HistoryMeeting[] = []): Topic[] {
   const { meetings, byId, items } = scoped(orgId, input);
-  const topics = new Map<string, { label: string; meetings: Set<string>; lastSeen: string; months: Map<string, string[]> }>();
+  // Every meeting as (id, when, labels, decisions), oldest first.
+  type Source = { id: string; at: string; labels: string[]; decisions: { label: string | null; text: string; order: number }[] };
+  const sources: Source[] = [];
+  const decisionsOf = new Map<string, Source["decisions"]>();
   for (const m of meetings) {
-    for (const [anchor, raw] of Object.entries(m.agenda_labels ?? {})) {
-      const role = m.agenda_roles?.[anchor] ?? "topic";
-      if (NOT_TOPICS.has(role) || typeof raw !== "string") continue;
+    const labels = Object.entries(m.agenda_labels ?? {})
+      .filter(([anchor, raw]) => !NOT_TOPICS.has(m.agenda_roles?.[anchor] ?? "topic") && typeof raw === "string")
+      .map(([, raw]) => raw as string);
+    const src: Source = { id: m.id, at: m.started_at, labels, decisions: [] };
+    decisionsOf.set(m.id, src.decisions);
+    sources.push(src);
+  }
+  for (const r of items.filter(isDecision)) decisionsOf.get(r.meeting_id)!.push({ label: itemLabel(byId.get(r.meeting_id)!, r.anchor), text: r.text, order: r.position });
+  imported.forEach((m, p) => {
+    const labels = [...m.items.filter((i) => i.kind === "topic").map((i) => i.text), ...m.items.map((i) => (i.kind === "topic" ? null : cleanLabel(i.topic))).filter((l): l is string => l !== null)];
+    const decisions = m.items.flatMap((i, k) => (i.kind === "decision" ? [{ label: cleanLabel(i.topic), text: i.text, order: k }] : []));
+    sources.push({ id: `import:${p}`, at: importedAt(m.date), labels, decisions });
+  });
+  sources.sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id));
+
+  const topics = new Map<string, { label: string; meetings: Set<string>; lastSeen: string; months: Map<string, string[]> }>();
+  for (const src of sources) {
+    for (const raw of src.labels) {
       const n = normLabel(raw);
       if (!n) continue;
-      const t = topics.get(n) ?? { label: raw.trim(), meetings: new Set<string>(), lastSeen: m.started_at, months: new Map() };
-      t.meetings.add(m.id);
-      // Newest spelling wins (meetings are oldest first).
+      const t = topics.get(n) ?? { label: raw.trim(), meetings: new Set<string>(), lastSeen: src.at, months: new Map() };
+      t.meetings.add(src.id);
+      // Newest spelling wins (oldest first).
       t.label = raw.trim();
-      t.lastSeen = m.started_at;
+      t.lastSeen = src.at;
       topics.set(n, t);
     }
   }
-  const decisions = items
-    .filter(isDecision)
-    .sort((a, b) => byId.get(a.meeting_id)!.started_at.localeCompare(byId.get(b.meeting_id)!.started_at) || a.position - b.position);
-  for (const r of decisions) {
-    const m = byId.get(r.meeting_id)!;
-    const label = itemLabel(m, r.anchor);
-    const t = label ? topics.get(normLabel(label)) : undefined;
-    if (!t) continue;
-    const month = m.started_at.slice(0, 7);
-    t.months.set(month, [...(t.months.get(month) ?? []), r.text]);
+  for (const src of sources) {
+    for (const d of [...src.decisions].sort((a, b) => a.order - b.order)) {
+      const t = d.label ? topics.get(normLabel(d.label)) : undefined;
+      if (!t) continue;
+      const month = monthOf(src.at);
+      t.months.set(month, [...(t.months.get(month) ?? []), d.text]);
+    }
   }
   return [...topics.values()]
     .filter((t) => t.meetings.size >= 2)
@@ -258,7 +306,7 @@ export function recurringTopics(orgId: string, input: DashInput): Topic[] {
       lastSeen: t.lastSeen,
       months: [...t.months.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([month, decisions]) => ({ month, decisions })),
     }))
-    .sort((a, b) => b.meetings - a.meetings || b.lastSeen.localeCompare(a.lastSeen) || a.label.localeCompare(b.label, "sv"));
+    .sort((a, b) => b.meetings - a.meetings || Date.parse(b.lastSeen) - Date.parse(a.lastSeen) || a.label.localeCompare(b.label, "sv"));
 }
 
 export function attendance(orgId: string, input: DashInput): Attendance {
@@ -299,15 +347,27 @@ export function attendance(orgId: string, input: DashInput): Attendance {
   };
 }
 
-export function buildOverview(orgId: string, input: DashInput, now: Date): Overview {
+/** What the Översikt says about imported protocols; their task lines are history, never open. */
+export function importedSummary(imported: HistoryMeeting[]): ImportedSummary {
+  const dates = imported.map((m) => m.date.slice(0, 10)).sort();
+  return {
+    count: imported.length,
+    first: dates[0] ?? null,
+    last: dates.at(-1) ?? null,
+    tasks: imported.reduce((n, m) => n + m.items.filter((i) => i.kind === "task").length, 0),
+  };
+}
+
+export function buildOverview(orgId: string, input: DashInput, now: Date, imported: HistoryMeeting[] = []): Overview {
   const meetings = countedMeetings(orgId, input.meetings);
   return {
     meetingCount: meetings.length,
     firstMeeting: meetings[0]?.started_at ?? null,
     lastMeeting: meetings.at(-1)?.started_at ?? null,
     openTasks: openTasks(orgId, input, now),
-    decisions: recentDecisions(orgId, input, now),
-    topics: recurringTopics(orgId, input),
+    decisions: recentDecisions(orgId, input, DECISION_LIMIT, imported),
+    topics: recurringTopics(orgId, input, imported),
     attendance: attendance(orgId, input),
+    imported: importedSummary(imported),
   };
 }
