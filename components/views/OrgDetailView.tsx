@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
@@ -50,6 +51,11 @@ export interface OrgDetailViewProps {
    * Hidden when absent.
    */
   liveMeetingHref?: (meetingId: string) => string;
+  /**
+   * The "Översikt" tab (org dashboard): when given, a tab bar shows under the header and
+   * `active === "oversikt"` renders `overview` instead of the meetings page; `href` builds the links.
+   */
+  tabs?: { active: OrgTab; href: (tab: OrgTab) => string; overview?: ReactNode };
   actions: {
     rotateInvite: FormAction;
     addPerson: FormAction;
@@ -67,6 +73,30 @@ export interface OrgDetailViewProps {
   };
 }
 
+export type OrgTab = "moten" | "oversikt";
+const TABS: { id: OrgTab; label: string }[] = [
+  { id: "moten", label: "Möten" },
+  { id: "oversikt", label: "Översikt" },
+];
+
+/** Server-rendered tabs: links with aria-current, so the URL can be shared and reloaded. */
+function OrgTabs({ active, href }: { active: OrgTab; href: (tab: OrgTab) => string }) {
+  return (
+    <nav aria-label="Föreningens vyer" className="-mt-2 flex gap-1 border-b border-line">
+      {TABS.map((t) => (
+        <Link
+          key={t.id}
+          href={href(t.id)}
+          aria-current={t.id === active ? "page" : undefined}
+          className="-mb-px inline-flex min-h-10 items-center border-b-2 border-transparent px-3 text-sm font-medium text-ink-3 no-underline transition-colors duration-120 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:text-ink max-md:min-h-11"
+        >
+          {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 const statusTone: Record<MeetingStatus, BadgeTone> = {
   live: "live",
   ending: "neutral",
@@ -75,7 +105,7 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, actions } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeeting, startMeetingHref, formatCard, liveMeetingHref, tabs, actions } = props;
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
   const running = liveMeetingHref && active && userId !== null && active.started_by === userId ? active : null;
   const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
@@ -107,8 +137,13 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           )
         }
       />
+      {tabs && <OrgTabs active={tabs.active} href={tabs.href} />}
       <NoticeBanner notice={notice} />
 
+      {tabs?.active === "oversikt" ? (
+        tabs.overview
+      ) : (
+      <>
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           {active ? (
@@ -257,6 +292,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
             </div>
           </Panel>
         </>
+      )}
+      </>
       )}
     </div>
   );

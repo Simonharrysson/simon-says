@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { OAuth2Client } from "google-auth-library";
 import { propagateDone } from "@/lib/agenda/followup";
 import { adoptedAgendaRanges, anchoredStarts, itemAt, newAgendaItems, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
+import { saveAgendaLabels } from "@/lib/dashboard/labels";
 import { recordClaudeUsage } from "@/lib/db/claude-usage";
 import { logEvent } from "@/lib/db/events";
 import type { CheckinWindow, ItemRole, MeetingRow, MeetingStatus, NoteItemRow, PersonRow } from "@/lib/db/types";
@@ -89,6 +90,8 @@ export interface TickDeps {
   now(): Date;
   sleep(ms: number): Promise<void>;
   random(): number;
+  /** Agenda labels for the org dashboard (0028); best effort, never throws. */
+  saveAgendaLabels: typeof saveAgendaLabels;
 }
 
 function defaultDeps(): TickDeps {
@@ -110,6 +113,7 @@ function defaultDeps(): TickDeps {
     now: () => new Date(),
     sleep,
     random: Math.random,
+    saveAgendaLabels,
   };
 }
 
@@ -988,11 +992,13 @@ export async function runTick(
         const tab = await deps.readNotes(auth, target);
         const st = readState(tab, ctx.rows);
         let newAnchors: { key: string; start: number; end: number }[] = [];
+        let newLabels: { key: string; label: string }[] = [];
         let res: Awaited<ReturnType<TickDeps["render"]>>;
         if (fmt) {
           const ranges = meeting.section_ranges ?? {};
           const scan = scanAgenda(withoutOwnLines(tab, st.diff.rows), fmt.profile, { anchors: anchoredStarts(tab, ranges, meetingId) });
           newAnchors = rekeyNewItems(newAgendaItems(scan, tab, ranges, meetingId), scan, fmt.fresh, agendaKeys(ranges));
+          newLabels = newAnchors.map((a) => ({ key: a.key, label: itemAt(scan, a.start)?.label ?? "" }));
           const groupBy = fmt.profile.tasksSection?.groupBy ?? "person";
           const people = fmt.people;
           res = await deps.render(auth, target, st.diff.rows, formatDesired(unproxy(items, fmt.proxied), st.diff, server, fmt.profile), st.revisionId, header, {
@@ -1019,6 +1025,7 @@ export async function runTick(
                 return "busy";
               }
               anchorsAdded = newAnchors.length;
+              if (!meeting.is_test) await deps.saveAgendaLabels(meetingId, meeting.org_id, newLabels);
             }
             // Test people are not people rows: an agenda Testmöte stores no owner ids.
             rows = withOwnerIds(rows, usesTestPeople(meeting) ? [] : fmt.people);

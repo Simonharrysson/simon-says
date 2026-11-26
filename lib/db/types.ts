@@ -117,6 +117,8 @@ export interface MeetingRow {
   is_test?: boolean;
   agenda_roles?: Record<string, ItemRole>;
   checkin_window?: CheckinWindow | null;
+  /** `ag-<n>` → the agenda item's label, safe labels only (migration 0028, org dashboard). */
+  agenda_labels?: Record<string, string>;
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

@@ -58,7 +58,7 @@ const hasName = (s: string, names: Set<string>) =>
     .some((w) => names.has(w) || (w.endsWith("s") && names.has(w.slice(0, -1))) || names.has(w.replace(/['’]s?$/, "")));
 
 /** An agenda label that may leave the Doc: at most 8 words, no digit, not a name. */
-const safeItemLabel = (s: string, names: Set<string>) =>
+export const safeItemLabel = (s: string, names: Set<string>) =>
   words(s).length >= 1 && words(s).length <= 8 && !/\d/.test(s) && !looksLikeName(s) && !hasName(s, names);
 
 /** Letters, spaces, hyphens, "&" and "/" only: no digits (dates, times), no URLs, no symbols. */
