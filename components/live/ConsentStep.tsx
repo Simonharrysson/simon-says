@@ -185,6 +185,11 @@ export function ConsentStep({
         </p>
       )}
 
+      {/* Outside the fold: a closed <details> hides its content from screen readers too. */}
+      <span className="sr-only" aria-live="polite">
+        {testing ? (everHeard ? t("works") : t("testing")) : ""}
+      </span>
+
       <details className="group/settings border-t border-line pt-3" open={settingsOpen}>
         <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-semibold text-ink-2 select-none hover:text-ink [&::-webkit-details-marker]:hidden">
           <IconChevronDown size={16} className="-rotate-90 transition-transform duration-120 group-open/settings:rotate-0" aria-hidden="true" />
@@ -203,9 +208,6 @@ export function ConsentStep({
                   </span>
                   <span className={heard ? "font-semibold text-green" : "text-ink-2"} aria-hidden="true">
                     {heard ? t("hear") : t("hearNothing")}
-                  </span>
-                  <span className="sr-only" aria-live="polite">
-                    {everHeard ? t("works") : t("testing")}
                   </span>
                 </>
               ) : (

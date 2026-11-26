@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { PickerError, usePicker } from "@/components/google/Picker";
 import { Button } from "@/components/ui/button";
 import { Check } from "@/components/ui/Field";
@@ -412,7 +412,8 @@ function AgendaStepOff({ orgId, formats, onChange, disabled, initialFormat = nul
       live = false;
     };
   }, [orgId, startWithNewDoc]);
-  useEffect(() => {
+  // Before paint: Start never sees an older choice than the screen shows.
+  useLayoutEffect(() => {
     const usePrep = chosen?.kind === "agenda" && prepared;
     onChange({
       agendaDocId: usePrep ? prepared.docId : null,
@@ -543,7 +544,8 @@ function AgendaStepOn({
     void load();
   }, [load]);
 
-  useEffect(() => {
+  // Before paint: Start never sees an older choice than the screen shows.
+  useLayoutEffect(() => {
     onChange({
       agendaDocId: chosen?.kind === "agenda" ? agendaDocId : null,
       agendaName: chosen?.kind === "agenda" ? chosen.name : null,

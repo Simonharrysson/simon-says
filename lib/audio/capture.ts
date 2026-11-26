@@ -43,7 +43,12 @@ export class MicCapture implements AudioSource {
    * the permission prompt follows. Idempotent; a failed open can be retried.
    */
   open(): Promise<void> {
-    if (this.opening) return this.opening;
+    if (this.opening) {
+      // Opened earlier (the consent tick's mic check): Safari may have suspended the context
+      // since (lock screen, a call). Resume it now, inside this click; later is too late.
+      if (this.ctx && this.ctx.state !== "running") void this.ctx.resume().catch(() => {});
+      return this.opening;
+    }
     const Ctx: typeof AudioContext | undefined =
       typeof window === "undefined"
         ? undefined

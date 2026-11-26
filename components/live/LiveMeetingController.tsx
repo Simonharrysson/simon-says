@@ -118,7 +118,13 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [startErrorText, setStartErrorText] = useState<string | null>(null);
   /** The server's error code of a failed start (agenda_* offers "Skapa nytt dokument i stället"). */
   const [startErrorCode, setStartErrorCode] = useState<string | null>(null);
-  const [agenda, setAgenda] = useState<AgendaChoice | null>(null);
+  const [agenda, setAgendaState] = useState<AgendaChoice | null>(null);
+  /** The AgendaStep's latest choice, set as it reports it: Start reads this, never a render behind. */
+  const agendaRef = useRef<AgendaChoice | null>(null);
+  const setAgenda = useCallback((choice: AgendaChoice | null) => {
+    agendaRef.current = choice;
+    setAgendaState(choice);
+  }, []);
   const [privatChoice, setPrivatChoice] = useState<PrivatChoice | null>(null);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
@@ -398,12 +404,13 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setStartError(null);
     setStartErrorText(null);
     setStartErrorCode(null);
-    const choice = agenda;
+    const choice = agendaRef.current;
     const privatStart = props.privat ? privatChoice : null;
     void (async () => {
       try {
         await opened;
       } catch (e) {
+        setMicLevel(null);
         setStartError(micProblem(e));
         setPhase("consent");
         return;
@@ -436,6 +443,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
         if (!res.ok || !json?.meetingId) {
           cap.stop();
+          // The mic is let go: no frozen meter; Testa mikrofonen comes back.
+          setMicLevel(null);
           setStartError(res.status === 429 ? "limit" : "start-failed");
           setStartErrorText(json?.message ?? null);
           setStartErrorCode(typeof json?.error === "string" ? json.error : null);
@@ -445,6 +454,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         created = json as typeof created;
       } catch {
         cap.stop();
+        setMicLevel(null);
         setStartError("start-failed");
         setStartErrorText(t("offline"));
         setPhase("consent");
