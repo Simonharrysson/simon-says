@@ -53,6 +53,7 @@ const people = [
 const actions: OrgDetailViewProps["actions"] = {
   removeMember: noopAction,
   leaveOrg: noopAction,
+  setMemberRole: noopAction,
   rotateInvite: noopAction,
   addPerson: noopAction,
   renamePerson: noopAction,
@@ -364,6 +365,26 @@ const render: Record<string, () => ReactNode> = {
         }
         liveMeetingHref={() => "/design?vy=live"}
         tabs={{ active: "moten", href: (t) => (t === "oversikt" ? "/design?vy=org-overview" : "/design?vy=org-admin") }}
+        actions={actions}
+      />
+    </AppChrome>
+  ),
+  "org-admins": () => (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={[
+          { userId: ME, email: "anna.berg@example.com", role: "admin" },
+          { userId: "00000000-0000-4000-8000-0000000000bb", email: "erik.lund@example.com", role: "admin" },
+          { userId: "00000000-0000-4000-8000-0000000000cc", email: "sara@example.com", role: "member" },
+        ]}
+        people={people}
+        meetings={[]}
+        notice={orgNotice(undefined, "admin-ny")}
+        startMeetingHref="#"
         actions={actions}
       />
     </AppChrome>

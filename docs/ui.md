@@ -292,8 +292,13 @@ replaced by an info banner with the Doc link.
 
 Members panel (final fix wave A2): each member's email with "admin" / "du". Admins get a ghost "Ta bort" per other
 member, everyone a ghost "Lämna" on their own row; both open a `ConfirmAction` dialog whose copy says that Docs
-already shared stay shared (and, for Ta bort, that the invite link still works until a new one is made). The last
-admin can't leave or be removed (the notice suggests deleting the förening instead).
+already shared stay shared (and, for Ta bort, that the invite link still works until a new one is made).
+Admin handover (todo #8, migration 0031): admins also get "Gör till admin" on members and "Ta bort som admin" on
+other admins, and "Sluta vara admin" on their own row while another admin exists; each opens a `ConfirmAction`
+with a primary (not red) confirm. The last admin's own row shows "Gör någon annan till admin först för att kunna
+lämna." instead of Lämna. The DB refuses demoting or removing the last admin on every path (`last_admin`); the
+notices say "Gör någon annan till admin först". Actions wrap under the email at phone width. `/design`:
+`org-admin` (last admin), `org-admins` (two admins).
 
 ## The live page (Task 7)
 

@@ -25,6 +25,7 @@ import {
   leaveOrgAction,
   removeMemberAction,
   renamePersonAction,
+  setMemberRoleAction,
   setPersonRoleAction,
   rotateInviteAction,
   updateOrgAction,
@@ -142,6 +143,7 @@ export default async function OrgPage({
         deleteOrg: deleteOrgAction,
         removeMember: removeMemberAction,
         leaveOrg: leaveOrgAction,
+        setMemberRole: setMemberRoleAction,
       }}
     />
   );

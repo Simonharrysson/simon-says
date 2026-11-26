@@ -16,6 +16,7 @@ import {
   removeMember,
   renamePerson,
   rotateInviteCode,
+  setMemberRole,
   setPersonRole,
   updateOrgSettings,
 } from "@/lib/db/orgs";
@@ -138,6 +139,18 @@ export async function leaveOrgAction(form: FormData): Promise<void> {
   const result = await leaveOrg(db, orgId);
   if (result === "removed") redirect("/orgs?klart=lamnat");
   redirect(`/orgs/${orgId}?fel=medlem-${result}`);
+}
+
+/** Admins: make a member admin (`role=admin`) or take admin away (`role=member`). The DB keeps the last admin. */
+export async function setMemberRoleAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const userId = field(form, "userId");
+  const role = field(form, "role");
+  const db = await createSupabaseServerClient();
+  const result =
+    isUuid(userId) && (role === "admin" || role === "member") ? await setMemberRole(db, orgId, userId, role) : "invalid";
+  if (result === "ok" || result === "unchanged") redirect(`/orgs/${orgId}?klart=${role === "admin" ? "admin-ny" : "admin-bort"}`);
+  redirect(`/orgs/${orgId}?fel=admin-${result}`);
 }
 
 /** Admins: switch the org's meeting format (`choice` = standard kind or `id:<profile id>`). RLS-style check is in the DB function. */
