@@ -96,7 +96,7 @@ export function StartMeetingForm({
                 <IconDoc size={14} />
                 Dagordning
               </a>
-              <a href={`/orgs/${orgId}/forbered`} className="text-ink-3">
+              <a href={`/orgs/${orgId}/forbered?datum=${p.date}`} className="text-ink-3">
                 Ändra
               </a>
             </li>

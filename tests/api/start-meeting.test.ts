@@ -888,6 +888,22 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(m.renderItems).not.toHaveBeenCalled();
   });
 
+  it("a prepared agenda restarted after a false start keeps the ordförande's dropped tasks off", async () => {
+    m.profiles = [{ id: "pv", org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: false }];
+    m.prevMeetings = [{ id: "prev1", org_id: ORG, is_test: false, status: "done", started_at: ago(7 * 86400), format_profile_id: "pv" } as never];
+    m.docMeetings = [{ id: "A", doc_id: AGENDA_DOC, status: "abandoned", started_at: ago(600) } as never];
+    const base = { section: "action", kind: "task", owner: null, due: null, locked: false, deleted_by_human: false, done: false, copy_of: null, position: 0 };
+    m.noteRows = [
+      { ...base, meeting_id: "prev1", id: "n1", text: "Boka hall" },
+      { ...base, meeting_id: "prev1", id: "n3", text: "Ring kommunen" },
+    ];
+    m.prepared = [{ id: "p1", org_id: ORG, doc_id: AGENDA_DOC, kind: "veckomote", format_profile_id: "pv", carried: [], dropped: ["prev1:n3"], shared_with: [] }];
+    const res = await agendaCall();
+    expect(res.status).toBe(200);
+    const inserted = m.noteInsert.mock.calls[0][0] as Record<string, unknown>[];
+    expect(inserted.filter((r) => String(r.id).startsWith("c")).map((r) => r.carried_from_id)).toEqual(["n1"]);
+  });
+
   it("a prepared Doc without carried lines is still ours to share", async () => {
     m.prepared = [{ id: "p1", org_id: ORG, doc_id: AGENDA_DOC, kind: "veckomote", format_profile_id: null, carried: [], dropped: [], shared_with: [] }];
     expect((await agendaCall()).status).toBe(200);

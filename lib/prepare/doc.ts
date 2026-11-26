@@ -130,7 +130,11 @@ export function planReprepare(
     }),
   ].map((p) => p.start);
   const regionParas = reg ? tab.paragraphs.filter((p) => !paraInTable(p) && p.start >= reg.start && p.start < reg.limit) : [];
-  const pure = reg !== null && regionParas.every((p) => p.text.trim() === "" || ourSpans.includes(p.start));
+  // A line a human deleted is an edit too: then merge, so it is never written back.
+  const deleted =
+    stored.some((l) => states.get(l.id)!.state === "gone") ||
+    carried.some((r) => !r.deleted_by_human && r.range_name && !itemSpan(tab, r.range_name));
+  const pure = reg !== null && !deleted && regionParas.every((p) => p.text.trim() === "" || ourSpans.includes(p.start));
 
   if (pure && reg) {
     const numbered = profile.numbering === "numbered";

@@ -143,7 +143,8 @@ export function normaliseItems(body: PrepareBody["items"], server: DraftItem[]):
       const ticks = new Map((it.tasks ?? []).map((t) => [t.source, t.on]));
       out.push({
         ...std,
-        label: it.label,
+        // The follow-up item keeps the format's label: the start finds it by that label.
+        label: std.role === "followup" ? std.label : it.label,
         on: it.on,
         ...(std.tasks ? { tasks: serverTasks.map((t) => ({ ...t, on: ticks.get(t.source) ?? true })) } : {}),
       });

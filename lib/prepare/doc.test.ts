@@ -12,6 +12,7 @@ import { buildDraft, type DraftItem } from "./draft";
 import { followupKey, itemText, planCarried, planInsert, planItemRanges, planReprepare, prepKey, prepMeeting, type DocLine } from "./doc";
 
 const KEY = prepKey("p1");
+const agenda = (doc: Parameters<typeof linesOf>[0]) => linesOf(doc).slice(linesOf(doc).indexOf("Agenda"), linesOf(doc).indexOf("Vad ska vi göra till nästa gång?"));
 const people = [{ id: "p-anna", name: "Anna Berg", role: "Kassör" }];
 const ownerLabel = (o: string) => (o.startsWith("Anna") ? "Kassör" : o);
 const task = (id: string, text: string, owner: string): NoteItemRow =>
@@ -103,6 +104,19 @@ describe("prepared agenda Doc", () => {
     expect(again.map((r) => r.range_name)).toEqual(["ss-prep-p1-c3", "ss-prep-p1-c4"]);
     const tab = parseNotesTab(doc, TAB);
     expect(tab.paragraphs.find((p) => p.text === "Fest på universitetet\n")?.bullet?.level).toBe(0);
+  });
+
+  it("preparing again after a human only deleted a line: merge, the line is not written back", () => {
+    const { doc, lines, rows } = prepared(VECKOMOTE, draft, desired);
+    const mr = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;
+    applyDoc(doc, [{ deleteContentRange: { range: { tabId: TAB, startIndex: mr.start, endIndex: mr.end } } }]);
+    const erik = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text.startsWith("– Erik"))!;
+    applyDoc(doc, [{ deleteContentRange: { range: { tabId: TAB, startIndex: erik.start, endIndex: erik.end } } }]);
+    const plan = planReprepare(parseNotesTab(doc, TAB), VECKOMOTE, KEY, lines, rows, draft);
+    expect(plan.mode).toBe("merge");
+    applyDoc(doc, plan.requests);
+    carry(doc, VECKOMOTE, plan.lines, draft, rows, desired, false);
+    expect(agenda(doc)).toEqual(["Agenda", "Godkänn dagordning", "Från förra veckan", "– Kassör: Boka Kårallen.", "Övrigt"]);
   });
 
   it("preparing again after human edits: their lines win, ours change in place, a new item is inserted before the next one of the draft", () => {

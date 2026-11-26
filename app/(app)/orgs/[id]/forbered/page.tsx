@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PrepareMeeting } from "@/components/views/PrepareMeeting";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
+import { validDate } from "@/lib/prepare/draft";
 import { proposedWhen } from "@/lib/prepare/when";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -14,8 +15,9 @@ export const metadata: Metadata = { title: "Förbered möte", robots: { index: f
  * proposed from the förening's last meeting (same weekday, next week); the steps run in the
  * client (PrepareMeeting → /api/orgs/<id>/prepare).
  */
-export default async function PreparePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PreparePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ datum?: string }> }) {
   const { id } = await params;
+  const { datum } = await searchParams;
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
@@ -31,6 +33,11 @@ export default async function PreparePage({ params }: { params: Promise<{ id: st
     .order("started_at", { ascending: false })
     .limit(1);
   const when = proposedWhen(new Date(), (last?.[0]?.started_at as string | undefined) ?? null);
+  // "Ändra" on the förening page: the prepared meeting's date.
+  if (datum && validDate(datum) && datum >= when.today) {
+    when.date = datum;
+    when.time = "";
+  }
 
   return <PrepareMeeting orgId={org.id} orgName={org.name} today={when.today} defaultDate={when.date} defaultTime={when.time} />;
 }

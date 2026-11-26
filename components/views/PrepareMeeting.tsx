@@ -350,8 +350,8 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
       <div className="flex flex-col gap-3 border-t border-line pt-6">
         <p className={hintClass}>
           {p.existing
-            ? "Dokumentet uppdateras i föreningens mötesmapp."
-            : "Simon Says skapar dokumentet i föreningens mötesmapp och delar det med medlemmarna. Ni kan fortsätta skriva i det som vanligt."}
+            ? "Dokumentet uppdateras där det ligger."
+            : "Simon Says skapar dokumentet i föreningens mötesmapp (eller i din Drive om du inte har öppnat mappen) och delar det med medlemmarna. Ni kan fortsätta skriva i det som vanligt."}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" size="lg" onClick={p.onSave} loading={saving} disabled={held || on.length === 0}>
@@ -398,6 +398,8 @@ function AgendaRow(props: {
           value={item.label}
           maxLength={120}
           onChange={(e) => props.onRename(e.target.value)}
+          // "Från förra veckan" keeps its name: the meeting finds last week's tasks by it.
+          readOnly={Boolean(item.tasks)}
           disabled={props.lock}
         />
         <div className="ml-auto flex items-center gap-1">
@@ -424,7 +426,7 @@ function AgendaRow(props: {
                 {item.tasks.map((t) => {
                   const tid = `${inputId}-${t.source.replace(/[^a-z0-9]/gi, "-")}`;
                   return (
-                    <li key={t.source} className="flex min-h-9 items-start gap-3">
+                    <li key={t.source} className="flex min-h-11 items-start gap-3">
                       <Checkbox id={tid} className="mt-1" checked={t.on} onCheckedChange={(v) => props.onTask(t.source, v === true)} disabled={props.lock} />
                       <label htmlFor={tid} className={cn("cursor-pointer text-sm wrap-anywhere", !t.on && "text-ink-3 line-through")}>
                         {t.line}

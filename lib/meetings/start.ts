@@ -710,8 +710,9 @@ async function prefill(input: {
       if (ppl.error) throw new Error(`prefill: people: ${ppl.error.message}`);
       people = (ppl.data ?? []) as RolePerson[];
       const docRows = sameDoc ? (sameRows ?? prevRows) : (fromPrepared?.carried ?? []);
-      // Only lines still in the Doc are taken over (one read; none when nothing could be).
-      const tab = docRows.some((r) => r.carried_from_id != null && r.range_name)
+      // Only lines still in the Doc are taken over (one read; none when nothing could be). A
+      // prepared agenda's lines are read too: one a human deleted stays off the agenda.
+      const tab = [...docRows, ...(prepared?.carried ?? [])].some((r) => r.carried_from_id != null && r.range_name)
         ? await readNotesTab(auth, meeting.doc_id, meeting.notes_tab_id)
         : null;
       const intact = (name: string) => Boolean(tab && itemSpan(tab, name));
@@ -720,7 +721,7 @@ async function prefill(input: {
         prev: prev ? { id: prev.id, rows: prevRows } : null,
         sameDoc: sameDoc ? { id: sameDoc.id, rows: docRows } : fromPrepared ? { id: `prep-${fromPrepared.id}`, rows: docRows } : null,
         intact,
-        excluded: fromPrepared || (prepared && !onDoc) ? preparedExclusions(prepared!, intact) : undefined,
+        excluded: prepared ? preparedExclusions(prepared, intact) : undefined,
         followup,
         people,
         groupBy,
