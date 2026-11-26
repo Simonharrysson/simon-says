@@ -87,7 +87,6 @@ describe("goalMeetings", () => {
         { ...base, meeting_id: "m1", id: "d", kind: "task", text: "Raderad", anchor: "ag-2", deleted_by_human: true },
         { ...base, meeting_id: "t1", id: "e", kind: "decision", section: "decision" as const, text: "Test", anchor: null },
       ],
-      speakers: [],
       people: [],
     };
     expect(goalMeetings("o", input)).toEqual([{ at: daysAgo(10), texts: ["Lokalen", "Ring om lokalen"], decisions: ["Ny lokal för styrelsen"] }]);

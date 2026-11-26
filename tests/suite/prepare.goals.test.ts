@@ -37,7 +37,6 @@ function overview(): DashInput {
       { ...base, meeting_id: "m2", id: "b", section: "decision", kind: "decision", text: "Budgeten ska vara balanserad till jul", anchor: "ag-1" },
       { ...base, meeting_id: "m3", id: "c", section: "decision", kind: "decision", text: "Att ansöka om ny lokal för styrelsen hos kåren", anchor: "ag-1" },
     ],
-    speakers: [],
     people: [],
   };
 }
