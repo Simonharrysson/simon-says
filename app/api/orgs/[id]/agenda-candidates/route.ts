@@ -5,6 +5,7 @@ import { localDate } from "@/lib/docs/create";
 import type { PreparedSuggestion } from "@/lib/prepare/types";
 export type { PreparedSuggestion };
 import { nextPrepared } from "@/lib/prepare/store";
+import { preparedDocState } from "@/lib/prepare/stale";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
@@ -51,10 +52,12 @@ async function preparedRow(orgId: string) {
 }
 
 /** The suggestion for `p`, with whether this starter's grant can edit it. */
-async function preparedSuggestion(p: NonNullable<Awaited<ReturnType<typeof preparedRow>>>, auth: Auth): Promise<PreparedSuggestion | null> {
+async function preparedSuggestion(p: NonNullable<Awaited<ReturnType<typeof preparedRow>>>, auth: Auth, userId: string): Promise<PreparedSuggestion | null> {
   try {
     const access = await checkAgendaDoc(auth, p.doc_id);
-    if (!access.ok && access.error !== "not_found") return null;
+    // Never suggest a Doc that is gone (trashed, or deleted: the preparer no longer sees it).
+    const state = preparedDocState(access, p.prepared_by === userId);
+    if (state === "gone" || (!access.ok && access.error !== "not_found")) return null;
     return { docId: p.doc_id, name: access.ok ? access.name || p.doc_name : p.doc_name, date: p.meeting_date, time: p.meeting_time, kind: p.kind, accessible: access.ok };
   } catch (err) {
     if (err instanceof GoogleAuthLostError) throw err;
@@ -87,7 +90,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
   try {
     const auth = await getGoogleAuth(user.id);
-    const prepared = row ? await preparedSuggestion(row, auth) : null;
+    const prepared = row ? await preparedSuggestion(row, auth, user.id) : null;
     const none: AgendaCandidates = { folderId, folderName, accessible: false, candidates: [], suggestedId: null, prepared };
     if (!folderId) return NextResponse.json(none, { headers: noStore });
 
