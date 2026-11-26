@@ -46,3 +46,19 @@ $$;
 
 revoke all on function public.set_my_locale(text) from public, anon, authenticated;
 grant execute on function public.set_my_locale(text) to authenticated;
+
+-- The language to e-mail an address in (invites, where only the address is known): the saved
+-- choice of the confirmed account signing in with it; null = Swedish. Service role only.
+create function public.locale_for_email(p_email text)
+returns text
+language sql stable security definer set search_path = ''
+as $$
+  select s.locale from public.user_settings s
+  join auth.users u on u.id = s.user_id
+  where u.email_confirmed_at is not null and lower(btrim(u.email::text)) = lower(btrim(p_email))
+  order by s.updated_at desc
+  limit 1
+$$;
+
+revoke all on function public.locale_for_email(text) from public, anon, authenticated;
+grant execute on function public.locale_for_email(text) to service_role;

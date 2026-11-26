@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
@@ -9,6 +10,7 @@ import { PickerError, usePicker } from "@/components/google/Picker";
  * `pick` opens the Picker right away (user activation); `message` is the polite result line.
  */
 export function useMeetingFolderPicker(orgId: string) {
+  const t = useTranslations("common.picker");
   const picker = usePicker();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -18,7 +20,7 @@ export function useMeetingFolderPicker(orgId: string) {
     setBusy(true);
     setMessage(null);
     try {
-      const picked = await picker.open({ mode: "folder", title: "Välj mötesmappen" });
+      const picked = await picker.open({ mode: "folder", title: t("folderTitle") });
       if (!picked?.[0]) return;
       const res = await fetch(`/api/orgs/${orgId}/meeting-folder`, {
         method: "POST",
@@ -28,13 +30,13 @@ export function useMeetingFolderPicker(orgId: string) {
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string } | null;
-        setMessage(json?.message ?? "Mötesmappen kunde inte sparas. Försök igen.");
+        setMessage(json?.message ?? t("folderSaveFailed"));
         return;
       }
-      setMessage("Mötesmappen är sparad.");
+      setMessage(t("folderSaved"));
       router.refresh();
     } catch (err) {
-      setMessage(err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen.");
+      setMessage(err instanceof PickerError ? err.message : t("failed"));
     } finally {
       setBusy(false);
     }

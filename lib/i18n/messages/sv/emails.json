@@ -1,0 +1,15 @@
+{
+  "invite": {
+    "preheader": "Gå med så kan du starta möten och läsa föreningens mötesanteckningar.",
+    "subject": "{inviter} bjuder in dig till {org} på Simon Says",
+    "heading": "Gå med i {org}",
+    "body": "{inviter} har bjudit in dig till föreningen på Simon Says. Där skrivs mötesanteckningarna medan ni pratar, direkt i ett Google Doc. Som medlem kan du starta möten och läsa alla tidigare mötesdokument.",
+    "button": "Gå med i {org}",
+    "fallback": "Fungerar inte knappen? Öppna länken:",
+    "footer": "Du får det här mejlet för att {inviter} lade till din adress i {org}. Du loggar in med Google och går med med en knapp. Väntade du dig inte mejlet kan du strunta i det, inget händer förrän du går med.",
+    "prefsLink": "Vill du inte få inbjudningar? Ändra dina mejlval.",
+    "textJoinHere": "Gå med här (du loggar in med Google och går med med en knapp):",
+    "textFooter": "Du får det här mejlet för att {inviter} lade till din adress i {org}. Väntade du dig inte mejlet kan du strunta i det, inget händer förrän du går med.",
+    "textPrefs": "Vill du inte få inbjudningar? Ändra dina mejlval: {url}"
+  }
+}

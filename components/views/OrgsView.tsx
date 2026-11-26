@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,23 +21,21 @@ export interface OrgsViewProps {
 }
 
 export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) {
+  const t = useTranslations("orgs");
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-8">
       <PageHeader
-        title="Föreningar"
-        meta={<p className="text-ink-2">Varje förening har sin egen personlista, sina möten och sin inbjudningslänk.</p>}
+        title={t("title")}
+        meta={<p className="text-ink-2">{t("intro")}</p>}
       />
       <NoticeBanner notice={notice} />
 
       {orgs.length === 0 ? (
-        <EmptyState title="Du är inte med i någon förening än">
-          <p>
-            Har någon skickat en inbjudningslänk? Öppna den så hamnar du rätt. Annars skapar du föreningen här
-            nedanför — du blir admin och kan bjuda in resten.
-          </p>
+        <EmptyState title={t("emptyTitle")}>
+          <p>{t("emptyText")}</p>
         </EmptyState>
       ) : (
-        <Panel flush title="Dina föreningar" titleId="orgs-title">
+        <Panel flush title={t("yours")} titleId="orgs-title">
           <ul  aria-labelledby="orgs-title">
             {orgs.map((org) => (
               <ListRow
@@ -46,7 +45,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
                 title={org.name}
                 actions={
                   <>
-                    {org.role === "admin" && <Badge tone="info">Admin</Badge>}
+                    {org.role === "admin" && <Badge tone="info">{t("admin")}</Badge>}
                     <IconArrowRight size={18} className="text-ink-3 transition-transform duration-120 ease-out group-hover/row:translate-x-[3px] group-hover/row:text-ink" />
                   </>
                 }
@@ -56,25 +55,25 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
         </Panel>
       )}
 
-      <Panel title="Skapa en förening" titleId="create-title">
+      <Panel title={t("createTitle")} titleId="create-title">
         <form action={createOrg} className="flex flex-col gap-8">
           <div className="flex items-end gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch">
             <Field
               id="org-name"
               name="name"
-              label="Namn"
-              placeholder="t.ex. LiU AI Society"
+              label={t("name")}
+              placeholder={t("namePlaceholder")}
               required
               maxLength={100}
               autoComplete="organization"
               error={nameError}
               className="min-w-0 flex-1"
             />
-            <SubmitButton variant="primary" icon={<IconPlus />} pendingLabel="Skapar…">
-              Skapa
+            <SubmitButton variant="primary" icon={<IconPlus />} pendingLabel={t("creating")}>
+              {t("create")}
             </SubmitButton>
           </div>
-          <p className="text-xs text-ink-3">Du kan skapa högst två föreningar. Att gå med i andras räknas inte.</p>
+          <p className="text-xs text-ink-3">{t("limit")}</p>
         </form>
       </Panel>
     </div>

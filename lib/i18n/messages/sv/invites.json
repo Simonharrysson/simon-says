@@ -1,0 +1,53 @@
+{
+  "linkName": {
+    "org": "Föreningens namn ser ut som en webb- eller e-postadress, och sådant skickar vi inte i mejl. Byt namn på föreningen under Inställningar och försök igen.",
+    "inviter": "Ditt namn (i föreningens personlista eller på ditt Google-konto) ser ut som en webb- eller e-postadress, och sådant skickar vi inte i mejl. Ändra namnet och försök igen."
+  },
+  "result": {
+    "sent": "Skickat",
+    "member": "Redan medlem",
+    "invalid": "Ogiltig adress",
+    "failed": "Misslyckades",
+    "uncertain": "Osäkert – kan ha skickats",
+    "not_sent": "Hann inte skickas",
+    "opted_out": "Vill inte ha mejl",
+    "already_invited": "Redan inbjuden",
+    "resend_limit": "Skickat två gånger i dag",
+    "org_limit": "Dagens gräns för föreningen nådd",
+    "user_limit": "Din gräns för i dag nådd",
+    "busy": "Skickas redan"
+  },
+  "status": {
+    "sending": "Skickas",
+    "sent": "Skickad",
+    "failed": "Misslyckades",
+    "uncertain": "Osäkert om det kom fram",
+    "accepted": "Har gått med"
+  },
+  "sendFailed": "Inbjudningarna kunde inte skickas. Försök igen.",
+  "offline": "Ingen kontakt med servern. Kontrollera nätet och försök igen.",
+  "emailsLabel": "E-postadresser",
+  "hint": "En eller flera, med komma eller ny rad emellan. Vi skickar ett mejl med föreningens länk.",
+  "addresses": "{count, plural, one {# adress} other {# adresser}}",
+  "alreadyMembers": " · {count, plural, one {# är redan medlem} other {# är redan medlemmar}}",
+  "notEmail": " · inte e-post: {list}",
+  "tooMany": " · högst {max} åt gången",
+  "addFromList": "Lägg till {count, plural, one {# adress} other {# adresser}} från listan",
+  "sendingRange": "Skickar {from}–{to} av {total}…",
+  "sending": "Skickar…",
+  "sendCount": "Skicka {count, plural, one {# inbjudan} other {# inbjudningar}}",
+  "sendOne": "Skicka inbjudan",
+  "hideEmail": "Dölj mejlet",
+  "showEmail": "Visa mejlet",
+  "results": "Resultat",
+  "againAt": " · igen {date}",
+  "tryAgain": "Försök igen",
+  "sentInvites": "Skickade inbjudningar",
+  "resendRule": "”Skicka igen” går en gång per dygn och adress.",
+  "resend": "Skicka igen",
+  "againShort": "Igen {date}",
+  "previewLabel": "Förhandsvisning av mejlet",
+  "subject": "Ämne:",
+  "from": "Från Simon Says · svar går till dig",
+  "previewLanguage": "Mejlet är på svenska om mottagaren inte har valt engelska i Simon Says."
+}

@@ -1,0 +1,16 @@
+{
+  "modes": {
+    "missed": { "title": "Till de som missade mötet", "hint": "Alla i personlistan med e-post som inte var med. Förvalt." },
+    "all": { "title": "Till alla", "hint": "Alla i personlistan med e-post, också de som var med." },
+    "selected": { "title": "Till utvalda personer", "hint": "Bara de du kryssar i nedan." },
+    "off": { "title": "Av", "hint": "Inga sammanfattningar skickas." }
+  },
+  "legend": "Sammanfattning efter mötet",
+  "intro": "När ett möte är klart mejlar Simon Says besluten och uppgifterna. Var och en ser sina egna uppgifter först och kan tacka nej i mejlet eller under Konto. Testmöten skickas aldrig.",
+  "whoLegend": "Vilka ska få sammanfattningen?",
+  "emptyList": "Personlistan är tom. Lägg till personer under Personer.",
+  "noEmail": "Ingen e-postadress",
+  "noneWithEmail": "Ingen i personlistan har en e-postadress än. Lägg till adresser i Kom igång → Styrelsen.",
+  "withEmail": "{count, plural, one {# person} other {# personer}} i personlistan har en e-postadress.",
+  "saved": "Sparat"
+}

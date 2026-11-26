@@ -1,3 +1,5 @@
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 import type { ItemRole } from "@/lib/db/types";
 import { FormatProfileSchema, type FixedItem, type FormatProfile } from "./schema";
 import { VECKOMOTE } from "./standard";
@@ -32,13 +34,7 @@ export interface EditorState {
   hideCheckin: boolean;
 }
 
-export const ROLE_NAMES: Record<ItemRole, string> = {
-  procedural: "Formalia",
-  checkin: "Må-runda",
-  followup: "Från förra veckan",
-  other: "Övrigt",
-  topic: "Ämne",
-};
+// Role names shown in the editor are UI copy: formatEditor.roles.* in lib/i18n/messages.
 
 const MAX = 80;
 const MAX_ITEMS = 20;
@@ -85,37 +81,39 @@ export function keyFromLabel(label: string): string {
  * approves a standard one), or the Swedish errors to show. Keys an item came with are kept;
  * new or duplicate ones are made from the label. Empty rows in the lists are dropped.
  */
-export function editorToProfile(s: EditorState): { ok: true; profile: FormatProfile } | { ok: false; errors: string[] } {
+export function editorToProfile(s: EditorState, locale: Locale = defaultLocale): { ok: true; profile: FormatProfile } | { ok: false; errors: string[] } {
+  const t = translator(locale);
+  const e = (key: Parameters<typeof t>[0], values?: Record<string, number>) => t(key, values as never);
   const errors: string[] = [];
   const title = clean(s.title);
-  if (!title) errors.push("Titeln får inte vara tom.");
-  else if (title.length > MAX) errors.push(`Titeln får vara högst ${MAX} tecken.`);
+  if (!title) errors.push(e("formatEditor.errors.titleEmpty"));
+  else if (title.length > MAX) errors.push(e("formatEditor.errors.titleLong", { max: MAX }));
 
   const infoTable = list(s.infoTable);
-  if (infoTable.length > MAX_FIELDS) errors.push(`Tabellen får ha högst ${MAX_FIELDS} fält.`);
+  if (infoTable.length > MAX_FIELDS) errors.push(e("formatEditor.errors.tableFields", { max: MAX_FIELDS }));
   const signatures = list(s.signatures);
-  if (signatures.length > MAX_FIELDS) errors.push(`Högst ${MAX_FIELDS} underskrifter.`);
+  if (signatures.length > MAX_FIELDS) errors.push(e("formatEditor.errors.signatures", { max: MAX_FIELDS }));
   const requiredItems = list(s.requiredItems);
-  if (requiredItems.length > MAX_REQUIRED) errors.push(`Högst ${MAX_REQUIRED} punkter från stadgarna.`);
+  if (requiredItems.length > MAX_REQUIRED) errors.push(e("formatEditor.errors.required", { max: MAX_REQUIRED }));
   if ([...infoTable, ...signatures, ...requiredItems].some((x) => x.length > MAX)) {
-    errors.push(`Varje fält får vara högst ${MAX} tecken.`);
+    errors.push(e("formatEditor.errors.fieldLong", { max: MAX }));
   }
 
   const agendaHeading = clean(s.agendaHeading);
-  if (agendaHeading.length > MAX) errors.push(`Rubriken för dagordningen får vara högst ${MAX} tecken.`);
+  if (agendaHeading.length > MAX) errors.push(e("formatEditor.errors.agendaLong", { max: MAX }));
 
-  if (s.items.some((i) => !clean(i.label))) errors.push("Varje punkt behöver en text.");
-  if (s.items.some((i) => clean(i.label).length > MAX)) errors.push(`Varje punkt får vara högst ${MAX} tecken.`);
-  if (s.items.length > MAX_ITEMS) errors.push(`Högst ${MAX_ITEMS} fasta punkter.`);
-  if (s.items.filter((i) => i.role === "checkin").length > 1) errors.push("Bara en punkt kan vara Må-runda.");
-  if (s.items.filter((i) => i.role === "followup").length > 1) errors.push("Bara en punkt kan vara Från förra veckan.");
+  if (s.items.some((i) => !clean(i.label))) errors.push(e("formatEditor.errors.itemEmpty"));
+  if (s.items.some((i) => clean(i.label).length > MAX)) errors.push(e("formatEditor.errors.itemLong", { max: MAX }));
+  if (s.items.length > MAX_ITEMS) errors.push(e("formatEditor.errors.items", { max: MAX_ITEMS }));
+  if (s.items.filter((i) => i.role === "checkin").length > 1) errors.push(e("formatEditor.errors.oneCheckin"));
+  if (s.items.filter((i) => i.role === "followup").length > 1) errors.push(e("formatEditor.errors.oneFollowup"));
 
   const tasksLabel = clean(s.tasks.label);
-  if (s.tasks.on && !tasksLabel) errors.push("Rubriken för uppgifter får inte vara tom.");
+  if (s.tasks.on && !tasksLabel) errors.push(e("formatEditor.errors.tasksEmpty"));
   const notesLabel = clean(s.notes.label);
-  if (s.notes.on && !notesLabel) errors.push("Rubriken för anteckningar får inte vara tom.");
+  if (s.notes.on && !notesLabel) errors.push(e("formatEditor.errors.notesEmpty"));
   if ((s.tasks.on && tasksLabel.length > MAX) || (s.notes.on && notesLabel.length > MAX)) {
-    errors.push(`Rubrikerna får vara högst ${MAX} tecken.`);
+    errors.push(e("formatEditor.errors.headingsLong", { max: MAX }));
   }
   if (errors.length) return { ok: false, errors };
 
@@ -144,6 +142,6 @@ export function editorToProfile(s: EditorState): { ok: true; profile: FormatProf
     // Only stored when on, and only with a Må-runda item to hide.
     ...(s.hideCheckin && s.items.some((i) => i.role === "checkin") ? { hideCheckin: true } : {}),
   });
-  if (!parsed.success) return { ok: false, errors: ["Formatet är inte giltigt. Kontrollera fälten."] };
+  if (!parsed.success) return { ok: false, errors: [e("formatEditor.errors.invalid")] };
   return { ok: true, profile: parsed.data as FormatProfile };
 }

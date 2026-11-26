@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useId, useState, type ReactNode } from "react";
 import { Button, type ButtonSize, type ButtonVariant } from "./button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle, DialogTrigger } from "./dialog";
@@ -46,6 +47,7 @@ export function ConfirmAction({
   requireText?: { name: string; value: string; label: ReactNode };
   disabled?: boolean;
 }) {
+  const common = useTranslations("common");
   const id = useId();
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
@@ -92,7 +94,7 @@ export function ConfirmAction({
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Avbryt
+              {common("cancel")}
             </Button>
             <SubmitButton variant={confirmVariant} disabled={!matches} pendingLabel={pendingLabel}>
               {confirmLabel}

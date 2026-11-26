@@ -1,0 +1,12 @@
+{
+  "unauthenticated": "Du är inte inloggad. Logga in och försök igen.",
+  "orgNotFound": "Föreningen finns inte.",
+  "generic": "Något gick fel. Försök igen om en liten stund.",
+  "invites": {
+    "forbidden": "Bara administratörer kan bjuda in via mejl.",
+    "listFailed": "Inbjudningarna kunde inte läsas. Ladda om sidan.",
+    "noEmails": "Skriv en eller flera e-postadresser.",
+    "tooMany": "Högst {max} adresser åt gången.",
+    "sendFailed": "Inbjudningarna kunde inte skickas. Försök igen."
+  }
+}

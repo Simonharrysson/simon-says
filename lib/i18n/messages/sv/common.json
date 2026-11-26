@@ -25,5 +25,17 @@
   "copy": "Kopiera",
   "copied": "Kopierad",
   "linkCopied": "Länken är kopierad.",
-  "copyManual": "Kunde inte kopiera automatiskt. Länken är markerad, tryck ⌘C eller Ctrl+C."
+  "copyManual": "Kunde inte kopiera automatiskt. Länken är markerad, tryck ⌘C eller Ctrl+C.",
+  "cancel": "Avbryt",
+  "opensInNewTab": "(öppnas i ny flik)",
+  "save": "Spara",
+  "saving": "Sparar…",
+  "picker": {
+    "offline": "Vi nådde inte servern. Kontrollera nätet och försök igen.",
+    "failed": "Google-väljaren kunde inte öppnas. Försök igen.",
+    "loadFailed": "Google-väljaren kunde inte laddas. Kontrollera nätet och försök igen.",
+    "folderTitle": "Välj mötesmappen",
+    "folderSaveFailed": "Mötesmappen kunde inte sparas. Försök igen.",
+    "folderSaved": "Mötesmappen är sparad."
+  }
 }

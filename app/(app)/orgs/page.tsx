@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
 import { OrgsView } from "@/components/views/OrgsView";
 import { listMyOrgs } from "@/lib/db/orgs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -7,13 +8,15 @@ import { logoUrl } from "@/lib/orgs/logo";
 import { createOrgAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Föreningar" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("orgs"))("metaTitle") };
+}
 
 export default async function OrgsPage({ searchParams }: { searchParams: Promise<{ fel?: string; klart?: string }> }) {
   const { fel, klart } = await searchParams;
   const db = await createSupabaseServerClient();
   const orgs = await listMyOrgs(db);
-  const notice = orgsNotice(fel, klart);
+  const notice = orgsNotice(fel, klart, await getLocale());
 
   return (
     <OrgsView

@@ -1,0 +1,15 @@
+{
+  "invite": {
+    "preheader": "Join to start meetings and read the association's meeting notes.",
+    "subject": "{inviter} invites you to {org} on Simon Says",
+    "heading": "Join {org}",
+    "body": "{inviter} has invited you to the association on Simon Says. There, the meeting notes are written while you talk, straight into a Google Doc. As a member you can start meetings and read all earlier meeting documents.",
+    "button": "Join {org}",
+    "fallback": "Button not working? Open the link:",
+    "footer": "You're getting this e-mail because {inviter} added your address in {org}. You sign in with Google and join with one button. If you weren't expecting this e-mail you can ignore it; nothing happens until you join.",
+    "prefsLink": "Don't want invitations? Change your e-mail choices.",
+    "textJoinHere": "Join here (you sign in with Google and join with one button):",
+    "textFooter": "You're getting this e-mail because {inviter} added your address in {org}. If you weren't expecting this e-mail you can ignore it; nothing happens until you join.",
+    "textPrefs": "Don't want invitations? Change your e-mail choices: {url}"
+  }
+}

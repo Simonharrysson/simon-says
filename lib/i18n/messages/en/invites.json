@@ -1,0 +1,53 @@
+{
+  "linkName": {
+    "org": "The association's name looks like a web or e-mail address, and we don't send that in e-mails. Rename the association under Settings and try again.",
+    "inviter": "Your name (on the association's people list or on your Google account) looks like a web or e-mail address, and we don't send that in e-mails. Change the name and try again."
+  },
+  "result": {
+    "sent": "Sent",
+    "member": "Already a member",
+    "invalid": "Invalid address",
+    "failed": "Failed",
+    "uncertain": "Uncertain – may have been sent",
+    "not_sent": "Not sent in time",
+    "opted_out": "Doesn't want e-mail",
+    "already_invited": "Already invited",
+    "resend_limit": "Sent twice today",
+    "org_limit": "The association's limit for today is reached",
+    "user_limit": "Your limit for today is reached",
+    "busy": "Already being sent"
+  },
+  "status": {
+    "sending": "Sending",
+    "sent": "Sent",
+    "failed": "Failed",
+    "uncertain": "Unsure whether it arrived",
+    "accepted": "Has joined"
+  },
+  "sendFailed": "The invitations couldn't be sent. Try again.",
+  "offline": "No contact with the server. Check the network and try again.",
+  "emailsLabel": "E-mail addresses",
+  "hint": "One or more, separated by commas or new lines. We send an e-mail with the association's link.",
+  "addresses": "{count, plural, one {# address} other {# addresses}}",
+  "alreadyMembers": " · {count, plural, one {# is already a member} other {# are already members}}",
+  "notEmail": " · not e-mail: {list}",
+  "tooMany": " · at most {max} at a time",
+  "addFromList": "Add {count, plural, one {# address} other {# addresses}} from the list",
+  "sendingRange": "Sending {from}–{to} of {total}…",
+  "sending": "Sending…",
+  "sendCount": "Send {count, plural, one {# invitation} other {# invitations}}",
+  "sendOne": "Send invitation",
+  "hideEmail": "Hide the e-mail",
+  "showEmail": "Show the e-mail",
+  "results": "Results",
+  "againAt": " · again {date}",
+  "tryAgain": "Try again",
+  "sentInvites": "Sent invitations",
+  "resendRule": "“Send again” works once a day per address.",
+  "resend": "Send again",
+  "againShort": "Again {date}",
+  "previewLabel": "Preview of the e-mail",
+  "subject": "Subject:",
+  "from": "From Simon Says · replies go to you",
+  "previewLanguage": "The e-mail is in Swedish unless the recipient has chosen English in Simon Says."
+}

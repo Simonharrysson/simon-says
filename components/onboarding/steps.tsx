@@ -13,7 +13,8 @@ import { plural } from "@/lib/format";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
 import { LOGO_TYPES } from "@/lib/orgs/logo";
 import { formatDateTime } from "@/lib/format";
-import { STATUS_LABEL, type InviteRow } from "@/lib/invites/rules";
+import type { InviteRow } from "@/lib/invites/rules";
+import { messages } from "@/lib/i18n/messages";
 import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
 import { OrgLogo } from "./OrgLogo";
@@ -264,7 +265,7 @@ function statusLine(row: BoardRow, me: boolean, invite?: InviteRow): ReactNode {
     return (
       <span className="wrap-anywhere">
         {row.email}
-        {invite ? ` · Inbjudan: ${STATUS_LABEL[invite.status].toLowerCase()}${sent ? ` ${formatDateTime(sent)}` : ""}` : " · ingen inbjudan skickad än"}
+        {invite ? ` · Inbjudan: ${messages.sv.invites.status[invite.status].toLowerCase()}${sent ? ` ${formatDateTime(sent)}` : ""}` : " · ingen inbjudan skickad än"}
       </span>
     );
   }

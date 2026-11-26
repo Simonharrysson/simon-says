@@ -1,0 +1,12 @@
+{
+  "unauthenticated": "You're not signed in. Sign in and try again.",
+  "orgNotFound": "The association doesn't exist.",
+  "generic": "Something went wrong. Try again in a little while.",
+  "invites": {
+    "forbidden": "Only admins can invite by e-mail.",
+    "listFailed": "The invitations couldn't be loaded. Reload the page.",
+    "noEmails": "Type one or more e-mail addresses.",
+    "tooMany": "At most {max} addresses at a time.",
+    "sendFailed": "The invitations couldn't be sent. Try again."
+  }
+}

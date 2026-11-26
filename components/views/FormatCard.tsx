@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
@@ -16,9 +17,9 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
-import { FORMAT_NAMES, formatLabel } from "@/lib/formats/standard";
+import { formatLabel, formatName } from "@/lib/formats/standard";
 import type { FormatKind, FormatProfile } from "@/lib/formats/schema";
-import { COPY, LearnFormatView, useFormatFlow } from "./FormatEditor";
+import { LearnFormatView, useFormatFlow } from "./FormatEditor";
 import { useMeetingFolderPicker } from "./useMeetingFolderPicker";
 
 export interface FormatCardProps {
@@ -37,7 +38,6 @@ export interface FormatCardProps {
 }
 
 const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
-const PICKER_OFF = "Google-väljaren är inte inställd än.";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -50,6 +50,10 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
   // Custom versions (a learned format, a Styrelseprotokoll with the stadgar's items, an adjusted
   // standard) are offered by id: choosing the bare standard would drop what makes them theirs (R3-I2).
+  const t = useTranslations("formatEditor");
+  const common = useTranslations("common");
+  const locale = useLocale();
+  const flowCopy = (v: "learn" | "customize" | "stadgar") => ({ start: t(`flows.${v}.start`), hint: t(`flows.${v}.hint`) });
   const custom = formats
     .map((f) => ({ ...f, custom: f.custom ?? f.kind === "learned", requiredCount: f.requiredCount ?? 0 }))
     .filter((f) => f.custom);
@@ -57,9 +61,15 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const required = current.profile?.requiredItems ?? [];
   const selected = currentRow ? `id:${currentRow.id}` : current.kind === "learned" ? "" : current.kind;
 
-  const name = current.kind === "learned" ? "Eget format" : current.name;
-  const version = currentRow ? `${currentRow.kind === "learned" ? "inlärt" : "anpassat"} ${currentRow.createdAt.slice(0, 10)}` : null;
-  const folderLine = meetingFolder.id ? (meetingFolder.name ? `mötesmapp: ${meetingFolder.name}` : "mötesmapp vald") : "ingen mötesmapp vald";
+  const name = current.kind === "learned" ? t("card.ownFormat") : current.name;
+  const version = currentRow
+    ? t(currentRow.kind === "learned" ? "card.versionLearned" : "card.versionCustom", { date: currentRow.createdAt.slice(0, 10) })
+    : null;
+  const folderLine = meetingFolder.id
+    ? meetingFolder.name
+      ? t("card.folderNamed", { name: meetingFolder.name })
+      : t("card.folderChosen")
+    : t("card.noFolder");
   const meta = capitalize([version, folderLine].filter(Boolean).join(" · "));
 
   const flow = useFormatFlow(orgId, current.profile);
@@ -87,7 +97,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button ref={triggerRef} variant="secondary" size="sm" loading={folder.busy} data-format-menu="">
-          Ändra
+          {t("card.change")}
           <IconChevronDown size={16} className="ml-1 inline-block align-[-0.2em] text-ink-2" />
         </Button>
       </DropdownMenuTrigger>
@@ -101,62 +111,62 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
       >
         {showChange && (
           <DropdownMenuItem
-            hint="Ett standardformat eller ett ni sparat"
+            hint={t("card.switchHint")}
             onSelect={() => {
               flow.reset();
               focusSelect.current = true;
               setChanging(true);
             }}
           >
-            Byt format
+            {t("card.switch")}
           </DropdownMenuItem>
         )}
         {showCustomize && (
           <DropdownMenuItem
-            hint={COPY.customize.hint}
+            hint={flowCopy("customize").hint}
             onSelect={() => {
               setChanging(false);
               flow.start("customize");
             }}
           >
-            {COPY.customize.start}
+            {flowCopy("customize").start}
           </DropdownMenuItem>
         )}
         {(showChange || showCustomize) && <DropdownMenuSeparator />}
         <DropdownMenuItem
-          hint={COPY.learn.hint}
+          hint={flowCopy("learn").hint}
           disabled={!pickerEnabled}
           onSelect={() => {
             setChanging(false);
             void flow.start("learn");
           }}
         >
-          {COPY.learn.start}
+          {flowCopy("learn").start}
         </DropdownMenuItem>
         {pickerEnabled && (
           <>
             <DropdownMenuItem
-              hint={COPY.stadgar.hint}
+              hint={flowCopy("stadgar").hint}
               onSelect={() => {
                 setChanging(false);
                 void flow.start("stadgar");
               }}
             >
-              {COPY.stadgar.start}
+              {flowCopy("stadgar").start}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem hint="Nya mötesdokument hamnar där och får mappens delning, även transkriptet. Dela mappen bara med styrelsen." onSelect={() => void folder.pick()}>
-              {meetingFolder.id ? "Byt mötesmapp" : "Välj mötesmapp"}
+            <DropdownMenuItem hint={t("card.folderHint")} onSelect={() => void folder.pick()}>
+              {meetingFolder.id ? t("card.changeFolder") : t("card.pickFolder")}
             </DropdownMenuItem>
           </>
         )}
-        {!pickerEnabled && <DropdownMenuNote>{PICKER_OFF}</DropdownMenuNote>}
+        {!pickerEnabled && <DropdownMenuNote>{t("card.pickerOff")}</DropdownMenuNote>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 
   return (
-    <Panel title="Mötesformat" titleId="format-title" actions={menu}>
+    <Panel title={t("card.title")} titleId="format-title" actions={menu}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <p className="text-base font-medium text-ink">{name}</p>
@@ -172,10 +182,10 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
           <details className="group text-sm">
             <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-sm font-medium text-ink-2 select-none hover:text-ink max-md:min-h-11 [&::-webkit-details-marker]:hidden">
               <IconChevronDown size={16} className="-rotate-90 transition-transform duration-120 group-open:rotate-0" />
-              Stadgarna kräver {required.length} punkter
+              {t("card.statutesRequire", { count: required.length })}
             </summary>
             <div className="mt-2 flex flex-col gap-3 pl-5">
-              <p className="text-ink-3">De kommer med på varje dagordning:</p>
+              <p className="text-ink-3">{t("card.everyAgenda")}</p>
               <ul className="list-dash pl-4 text-xs text-ink-3 marker:text-ink-3">
                 {required.map((r) => (
                   <li key={r}>{r}</li>
@@ -194,31 +204,31 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
             className="flex flex-col gap-2 border-t border-line pt-4"
           >
             <input type="hidden" name="orgId" value={orgId} />
-            <Label htmlFor="format-choice">Byt format</Label>
+            <Label htmlFor="format-choice">{t("card.switch")}</Label>
             <div className="flex flex-wrap gap-2">
               <NativeSelect ref={selectRef} id="format-choice" name="choice" defaultValue={selected} className="min-w-[14rem] flex-1 max-md:basis-full">
                 {selected === "" && (
                   <option value="" disabled>
-                    {FORMAT_NAMES.learned}
+                    {formatName("learned", locale)}
                   </option>
                 )}
                 {STANDARD_KINDS.map((k) => (
                   <option key={k} value={k}>
-                    {FORMAT_NAMES[k]}
+                    {formatName(k, locale)}
                   </option>
                 ))}
                 {custom.map((f) => (
                   <option key={f.id} value={`id:${f.id}`}>
-                    {formatLabel(f)}
-                    {f.isDefault ? " · används nu" : ""}
+                    {formatLabel(f, locale)}
+                    {f.isDefault ? t("card.inUse") : ""}
                   </option>
                 ))}
               </NativeSelect>
-              <SubmitButton variant="primary" pendingLabel="Byter…">
-                Byt
+              <SubmitButton variant="primary" pendingLabel={t("card.switching")}>
+                {t("card.switchShort")}
               </SubmitButton>
               <Button variant="ghost" onClick={() => setChanging(false)}>
-                Avbryt
+                {common("cancel")}
               </Button>
             </div>
           </form>

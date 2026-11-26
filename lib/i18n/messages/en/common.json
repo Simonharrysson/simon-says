@@ -25,5 +25,17 @@
   "copy": "Copy",
   "copied": "Copied",
   "linkCopied": "The link is copied.",
-  "copyManual": "Couldn't copy automatically. The link is selected, press ⌘C or Ctrl+C."
+  "copyManual": "Couldn't copy automatically. The link is selected, press ⌘C or Ctrl+C.",
+  "cancel": "Cancel",
+  "opensInNewTab": "(opens in a new tab)",
+  "save": "Save",
+  "saving": "Saving…",
+  "picker": {
+    "offline": "We couldn't reach the server. Check the network and try again.",
+    "failed": "The Google picker couldn't be opened. Try again.",
+    "loadFailed": "The Google picker couldn't be loaded. Check the network and try again.",
+    "folderTitle": "Choose the meeting folder",
+    "folderSaveFailed": "The meeting folder couldn't be saved. Try again.",
+    "folderSaved": "The meeting folder is saved."
+  }
 }

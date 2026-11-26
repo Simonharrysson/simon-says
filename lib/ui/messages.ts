@@ -5,7 +5,8 @@
 import { defaultLocale, type Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
 
-export type Notice = { tone: "danger" | "success"; title?: string; text: string };
+/** `code` is the `?fel=` / `?klart=` code it came from (views match on it, never on the text). */
+export type Notice = { tone: "danger" | "success"; title?: string; text: string; code?: string };
 
 type Copy = { title?: string; text: string };
 
@@ -64,7 +65,7 @@ function pick(tones: Record<string, Notice["tone"]>, texts: Record<string, Copy>
   const code = (fel && Object.hasOwn(tones, fel) && fel) || (klart && Object.hasOwn(tones, klart) && klart) || null;
   if (!code) return null;
   const text = texts[code];
-  return { tone: tones[code], ...(text.title ? { title: text.title } : {}), text: text.text };
+  return { tone: tones[code], ...(text.title ? { title: text.title } : {}), text: text.text, code };
 }
 
 export const orgsNotice = (fel?: string, klart?: string, locale: Locale = defaultLocale) =>

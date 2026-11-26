@@ -1,3 +1,5 @@
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 import type { FormatKind, FormatProfile } from "./schema";
 
 // Structure only: labels, never any förening's real minutes.
@@ -113,10 +115,17 @@ export const FORMAT_NAMES: Record<FormatKind, string> = {
   arsmote: "Årsmöte",
 };
 
+/** A format's name in the UI language (FORMAT_NAMES above is the Swedish one, also used in Docs). */
+export function formatName(kind: FormatKind, locale: Locale = defaultLocale): string {
+  return translator(locale)(`formats.names.${kind}`);
+}
+
 /** A saved format's display name: the standard name; "(date)" for learned and custom versions (R3-I2). */
-export function formatLabel(f: { kind: FormatKind; createdAt: string; custom: boolean; requiredCount: number }): string {
+export function formatLabel(f: { kind: FormatKind; createdAt: string; custom: boolean; requiredCount: number }, locale: Locale = defaultLocale): string {
+  const t = translator(locale);
   const date = f.createdAt.slice(0, 10);
-  if (f.kind === "learned") return `${FORMAT_NAMES.learned} (${date})`;
-  if (!f.custom) return FORMAT_NAMES[f.kind];
-  return f.requiredCount > 0 ? `${FORMAT_NAMES[f.kind]} med stadgarnas punkter (${date})` : `${FORMAT_NAMES[f.kind]}, anpassat (${date})`;
+  const name = formatName(f.kind, locale);
+  if (f.kind === "learned") return t("formats.labelLearned", { name, date });
+  if (!f.custom) return name;
+  return f.requiredCount > 0 ? t("formats.labelStatutes", { name, date }) : t("formats.labelCustom", { name, date });
 }

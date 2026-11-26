@@ -5,6 +5,24 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enFormatEditor from "./en/formatEditor.json";
+import svFormatEditor from "./sv/formatEditor.json";
+import enStart from "./en/start.json";
+import svStart from "./sv/start.json";
+import enSummary from "./en/summary.json";
+import svSummary from "./sv/summary.json";
+import enApi from "./en/api.json";
+import svApi from "./sv/api.json";
+import enInvites from "./en/invites.json";
+import svInvites from "./sv/invites.json";
+import enEmails from "./en/emails.json";
+import svEmails from "./sv/emails.json";
+import enFormats from "./en/formats.json";
+import svFormats from "./sv/formats.json";
+import enOrg from "./en/org.json";
+import svOrg from "./sv/org.json";
+import enOrgs from "./en/orgs.json";
+import svOrgs from "./sv/orgs.json";
 import enPrivacy from "./en/privacy.json";
 import svPrivacy from "./sv/privacy.json";
 import enLanding from "./en/landing.json";
@@ -27,6 +45,15 @@ import svMailPrefs from "./sv/mailPrefs.json";
 import svNotices from "./sv/notices.json";
 
 export const sv = {
+  formatEditor: svFormatEditor,
+  start: svStart,
+  summary: svSummary,
+  api: svApi,
+  invites: svInvites,
+  emails: svEmails,
+  formats: svFormats,
+  org: svOrg,
+  orgs: svOrgs,
   privacy: svPrivacy,
   landing: svLanding,
   status: svStatus,
@@ -42,6 +69,15 @@ export const sv = {
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  formatEditor: enFormatEditor,
+  start: enStart,
+  summary: enSummary,
+  api: enApi,
+  invites: enInvites,
+  emails: enEmails,
+  formats: enFormats,
+  org: enOrg,
+  orgs: enOrgs,
   privacy: enPrivacy,
   landing: enLanding,
   status: enStatus,

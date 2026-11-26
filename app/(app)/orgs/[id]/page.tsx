@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getLocale, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { FormatCard } from "@/components/views/FormatCard";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
@@ -17,7 +18,7 @@ import { appCreatedFlags, sharedMeetingIds } from "@/lib/docs/access";
 import { docAccessFor } from "@/lib/docs/access-state";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listMeetings, listPeople, myRole } from "@/lib/db/orgs";
-import { FORMAT_NAMES } from "@/lib/formats/standard";
+import { formatName } from "@/lib/formats/standard";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { getEnv, pickerEnabled } from "@/lib/env";
 import { hasImportAccess } from "@/lib/google/client";
@@ -67,7 +68,9 @@ const EMPTY_OVERVIEW: Overview = {
   attendance: { meetings: 0, people: [] },
   imported: { count: 0, first: null, last: null, tasks: 0 },
 };
-export const metadata: Metadata = { title: "Förening" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getTranslations("org"))("metaTitle") };
+}
 
 /** The Översikt tab's data, read with the user's client (RLS: members of this org only). */
 async function safeOverview(
@@ -144,6 +147,8 @@ export default async function OrgPage({
   searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string }>;
 }) {
   const { id } = await params;
+  const locale = await getLocale();
+  const t = await getTranslations("org");
   const { fel, klart, flik, import: openImport, drive } = await searchParams;
   const tab: OrgTab = flik === "oversikt" ? "oversikt" : "moten";
   if (!isUuid(id)) notFound();
@@ -197,7 +202,7 @@ export default async function OrgPage({
       }
       docAccess={docAccess}
       viewerEmail={userResult.data.user?.email ?? null}
-      notice={orgNotice(fel, klart)}
+      notice={orgNotice(fel, klart, locale)}
       tabs={{
         active: tab,
         href: (t) => (t === "oversikt" ? `/orgs/${org.id}?flik=oversikt` : `/orgs/${org.id}`),
@@ -213,7 +218,7 @@ export default async function OrgPage({
               importAccess={{
                 driveReadonly,
                 email: userResult.data.user?.email ?? null,
-                meetingFolder: org.meeting_folder_id ? { id: org.meeting_folder_id, name: org.meeting_folder_name ?? "Föreningens mötesmapp" } : null,
+                meetingFolder: org.meeting_folder_id ? { id: org.meeting_folder_id, name: org.meeting_folder_name ?? t("meetingFolderFallback") } : null,
               }}
               importJob={importJob}
               initialGoalsPhase={isAdmin && openImport === "1" && !(importJob && isOpen(importJob.status)) ? { phase: "import", consent: importBack } : undefined}
@@ -245,7 +250,7 @@ export default async function OrgPage({
       formatCard={
         <FormatCard
           orgId={org.id}
-          current={{ kind: format.profile.kind, name: FORMAT_NAMES[format.profile.kind], id: format.id, profile: format.profile }}
+          current={{ kind: format.profile.kind, name: formatName(format.profile.kind, locale), id: format.id, profile: format.profile }}
           isAdmin={role === "admin"}
           meetingFolder={{ id: org.meeting_folder_id ?? null, name: org.meeting_folder_name ?? null }}
           formats={formats}

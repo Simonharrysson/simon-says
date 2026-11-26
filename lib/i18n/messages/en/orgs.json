@@ -1,0 +1,15 @@
+{
+  "metaTitle": "Associations",
+  "title": "Associations",
+  "intro": "Each association has its own people list, its meetings and its invite link.",
+  "emptyTitle": "You're not in any association yet",
+  "emptyText": "Has someone sent you an invite link? Open it and you'll end up in the right place. Otherwise, create the association below — you become its admin and can invite the rest.",
+  "yours": "Your associations",
+  "admin": "Admin",
+  "createTitle": "Create an association",
+  "name": "Name",
+  "namePlaceholder": "e.g. LiU AI Society",
+  "creating": "Creating…",
+  "create": "Create",
+  "limit": "You can create at most two associations. Joining other people's doesn't count."
+}

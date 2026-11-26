@@ -47,3 +47,16 @@ export async function localesForUsers(userIds: string[], db: SupabaseClient = su
   }
   return out;
 }
+
+/**
+ * The language to e-mail an address in: the saved choice of the confirmed account that signs in
+ * with it (locale_for_email, 0040), Swedish otherwise (no account, no choice, or no answer).
+ */
+export async function localeForEmail(email: string, db: SupabaseClient = supabaseAdmin()): Promise<Locale> {
+  try {
+    const { data, error } = await db.rpc("locale_for_email", { p_email: email });
+    return !error && isLocale(data) ? data : defaultLocale;
+  } catch {
+    return defaultLocale;
+  }
+}

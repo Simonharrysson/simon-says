@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
@@ -13,9 +14,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { MeetingStatus } from "@/lib/db/types";
-import { formatDateTime, formatDuration, formatMeetingDate, plural } from "@/lib/format";
+import { formatDateTime, formatDuration, formatMeetingDate } from "@/lib/format";
 import { canEndFromOrgPage } from "@/lib/meetings/access";
-import { canResume, docUrl, meetingDeleteState, meetingStatusLabel } from "@/lib/ui/meetings";
+import { canResume, docUrl, meetingDeleteState } from "@/lib/ui/meetings";
 import type { Notice } from "@/lib/ui/messages";
 import { DocAccessButton } from "./DocAccessButton";
 import { NoticeBanner } from "./NoticeBanner";
@@ -114,26 +115,27 @@ function MemberRow({
   memberCount: number;
   actions: OrgDetailViewProps["actions"];
 }) {
-  const label = m.email || "Okänd medlem";
+  const t = useTranslations("org");
+  const label = m.email || t("unknownMember");
   const lastAdmin = m.role === "admin" && adminCount <= 1;
   const roleForm = (role: "admin" | "member") => ({ orgId: org.id, userId: m.userId, role });
 
   let controls: ReactNode = null;
   if (me) {
     controls = lastAdmin ? (
-      memberCount > 1 && <span className="text-sm text-ink-3">Gör någon annan till admin först för att kunna lämna.</span>
+      memberCount > 1 && <span className="text-sm text-ink-3">{t("lastAdminLeave")}</span>
     ) : (
       <>
         {isAdmin && actions.setMemberRole && (
           <ConfirmAction
             action={actions.setMemberRole}
             hidden={roleForm("member")}
-            trigger="Sluta vara admin"
+            trigger={t("stepDown")}
             triggerVariant="ghost"
-            title={`Sluta vara admin i ${org.name}?`}
-            description="Du blir vanlig medlem och kan fortfarande starta möten. Bara en admin kan göra dig till admin igen."
-            confirmLabel="Sluta vara admin"
-            pendingLabel="Sparar…"
+            title={t("stepDownTitle", { org: org.name })}
+            description={t("stepDownText")}
+            confirmLabel={t("stepDown")}
+            pendingLabel={t("saving")}
             confirmVariant="primary"
           />
         )}
@@ -141,12 +143,12 @@ function MemberRow({
           <ConfirmAction
             action={actions.leaveOrg}
             hidden={{ orgId: org.id }}
-            trigger="Lämna"
+            trigger={t("leave")}
             triggerVariant="ghost"
-            title={`Lämna ${org.name}?`}
-            description="Du ser inte längre föreningens möten och får inte nya mötesdokument. Dokument som redan delats med dig ligger kvar i din Drive. Du kan gå med igen via en inbjudningslänk."
-            confirmLabel="Lämna föreningen"
-            pendingLabel="Lämnar…"
+            title={t("leaveTitle", { org: org.name })}
+            description={t("leaveText")}
+            confirmLabel={t("leaveConfirm")}
+            pendingLabel={t("leaving")}
           />
         )}
       </>
@@ -159,24 +161,24 @@ function MemberRow({
             <ConfirmAction
               action={actions.setMemberRole}
               hidden={roleForm("admin")}
-              trigger="Gör till admin"
+              trigger={t("makeAdmin")}
               triggerVariant="ghost"
-              title={`Gör ${label} till admin?`}
-              description="Hen kan då ändra föreningens inställningar, ta bort medlemmar, radera möten och föreningen, och göra andra till admin. Du är fortfarande admin."
-              confirmLabel="Gör till admin"
-              pendingLabel="Sparar…"
+              title={t("makeAdminTitle", { name: label })}
+              description={t("makeAdminText")}
+              confirmLabel={t("makeAdmin")}
+              pendingLabel={t("saving")}
               confirmVariant="primary"
             />
           ) : (
             <ConfirmAction
               action={actions.setMemberRole}
               hidden={roleForm("member")}
-              trigger="Ta bort som admin"
+              trigger={t("removeAdmin")}
               triggerVariant="ghost"
-              title={`Ta bort ${label} som admin?`}
-              description="Hen blir vanlig medlem och kan fortfarande starta möten."
-              confirmLabel="Ta bort som admin"
-              pendingLabel="Sparar…"
+              title={t("removeAdminTitle", { name: label })}
+              description={t("removeAdminText")}
+              confirmLabel={t("removeAdmin")}
+              pendingLabel={t("saving")}
               confirmVariant="primary"
             />
           ))}
@@ -184,12 +186,12 @@ function MemberRow({
           <ConfirmAction
             action={actions.removeMember}
             hidden={{ orgId: org.id, userId: m.userId }}
-            trigger="Ta bort"
+            trigger={t("remove")}
             triggerVariant="ghost"
-            title={`Ta bort ${label}?`}
-            description="Hen ser inte längre föreningens möten och får inte nya mötesdokument. Mötesdokument som redan delats med hen förblir delade – ta bort delningen i Google Drive om det behövs. Inbjudningslänken fungerar fortfarande, så skapa en ny länk om hen inte ska kunna gå med igen."
-            confirmLabel="Ta bort medlemmen"
-            pendingLabel="Tar bort…"
+            title={t("removeTitle", { name: label })}
+            description={t("removeText")}
+            confirmLabel={t("removeConfirm")}
+            pendingLabel={t("removing")}
           />
         )}
       </>
@@ -202,7 +204,7 @@ function MemberRow({
         <span className="flex min-w-0 flex-1 basis-48 flex-col gap-[0.1rem]">
           <span className="text-sm font-medium wrap-anywhere">{label}</span>
           {(m.role === "admin" || me) && (
-            <span className="text-sm text-ink-3">{[m.role === "admin" ? "admin" : null, me ? "du" : null].filter(Boolean).join(" · ")}</span>
+            <span className="text-sm text-ink-3">{[m.role === "admin" ? t("roleAdmin") : null, me ? t("roleYou") : null].filter(Boolean).join(" · ")}</span>
           )}
         </span>
         {controls && <div className="ml-auto flex flex-wrap items-center justify-end gap-1">{controls}</div>}
@@ -212,23 +214,24 @@ function MemberRow({
 }
 
 export type OrgTab = "moten" | "oversikt";
-const TABS: { id: OrgTab; label: string }[] = [
-  { id: "moten", label: "Möten" },
-  { id: "oversikt", label: "Översikt" },
+const TABS: { id: OrgTab; label: "tabMeetings" | "tabOverview" }[] = [
+  { id: "moten", label: "tabMeetings" },
+  { id: "oversikt", label: "tabOverview" },
 ];
 
 /** Server-rendered tabs: links with aria-current, so the URL can be shared and reloaded. */
 function OrgTabs({ active, href }: { active: OrgTab; href: (tab: OrgTab) => string }) {
+  const t = useTranslations("org");
   return (
-    <nav aria-label="Föreningens vyer" className="-mt-2 flex gap-1 border-b border-line">
-      {TABS.map((t) => (
+    <nav aria-label={t("tabsLabel")} className="-mt-2 flex gap-1 border-b border-line">
+      {TABS.map((tab) => (
         <Link
-          key={t.id}
-          href={href(t.id)}
-          aria-current={t.id === active ? "page" : undefined}
+          key={tab.id}
+          href={href(tab.id)}
+          aria-current={tab.id === active ? "page" : undefined}
           className="-mb-px inline-flex min-h-10 items-center border-b-2 border-transparent px-3 text-sm font-medium text-ink-3 no-underline transition-colors duration-120 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:text-ink max-md:min-h-11"
         >
-          {t.label}
+          {t(tab.label)}
         </Link>
       ))}
     </nav>
@@ -244,17 +247,18 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 
 export function OrgDetailView(props: OrgDetailViewProps) {
   const { org, isAdmin, userId, inviteUrl, members, people, meetings, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
+  const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
-  const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || "den som startade mötet";
+  const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
   // Any member may continue the running meeting from their own device (Meet-like presence).
   const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
-  const nameError = notice?.text.startsWith("Ange ett namn") ? notice.text : undefined;
+  const nameError = notice?.code === "namn" ? notice.text : undefined;
 
   return (
     <div className="mx-auto w-full max-w-page px-gutter flex flex-col gap-6">
       <PageHeader
-        back={{ href: "/orgs", label: "Föreningar" }}
+        back={{ href: "/orgs", label: t("back") }}
         title={
           <span className="flex items-center gap-4">
             <OrgLogo name={org.name} src={logoUrl} size="md" />
@@ -263,21 +267,21 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         }
         meta={
           <div className="flex flex-wrap items-center gap-3">
-            <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? "Du är admin" : "Du är medlem"}</Badge>
+            <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? t("youAreAdmin") : t("youAreMember")}</Badge>
             <span className="text-sm text-ink-3">
-              {plural(people.length, "person", "personer")} · {plural(meetings.length, "möte", "möten")}
+              {t("counts", { people: people.length, meetings: meetings.length })}
             </span>
           </div>
         }
         actions={
           running && liveMeetingHref ? (
             <ButtonLink href={liveMeetingHref(running.id)} variant="primary" size="lg" icon={<IconPlay size={18} />}>
-              Fortsätt mötet
+              {t("resume")}
             </ButtonLink>
           ) : (
             startMeetingHref && (
               <ButtonLink href={startMeetingHref} variant="primary" size="lg" icon={<IconMic />}>
-                Starta ett möte
+                {t("startMeeting")}
               </ButtonLink>
             )
           )
@@ -294,13 +298,12 @@ export function OrgDetailView(props: OrgDetailViewProps) {
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           {active ? (
-            <Banner tone="info" title="Ett möte pågår" live={false}>
+            <Banner tone="info" title={t("activeTitle")} live={false}>
               {access(active) !== "open" && active.started_by !== userId ? (
                 <div className="flex flex-col items-start gap-2">
                   <p>
-                    Anteckningarna skrivs i mötesdokumentet. Ett nytt möte kan startas när det är avslutat.
-                    {active.status === "live" &&
-                      " Är ingen kvar i mötet avslutas det av sig självt efter några minuter, och anteckningarna görs klara."}
+                    {t("activeText")}
+                    {active.status === "live" && t("activeAutoEnd")}
                   </p>
                   <DocAccessButton
                     meetingId={active.id}
@@ -312,19 +315,20 @@ export function OrgDetailView(props: OrgDetailViewProps) {
                 </div>
               ) : (
                 <p>
-                  Anteckningarna skrivs i{" "}
-                  <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
-                    mötesdokumentet
-                  </a>
-                  . Ett nytt möte kan startas när det är avslutat.
-                  {active.status === "live" &&
-                    " Är ingen kvar i mötet avslutas det av sig självt efter några minuter, och anteckningarna görs klara."}
+                  {t.rich("activeTextLink", {
+                    link: (chunks) => (
+                      <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                        {chunks}
+                      </a>
+                    ),
+                  })}
+                  {active.status === "live" && t("activeAutoEnd")}
                 </p>
               )}
             </Banner>
           ) : (
             startMeeting && (
-              <Panel title="Starta möte" titleId="start-title">
+              <Panel title={t("startPanel")} titleId="start-title">
                 {startMeeting}
               </Panel>
             )
@@ -346,33 +350,34 @@ export function OrgDetailView(props: OrgDetailViewProps) {
         </div>
 
         <div className="flex flex-col gap-6">
-          <Panel title="Bjud in" titleId="invite-title">
+          <Panel title={t("inviteTitle")} titleId="invite-title">
             <div className="flex flex-col gap-3">
               {inviteByEmail && (
                 <section aria-labelledby="invite-email-title" className="flex flex-col gap-3 border-b border-line pb-5">
                   <h3 id="invite-email-title" className="text-sm font-semibold">
-                    Bjud in via mejl
+                    {t("inviteByEmail")}
                   </h3>
                   {inviteByEmail}
                 </section>
               )}
               <p className="text-sm text-ink-3">
-                {inviteByEmail ? "Eller dela länken själv. " : ""}Den som öppnar länken och loggar in med Google blir medlem och kan starta möten.
+                {inviteByEmail ? t("orShareLink") : ""}
+                {t("inviteLinkText")}
               </p>
-              <CopyField id="invite-url" value={inviteUrl} label="Inbjudningslänk" />
+              <CopyField id="invite-url" value={inviteUrl} label={t("inviteLinkLabel")} />
               {isAdmin && (
                 <div>
                   <ConfirmAction
                     action={actions.rotateInvite}
                     hidden={{ orgId: org.id }}
-                    trigger="Skapa ny länk"
+                    trigger={t("newLink")}
                     triggerVariant="ghost"
                     triggerIcon={<IconRefresh size={18} />}
-                    title="Skapa en ny inbjudningslänk?"
-                    description="Den gamla länken slutar fungera direkt. Den som redan är medlem påverkas inte."
-                    confirmLabel="Skapa ny länk"
+                    title={t("newLinkTitle")}
+                    description={t("newLinkText")}
+                    confirmLabel={t("newLink")}
                     confirmVariant="primary"
-                    pendingLabel="Skapar…"
+                    pendingLabel={t("creating")}
                   />
                 </div>
               )}
@@ -380,8 +385,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </Panel>
 
           {members && (
-            <Panel flush title="Medlemmar" titleId="members-title" actions={<span className="text-sm text-ink-3">{members.length}</span>}>
-              <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">Kan logga in, starta möten och får tillgång till nya mötesdokument.</p>
+            <Panel flush title={t("membersTitle")} titleId="members-title" actions={<span className="text-sm text-ink-3">{members.length}</span>}>
+              <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">{t("membersText")}</p>
               <ul aria-labelledby="members-title">
                 {members.map((m) => (
                   <MemberRow
@@ -403,7 +408,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
       {isAdmin && (
         <>
-          <Panel title="Inställningar" titleId="settings-title" id="installningar">
+          <Panel title={t("settingsTitle")} titleId="settings-title" id="installningar">
             <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
             {summarySettings && (
               <div id="sammanfattning" className="mt-6 scroll-mt-6 border-t border-line pt-6">
@@ -411,36 +416,29 @@ export function OrgDetailView(props: OrgDetailViewProps) {
               </div>
             )}
             <p className="mt-6 border-t border-line pt-4 text-sm text-ink-3">
-              Logga, styrelsen, stadgar och röster: <a href={`/orgs/${org.id}/kom-igang`}>öppna Kom igång</a>.
+              {t.rich("settingsMore", { link: (chunks) => <a href={`/orgs/${org.id}/kom-igang`}>{chunks}</a> })}
             </p>
           </Panel>
 
-          <Panel title="Radera föreningen" titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
+          <Panel title={t("deleteOrgTitle")} titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm text-ink-3 max-w-[68ch]">
-                Tar bort föreningen med alla möten, transkriptioner, anteckningar och personer här. Det går
-                inte att ångra. Google-dokumenten ligger kvar i Drive.
-              </p>
+              <p className="text-sm text-ink-3 max-w-[68ch]">{t("deleteOrgText")}</p>
               <ConfirmAction
                 action={actions.deleteOrg}
                 hidden={{ orgId: org.id }}
-                trigger="Radera föreningen"
+                trigger={t("deleteOrg")}
                 triggerVariant="danger"
                 triggerSize="md"
                 triggerIcon={<IconTrash size={18} />}
-                title={`Radera ${org.name}?`}
-                description="Alla möten, transkriptioner, anteckningar och personer försvinner. Google-dokumenten ligger kvar i Drive."
+                title={t("deleteOrgConfirmTitle", { org: org.name })}
+                description={t("deleteOrgConfirmText")}
                 requireText={{
                   name: "confirmName",
                   value: org.name,
-                  label: (
-                    <>
-                      Skriv <strong>{org.name}</strong> för att bekräfta
-                    </>
-                  ),
+                  label: <>{t.rich("deleteOrgType", { org: org.name, strong: (chunks) => <strong>{chunks}</strong> })}</>,
                 }}
-                confirmLabel="Radera för alltid"
-                pendingLabel="Raderar…"
+                confirmLabel={t("deleteForever")}
+                pendingLabel={t("deleting")}
               />
             </div>
           </Panel>
@@ -475,16 +473,15 @@ function MeetingsPanel({
   endMeeting?: FormAction;
   liveMeetingHref?: (meetingId: string) => string;
 }) {
+  const t = useTranslations("org");
+  const common = useTranslations("common");
+  const locale = useLocale();
   return (
-    <Panel flush title="Möten" titleId="meetings-title">
+    <Panel flush title={t("meetingsTitle")} titleId="meetings-title">
       {meetings.length === 0 ? (
         <div className="px-6 pb-6">
-          <EmptyState title="Inga möten än">
-            <p>
-              När någon startar ett möte skapas ett Google-dokument i föreningens mötesmapp (eller i
-              startarens Drive) och delas med föreningens medlemmar. Mötet hamnar här, med en länk
-              till dokumentet.
-            </p>
+          <EmptyState title={t("noMeetingsTitle")}>
+            <p>{t("noMeetingsText")}</p>
           </EmptyState>
         </div>
       ) : (
@@ -495,40 +492,40 @@ function MeetingsPanel({
               const mine = userId !== null && meeting.started_by === userId;
               const duration =
                 meeting.ended_at &&
-                formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000);
+                formatDuration((new Date(meeting.ended_at).getTime() - new Date(meeting.started_at).getTime()) / 1000, locale);
               return (
                 <li key={meeting.id} id={`mote-${meeting.id}`} className="scroll-mt-6">
                   <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
                     <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
-                      <span className="font-medium wrap-anywhere">{formatMeetingDate(meeting.started_at)}</span>
+                      <span className="font-medium wrap-anywhere">{formatMeetingDate(meeting.started_at, undefined, locale)}</span>
                       <span className="mt-[0.15rem] flex flex-wrap items-center gap-2 text-xs text-ink-3">
-                        <Badge tone={statusTone[meeting.status]}>{meetingStatusLabel[meeting.status]}</Badge>
+                        <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>
                         {duration && <span>{duration}</span>}
-                        {state === "active" && <span>Avsluta mötet innan du raderar det.</span>}
+                        {state === "active" && <span>{t("endBeforeDelete")}</span>}
                       </span>
                     </span>
                     <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
                       {meeting.status === "live" && userId !== null && liveMeetingHref && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} variant="primary" size="sm" icon={<IconArrowRight size={16} />}>
-                          Till mötet
+                          {t("toMeeting")}
                         </ButtonLink>
                       )}
                       {meeting.status === "live" && endMeeting && canEndFromOrgPage(isAdmin ? "admin" : "member", mine) && (
                         <ConfirmAction
                           action={endMeeting}
                           hidden={{ orgId, meetingId: meeting.id }}
-                          trigger="Avsluta mötet"
+                          trigger={t("endMeeting")}
                           triggerIcon={<IconStop size={16} />}
                           triggerVariant="ghost"
-                          title="Avsluta mötet?"
-                          description="Inspelningen slutar och anteckningarna görs klara i dokumentet. Det som redan sagts finns kvar."
-                          confirmLabel="Avsluta mötet"
-                          pendingLabel="Avslutar…"
+                          title={t("endMeetingTitle")}
+                          description={t("endMeetingText")}
+                          confirmLabel={t("endMeeting")}
+                          pendingLabel={t("ending")}
                         />
                       )}
                       {meeting.status === "abandoned" && userId !== null && liveMeetingHref && canResume(meeting) && (
                         <ButtonLink href={liveMeetingHref(meeting.id)} size="sm" icon={<IconPlay size={16} />}>
-                          Fortsätt mötet
+                          {t("resume")}
                         </ButtonLink>
                       )}
                       {access(meeting) !== "open" && !mine ? (
@@ -546,23 +543,23 @@ function MeetingsPanel({
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          Dokument
+                          {t("document")}
                           <IconExternal size={16} />
-                          <span className="sr-only">(öppnas i ny flik)</span>
+                          <span className="sr-only">{common("opensInNewTab")}</span>
                         </a>
                       )}
                       {state === "allowed" && (
                         <ConfirmAction
                           action={deleteMeeting}
                           hidden={{ orgId, meetingId: meeting.id }}
-                          trigger={`Radera mötet ${formatDateTime(meeting.started_at)}`}
+                          trigger={t("deleteMeeting", { date: formatDateTime(meeting.started_at, locale) })}
                           triggerIcon={<IconTrash size={18} />}
                           triggerIconOnly
                           triggerVariant="danger-ghost"
-                          title="Radera mötet?"
-                          description="Transkriptionen, anteckningarna och loggen här tas bort. Google-dokumentet ligger kvar i Drive."
-                          confirmLabel="Radera mötet"
-                          pendingLabel="Raderar…"
+                          title={t("deleteMeetingTitle")}
+                          description={t("deleteMeetingText")}
+                          confirmLabel={t("deleteMeetingConfirm")}
+                          pendingLabel={t("deleting")}
                         />
                       )}
                     </span>
@@ -572,8 +569,8 @@ function MeetingsPanel({
             })}
           </ul>
           <p className="text-sm text-ink-3 border-t border-line px-6 pt-3 pb-4">
-            Att radera ett möte tar bort transkription, anteckningar och logg här. Google-dokumentet ligger kvar.
-            {viewerEmail && ` Mötesdokumenten delas till ${viewerEmail} – öppna dem i Google med den adressen.`}
+            {t("meetingsFoot")}
+            {viewerEmail && t("meetingsFootEmail", { email: viewerEmail })}
           </p>
         </>
       )}
@@ -582,10 +579,14 @@ function MeetingsPanel({
 }
 
 /** The account line under a person (0035): linked to a member, or invited by e-mail. */
-function personStatus(p: OrgDetailViewProps["people"][number], members: OrgDetailViewProps["members"]): string | null {
+function personStatus(
+  p: OrgDetailViewProps["people"][number],
+  members: OrgDetailViewProps["members"],
+  t: (key: "hasAccount" | "hasAccountEmail" | "invited", values?: { email: string }) => string,
+): string | null {
   const member = p.member_user_id ? members?.find((m) => m.userId === p.member_user_id) : undefined;
-  if (member) return `Har konto${member.email ? ` · ${member.email}` : ""}`;
-  if (p.email) return `Inbjuden · ${p.email}`;
+  if (member) return member.email ? t("hasAccountEmail", { email: member.email }) : t("hasAccount");
+  if (p.email) return t("invited", { email: p.email });
   return null;
 }
 
@@ -603,15 +604,16 @@ function PeoplePanel({
   actions: OrgDetailViewProps["actions"];
 }) {
   // Members nobody has named yet (0035): shown here too, so the list holds everyone (audit U3).
+  const t = useTranslations("org");
   const unnamed = (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId));
   return (
-    <Panel flush title="Personer" titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length + unnamed.length}</span>}>
+    <Panel flush title={t("peopleTitle")} titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length + unnamed.length}</span>}>
       <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
-        Alla som brukar vara med på mötena. Namnen används för att känna igen vem som talar. De behöver inget konto.
+        {t("peopleText")}
         {isAdmin && (
           <>
             {" "}
-            <a href={`/orgs/${orgId}/kom-igang?steg=2`}>Bjud in med e-post och sätt roller under Styrelsen</a>.
+            {t.rich("peopleBoardLink", { link: (chunks) => <a href={`/orgs/${orgId}/kom-igang?steg=2`}>{chunks}</a> })}
           </>
         )}
       </p>
@@ -619,18 +621,18 @@ function PeoplePanel({
         <input type="hidden" name="orgId" value={orgId} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <Label className="sr-only" htmlFor="new-person">
-            Namn på ny person
+            {t("newPersonLabel")}
           </Label>
-          <Input id="new-person" name="name" placeholder="Namn, t.ex. Anna Berg" required maxLength={100} autoComplete="off" />
+          <Input id="new-person" name="name" placeholder={t("newPersonPlaceholder")} required maxLength={100} autoComplete="off" />
         </div>
-        <SubmitButton icon={<IconPlus />} pendingLabel="Lägger till…">
-          Lägg till
+        <SubmitButton icon={<IconPlus />} pendingLabel={t("adding")}>
+          {t("add")}
         </SubmitButton>
       </form>
       {people.length === 0 && unnamed.length === 0 ? (
         <div className="px-6 pb-6">
-          <EmptyState title="Inga personer än">
-            <p>Lägg till de som brukar vara med. Det går också bra att låta namnrundan i första mötet fylla på listan.</p>
+          <EmptyState title={t("noPeopleTitle")}>
+            <p>{t("noPeopleText")}</p>
           </EmptyState>
         </div>
       ) : (
@@ -640,7 +642,7 @@ function PeoplePanel({
               key={person.id}
               orgId={orgId}
               person={person}
-              status={personStatus(person, members)}
+              status={personStatus(person, members, t)}
               renamePerson={actions.renamePerson}
               setPersonRole={isAdmin ? actions.setPersonRole : undefined}
               deletePerson={actions.deletePerson}
@@ -652,11 +654,11 @@ function PeoplePanel({
                 <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
                 <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
                   <span className="font-medium wrap-anywhere">{m.email}</span>
-                  <span className="text-sm text-ink-3">Har konto, men inget namn i listan</span>
+                  <span className="text-sm text-ink-3">{t("unnamedMember")}</span>
                 </span>
                 {isAdmin && (
                   <a className={buttonVariants({ size: "sm" })} href={`/orgs/${orgId}/kom-igang?steg=2`}>
-                    Koppla till namn
+                    {t("linkToName")}
                   </a>
                 )}
               </div>

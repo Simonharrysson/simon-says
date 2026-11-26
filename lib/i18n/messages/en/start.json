@@ -1,0 +1,16 @@
+{
+  "startFailed": "The meeting couldn't start. Try again in a little while.",
+  "offline": "We couldn't reach the server. Check the network and try again.",
+  "next": "Next meeting",
+  "agenda": "Agenda",
+  "change": "Change",
+  "startFailedTitle": "The meeting couldn't start",
+  "start": "Start meeting",
+  "prepare": "Prepare meeting",
+  "startingTest": "Starting test meeting …",
+  "test": "Test meeting",
+  "testNewHint": "A made-up meeting is played back, about 3–8 min.",
+  "testNew": "Without agenda",
+  "testAgendaHint": "A made-up weekly meeting in a new agenda document.",
+  "testAgenda": "With agenda"
+}

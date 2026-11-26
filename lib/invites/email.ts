@@ -2,8 +2,14 @@
 // variants B and C were considered, see docs/ui.md). Pure, no `server-only`: the route sends it,
 // the invite form previews it and the tests render it.
 //
+// The recipient's language (`locale`, from their account; Swedish when unknown): copy in
+// lib/i18n/messages/*/emails.json.
+//
 // Every value is user-supplied (names typed by admins): HTML-escaped in the HTML part; in the
 // subject, preheader and text part newlines and control characters are collapsed instead.
+
+import { defaultLocale, type Locale } from "@/lib/i18n/config";
+import { translator } from "@/lib/i18n/translator";
 
 export interface InviteEmailInput {
   /** Who invites: their name in the förening's list, or their Google name. Never an e-mail address. */
@@ -13,6 +19,8 @@ export interface InviteEmailInput {
   inviteUrl: string;
   /** The recipient's signed mail-settings link (`emailPrefsUrl(email, "invite")`, 0039), per address. */
   prefsUrl?: string;
+  /** The recipient's language; Swedish when unknown. */
+  locale?: Locale;
 }
 
 export interface InviteEmail {
@@ -57,10 +65,12 @@ export function defang(s: string): string {
 /** Subjects are cut at this many characters (with "…"). */
 export const SUBJECT_MAX = 80;
 
-export const INVITE_PREHEADER = "Gå med så kan du starta möten och läsa föreningens mötesanteckningar.";
+export function invitePreheader(locale: Locale = defaultLocale): string {
+  return translator(locale)("emails.invite.preheader");
+}
 
-export function inviteSubject(inviterName: string, orgName: string): string {
-  const subject = `${defang(oneLine(inviterName))} bjuder in dig till ${defang(oneLine(orgName))} på Simon Says`;
+export function inviteSubject(inviterName: string, orgName: string, locale: Locale = defaultLocale): string {
+  const subject = translator(locale)("emails.invite.subject", { inviter: defang(oneLine(inviterName)), org: defang(oneLine(orgName)) });
   return subject.length > SUBJECT_MAX ? `${subject.slice(0, SUBJECT_MAX - 1).trimEnd()}…` : subject;
 }
 
@@ -71,17 +81,20 @@ const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-s
 const SPACER = "&#847;&zwnj;&nbsp;".repeat(24);
 
 export function inviteEmail(input: InviteEmailInput): InviteEmail {
+  const locale = input.locale ?? defaultLocale;
+  const t = translator(locale);
+  const preheader = invitePreheader(locale);
   const inviter = defang(oneLine(input.inviterName));
   const org = defang(oneLine(input.orgName));
   const url = oneLine(input.inviteUrl);
   if (!/^https?:\/\//.test(url)) throw new Error("inviteEmail: the invite URL must be http(s)");
-  const subject = inviteSubject(inviter, org);
+  const subject = inviteSubject(inviter, org, locale);
   const prefsUrl = input.prefsUrl ? oneLine(input.prefsUrl) : null;
   if (prefsUrl && !/^https?:\/\//.test(prefsUrl)) throw new Error("inviteEmail: the settings URL must be http(s)");
   const h = { inviter: escapeHtml(inviter), org: escapeHtml(org), url: escapeHtml(url), shown: escapeHtml(displayUrl(url)), subject: escapeHtml(subject) };
 
   const html = `<!doctype html>
-<html lang="sv" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<html lang="${locale}" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -127,7 +140,7 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
 </head>
 <body class="bg-board" style="margin:0; padding:0; background-color:#fafafa;">
   <div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#fafafa; opacity:0;">
-    ${escapeHtml(INVITE_PREHEADER)}
+    ${escapeHtml(preheader)}
     ${SPACER}
   </div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg-board" style="background-color:#fafafa;">
@@ -145,8 +158,8 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td>
-                    <h1 class="ink h1" style="margin:0 0 16px 0; font-family:${FONT}; font-size:32px; line-height:38px; font-weight:600; letter-spacing:-0.8px; color:#171717;">Gå med i ${h.org}</h1>
-                    <p class="ink-2" style="margin:0 0 32px 0; font-family:${FONT}; font-size:16px; line-height:26px; color:#4d4d4d;">${h.inviter} har bjudit in dig till föreningen på Simon Says. Där skrivs mötesanteckningarna medan ni pratar, direkt i ett Google Doc. Som medlem kan du starta möten och läsa alla tidigare mötesdokument.</p>
+                    <h1 class="ink h1" style="margin:0 0 16px 0; font-family:${FONT}; font-size:32px; line-height:38px; font-weight:600; letter-spacing:-0.8px; color:#171717;">${t("emails.invite.heading", { org: h.org })}</h1>
+                    <p class="ink-2" style="margin:0 0 32px 0; font-family:${FONT}; font-size:16px; line-height:26px; color:#4d4d4d;">${inviteBody(h.inviter, locale)}</p>
                   </td>
                 </tr>
                 <tr>
@@ -154,7 +167,7 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
                     <table role="presentation" class="btn-full" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td class="btn-td" bgcolor="#171717" style="background-color:#171717; border-radius:6px;">
-                          <a class="btn-a" href="${h.url}" target="_blank" style="display:inline-block; padding:14px 24px; font-family:${FONT}; font-size:16px; line-height:20px; font-weight:500; color:#ffffff; text-decoration:none; border-radius:6px;">Gå med i ${h.org}</a>
+                          <a class="btn-a" href="${h.url}" target="_blank" style="display:inline-block; padding:14px 24px; font-family:${FONT}; font-size:16px; line-height:20px; font-weight:500; color:#ffffff; text-decoration:none; border-radius:6px;">${t("emails.invite.button", { org: h.org })}</a>
                         </td>
                       </tr>
                     </table>
@@ -162,7 +175,7 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
                 </tr>
                 <tr>
                   <td style="padding-top:24px;">
-                    <p class="ink-3" style="margin:0; font-family:${FONT}; font-size:13px; line-height:20px; color:#666666;">Fungerar inte knappen? Öppna länken:<br>
+                    <p class="ink-3" style="margin:0; font-family:${FONT}; font-size:13px; line-height:20px; color:#666666;">${escapeHtml(t("emails.invite.fallback"))}<br>
                       <a class="link" href="${h.url}" target="_blank" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; color:#0068d6; text-decoration:none; word-break:break-all;">${h.shown}</a>
                     </p>
                   </td>
@@ -172,7 +185,7 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
           </tr>
           <tr>
             <td style="padding:24px 4px 0 4px;">
-              <p class="ink-3" style="margin:0; font-family:${FONT}; font-size:13px; line-height:20px; color:#666666;">${inviteFooter(h.inviter, h.org)}${prefsUrl ? ` <a class="link" href="${escapeHtml(prefsUrl)}" target="_blank" style="color:#0068d6; text-decoration:none;">Vill du inte få inbjudningar? Ändra dina mejlval.</a>` : ""}</p>
+              <p class="ink-3" style="margin:0; font-family:${FONT}; font-size:13px; line-height:20px; color:#666666;">${inviteFooter(h.inviter, h.org, locale)}${prefsUrl ? ` <a class="link" href="${escapeHtml(prefsUrl)}" target="_blank" style="color:#0068d6; text-decoration:none;">${escapeHtml(t("emails.invite.prefsLink"))}</a>` : ""}</p>
             </td>
           </tr>
         </table>
@@ -185,29 +198,29 @@ export function inviteEmail(input: InviteEmailInput): InviteEmail {
 `;
 
   const text = [
-    `Gå med i ${org}`,
+    t("emails.invite.heading", { org }),
     "",
-    inviteBody(inviter),
+    inviteBody(inviter, locale),
     "",
-    "Gå med här (du loggar in med Google och går med med en knapp):",
+    t("emails.invite.textJoinHere"),
     url,
     "",
     "--",
     "Simon Says",
-    `Du får det här mejlet för att ${inviter} lade till din adress i ${org}. Väntade du dig inte mejlet kan du strunta i det, inget händer förrän du går med.`,
-    ...(prefsUrl ? [`Vill du inte få inbjudningar? Ändra dina mejlval: ${prefsUrl}`] : []),
+    t("emails.invite.textFooter", { inviter, org }),
+    ...(prefsUrl ? [t("emails.invite.textPrefs", { url: prefsUrl })] : []),
     "",
   ].join("\n");
 
-  return { subject, preheader: INVITE_PREHEADER, html, text };
+  return { subject, preheader, html, text };
 }
 
 /** The paragraph under the heading (plain text; the form's preview shows the same words). */
-export function inviteBody(inviterName: string): string {
-  return `${oneLine(inviterName)} har bjudit in dig till föreningen på Simon Says. Där skrivs mötesanteckningarna medan ni pratar, direkt i ett Google Doc. Som medlem kan du starta möten och läsa alla tidigare mötesdokument.`;
+export function inviteBody(inviterName: string, locale: Locale = defaultLocale): string {
+  return translator(locale)("emails.invite.body", { inviter: oneLine(inviterName) });
 }
 
 /** The footer line; arguments are already safe for the output (escaped for HTML, or plain). */
-export function inviteFooter(inviter: string, org: string): string {
-  return `Du får det här mejlet för att ${inviter} lade till din adress i ${org}. Du loggar in med Google och går med med en knapp. Väntade du dig inte mejlet kan du strunta i det, inget händer förrän du går med.`;
+export function inviteFooter(inviter: string, org: string, locale: Locale = defaultLocale): string {
+  return translator(locale)("emails.invite.footer", { inviter, org });
 }
