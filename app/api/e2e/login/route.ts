@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { e2eMode } from "@/lib/e2e/guard";
-import { storeGoogleToken } from "@/lib/google/client";
-import { GOOGLE_SCOPES } from "@/lib/google/scopes";
+import { storeGoogleToken, storeImportToken } from "@/lib/google/client";
+import { GOOGLE_SCOPES, IMPORT_SCOPES } from "@/lib/google/scopes";
 import { safeNextPath } from "@/lib/next-path";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -18,9 +17,10 @@ const TEST_DOMAIN = "@e2e.test";
  * unless lib/e2e/guard.ts `e2eMode()` holds (flag, not production, not Vercel, loopback Supabase).
  *
  * `GET /api/e2e/login?email=<x>@e2e.test&next=/path`: creates the user on first use, signs in
- * with a one-time password (the session lands in the same httpOnly cookies the callback sets),
+ * with a magic link verified here (the session lands in the same httpOnly cookies the callback sets),
  * stores a fake Google refresh token with the sign-in scopes (the fake Google server knows it),
- * and redirects to `next` like the callback does.
+ * and redirects to `next` like the callback does. `&drive=1` stands in for the protocol import's
+ * drive.readonly consent instead: it also stores the import token and returns `next?drive=ok`.
  */
 export async function GET(request: NextRequest) {
   if (!e2eMode()) return new NextResponse(null, { status: 404 });
@@ -28,35 +28,28 @@ export async function GET(request: NextRequest) {
   if (!email.endsWith(TEST_DOMAIN) || email.length > 200) return NextResponse.json({ error: "bad_email" }, { status: 400 });
   const next = safeNextPath(request.nextUrl.searchParams.get("next"));
 
+  // A magic link verified on the server: a new session in the same httpOnly cookies the callback
+  // sets, without touching the password or any other session of the user.
   const admin = supabaseAdmin();
-  const password = `e2e-${randomUUID()}`;
-  let userId = await findUser(email);
-  if (userId) {
-    const { error } = await admin.auth.admin.updateUserById(userId, { password });
-    if (error) return NextResponse.json({ error: `update: ${error.message}` }, { status: 500 });
-  } else {
-    const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    // A parallel first login of the same address: the other one created it.
-    userId = data.user?.id ?? (error ? await findUser(email) : null);
-    if (!userId) return NextResponse.json({ error: `create: ${error?.message}` }, { status: 500 });
-    if (error) await admin.auth.admin.updateUserById(userId, { password });
+  let link = await admin.auth.admin.generateLink({ type: "magiclink", email });
+  if (link.error) {
+    // First use: create the (confirmed) user, then the link.
+    const created = await admin.auth.admin.createUser({ email, email_confirm: true });
+    if (created.error && !/already/i.test(created.error.message)) return NextResponse.json({ error: `create: ${created.error.message}` }, { status: 500 });
+    link = await admin.auth.admin.generateLink({ type: "magiclink", email });
   }
+  const tokenHash = link.data.properties?.hashed_token;
+  const userId = link.data.user?.id;
+  if (link.error || !tokenHash || !userId) return NextResponse.json({ error: `link: ${link.error?.message}` }, { status: 500 });
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return NextResponse.json({ error: `sign-in: ${error.message}` }, { status: 500 });
+  const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+  if (error) return NextResponse.json({ error: `verify: ${error.message}` }, { status: 500 });
   await storeGoogleToken(userId, `e2e-refresh:${email}`, GOOGLE_SCOPES.join(" "));
+  if (request.nextUrl.searchParams.get("drive") === "1") {
+    await storeImportToken(userId, `e2e-refresh:${email}`, IMPORT_SCOPES.join(" "));
+    return NextResponse.redirect(`${appOrigin()}${next}?drive=ok`);
+  }
   return NextResponse.redirect(`${appOrigin()}${next}`);
 }
 
-async function findUser(email: string): Promise<string | null> {
-  const admin = supabaseAdmin();
-  for (let page = 1; page < 50; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw new Error(`listUsers: ${error.message}`);
-    const hit = data.users.find((u) => u.email?.toLowerCase() === email);
-    if (hit) return hit.id;
-    if (data.users.length < 1000) return null;
-  }
-  return null;
-}
