@@ -129,3 +129,26 @@ export function suggestGoals(goals: GoalRow[], meetings: GoalMeeting[], now: Dat
 /** The agenda item's label and draft id for a goal. */
 export const goalLabel = (title: string) => `Mål: ${title.trim()}`;
 export const goalItemId = (title: string) => `goal:${normLabel(title)}`;
+
+/** At most this many characters of a goal title in an agenda label (org_goals allows 80). */
+const GOAL_LABEL_MAX = 120;
+
+/**
+ * Starta möte with a new Doc (todo #12): the format with the ticked goals as topic items, after its
+ * own items and before "Övriga punkter" (and the "last" ones). Only this meeting's Doc and anchoring
+ * see it; the stored format is unchanged.
+ */
+export function withGoalItems<P extends { fixedAgendaItems: { key: string; label: string; role: string; position?: "last" }[] }>(profile: P, titles: string[]): P {
+  if (!titles.length) return profile;
+  const keys = new Set(profile.fixedAgendaItems.map((i) => i.key));
+  const added: P["fixedAgendaItems"] = [];
+  titles.forEach((title) => {
+    const label = goalLabel(title).slice(0, GOAL_LABEL_MAX);
+    if ([...profile.fixedAgendaItems, ...added].some((i) => i.label.toLowerCase() === label.toLowerCase())) return;
+    let n = added.length + 1;
+    while (keys.has(`goal-${n}`)) n++;
+    keys.add(`goal-${n}`);
+    added.push({ key: `goal-${n}`, label, role: "topic" });
+  });
+  return { ...profile, fixedAgendaItems: [...profile.fixedAgendaItems, ...added] };
+}

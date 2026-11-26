@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
-import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState } from "@/components/live/AgendaStep";
+import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState, type GoalOption } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
 import type { Speaker } from "@/components/live/types";
 import { Badge } from "@/components/ui/badge";
@@ -201,16 +201,21 @@ function MicCheckDemo() {
 
 const agendaFormats: AgendaFormatOption[] = [
   { id: "f1", kind: "veckomote", name: "Veckomöte", isDefault: true },
-  { id: null, kind: "styrelseprotokoll", name: "Styrelseprotokoll", isDefault: false },
+  { id: null, kind: "arsmote", name: "Årsmöte", isDefault: false },
   { id: null, kind: "enkel", name: "Enkel", isDefault: false },
+];
+const agendaGoals: GoalOption[] = [
+  { id: "g2", label: "Mål: Ny lokal för styrelsen", reason: "Följ upp beslutet från förra veckan" },
+  { id: "g1", label: "Mål: Fler medlemmar till vårens event", reason: "Inget nytt sedan 12 okt" },
 ];
 
 /** Consent step with the agenda step in one state; Använd / Skapa nytt dokument work locally (no Picker). */
-function AgendaDemo({ view }: { view: AgendaViewState }) {
+function AgendaDemo({ view, goals }: { view: AgendaViewState; goals?: GoalOption[] }) {
   const off = view.state === "picker-off";
-  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off ? { kind: "new" } : null);
+  const [chosen, setChosen] = useState<AgendaStepViewProps["chosen"]>(off || goals ? { kind: "new" } : null);
   const [formatValue, setFormatValue] = useState("id:f1");
   const [transcript, setTranscript] = useState(false);
+  const [goalIds, setGoalIds] = useState<string[]>(goals ? [goals[0].id] : []);
   return (
     <LiveDemo
       phase="consent"
@@ -228,6 +233,9 @@ function AgendaDemo({ view }: { view: AgendaViewState }) {
           onNewDoc={() => setChosen({ kind: "new" })}
           onFormatChange={setFormatValue}
           onTranscriptChange={setTranscript}
+          goals={goals}
+          goalIds={goalIds}
+          onGoalChange={(id, on) => setGoalIds((ids) => (on ? [...ids, id] : ids.filter((x) => x !== id)))}
         />
       }
       agendaConfirmed={chosen !== null}
@@ -858,6 +866,7 @@ const render: Record<string, () => ReactNode> = {
   "live-agenda-none": () => <AgendaDemo view={{ state: "none" }} />,
   "live-agenda-folder": () => <AgendaDemo view={{ state: "folder-unreachable", folderName: "Verksamhetsår 2026-2027" }} />,
   "live-agenda-off": () => <AgendaDemo view={{ state: "picker-off" }} />,
+  "live-agenda-new-goals": () => <AgendaDemo view={{ state: "none" }} goals={agendaGoals} />,
   "live-starting": () => <LiveDemo phase="starting" />,
   "live-nameround": () => (
     <LiveDemo

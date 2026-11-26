@@ -88,6 +88,7 @@ export const designViews: DesignView[] = [
   { id: "live-agenda-none", title: "Före start · ingen dagordning", group: "Mötet live" },
   { id: "live-agenda-folder", title: "Före start · mötesmappen inte öppnad", group: "Mötet live" },
   { id: "live-agenda-off", title: "Före start · Google-väljaren av", group: "Mötet live" },
+  { id: "live-agenda-new-goals", title: "Före start · nytt dokument, mål att ta upp", group: "Mötet live" },
   { id: "live-starting", title: "Startar", group: "Mötet live" },
   { id: "live-nameround", title: "Namnrunda", group: "Mötet live" },
   { id: "live", title: "Pågår", group: "Mötet live" },

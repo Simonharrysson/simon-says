@@ -7,6 +7,8 @@ import { getOrg, myRole } from "@/lib/db/orgs";
 import { getEnv, pickerEnabled } from "@/lib/env";
 import { FORMAT_NAMES, formatLabel } from "@/lib/formats/standard";
 import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
+import { goalLabel } from "@/lib/prepare/goals";
+import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -62,7 +64,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
   const running = active?.[0];
   if (running) redirect(running.started_by === user.id ? `/meetings/${running.id}` : `/orgs/${orgId}`);
 
-  const [def, rows] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId)]);
+  const [def, rows, goals] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId), goalSuggestionsFor(db, orgId)]);
 
   return (
     <main id="innehall">
@@ -74,6 +76,7 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
         meeting={null}
         formats={startFormats(def, rows)}
         pickerEnabled={pickerEnabled(getEnv())}
+        goals={goals.map((g) => ({ id: g.goalId, label: goalLabel(g.title), reason: g.reason }))}
       />
     </main>
   );

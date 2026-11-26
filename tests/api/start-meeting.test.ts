@@ -322,6 +322,11 @@ describe("POST /api/meetings", () => {
     expect((await call({ orgId: ORG })).status).toBe(400);
     expect((await call({ orgId: ORG, consent: "true" })).status).toBe(400);
     expect((await call({ orgId: "nope", consent: true })).status).toBe(400);
+    // "Mål att ta upp" (todo #12): at most two goal ids, uuids only.
+    expect((await call({ orgId: ORG, consent: true, goalIds: ["nope"] })).status).toBe(400);
+    expect((await call({ orgId: ORG, consent: true, goalIds: "x" })).status).toBe(400);
+    const id = "00000000-0000-4000-8000-00000000000a";
+    expect((await call({ orgId: ORG, consent: true, goalIds: [id, id, id] })).status).toBe(400);
     expect(m.createMeetingDoc).not.toHaveBeenCalled();
   });
 

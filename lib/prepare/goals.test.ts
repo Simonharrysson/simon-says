@@ -93,3 +93,19 @@ describe("goalMeetings", () => {
     expect(goalMeetings("o", input)).toEqual([{ at: daysAgo(10), texts: ["Lokalen", "Ring om lokalen"], decisions: ["Ny lokal för styrelsen"] }]);
   });
 });
+
+describe("withGoalItems (Starta möte, a new Doc)", () => {
+  it("ticked goals become topic items before Övriga punkter; the stored profile is untouched", async () => {
+    const { VECKOMOTE } = await import("@/lib/formats/standard");
+    const { rolesFromSkeleton, skeletonBlocks } = await import("@/lib/formats/skeleton");
+    const { withGoalItems } = await import("./goals");
+    const p = withGoalItems(VECKOMOTE, ["Ny lokal för styrelsen", "Ny lokal för styrelsen"]);
+    expect(VECKOMOTE.fixedAgendaItems.some((i) => i.key.startsWith("goal-"))).toBe(false);
+    const items = skeletonBlocks(p).filter((b) => b.type === "item").map((b) => ("text" in b ? b.text : ""));
+    expect(items.filter((t) => t === "Mål: Ny lokal för styrelsen")).toHaveLength(1);
+    expect(items.indexOf("Mål: Ny lokal för styrelsen")).toBe(items.indexOf("Övriga punkter") - 1);
+    const roles = rolesFromSkeleton(p);
+    expect(roles[`ag-${items.indexOf("Mål: Ny lokal för styrelsen") + 1}`]).toBe("topic");
+    expect(withGoalItems(VECKOMOTE, [])).toBe(VECKOMOTE);
+  });
+});
