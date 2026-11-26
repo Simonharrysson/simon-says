@@ -116,6 +116,34 @@ describe("runReprepare: a failure between a Doc batch and its save never strands
     expect(agenda(doc).filter((l) => l.includes("Boka Kårallen"))).toEqual(["– Kassör: Boka Kårallen Bokat!."]);
   });
 
+  it("the settling batch lands but its save fails: the journal survives, still no duplicate", async () => {
+    const { doc, store } = fresh();
+    const mr = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;
+    applyDoc(doc, [{ insertText: { text: " (kort)", location: { tabId: TAB, index: mr.end - 1 } } }]);
+    const items = [draft[0], draft[1], FEST, draft[2], draft[3]];
+    await expect(run(doc, store, items, { save: 5 })).rejects.toThrow("db down");
+    // A stray range of ours, so settling has a batch of its own; the save after it fails.
+    const ov = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Övrigt\n")!;
+    applyDoc(doc, [{ createNamedRange: { name: `ss-${KEY}-zz`, range: { tabId: TAB, startIndex: ov.start, endIndex: ov.start + 3 } } }]);
+    await expect(run(doc, store, items, { save: 2 })).rejects.toThrow("db down");
+    expect(store.journal?.writes.length).toBeGreaterThan(0);
+    await run(doc, store, items);
+    expect(agenda(doc).filter((l) => l === "Fest på universitetet")).toHaveLength(1);
+    expect(agenda(doc).filter((l) => l.includes("Boka Kårallen"))).toHaveLength(1);
+  });
+
+  it("a new item line a human edited before the save stays tracked (theirs), never inserted again", async () => {
+    const { doc, store } = fresh();
+    const mr = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;
+    applyDoc(doc, [{ insertText: { text: " (kort)", location: { tabId: TAB, index: mr.end - 1 } } }]);
+    const items = [draft[0], draft[1], FEST, draft[2], draft[3]];
+    await expect(run(doc, store, items, { save: 5 })).rejects.toThrow("db down");
+    const fest = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Fest på universitetet\n")!;
+    applyDoc(doc, [{ insertText: { text: " stora", location: { tabId: TAB, index: fest.start + 4 } } }]);
+    await run(doc, store, items);
+    expect(agenda(doc).filter((l) => l.startsWith("Fest på universitet"))).toEqual(["Fest stora på universitetet"]);
+  });
+
   it("merge: an inserted line whose save failed is adopted, never inserted twice", async () => {
     const { doc, store } = fresh();
     const mr = parseNotesTab(doc, TAB).paragraphs.find((p) => p.text === "Må-runda\n")!;

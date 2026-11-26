@@ -91,13 +91,18 @@ export const LEASE_MS = 120_000;
  * Take the prepared agenda's lease (atomic: one conditional update), returning the row as it is
  * now, or null while someone else holds it. Every plan is made from this fresh row.
  */
-export async function acquireLease(id: string, db: SupabaseClient = supabaseAdmin()): Promise<PreparedAgenda | null> {
-  const { data, error } = await db.rpc("acquire_prepared_lease", { p_id: id, p_ms: LEASE_MS });
+export async function acquireLease(id: string, token: string, db: SupabaseClient = supabaseAdmin()): Promise<PreparedAgenda | null> {
+  const { data, error } = await db.rpc("acquire_prepared_lease", { p_id: id, p_ms: LEASE_MS, p_token: token });
   if (error) throw new Error(`prepared_agendas: lease: ${error.message}`);
   return ((data ?? []) as PreparedAgenda[])[0] ?? null;
 }
 
-export async function releaseLease(id: string, db: SupabaseClient = supabaseAdmin()): Promise<void> {
-  const { error } = await db.from("prepared_agendas").update({ busy_until: null }).eq("id", id);
-  if (error) console.error(`prepared_agendas: release: ${error.message}`);
+/** Release the lease, only while `token` still holds it (an expired one taken over is left alone). */
+export async function releaseLease(id: string, token: string, db: SupabaseClient = supabaseAdmin()): Promise<boolean> {
+  const { data, error } = await db.rpc("release_prepared_lease", { p_id: id, p_token: token });
+  if (error) {
+    console.error(`prepared_agendas: release: ${error.message}`);
+    return false;
+  }
+  return data === true;
 }

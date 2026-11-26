@@ -358,16 +358,17 @@ async function update(
   const key = prepKey(existing.id);
   const db = supabaseAdmin();
   // One preparer at a time; the plan is made from the row as it is once the lease is ours.
+  const token = randomUUID();
   let fresh: PreparedAgenda | null = null;
   for (let i = 0; i < 10 && !fresh; i++) {
-    fresh = await acquireLease(existing.id);
+    fresh = await acquireLease(existing.id, token);
     if (!fresh) await new Promise((r) => setTimeout(r, 2000));
   }
   if (!fresh) return failed("busy", 409, "Någon annan uppdaterar dagordningen just nu. Försök igen om en liten stund.");
   try {
     return await updateLeased(auth, orgId, fresh, key, items, desired, dropped, src, body);
   } finally {
-    await releaseLease(existing.id);
+    await releaseLease(existing.id, token);
   }
 }
 

@@ -379,7 +379,9 @@ export function planReconcile(
     }
     const any = itemSpan(tab, w.range);
     if (!any) continue;
-    if (span && w.id && /-ag-\d+$/.test(w.range)) {
+    // A new item line: adopted as ours, or (edited before the save) as the human's line it now is,
+    // tracked either way so it is never inserted again.
+    if (w.id && /-ag-\d+$/.test(w.range)) {
       lines = lines.filter((l) => l.id !== w.id || itemSpan(tab, l.range));
       if (!lines.some((l) => l.id === w.id)) {
         lines.push({ id: w.id, key: `ag-${nextN(lines)}`, range: w.range, text: w.text });

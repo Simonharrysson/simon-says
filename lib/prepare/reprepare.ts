@@ -56,7 +56,9 @@ export async function runReprepare(
   const settled = await deps.step((tab) => {
     const r = planReconcile(tab, key, input.lines, input.carried, input.journal);
     return { requests: r.requests, value: r, journal: { writes: [], deletes: [] } };
-  }, journaled);
+    // Never overwrite the journal being settled: if this batch lands and the save after it fails,
+    // the next run must settle the same journal again (settling is idempotent).
+  }, async () => {});
   let lines = settled.lines;
   let carried = settled.carried;
   await deps.save({ doc_lines: lines, carried, journal: null });
