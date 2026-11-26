@@ -23,17 +23,21 @@ grant select, insert, update, delete on table public.google_calendar_tokens to s
 -- The förening's meeting calendar (admins choose it among their own calendars): its Google id,
 -- the name as shown when chosen, and an optional title filter ("möte"). Each member reads it with
 -- their OWN calendar grant; nothing from the calendar is stored here. The förening's text: never logged.
+--
+-- Only a shared (secondary) calendar: its id ends in @group.calendar.google.com. Never a primary
+-- calendar ('primary' or an e-mail address): read with each starter's own grant, that would put
+-- their private events into the förening's Doc. Written ONLY by the server (service role) after it
+-- checked that the admin's own calendar list holds it: no column grant to authenticated.
 
 alter table public.orgs
   add column calendar_id text
-    check (calendar_id is null or (char_length(calendar_id) between 1 and 300 and calendar_id !~ '\s')),
+    check (calendar_id is null or (char_length(calendar_id) between 27 and 300 and calendar_id ~ '^[^\s@/]+@group\.calendar\.google\.com$')),
   add column calendar_name text
     check (calendar_name is null or char_length(calendar_name) between 1 and 200),
   add column calendar_filter text
     check (calendar_filter is null or char_length(calendar_filter) between 1 and 60);
 
--- orgs uses column-level update grants (0002, 0023, 0030, 0035, 0044); orgs_update lets admins only.
-grant update (calendar_id, calendar_name, calendar_filter) on table public.orgs to authenticated;
+-- No column update grant: unlike 0044's columns, these are written by the server only.
 
 -- ---------------------------------------------------------------------------------------------
 -- meetings.calendar_event: the calendar event the meeting matched at start (read with the

@@ -133,3 +133,21 @@ describe("parseMeetingEvent", () => {
     expect(parseMeetingEvent(null)).toBeNull();
   });
 });
+
+describe("which calendars a förening may use", () => {
+  it("only shared calendars, never a primary one or an e-mail address", async () => {
+    const { isOrgCalendarId, orgCalendarChoices } = await import("./events");
+    expect(isOrgCalendarId("c_abc123@group.calendar.google.com")).toBe(true);
+    expect(isOrgCalendarId("primary")).toBe(false);
+    expect(isOrgCalendarId("anna@example.com")).toBe(false);
+    expect(isOrgCalendarId("sv.swedish#holiday@group.v.calendar.google.com")).toBe(false);
+    expect(isOrgCalendarId("x@group.calendar.google.com.evil.com")).toBe(false);
+    expect(
+      orgCalendarChoices([
+        { id: "anna@example.com", name: "Anna", primary: true },
+        { id: "erik@example.com", name: "Erik", primary: false },
+        { id: "c_1@group.calendar.google.com", name: "Föreningen", primary: false },
+      ]).map((c) => c.id),
+    ).toEqual(["c_1@group.calendar.google.com"]);
+  });
+});

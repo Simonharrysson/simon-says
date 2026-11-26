@@ -3,13 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { myCalendars } from "@/lib/calendar/load";
-import { cleanFilter } from "@/lib/calendar/events";
+import { cleanFilter, orgCalendarChoices } from "@/lib/calendar/events";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
 import { deleteCalendarToken } from "@/lib/google/client";
 import { CALENDAR_SCOPES } from "@/lib/google/scopes";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getOrg } from "@/lib/db/orgs";
 
 /** Where "Koppla kalender" may return: Inställningar, or a förening page (never a query string). */
 function backPath(raw: unknown): string {
@@ -68,8 +70,9 @@ export async function disconnectCalendar(formData: FormData): Promise<void> {
 
 /**
  * Inställningar → "Mötenas kalender" (admins): the calendar holding the förening's meetings, one
- * of the admin's OWN calendars (checked against their list, which also gives its name), and an
- * optional title filter. An empty choice clears it. The database checks admin (orgs_update, 0046 grant).
+ * of the admin's OWN shared calendars (checked against their list, which also gives its name; never
+ * a primary calendar), and an optional title filter. An empty choice clears it. Written with the
+ * service role after these checks: authenticated has no update grant on these columns (0046).
  */
 export async function saveOrgCalendarAction(formData: FormData): Promise<void> {
   const orgId = formData.get("orgId")?.toString() ?? "";
@@ -80,16 +83,18 @@ export async function saveOrgCalendarAction(formData: FormData): Promise<void> {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   if ((await myRole(supabase, orgId)) !== "admin") redirect(`/orgs/${orgId}`);
+  const org = await getOrg(supabase, orgId);
+  if (!org || org.kind === "privat") redirect("/");
   const calendarId = formData.get("calendar_id")?.toString() ?? "";
   let values: { calendar_id: string | null; calendar_name: string | null; calendar_filter: string | null };
   if (!calendarId) values = { calendar_id: null, calendar_name: null, calendar_filter: null };
   else {
-    const mine = await myCalendars(user.id);
-    const picked = mine?.find((c) => c.id === calendarId);
+    const mine = await myCalendars(user.id, { fresh: true });
+    const picked = orgCalendarChoices(mine ?? []).find((c) => c.id === calendarId);
     if (!picked) redirect(`/orgs/${orgId}?fel=kalender`);
     values = { calendar_id: picked.id, calendar_name: picked.name, calendar_filter: cleanFilter(formData.get("calendar_filter")) || null };
   }
-  const { data, error } = await supabase.from("orgs").update(values).eq("id", orgId).select("id");
+  const { data, error } = await supabaseAdmin().from("orgs").update(values).eq("id", orgId).select("id");
   if (error || !data?.length) {
     console.error("calendar: saving the org calendar failed", error?.message ?? "no row");
     redirect(`/orgs/${orgId}?fel=kalender`);

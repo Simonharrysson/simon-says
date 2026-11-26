@@ -176,3 +176,18 @@ export type CalendarResult = "ok" | "nej" | "fel" | "konto" | "fran";
 export function calendarResult(raw: string | undefined): CalendarResult | undefined {
   return raw === "ok" || raw === "nej" || raw === "fel" || raw === "konto" || raw === "fran" ? raw : undefined;
 }
+
+/**
+ * May a förening use this calendar? Only a shared (secondary) calendar, never a primary one
+ * ('primary', or an e-mail address): every starter reads the förening's calendar with their own
+ * grant, so a primary id would put each starter's private events into the shared Doc. Same rule
+ * as the database check (0046).
+ */
+export function isOrgCalendarId(id: string): boolean {
+  return id.length <= 300 && /^[^\s@/]+@group\.calendar\.google\.com$/.test(id);
+}
+
+/** The admin's calendars a förening may choose: shared ones only, never the primary. */
+export function orgCalendarChoices(calendars: CalendarInfo[]): CalendarInfo[] {
+  return calendars.filter((c) => !c.primary && isOrgCalendarId(c.id));
+}
