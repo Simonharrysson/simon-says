@@ -15,6 +15,8 @@ export interface MailMessage {
   replyTo?: string;
   /** Optional Resend Idempotency-Key: a retry with the same key is never delivered twice (24 h). */
   idempotencyKey?: string;
+  /** Extra headers, e.g. List-Unsubscribe (lib/email/token.ts listUnsubscribeHeaders). */
+  headers?: Record<string, string>;
 }
 
 /** sent: the provider took it · failed: it did not · uncertain: no answer (timeout, 5xx), may have gone out. */
@@ -46,6 +48,7 @@ export function resendMailer(apiKey: string, from: string, fetchFn: typeof fetch
           text: message.text,
           ...(message.html ? { html: message.html } : {}),
           ...(message.replyTo ? { reply_to: message.replyTo } : {}),
+          ...(message.headers ? { headers: message.headers } : {}),
         }),
         signal: AbortSignal.timeout(10_000),
       });
