@@ -169,3 +169,10 @@ export function parseMeetingEvent(raw: unknown): MeetingCalendarEvent | null {
   const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
   return { title: cleanTitle(r.title), expected: ids(r.expected), declined: ids(r.declined) };
 }
+
+/** The `?kalender=` result the consent (or "Koppla från") returns with. */
+export type CalendarResult = "ok" | "nej" | "fel" | "konto" | "fran";
+
+export function calendarResult(raw: string | undefined): CalendarResult | undefined {
+  return raw === "ok" || raw === "nej" || raw === "fel" || raw === "konto" || raw === "fran" ? raw : undefined;
+}

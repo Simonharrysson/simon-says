@@ -5,12 +5,7 @@ import { Banner } from "@/components/ui/Banner";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 
-/** The `?kalender=` result the consent (or "Koppla från") returns with. */
-export type CalendarResult = "ok" | "nej" | "fel" | "konto" | "fran";
-
-export function calendarResult(raw: string | undefined): CalendarResult | undefined {
-  return raw === "ok" || raw === "nej" || raw === "fel" || raw === "konto" || raw === "fran" ? raw : undefined;
-}
+import type { CalendarResult } from "@/lib/calendar/events";
 
 /** The result line after "Koppla kalender" / "Koppla från". */
 export function CalendarResultBanner({ result }: { result?: CalendarResult }) {
