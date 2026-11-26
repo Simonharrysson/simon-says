@@ -12,7 +12,7 @@ const processors: [string, string, string][] = [
   ["Google", "Inloggning, och dokumentet i Drive hos den som startar mötet.", "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive (se Vad som sparas). Behandlingen kan ske utanför EU."],
   ["Supabase", "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "Lagras inom EU."],
   ["Vercel", "Kör webbplatsen och servern.", "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."],
-  ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss, och bara till oss.", "Innehåller inga transkriptioner."],
+  ["Resend", "Skickar driftlarm och dagliga sammanfattningar till oss, och inbjudningar som en admin skickar till de adresser hen skriver in.", "Innehåller inga transkriptioner."],
 ];
 
 export default function PrivacyPage() {
@@ -73,6 +73,10 @@ export default function PrivacyPage() {
           <h3>För varje förening</h3>
           <ul>
             <li>Namn, medlemmar, inbjudningslänk och personlistan (bara namn).</li>
+            <li>
+              E-postadresser som en admin skriver in för att bjuda in någon används bara för att skicka inbjudan. De sparas
+              med när den skickades och om personen har gått med, tills föreningen raderas.
+            </li>
             <li>
               Möten: tider, transkription med talarnamn, anteckningar och en logg över när anteckningarna uppdaterades.
               Transkriptionen och anteckningarna sparas tills mötet eller föreningen raderas.
