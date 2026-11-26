@@ -177,7 +177,8 @@ begin
     return false;
   end if;
   select p.org_id, p.member_user_id into v_org, v_member from public.people p where p.id = p_person_id;
-  if v_org is null or not (public.is_org_admin(v_org) or (v_member = auth.uid() and public.is_org_member(v_org))) then
+  -- coalesce: an unlinked person (member_user_id null) must refuse, not make the test null.
+  if v_org is null or not (public.is_org_admin(v_org) or coalesce(v_member = auth.uid() and public.is_org_member(v_org), false)) then
     return false;
   end if;
   update public.people
