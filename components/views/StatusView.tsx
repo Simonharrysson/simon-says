@@ -16,17 +16,17 @@ export interface StatusData {
   updatedAt: string;
 }
 
-const healthCopy: Record<StatusData["health"], { title: string; text: string; magnet: string }> = {
-  ok: { title: "Allt fungerar", text: "Transkribering och anteckningar går som de ska.", magnet: "magnet magnet--green" },
+const healthCopy: Record<StatusData["health"], { title: string; text: string; tone: "ok" | "alert" }> = {
+  ok: { title: "Allt fungerar", text: "Transkribering och anteckningar går som de ska.", tone: "ok" },
   degraded: {
     title: "Anteckningarna går långsamt",
     text: "Transkriberingen fungerar, men det tar längre tid än vanligt innan anteckningarna syns i dokumenten.",
-    magnet: "magnet",
+    tone: "alert",
   },
   paused: {
     title: "Tjänsten är pausad",
     text: "Nya möten kan inte starta just nu. Pågående möten avslutas och anteckningarna blir klara.",
-    magnet: "magnet",
+    tone: "alert",
   },
 };
 
@@ -49,8 +49,7 @@ export function StatusView({ data }: { data: StatusData | null }) {
         </EmptyState>
       ) : (
         <>
-          <div className="status-hero" role="status">
-            <span className={`${health.magnet} status-hero__light`} aria-hidden="true" />
+          <div className={`status-hero status-hero--${health.tone}`} role="status">
             <div>
               <p className="status-hero__title">{health.title}</p>
               <p className="muted">{health.text}</p>

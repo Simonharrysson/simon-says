@@ -29,7 +29,6 @@ export function ResumeMeeting({
   const dialog = useRef<HTMLDialogElement>(null);
   return (
     <section className="resume" aria-labelledby="resume-title">
-      <span className="magnet magnet--ink resume__magnet" aria-hidden="true" />
       <div className="stack stack--2">
         <h1 id="resume-title" className="consent__title">
           Mötet är inte avslutat

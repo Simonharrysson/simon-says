@@ -32,7 +32,6 @@ export function SpeakerList({
         </h2>
         {unknown > 0 && (
           <span className="badge badge--info">
-            <span className="magnet magnet--blue" aria-hidden="true" />
             {unknown} att bekräfta
           </span>
         )}

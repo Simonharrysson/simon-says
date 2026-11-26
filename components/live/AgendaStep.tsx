@@ -134,7 +134,6 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="agenda__line agenda__choice" ref={choiceRef} tabIndex={-1}>
-          <span className="magnet magnet--green agenda__magnet" aria-hidden="true" />
           <span>
             Dagordning: <strong className="agenda__name">{p.chosen.name}</strong>
           </span>
@@ -153,7 +152,6 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="agenda__line agenda__choice" ref={choiceRef} tabIndex={-1}>
-          <span className="magnet magnet--green agenda__magnet" aria-hidden="true" />
           <span>
             Nytt dokument i formatet <strong>{formatName}</strong>
           </span>
@@ -175,7 +173,6 @@ export function AgendaStepView(p: AgendaStepViewProps) {
     body = (
       <>
         <p className="agenda__line">
-          <span className="magnet magnet--blue agenda__magnet" aria-hidden="true" />
           <span>
             Förslag: <strong className="agenda__name">{p.view.suggestion.name}</strong>
           </span>

@@ -665,7 +665,6 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return (
       <div className="live live--centered">
         <section className="resume" aria-labelledby="superseded-title">
-          <span className="magnet magnet--ink resume__magnet" aria-hidden="true" />
           <div className="stack stack--2">
             <h1 id="superseded-title" className="consent__title">
               Mötet körs i en annan flik

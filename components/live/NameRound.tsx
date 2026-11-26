@@ -44,7 +44,6 @@ export function NameRound({
         {heard.length === 0 && <li className="nameround__waiting">Väntar på första rösten…</li>}
         {heard.map((entry) => (
           <li key={entry.key} className={`nameplate${entry.needsConfirm ? " nameplate--unsure" : ""}`}>
-            <span className="magnet magnet--blue" aria-hidden="true" />
             <span className="nameplate__name">
               {entry.name ?? "…"}
               {entry.name && entry.needsConfirm && "?"}

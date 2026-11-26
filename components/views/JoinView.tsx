@@ -15,7 +15,6 @@ export function JoinView(props: JoinViewProps) {
   return (
     <div className="page page--narrow auth">
       <div className="auth__sheet stack stack--5">
-        <span className="magnet magnet--blue join__magnet" aria-hidden="true" />
         {props.state === "signed-out" && (
           <>
             <div className="stack stack--2">

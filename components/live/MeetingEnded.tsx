@@ -59,7 +59,6 @@ export function MeetingEnded({
         : "";
   return (
     <section className="ended" aria-labelledby="ended-title" aria-live="polite">
-      <span className={`magnet ${finalizing ? "magnet--rail ended__magnet--busy" : "magnet--green"} ended__magnet`} aria-hidden="true" />
       <h1 id="ended-title" className="consent__title" ref={heading} tabIndex={-1}>
         {finalizing ? "Gör anteckningarna klara…" : "Mötet är avslutat"}
       </h1>

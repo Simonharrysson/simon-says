@@ -1,8 +1,7 @@
-/** The logo: the name with its glossy ink dot (red is kept for things that are really live). */
+/** The logo: "Simon Says" set in Instrument Serif (the only place that face is used). No mark, no dot. */
 export function Wordmark({ href = "/" }: { href?: string }) {
   return (
     <a className="wordmark" href={href}>
-      <span className="magnet magnet--ink" aria-hidden="true" />
       Simon Says
     </a>
   );

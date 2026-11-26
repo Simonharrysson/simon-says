@@ -172,11 +172,6 @@ a.row:hover .row__chevron {
   overflow-wrap: anywhere;
 }
 
-.join__magnet {
-  width: 1rem;
-  height: 1rem;
-}
-
 .auth__icon {
   display: grid;
   place-items: center;
@@ -333,7 +328,7 @@ a.row:hover .row__chevron {
 }
 
 /* The demo frame: a flat sunk card with a hairline, holding the Doc sheet and the control strip.
-   (Class names keep the first design's "board"; the pins are small status dots.) */
+   (Class names keep the first design's "board".) */
 .board {
   position: relative;
   margin: 0;
@@ -348,21 +343,6 @@ a.row:hover .row__chevron {
 
 .board__sheet {
   position: relative;
-}
-
-.board__pin {
-  position: absolute;
-  top: -0.3rem;
-  width: 0.6rem;
-  height: 0.6rem;
-  z-index: 2;
-}
-
-.board__pin--l {
-  left: 12%;
-}
-.board__pin--r {
-  right: 12%;
 }
 
 /* The Google Doc sheet: always paper-white, the Doc's own world */
@@ -397,12 +377,7 @@ a.row:hover .row__chevron {
   margin-top: 0.2em !important;
 }
 
-.doc__dot {
-  display: inline-block;
-  /* Blinks a few times after the notes have written themselves, then stays lit. */
-  animation: doc-blink 2s steps(2, jump-none) 3;
-}
-
+/* Used by the edit demo's caret. */
 @keyframes doc-blink {
   50% {
     opacity: 0.25;
@@ -506,12 +481,6 @@ a.row:hover .row__chevron {
   color: var(--red);
 }
 
-.board__rec .magnet {
-  width: 0.6rem;
-  height: 0.6rem;
-  animation: live-pulse 2.4s var(--ease-out) infinite;
-}
-
 .board__partial {
   flex: 1;
   min-width: 0;
@@ -562,30 +531,14 @@ a.row:hover .row__chevron {
   position: relative;
 }
 
-/* A hairline the step dots sit on */
-.steps::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0.625rem;
-  height: 1px;
-  background: var(--line);
-}
-
 .step {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
   counter-increment: step;
-}
-
-.step__magnet {
-  width: 0.75rem;
-  height: 0.75rem;
-  margin-block: 0.25rem calc(var(--s-3) + 0.25rem);
-  box-shadow: 0 0 0 4px var(--board);
+  border-top: 1px solid var(--rail);
+  padding-top: var(--s-3);
 }
 
 .step__title {
@@ -601,20 +554,6 @@ a.row:hover .row__chevron {
   .steps {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--s-5);
-    padding-left: var(--s-6);
-  }
-  .steps::before {
-    left: 0.625rem;
-    right: auto;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    height: auto;
-  }
-  .step__magnet {
-    position: absolute;
-    left: calc(var(--s-6) * -1 + 0.25rem);
-    top: 0.2rem;
   }
 }
 
@@ -693,11 +632,6 @@ a.row:hover .row__chevron {
   font-size: 0.75rem;
   color: #1a56c4;
   font-weight: 600;
-}
-
-.edit-demo__note .magnet {
-  width: 0.55rem;
-  height: 0.55rem;
 }
 
 .facts-grid {
@@ -791,6 +725,7 @@ a.row:hover .row__chevron {
 .prose ul {
   margin: 0;
   padding-left: 1.25rem;
+  list-style-type: "–  ";
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
@@ -850,14 +785,18 @@ a.row:hover .row__chevron {
   box-shadow: var(--shadow-panel);
 }
 
-.status-hero__light {
-  width: 1rem;
-  height: 1rem;
-}
-
 .status-hero__title {
   font-weight: 600;
   font-size: var(--text-xl);
+}
+
+/* Health is said in the title; the colour only supports it. */
+.status-hero--ok .status-hero__title {
+  color: var(--green);
+}
+
+.status-hero--alert .status-hero__title {
+  color: var(--red);
 }
 
 .status-counts {

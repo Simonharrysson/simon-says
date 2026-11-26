@@ -3,20 +3,7 @@ import { cx } from "./cx";
 
 export type BadgeTone = "neutral" | "live" | "alert" | "success" | "info";
 
-const magnet: Record<BadgeTone, string> = {
-  neutral: "magnet magnet--rail",
-  live: "magnet",
-  alert: "magnet magnet--red",
-  success: "magnet magnet--green",
-  info: "magnet magnet--blue",
-};
-
-/** A status dot with a label: status of a meeting, a role, a state. */
+/** A label in a tinted pill: status of a meeting, a role, a state. The text carries the meaning; the tint only supports it. */
 export function Badge({ tone = "neutral", children, className }: { tone?: BadgeTone; children: ReactNode; className?: string }) {
-  return (
-    <span className={cx("badge", tone !== "neutral" && `badge--${tone}`, className)}>
-      <span className={magnet[tone]} aria-hidden="true" />
-      {children}
-    </span>
-  );
+  return <span className={cx("badge", tone !== "neutral" && `badge--${tone}`, className)}>{children}</span>;
 }

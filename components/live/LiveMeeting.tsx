@@ -264,11 +264,7 @@ function StatusHeadline({ status }: { status: LiveStatus }) {
   return (
     <p className={`status-line status-line--${status.tone}`} role="status">
       <span className="status-line__main">
-        {status.tone === "paused" ? (
-          <IconPause size={20} className="status-line__icon" aria-hidden="true" />
-        ) : (
-          <span className="magnet status-line__magnet" aria-hidden="true" />
-        )}
+        {status.tone === "paused" && <IconPause size={20} className="status-line__icon" aria-hidden="true" />}
         <span className="status-line__label">{status.label}</span>
       </span>
       {status.detail && <span className="status-line__detail">— {status.detail}</span>}

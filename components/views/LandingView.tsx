@@ -64,7 +64,6 @@ export function LandingView({ user, signIn }: LandingViewProps) {
           </h2>
           <ol className="steps">
             <li className="step">
-              <span className="step__magnet magnet magnet--ink" aria-hidden="true" />
               <h3 className="step__title">Alla i rummet vet</h3>
               <p className="muted">
                 Den som håller i mötet bekräftar att alla vet att mötet transkriberas och kan be om paus. Först då går
@@ -72,7 +71,6 @@ export function LandingView({ user, signIn }: LandingViewProps) {
               </p>
             </li>
             <li className="step">
-              <span className="step__magnet magnet magnet--blue" aria-hidden="true" />
               <h3 className="step__title">Starta och prata som vanligt</h3>
               <p className="muted">
                 Laptopens egen mikrofon räcker. En kort namnrunda först, så står det Anna och Erik i stället för Talare
@@ -80,7 +78,6 @@ export function LandingView({ user, signIn }: LandingViewProps) {
               </p>
             </li>
             <li className="step">
-              <span className="step__magnet magnet magnet--green" aria-hidden="true" />
               <h3 className="step__title">Dokumentet fylls på</h3>
               <p className="muted">
                 Ungefär en gång i minuten uppdateras anteckningarna: beslut, att göra med namn och datum, och vad som pågår.
@@ -112,7 +109,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
               <span className="edit-demo__caret" />
             </p>
             <p className="edit-demo__note">
-              <span className="magnet magnet--blue" /> Ändrat av en människa · låst
+              Ändrat av en människa · låst
             </p>
           </div>
         </div>
@@ -181,14 +178,9 @@ function BoardDemo() {
   return (
     <figure className="board" aria-label="Exempel: ett mötesdokument som fylls i under mötet">
       <div className="board__sheet">
-        <span className="board__pin board__pin--l magnet" aria-hidden="true" />
-        <span className="board__pin board__pin--r magnet magnet--blue" aria-hidden="true" />
         <div className="doc">
           <p className="doc__title">Styrelsemöte, 24 nov</p>
           <p className="doc__live">
-            <span className="doc__dot" aria-hidden="true">
-              ●
-            </span>{" "}
             LIVE · uppdaterad 18:42
           </p>
           <p className="doc__attend w w1">Närvarande: Simon, Anna, Erik, Sara</p>
@@ -218,7 +210,7 @@ function BoardDemo() {
 
       <div className="board__strip" aria-hidden="true">
         <span className="board__rec">
-          <span className="magnet" /> 42:10
+          LIVE 42:10
         </span>
         <span className="board__partial">…då täcker inträdet pizzan</span>
         <span className="board__ctrl">

@@ -15,7 +15,7 @@
   --board: #fafafa; /* page background */
   --surface: #ffffff; /* cards, sheets, controls */
   --surface-sunk: #f2f2f2; /* hover, inset areas */
-  --rail: #c7c7c7; /* decorative strong lines: timer track, dashed empty states, neutral dots */
+  --rail: #c7c7c7; /* decorative strong lines: timer track, dashed empty states */
   --line: #ebebeb; /* hairlines: card borders, row dividers */
   --control-border: #8a8a8a; /* edges of inputs, selects, checkboxes, bordered buttons: >= 3:1 (WCAG 1.4.11) */
 
@@ -60,7 +60,7 @@
   --s-8: 4rem;
   --s-9: 6rem;
 
-  /* Radii: small and square-ish; pills only for badges and dots */
+  /* Radii: small and square-ish; pills only for badges */
   --r-control: 6px;
   --r-panel: 8px;
   --r-round: 999px;
@@ -69,7 +69,6 @@
      only popovers, menus and dialogs float. */
   --shadow-panel: 0 0 0 1px var(--line);
   --shadow-lift: 0 0 0 1px var(--line), 0 2px 2px rgb(0 0 0 / 0.04), 0 8px 16px -4px rgb(0 0 0 / 0.08);
-  --shadow-magnet: 0 0 0 0 transparent; /* status dots are flat */
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -365,55 +364,25 @@ select {
   }
 }
 
-/* Wordmark (the logo): the glossy ink dot and the name. Kept as-is from the first design. */
+/* Wordmark (the logo): "Simon Says" in Instrument Serif, a single 400 weight (never faux-bolded).
+   The only use of the display face; no mark, no dot. */
 .wordmark {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
   color: var(--ink);
   text-decoration: none;
-  font-weight: 600;
-  font-size: 1.125rem;
-  letter-spacing: -0.03em;
+  font-family: var(--font-wordmark), Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  font-synthesis: none;
+  font-size: 1.625rem;
+  line-height: 1;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   min-height: 2.75rem;
 }
 
 .wordmark:hover {
   text-decoration: none;
-}
-
-/* Status dot (class name kept from the first design): a flat circle in a status colour. */
-.magnet {
-  --magnet: var(--red);
-  display: inline-block;
-  width: 0.8em;
-  height: 0.8em;
-  flex: none;
-  border-radius: var(--r-round);
-  background: var(--magnet);
-  box-shadow: var(--shadow-magnet);
-}
-
-.wordmark .magnet {
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, white 45%, var(--magnet)) 0 18%, var(--magnet) 55%);
-  box-shadow: 0 1px 1px rgb(0 0 0 / 0.25), 0 3px 6px -2px rgb(0 0 0 / 0.3);
-}
-
-.magnet--blue {
-  --magnet: var(--blue);
-}
-.magnet--green {
-  --magnet: var(--green);
-}
-.magnet--ink {
-  --magnet: var(--ink);
-}
-.magnet--rail {
-  --magnet: var(--rail);
-}
-.magnet--red {
-  --magnet: var(--red);
 }
 
 /* ---------- Footer ---------- */
@@ -630,6 +599,10 @@ select {
 .hint {
   font-size: var(--text-xs);
   color: var(--ink-3);
+}
+
+ul.hint {
+  list-style-type: "–  ";
 }
 
 .field-error {
@@ -868,13 +841,12 @@ select {
   }
 }
 
-/* ---------- Badge (a status dot with a label) ---------- */
+/* ---------- Badge (a label in a tinted pill; the text carries the meaning) ---------- */
 
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.125rem 0.5rem 0.125rem 0.4rem;
+  padding: 0.125rem 0.5rem;
   border-radius: var(--r-round);
   background: var(--surface-sunk);
   color: var(--ink-2);
@@ -884,18 +856,9 @@ select {
   white-space: nowrap;
 }
 
-.badge .magnet {
-  width: 0.5rem;
-  height: 0.5rem;
-}
-
 .badge--live {
   background: var(--red-wash);
   color: var(--red);
-}
-
-.badge--live .magnet {
-  animation: live-pulse 2.4s var(--ease-out) infinite;
 }
 
 /* Static red: needs you (not live). */
@@ -912,17 +875,6 @@ select {
 .badge--info {
   background: var(--blue-wash);
   color: var(--blue);
-}
-
-@keyframes live-pulse {
-  0%,
-  60%,
-  100% {
-    box-shadow: var(--shadow-magnet), 0 0 0 0 color-mix(in srgb, var(--red) 45%, transparent);
-  }
-  30% {
-    box-shadow: var(--shadow-magnet), 0 0 0 5px color-mix(in srgb, var(--red) 0%, transparent);
-  }
 }
 
 /* ---------- List rows ---------- */

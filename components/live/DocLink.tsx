@@ -47,7 +47,6 @@ export function DocLink({
       <span className="doclink__main">
         <span className="doclink__title">{title}</span>
         <span className={`doclink__meta doclink__meta--${tone}`}>
-          <span className={`magnet magnet--${tone}`} aria-hidden="true" />
           {meta}
         </span>
       </span>
