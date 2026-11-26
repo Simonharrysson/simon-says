@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, Spinner } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { IconCheck, IconChevronRight, IconDoc, IconFolder, IconSearch, IconX } f
 import { Input } from "@/components/ui/input";
 import type { DriveFolder, ImportFile } from "@/lib/history/drive-list";
 import { MAX_IMPORT_DOCS } from "@/lib/history/limits";
-import { plural } from "@/lib/format";
+import { intlTag, type Locale } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 
 // The protocol import's own Drive browser (no Google Picker), on the admin's drive.readonly
@@ -21,7 +22,7 @@ const MAX_FOLDERS = 20;
 /** `needs_drive_access`: the grant lacks drive.readonly (withdrawn, or replaced by a plain sign-in). */
 type DriveFetchResult<T> = { ok: true; data: T } | { ok: false; error: string; message: string };
 
-async function driveCall<T>(orgId: string, body: unknown): Promise<DriveFetchResult<T>> {
+async function driveCall<T>(orgId: string, body: unknown, copy: { generic: string; offline: string }): Promise<DriveFetchResult<T>> {
   try {
     const res = await fetch(`/api/orgs/${orgId}/history/drive`, {
       method: "POST",
@@ -29,19 +30,15 @@ async function driveCall<T>(orgId: string, body: unknown): Promise<DriveFetchRes
       body: JSON.stringify(body),
     });
     const json = (await res.json().catch(() => null)) as (T & { error?: string; message?: string }) | null;
-    if (!res.ok || !json) return { ok: false, error: json?.error ?? "error", message: json?.message ?? "Något gick fel. Försök igen om en liten stund." };
+    if (!res.ok || !json) return { ok: false, error: json?.error ?? "error", message: json?.message ?? copy.generic };
     return { ok: true, data: json };
   } catch {
-    return { ok: false, error: "network", message: "Vi nådde inte servern. Kontrollera nätet och försök igen." };
+    return { ok: false, error: "network", message: copy.offline };
   }
 }
 
 type Where = "root" | "shared" | "drives";
-const PLACES: { key: Where; label: string }[] = [
-  { key: "root", label: "Min enhet" },
-  { key: "shared", label: "Delade med mig" },
-  { key: "drives", label: "Delade enheter" },
-];
+const PLACES: Where[] = ["root", "shared", "drives"];
 
 const rowBase = "flex min-h-12 items-center gap-3 border-t border-line px-3 max-md:min-h-14 [li:first-child>&]:border-t-0";
 
@@ -68,15 +65,18 @@ export function FolderStep({
   /** "Ta bort läsåtkomst" done. */
   onRemoved: () => void;
 }) {
+  const t = useTranslations("drive");
+  const common = useTranslations("common");
+  const copy = { generic: t("generic"), offline: t("offline") };
   const [removing, setRemoving] = useState(false);
   const removeAccess = async () => {
     setRemoving(true);
     try {
       const res = await fetch(`/api/orgs/${orgId}/history/drive`, { method: "DELETE" });
       if (res.ok) onRemoved();
-      else setError("Läsåtkomsten kunde inte tas bort. Försök igen.");
+      else setError(t("removeFailed"));
     } catch {
-      setError("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+      setError(t("offline"));
     } finally {
       setRemoving(false);
     }
@@ -110,7 +110,7 @@ export function FolderStep({
     const mine = ++seq.current;
     setLoading(true);
     setError(null);
-    const r = await driveCall<{ folders: DriveFolder[]; nextPageToken: string | null }>(orgId, { ...body, ...(pageToken ? { pageToken } : {}) });
+    const r = await driveCall<{ folders: DriveFolder[]; nextPageToken: string | null }>(orgId, { ...body, ...(pageToken ? { pageToken } : {}) }, copy);
     if (mine !== seq.current) return;
     setLoading(false);
     if (!r.ok) {
@@ -141,10 +141,8 @@ export function FolderStep({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <p className="font-medium">Steg 1 av 2: Välj mapparna med protokollen</p>
-        <p className="text-sm text-ink-3 max-w-[68ch]">
-          Kryssa i en eller flera mappar. I nästa steg ser du mötena som ligger i dem och väljer vilka som ska läsas in.
-        </p>
+        <p className="font-medium">{t("step1")}</p>
+        <p className="text-sm text-ink-3 max-w-[68ch]">{t("step1Text")}</p>
       </div>
 
       {meetingFolder && (
@@ -152,7 +150,7 @@ export function FolderStep({
           <FolderRow
             folder={meetingFolder}
             label={meetingFolder.name}
-            meta="Föreningens mötesmapp"
+            meta={t("meetingFolder")}
             className="border-t-0"
             checked={isSelected(meetingFolder.id)}
             disabled={full && !isSelected(meetingFolder.id)}
@@ -171,8 +169,8 @@ export function FolderStep({
           <IconSearch size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
           <Input
             type="search"
-            aria-label="Sök mapp"
-            placeholder="Sök mapp efter namn"
+            aria-label={t("searchLabel")}
+            placeholder={t("searchPlaceholder")}
             value={query}
             maxLength={100}
             className="pl-9"
@@ -180,27 +178,27 @@ export function FolderStep({
           />
         </div>
         {!search && (
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Var i Drive">
+          <div className="flex flex-wrap gap-1" role="group" aria-label={t("where")}>
             {PLACES.map((p) => (
               <Button
-                key={p.key}
+                key={p}
                 size="sm"
-                variant={where === p.key && !path.length ? "secondary" : "ghost"}
-                aria-pressed={where === p.key}
+                variant={where === p && !path.length ? "secondary" : "ghost"}
+                aria-pressed={where === p}
                 onClick={() => {
-                  setWhere(p.key);
+                  setWhere(p);
                   setPath([]);
                 }}
               >
-                {p.label}
+                {t(`places.${p}`)}
               </Button>
             ))}
           </div>
         )}
         {!search && path.length > 0 && (
-          <nav aria-label="Mappar" className="flex flex-wrap items-center gap-1 text-sm text-ink-3">
+          <nav aria-label={t("breadcrumbs")} className="flex flex-wrap items-center gap-1 text-sm text-ink-3">
             <button type="button" className="rounded-md px-1 py-0.5 hover:text-ink" onClick={() => setPath([])}>
-              {PLACES.find((p) => p.key === where)?.label}
+              {t(`places.${where}`)}
             </button>
             {path.map((f, i) => (
               <span key={f.id} className="flex items-center gap-1">
@@ -222,17 +220,17 @@ export function FolderStep({
         <div className="rounded-lg border border-line bg-surface" aria-busy={loading}>
           {error ? (
             <div className="p-3">
-              <Banner tone="danger" action={<Button size="sm" variant="secondary" onClick={() => load()}>Försök igen</Button>}>
+              <Banner tone="danger" action={<Button size="sm" variant="secondary" onClick={() => load()}>{t("tryAgain")}</Button>}>
                 {error}
               </Banner>
             </div>
           ) : folders.length === 0 && loading ? (
             <p className="flex items-center gap-2 px-3 py-4 text-sm text-ink-3" role="status">
-              <Spinner /> Hämtar mappar …
+              <Spinner /> {t("loadingFolders")}
             </p>
           ) : folders.length === 0 ? (
             <p className="px-3 py-4 text-sm text-ink-3">
-              {search ? `Ingen mapp heter något med ”${search}”.` : path.length ? "Inga mappar här inne." : "Inga mappar här."}
+              {search ? t("noMatch", { search }) : path.length ? t("emptyInside") : t("empty")}
             </p>
           ) : (
             <ul className="max-h-[22rem] overflow-y-auto overscroll-contain">
@@ -251,7 +249,7 @@ export function FolderStep({
               {next && (
                 <li className="border-t border-line p-2">
                   <Button size="sm" variant="ghost" loading={loading} onClick={() => load(next)}>
-                    Visa fler mappar
+                    {t("moreFolders")}
                   </Button>
                 </li>
               )}
@@ -263,8 +261,8 @@ export function FolderStep({
       {selected.length > 0 && (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-ink-3">
-            {plural(selected.length, "mapp vald", "mappar valda")}
-            {full && ` (högst ${MAX_FOLDERS})`}
+            {t("selected", { count: selected.length })}
+            {full && t("max", { max: MAX_FOLDERS })}
           </p>
           <ul className="flex flex-wrap gap-2">
             {selected.map((f) => (
@@ -272,7 +270,7 @@ export function FolderStep({
                 <IconFolder size={14} className="flex-none text-ink-3" />
                 <span className="truncate">{f.name}</span>
                 <Button size="sm" variant="ghost" iconOnly icon={<IconX size={14} />} onClick={() => toggle(f)}>
-                  {`Ta bort ${f.name}`}
+                  {t("removeFolder", { name: f.name })}
                 </Button>
               </li>
             ))}
@@ -280,22 +278,22 @@ export function FolderStep({
         </div>
       )}
 
-      <Check id="import-subfolders" title="Ta med undermappar" checked={subfolders} onCheckedChange={(v) => setSubfolders(v === true)}>
-        Till exempel en mapp per termin eller år.
+      <Check id="import-subfolders" title={t("subfolders")} checked={subfolders} onCheckedChange={(v) => setSubfolders(v === true)}>
+        {t("subfoldersText")}
       </Check>
 
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" disabled={!selected.length} onClick={() => onNext(selected, subfolders)}>
-          {selected.length ? `Visa mötena i ${plural(selected.length, "mapp", "mappar")}` : "Välj minst en mapp"}
+          {selected.length ? t("showMeetings", { count: selected.length }) : t("pickOne")}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
-          Avbryt
+          {common("cancel")}
         </Button>
       </div>
       <p className="text-xs text-ink-3">
-        Simon Says läsåtkomst till din Drive tas bort automatiskt efter 24 timmar.{" "}
+        {t("autoRemoved")}{" "}
         <Button variant="ghost" size="sm" loading={removing} onClick={removeAccess} className="h-auto min-h-0 px-1 py-0 text-xs underline max-md:min-h-11">
-          Ta bort läsåtkomst nu
+          {t("removeNow")}
         </Button>
       </p>
     </div>
@@ -321,15 +319,16 @@ function FolderRow({
   onToggle: () => void;
   onOpen: () => void;
 }) {
+  const t = useTranslations("drive");
   const id = `folder-${folder.id}`;
   return (
     <div className={cn(rowBase, className)}>
-      <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={onToggle} aria-label={`Välj ${label}`} />
+      <Checkbox id={id} checked={checked} disabled={disabled} onCheckedChange={onToggle} aria-label={t("selectFolder", { label })} />
       <button
         type="button"
         onClick={onOpen}
         className="group/open flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md py-2 text-left"
-        aria-label={`Öppna ${label}`}
+        aria-label={t("openFolder", { label })}
       >
         <IconFolder size={18} className="flex-none text-ink-3" />
         <span className="flex min-w-0 flex-1 flex-col">
@@ -345,16 +344,11 @@ function FolderRow({
 // ---------------------------------------------------------------------------------------------
 // Step 2: the meetings in them
 
-const fmtDate = (iso: string) =>
-  new Date(`${iso}T12:00:00Z`).toLocaleDateString("sv-SE", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "");
+const fmtDate = (iso: string, locale: Locale) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString(intlTag(locale), { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }).replace(/\./g, "");
 
-const HINT: Record<ImportFile["status"], string | null> = {
-  ready: null,
-  template: "Ser ut som en mall, kallelse eller dagordning, inte ett protokoll.",
-  docx: "Word-fil. Öppna den i Google Docs och spara som Google-dokument för att kunna läsa in den.",
-  own: "Simon Says eget mötesdokument. Mötet finns redan med.",
-  imported: "Kryssa i för att läsa in det igen (till exempel om dokumentet har fått fler möten).",
-};
+/** Statuses with a hint line under the row (drive.hint.* in the catalogs). */
+const HINTED = new Set<ImportFile["status"]>(["template", "docx", "own", "imported"]);
 
 /**
  * The rows ticked from the start (and by "Välj alla"): the protocol-looking ones not imported
@@ -386,6 +380,8 @@ export function FileStep({
   onNext: (files: ImportFile[]) => void;
   onNeedsAccess: () => void;
 }) {
+  const t = useTranslations("drive");
+  const common = useTranslations("common");
   const [list, setList] = useState<{ files: ImportFile[]; truncated: boolean; folders: number } | null>(initialFiles ?? null);
   const [error, setError] = useState<string | null>(null);
   const [ticked, setTicked] = useState<Set<string>>(() => (initialFiles ? defaultTicks(initialFiles.files) : new Set()));
@@ -397,7 +393,7 @@ export function FileStep({
       action: "files",
       folders: folders.map((f) => ({ id: f.id })),
       subfolders,
-    });
+    }, { generic: t("generic"), offline: t("offline") });
     if (!r.ok) {
       if (r.error === "needs_drive_access") onNeedsAccess();
       else setError(r.message);
@@ -417,10 +413,10 @@ export function FileStep({
         <Banner tone="danger">{error}</Banner>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={load}>
-            Försök igen
+            {t("tryAgain")}
           </Button>
           <Button variant="ghost" onClick={onBack}>
-            Tillbaka till mapparna
+            {t("backToFolders")}
           </Button>
         </div>
       </div>
@@ -429,8 +425,9 @@ export function FileStep({
   if (!list) {
     return (
       <p className="flex items-center gap-2 text-sm text-ink-3" role="status" aria-live="polite">
-        <Spinner /> Letar efter protokoll i {plural(folders.length, "mapp", "mappar")}
-        {subfolders ? " och deras undermappar" : ""} … Bara namnen läses.
+        <Spinner /> {t("searching", { count: folders.length })}
+        {subfolders ? t("andSubfolders") : ""}
+        {t("namesOnly")}
       </p>
     );
   }
@@ -442,8 +439,8 @@ export function FileStep({
   const allTicked = all.size > 0 && [...all].every((id) => ticked.has(id));
   const tooMany = n > MAX_IMPORT_DOCS;
   const toggle = (id: string) =>
-    setTicked((t) => {
-      const u = new Set(t);
+    setTicked((prev) => {
+      const u = new Set(prev);
       if (u.has(id)) u.delete(id);
       else u.add(id);
       return u;
@@ -452,16 +449,16 @@ export function FileStep({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <p className="font-medium">Steg 2 av 2: Välj protokollen</p>
+        <p className="font-medium">{t("step2")}</p>
         <p className="text-sm text-ink-3 max-w-[68ch]">
           {list.files.length === 0
-            ? `Inga Google-dokument i ${plural(list.folders, "mapp", "mappar")}.`
-            : `${plural(list.files.length, "dokument", "dokument")} i ${plural(list.folders, "mapp", "mappar")}, äldst först.${done ? ` ${plural(done, "är", "är")} redan inlästa.` : ""} Datum med ”gissat” kommer inte från namnet; Simon Says läser det riktiga datumet ur protokollet.`}
+            ? t("noDocs", { count: list.folders })
+            : `${t("docsIn", { files: list.files.length, folders: list.folders })}${done ? t("alreadyImported", { count: done }) : ""}${t("guessed")}`}
         </p>
       </div>
       {list.truncated && (
         <Banner tone="warning" live={false}>
-          Mapparna innehåller fler dokument än Simon Says visar på en gång. Välj färre mappar, eller stäng av undermappar, för att se resten.
+          {t("truncated")}
         </Banner>
       )}
 
@@ -475,10 +472,10 @@ export function FileStep({
               onCheckedChange={() => setTicked(allTicked ? new Set() : all)}
             />
             <label htmlFor="import-all" className="flex min-h-11 flex-1 cursor-pointer items-center text-sm font-medium">
-              {ready > MAX_IMPORT_DOCS ? `Välj de ${MAX_IMPORT_DOCS} äldsta som inte är inlästa` : `Välj alla som inte är inlästa (${ready})`}
+              {ready > MAX_IMPORT_DOCS ? t("pickOldest", { max: MAX_IMPORT_DOCS }) : t("pickAll", { count: ready })}
             </label>
           </div>
-          <ul className="max-h-[28rem] overflow-y-auto overscroll-contain" aria-label="Dokument">
+          <ul className="max-h-[28rem] overflow-y-auto overscroll-contain" aria-label={t("docsLabel")}>
             {list.files.map((f) => (
               <li key={f.id}>
                 <FileRow file={f} checked={ticked.has(f.id)} onToggle={() => toggle(f.id)} />
@@ -490,18 +487,14 @@ export function FileStep({
 
       <div className="flex flex-col gap-2">
         <p className={cn("text-sm", tooMany ? "text-amber font-medium" : "text-ink-3")} aria-live="polite">
-          {tooMany
-            ? `${plural(n, "protokoll", "protokoll")} valda. Du kan läsa in högst ${MAX_IMPORT_DOCS} åt gången; ta resten nästa gång.`
-            : n
-              ? `${plural(n, "protokoll", "protokoll")} valda. Nästa steg visar vad det kostar; inget skickas än.`
-              : "Inga protokoll valda."}
+          {tooMany ? t("tooMany", { count: n, max: MAX_IMPORT_DOCS }) : n ? t("picked", { count: n }) : t("noneSelected")}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" disabled={!n || tooMany} onClick={() => onNext(list.files.filter((f) => ticked.has(f.id)))}>
-            {n ? `Fortsätt med ${plural(n, "protokoll", "protokoll")}` : "Välj protokoll"}
+            {n ? t("continueWith", { count: n }) : t("pickProtocols")}
           </Button>
           <Button variant="ghost" onClick={onBack}>
-            Tillbaka till mapparna
+            {t("backToFolders")}
           </Button>
         </div>
       </div>
@@ -512,7 +505,9 @@ export function FileStep({
 function FileRow({ file, checked, onToggle }: { file: ImportFile; checked: boolean; onToggle: () => void }) {
   const id = `file-${file.id}`;
   const selectable = canTick(file);
-  const hint = HINT[file.status];
+  const t = useTranslations("drive");
+  const locale = useLocale();
+  const hint = HINTED.has(file.status) ? t(`hint.${file.status as "template" | "docx" | "own" | "imported"}`) : null;
   return (
     <div className={cn(rowBase, "items-start py-2")}>
       <Checkbox id={id} className="mt-0.5" checked={selectable && checked} disabled={!selectable} onCheckedChange={onToggle} />
@@ -522,14 +517,14 @@ function FileRow({ file, checked, onToggle }: { file: ImportFile; checked: boole
           <span className={cn("font-medium wrap-anywhere", !selectable && file.status !== "imported" && "text-ink-3")}>{file.name}</span>
         </span>
         <span className="pl-6 text-xs text-ink-3">
-          {file.date ? fmtDate(file.date) : "Inget datum"}
-          {file.date && file.dateInferred && " (gissat)"}
+          {file.date ? fmtDate(file.date, locale) : t("noDate")}
+          {file.date && file.dateInferred && t("guessedTag")}
           {" · "}
           <span className="wrap-anywhere">{file.folderName}</span>
           {file.status === "imported" && (
             <span className="text-green">
               {" · "}
-              <IconCheck size={12} strokeWidth={2.5} className="inline align-[-0.1em]" /> Redan inläst
+              <IconCheck size={12} strokeWidth={2.5} className="inline align-[-0.1em]" /> {t("alreadyRead")}
             </span>
           )}
         </span>

@@ -1,10 +1,10 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, Spinner } from "@/components/ui/button";
 import { IconAlert, IconCheck, IconClock, IconRefresh } from "@/components/ui/icons";
-import { plural } from "@/lib/format";
 import { formatUsd } from "@/lib/history/limits";
 import {
   DIRECT_CONCURRENCY,
@@ -45,14 +45,6 @@ const POLL_MS = 15_000;
 /** Errors that stop the rest of a direct import: no point in trying the others now. */
 const STOPPING = new Set(["google_auth_lost", "rate_limited", "spend"]);
 
-const ROW_STATE: Record<ItemView["state"], string> = {
-  waiting: "Väntar",
-  reading: "Läses",
-  done: "Klar",
-  skipped: "Hoppades över",
-  failed: "Misslyckades",
-};
-
 export function ImportProgress({
   orgId,
   initial,
@@ -77,6 +69,8 @@ export function ImportProgress({
   onClose: () => void;
 }) {
   const demo = fixedNow !== undefined;
+  const tr = useTranslations("importProgress");
+  const locale = useLocale();
   const [job, setJob] = useState<JobView>(initial);
   const [running, setRunning] = useState(false);
   const [stopped, setStopped] = useState<string | null>(null);
@@ -117,9 +111,9 @@ export function ImportProgress({
         setNotice(null);
       }
     } catch {
-      setNotice("Vi når inte servern just nu. Inläsningen fortsätter ändå; sidan försöker igen.");
+      setNotice(tr("unreachable"));
     }
-  }, [orgId, job.id]);
+  }, [orgId, job.id, tr]);
 
   // Batch (and a digest in progress): ask for the state now and then.
   useEffect(() => {
@@ -145,16 +139,16 @@ export function ImportProgress({
         if (res.ok) return null;
         if (json?.error === "busy" && attempt < BACKOFF_MS.length) {
           const wait = BACKOFF_MS[attempt] + Math.round(Math.random() * 1000);
-          setNotice(`Claude har mycket att göra just nu. Simon Says väntar ${Math.ceil(wait / 1000)} s och försöker igen.`);
+          setNotice(tr("busy", { seconds: Math.ceil(wait / 1000) }));
           await new Promise((r) => setTimeout(r, wait));
           setNotice(null);
           continue;
         }
-        if (json?.error && STOPPING.has(json.error)) return json.message ?? "Inläsningen stoppades. Försök igen senare.";
+        if (json?.error && STOPPING.has(json.error)) return json.message ?? tr("stopped");
         return null;
       }
     },
-    [orgId, job.id],
+    [orgId, job.id, tr],
   );
 
   /** Reads every waiting meeting, a few at a time. */
@@ -198,9 +192,9 @@ export function ImportProgress({
       const res = await fetch(`/api/orgs/${orgId}/history/jobs/${job.id}/cancel`, { method: "POST" });
       const json = (await res.json().catch(() => null)) as { job?: JobView; message?: string } | null;
       if (json?.job) setJob(json.job);
-      else if (!res.ok) setNotice(json?.message ?? "Inläsningen kunde inte avbrytas just nu. Försök igen.");
+      else if (!res.ok) setNotice(json?.message ?? tr("cancelFailed"));
     } catch {
-      setNotice("Vi nådde inte servern. Försök igen.");
+      setNotice(tr("offline"));
     } finally {
       setBusy(null);
       setConfirmCancel(false);
@@ -236,7 +230,7 @@ export function ImportProgress({
     failed: t.failed,
     stopped,
     fileDated: job.items.flatMap((i) =>
-      i.state === "done" && i.dateFrom === "file" && i.protocolId && i.date ? [{ protocolId: i.protocolId, label: itemLabel({ ...i, date: null }, names), date: i.date }] : [],
+      i.state === "done" && i.dateFrom === "file" && i.protocolId && i.date ? [{ protocolId: i.protocolId, label: itemLabel({ ...i, date: null }, names, locale), date: i.date }] : [],
     ),
   };
 
@@ -244,40 +238,49 @@ export function ImportProgress({
   let headline: string;
   let detail: string;
   if (job.status === "digesting") {
-    headline = `${t.done} av ${p.total} lästa${t.failed ? `, ${t.failed} misslyckades` : ""} · förslag på mål inom ca 10 min`;
-    detail =
-      "Claude har läst klart. Förslaget på mål tas fram vid nästa körning (inom 5 minuter) och tar sedan några minuter: Simon Says läser hela historiken i tidsordning. Du kan stänga sidan — förslaget väntar här när du kommer tillbaka.";
+    headline = tr("digestingHeadline", { done: t.done, total: p.total, failed: t.failed ? tr("failedSuffix", { count: t.failed }) : "" });
+    detail = tr("digestingDetail");
   } else if (job.status === "canceling") {
-    headline = `${p.finished} av ${p.total} klara · avbryter`;
-    detail = "Claude stoppar omgången. Det som redan är läst sparas (det är betalt), men inga mål föreslås. Det brukar ta någon minut.";
+    headline = tr("cancelingHeadline", { finished: p.finished, total: p.total });
+    detail = tr("cancelingDetail");
   } else if (open) {
     const eta =
       p.minutesLeft !== null
-        ? formatMinutesLeft(p.minutesLeft)
+        ? formatMinutesLeft(p.minutesLeft, locale)
         : job.mode === "batch"
           ? p.noEstimate === "too_early"
-            ? "tiden räknas ut om en stund"
-            : "ingen tidsuppskattning än"
-          : "tiden räknas ut när första protokollet är klart";
-    headline = `${p.finished} av ${p.total} klara${t.failed ? `, ${t.failed} misslyckades` : ""} · ${pausedDirect ? "pausad" : eta}`;
+            ? tr("etaSoon")
+            : tr("etaNone")
+          : tr("etaFirst");
+    headline = tr("openHeadline", {
+      finished: p.finished,
+      total: p.total,
+      failed: t.failed ? tr("failedSuffix", { count: t.failed }) : "",
+      eta: pausedDirect ? tr("paused") : eta,
+    });
     detail =
       job.mode === "batch"
-        ? `${p.noEstimate === "none_finished" ? "Claude har fått alla protokoll på en gång (till halva priset) och har börjat. De flesta omgångar är klara inom en timme, alla inom ett dygn. " : "Claude läser alla protokoll på en gång (till halva priset). Resultaten kommer när hela omgången är klar. "}Du kan stänga sidan — vi fortsätter och visar resultatet här när du kommer tillbaka.`
+        ? `${p.noEstimate === "none_finished" ? tr("batchStarted") : tr("batchReading")}${tr("batchClose")}`
         : pausedDirect
-          ? "Inläsningen pausades när sidan stängdes. Fortsätt där den slutade."
-          : `Simon Says läser ${Math.min(DIRECT_CONCURRENCY, p.total)} protokoll åt gången. Låt sidan vara öppen tills det är klart; stänger du den pausas inläsningen och du kan fortsätta här sedan.`;
+          ? tr("pausedDetail")
+          : tr("directDetail", { count: Math.min(DIRECT_CONCURRENCY, p.total) });
   } else {
     const parts = [
-      `${plural(t.done, "protokoll", "protokoll")} inlästa`,
-      t.skipped ? `${t.skipped} hoppades över` : "",
-      t.failed ? `${t.failed} misslyckades` : "",
+      tr("partImported", { count: t.done }),
+      t.skipped ? tr("partSkipped", { count: t.skipped }) : "",
+      t.failed ? tr("partFailed", { count: t.failed }) : "",
     ].filter(Boolean);
-    headline = job.status === "canceled" ? `Avbruten · ${parts.join(" · ")}` : job.status === "failed" ? "Inläsningen kunde inte startas" : `Klart · ${parts.join(" · ")}`;
+    headline =
+      job.status === "canceled"
+        ? tr("canceledHeadline", { parts: parts.join(" · ") })
+        : job.status === "failed"
+          ? tr("failedHeadline")
+          : tr("doneHeadline", { parts: parts.join(" · ") });
     detail =
       job.status === "failed"
-        ? "Simon Says kunde inte skicka protokollen till Claude. Inget har kostat något. Stäng och försök igen om en liten stund."
+        ? tr("failedDetail")
         : job.mode === "batch" && job.costUsd > 0
-          ? `Kostade ${formatUsd(job.costUsd).replace("≈ ", "")} för Simon Says.`
+          ? tr("cost", { cost: formatUsd(job.costUsd, locale).replace("≈ ", "") })
           : "";
   }
 
@@ -290,7 +293,7 @@ export function ImportProgress({
         <div
           className="h-2 w-full max-w-[28rem] overflow-hidden rounded-full bg-sunk"
           role="progressbar"
-          aria-label="Inlästa protokoll"
+          aria-label={tr("progressLabel")}
           aria-valuemin={0}
           aria-valuemax={p.total}
           aria-valuenow={p.finished}
@@ -308,21 +311,19 @@ export function ImportProgress({
       {stopped && <Banner tone="danger">{stopped}</Banner>}
       {job.status === "done" && job.mode === "batch" && job.proposalError && (
         <Banner tone="warning" live={false}>
-          {job.proposalError === "too_few"
-            ? "Simon Says behöver minst 3 möten eller protokoll för att föreslå mål."
-            : "Simon Says kunde inte föreslå mål den här gången. Du kan be om ett förslag igen."}
+          {job.proposalError === "too_few" ? tr("tooFew") : tr("proposalFailed")}
         </Banner>
       )}
       {job.proposal && job.proposal.trimmed > 0 && (
         <p className="text-sm text-ink-3 max-w-[68ch]">
-          Historiken var för lång för en genomläsning: förslaget bygger på de senaste {job.proposal.meetings} mötena ({job.proposal.trimmed} äldre lämnades utanför).
+          {tr("trimmed", { meetings: job.proposal.meetings, trimmed: job.proposal.trimmed })}
         </p>
       )}
 
       <div className="flex flex-wrap gap-2">
         {pausedDirect && (
           <Button variant="primary" onClick={() => runPool(runnable(job))}>
-            Fortsätt
+            {tr("continue")}
           </Button>
         )}
         {!open && job.status !== "failed" && job.proposal && (
@@ -330,7 +331,7 @@ export function ImportProgress({
               markSeen();
               onProposal(job.proposal!, result);
             }}>
-            Se förslaget på mål
+            {tr("seeProposal")}
           </Button>
         )}
         {!open && job.status === "done" && !job.proposal && t.done > 0 && (
@@ -341,38 +342,38 @@ export function ImportProgress({
               onFinished(result);
             }}
           >
-            {job.mode === "batch" ? "Föreslå mål" : "Fortsätt till målen"}
+            {job.mode === "batch" ? tr("propose") : tr("toGoals")}
           </Button>
         )}
         {job.status === "running" &&
           (confirmCancel ? (
             <span className="flex flex-wrap items-center gap-2 text-sm text-ink-2">
-              <span>{job.mode === "batch" ? "Avbryta? Det som redan är läst sparas." : "Avbryta? De protokoll som är klara sparas."}</span>
+              <span>{job.mode === "batch" ? tr("cancelBatch") : tr("cancelDirect")}</span>
               <Button variant="danger-ghost" size="sm" loading={busy === "cancel"} onClick={cancel}>
-                Avbryt inläsningen
+                {tr("cancelImport")}
               </Button>
               <Button variant="ghost" size="sm" disabled={busy === "cancel"} onClick={() => setConfirmCancel(false)}>
-                Fortsätt läsa
+                {tr("keepReading")}
               </Button>
             </span>
           ) : (
             <Button variant="ghost" onClick={() => setConfirmCancel(true)}>
-              Avbryt …
+              {tr("cancelEllipsis")}
             </Button>
           ))}
         {!open && (
           <Button variant="ghost" loading={busy === "close"} onClick={close}>
-            Stäng
+            {tr("close")}
           </Button>
         )}
       </div>
 
-      <ol className="max-h-[26rem] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface" aria-label="Protokoll">
+      <ol className="max-h-[26rem] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface" aria-label={tr("listLabel")}>
         {job.items.map((i) => (
           <Row
             key={i.id}
             item={i}
-            label={itemLabel(i, names)}
+            label={itemLabel(i, names, locale)}
             batchRunning={job.mode === "batch" && open}
             canRetry={retryable(i.state, i.reason) && !(job.mode === "batch" && open) && !isRunning}
             retrying={busy === i.id}
@@ -399,8 +400,10 @@ function Row({
   retrying: boolean;
   onRetry: () => void;
 }) {
-  const why = i.state === "skipped" || i.state === "failed" ? reasonMessage(i.reason) : null;
-  const stateText = i.state === "reading" && batchRunning ? "Hos Claude" : ROW_STATE[i.state];
+  const tr = useTranslations("importProgress");
+  const locale = useLocale();
+  const why = i.state === "skipped" || i.state === "failed" ? reasonMessage(i.reason, locale) : null;
+  const stateText = i.state === "reading" && batchRunning ? tr("atClaude") : tr(`rowState.${i.state}`);
   return (
     <li className="flex flex-wrap items-start gap-x-3 gap-y-1 border-t border-line px-3 py-2 first:border-t-0">
       <span className="mt-0.5 grid size-5 flex-none place-content-center text-ink-3" aria-hidden>
@@ -415,12 +418,12 @@ function Row({
       <span className="flex min-w-[min(12rem,100%)] flex-1 flex-col">
         <span className={cn("text-sm wrap-anywhere", (i.state === "waiting" || i.state === "skipped") && "text-ink-3")}>{label}</span>
         {why && <span className="text-xs text-ink-3">{why}</span>}
-        {i.state === "done" && i.dateFrom === "file" && <span className="text-xs text-ink-3">Datum från filen — kontrollera det efteråt.</span>}
+        {i.state === "done" && i.dateFrom === "file" && <span className="text-xs text-ink-3">{tr("dateFromFile")}</span>}
       </span>
       <span className="ml-auto flex flex-none items-center gap-2">
         {canRetry && (
           <Button variant="ghost" size="sm" icon={<IconRefresh size={14} />} loading={retrying} onClick={onRetry}>
-            Försök igen
+            {tr("tryAgain")}
           </Button>
         )}
         <span className={cn("text-xs", i.state === "done" ? "text-green" : i.state === "failed" ? "text-red" : "text-ink-3")}>{stateText}</span>

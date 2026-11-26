@@ -8,8 +8,9 @@ export const IMPORT_RATE_LIMITED = "Simon Says har läst 60 protokoll ett och et
 export const BATCH_RATE_LIMITED = "Föreningen har redan låtit Simon Says läsa nära 500 protokoll det senaste dygnet. Fortsätt i morgon eller välj färre.";
 
 /** "≈ 0,40 USD" (two decimals rounded up, at least 0,01; Swedish decimal comma). */
-export function formatUsd(x: number): string {
-  return `≈ ${(Math.max(0.01, Math.ceil(x * 100 - 1e-9) / 100)).toFixed(2).replace(".", ",")} USD`;
+export function formatUsd(x: number, locale: "sv" | "en" = "sv"): string {
+  const n = (Math.max(0.01, Math.ceil(x * 100 - 1e-9) / 100)).toFixed(2);
+  return `≈ ${locale === "en" ? n : n.replace(".", ",")} USD`;
 }
 
 /** A picked Doc that is one of Simon Says' own meeting Docs: its meeting is already in the history. */

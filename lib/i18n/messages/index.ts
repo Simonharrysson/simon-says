@@ -5,6 +5,14 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enDrive from "./en/drive.json";
+import svDrive from "./sv/drive.json";
+import enImportProgress from "./en/importProgress.json";
+import svImportProgress from "./sv/importProgress.json";
+import enHistory from "./en/history.json";
+import svHistory from "./sv/history.json";
+import enOverview from "./en/overview.json";
+import svOverview from "./sv/overview.json";
 import enFormatEditor from "./en/formatEditor.json";
 import svFormatEditor from "./sv/formatEditor.json";
 import enStart from "./en/start.json";
@@ -45,6 +53,10 @@ import svMailPrefs from "./sv/mailPrefs.json";
 import svNotices from "./sv/notices.json";
 
 export const sv = {
+  drive: svDrive,
+  importProgress: svImportProgress,
+  history: svHistory,
+  overview: svOverview,
   formatEditor: svFormatEditor,
   start: svStart,
   summary: svSummary,
@@ -69,6 +81,10 @@ export const sv = {
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  drive: enDrive,
+  importProgress: enImportProgress,
+  history: enHistory,
+  overview: enOverview,
   formatEditor: enFormatEditor,
   start: enStart,
   summary: enSummary,

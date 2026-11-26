@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { requestDriveAccess } from "@/app/(app)/orgs/drive-access";
 import { PickerError, usePicker, type PickedFile } from "@/components/google/Picker";
@@ -12,7 +13,6 @@ import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { DriveFolder, ImportFile } from "@/lib/history/drive-list";
 import { formatUsd, MAX_IMPORT_DOCS } from "@/lib/history/limits";
 import { DIRECT_CONCURRENCY, type ImportMode, type JobProposal, type JobView } from "@/lib/history/progress";
-import { plural } from "@/lib/format";
 import { FileStep, FolderStep } from "./DriveSteps";
 import { ImportProgress, type FinishedImport } from "./ImportProgress";
 
@@ -88,24 +88,17 @@ export interface ImportResult {
 
 /** What the admin reads before confirming: the text goes to Claude, only short lines are kept. */
 export function PrivacyNote() {
+  const t = useTranslations("history");
   return (
-    <p className="text-sm text-ink-2 max-w-[68ch]">
-      Simon Says skickar <strong>protokollens text</strong> till Claude (Anthropic) för att plocka ut datum, beslut,
-      uppgifter och läget för det ni har jobbat med. Till skillnad från när Simon Says lär sig ert mötesformat läses alltså
-      hela texten. Hos oss sparas bara korta rader, utan namn, aldrig dokumenten. Du kan ta bort dem när som helst.
-    </p>
+    <p className="text-sm text-ink-2 max-w-[68ch]">{t.rich("privacyNote", { strong: (chunks) => <strong>{chunks}</strong> })}</p>
   );
 }
 
 /** Why Simon Says asks for read access to Drive, in one calm paragraph (shown before "Ge åtkomst"). */
 export function DriveAccessNote() {
+  const t = useTranslations("history");
   return (
-    <p className="max-w-[68ch]">
-      För att du ska kunna välja mappar och se mötena i dem behöver Simon Says läsrättighet till din Google Drive. Den används
-      bara här: Simon Says visar dina mappar och namnen på mötena i de mappar du väljer, öppnar bara de protokoll du kryssar
-      i, och sparar inget annat från din Drive. Åtkomsten gäller i 24 timmar och tas sedan bort automatiskt; du kan också ta
-      bort den direkt.
-    </p>
+    <p className="max-w-[68ch]">{t("driveNote")}</p>
   );
 }
 
@@ -132,6 +125,9 @@ export function HistoryImport({
   onProposal: (proposal: JobProposal, notice: string) => void;
   onCancel: () => void;
 }) {
+  const t = useTranslations("history");
+  const common = useTranslations("common");
+  const locale = useLocale();
   const picker = usePicker();
   const [view, setView] = useState<ImportPhase>(
     initial ?? (access.driveReadonly ? { phase: "folders" } : { phase: "access", ...(consent && consent !== "ok" ? { consent } : {}) }),
@@ -151,26 +147,26 @@ export function HistoryImport({
       });
       const json = (await res.json().catch(() => null)) as (ImportEstimate & { message?: string }) | null;
       if (!res.ok || !json || typeof json.totalUsd !== "number" || !Array.isArray(json.docs)) {
-        setView({ phase: "error", message: json?.message ?? "Simon Says kunde inte läsa dokumenten. Försök igen.", back });
+        setView({ phase: "error", message: json?.message ?? t("readFailed"), back });
         return;
       }
       setView({ phase: "confirm", files, estimate: json, back });
     } catch {
-      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen.", back });
+      setView({ phase: "error", message: t("offline"), back });
     }
   };
 
   const pick = async () => {
     let files: PickedFile[] | null;
     try {
-      files = await picker.open({ mode: "docs-multi", title: `Välj föreningens gamla protokoll (högst ${MAX_IMPORT_DOCS})` });
+      files = await picker.open({ mode: "docs-multi", title: t("pickTitle", { max: MAX_IMPORT_DOCS }) });
     } catch (err) {
-      setView({ phase: "error", message: err instanceof PickerError ? err.message : "Google-väljaren kunde inte öppnas. Försök igen.", back: { phase: "picker" } });
+      setView({ phase: "error", message: err instanceof PickerError ? err.message : t("pickerFailed"), back: { phase: "picker" } });
       return;
     }
     if (!files?.length) return;
     if (files.length > MAX_IMPORT_DOCS) {
-      setView({ phase: "error", message: `Välj högst ${MAX_IMPORT_DOCS} protokoll åt gången.`, back: { phase: "picker" } });
+      setView({ phase: "error", message: t("tooMany", { max: MAX_IMPORT_DOCS }), back: { phase: "picker" } });
       return;
     }
     await estimate(files, { phase: "picker" });
@@ -180,7 +176,7 @@ export function HistoryImport({
     const docs = e.docs.flatMap((d) => {
       if (!("sections" in d)) return [];
       const file = files.find((f) => f.id === d.docId);
-      return [{ docId: d.docId, sections: d.sections, name: file?.name ?? "Dokument" }];
+      return [{ docId: d.docId, sections: d.sections, name: file?.name ?? t("documentFallback") }];
     });
     const names = Object.fromEntries(docs.map((d) => [d.docId, d.name]));
     const picked = files.filter((f) => docs.some((d) => d.docId === f.id));
@@ -196,12 +192,12 @@ export function HistoryImport({
       });
       const json = (await res.json().catch(() => null)) as { job?: JobView; message?: string } | null;
       if (!res.ok || !json?.job) {
-        setView({ phase: "error", message: json?.message ?? "Inläsningen kunde inte startas. Försök igen.", back });
+        setView({ phase: "error", message: json?.message ?? t("startFailed"), back });
         return;
       }
       setView({ phase: "job", job: json.job, autoRun: true, names });
     } catch {
-      setView({ phase: "error", message: "Vi nådde inte servern. Kontrollera nätet och försök igen.", back });
+      setView({ phase: "error", message: t("offline"), back });
     }
   };
 
@@ -211,7 +207,7 @@ export function HistoryImport({
     else next();
   };
   const summary = (r: FinishedImport) =>
-    [r.imported ? `${plural(r.imported, "protokoll", "protokoll")} inlästa.` : "", r.failed ? `${plural(r.failed, "protokoll", "protokoll")} gick inte att läsa.` : ""]
+    [r.imported ? t("importedCount", { count: r.imported }) : "", r.failed ? t("failedCount", { count: r.failed }) : ""]
       .filter(Boolean)
       .join(" ");
 
@@ -235,9 +231,7 @@ export function HistoryImport({
     return (
       <p className="text-sm text-ink-3" role="status" aria-live="polite">
         <Spinner className="align-[-0.125em]" />{" "}
-        {view.mode === "batch"
-          ? `Simon Says öppnar ${plural(view.protocols, "protokoll", "protokoll")} och skickar dem till Claude i en omgång … Det tar upp till en minut.`
-          : "Startar inläsningen …"}
+        {view.mode === "batch" ? t("startingBatch", { count: view.protocols }) : t("starting")}
       </p>
     );
   }
@@ -277,7 +271,7 @@ export function HistoryImport({
   if (view.phase === "estimating") {
     return (
       <p className="text-sm text-ink-3" role="status" aria-live="polite">
-        <Spinner className="align-[-0.125em]" /> Räknar på {plural(view.files.length, "dokument", "dokument")} … Inget skickas än.
+        <Spinner className="align-[-0.125em]" /> {t("estimating", { count: view.files.length })}
       </p>
     );
   }
@@ -288,10 +282,10 @@ export function HistoryImport({
         <Banner tone="danger">{view.message}</Banner>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => goBack(view.back)}>
-            Tillbaka
+            {t("back")}
           </Button>
           <Button variant="ghost" onClick={onCancel}>
-            Avbryt
+            {common("cancel")}
           </Button>
         </div>
       </div>
@@ -300,17 +294,17 @@ export function HistoryImport({
 
   if (view.phase === "confirm") {
     const e = view.estimate;
-    const name = (id: string) => view.files.find((f) => f.id === id)?.name ?? "Dokument";
+    const name = (id: string) => view.files.find((f) => f.id === id)?.name ?? t("documentFallback");
     const refused = e.docs.filter((d): d is Extract<EstimateDoc, { error: string }> => "error" in d);
     const multi = e.docs.filter((d): d is Extract<EstimateDoc, { sections: number }> => "sections" in d && d.sections > 1);
     return (
       <div className="flex flex-col gap-4">
         <p className="font-medium">
-          {plural(e.protocols, "möte", "möten")} att läsa in
-          {multi.length > 0 && <span className="font-normal text-ink-3"> ({multi.map((d) => `${name(d.docId)}: ${d.sections} möten`).join(", ")})</span>}
+          {t("toRead", { count: e.protocols })}
+          {multi.length > 0 && <span className="font-normal text-ink-3"> ({multi.map((d) => t("multi", { name: name(d.docId), count: d.sections })).join(", ")})</span>}
         </p>
         {refused.length > 0 && (
-          <Banner tone="warning" title={`${plural(refused.length, "dokument", "dokument")} hoppas över`} live={false}>
+          <Banner tone="warning" title={t("skipped", { count: refused.length })} live={false}>
             <ul className="flex flex-col gap-1">
               {refused.map((d) => (
                 <li key={d.docId}>
@@ -322,26 +316,24 @@ export function HistoryImport({
         )}
         <PrivacyNote />
         {e.mode === "batch" ? (
-          <p className="text-sm text-ink-2 max-w-[68ch]">
-            Så många protokoll skickas till Claude <strong>i en omgång</strong>, till halva priset. De flesta omgångar är klara
-            inom en timme, alla inom ett dygn. Du kan stänga sidan under tiden; resultatet och förslaget på mål väntar här.
-          </p>
+          <p className="text-sm text-ink-2 max-w-[68ch]">{t.rich("batchNote", { strong: (chunks) => <strong>{chunks}</strong> })}</p>
         ) : (
-          <p className="text-sm text-ink-2 max-w-[68ch]">
-            Simon Says läser {Math.min(DIRECT_CONCURRENCY, e.protocols)} protokoll åt gången, ungefär en halv minut vardera. Låt sidan vara öppen tills det är klart.
-          </p>
+          <p className="text-sm text-ink-2 max-w-[68ch]">{t("directNote", { count: Math.min(DIRECT_CONCURRENCY, e.protocols) })}</p>
         )}
         <p className="text-sm text-ink-3">
-          Kostnad för Simon Says: {formatUsd(e.totalUsd)} (läsa protokollen {formatUsd(e.importUsd)}
-          {e.mode === "batch" ? ", halva priset" : ""}, förslag på mål över hela historiken {formatUsd(e.digestUsd)}).
-          Sedan föreslår Simon Says mål, och du godkänner dem innan någon annan ser dem.
+          {t("cost", {
+            total: formatUsd(e.totalUsd, locale),
+            imports: formatUsd(e.importUsd, locale),
+            half: e.mode === "batch" ? t("halfPrice") : "",
+            digest: formatUsd(e.digestUsd, locale),
+          })}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button variant="primary" disabled={e.protocols === 0} onClick={() => run(view.files, e, view.back)}>
-            {`Läs in ${plural(e.protocols, "protokoll", "protokoll")}`}
+            {t("readN", { count: e.protocols })}
           </Button>
           <Button variant="ghost" onClick={() => goBack(view.back)}>
-            Tillbaka
+            {t("back")}
           </Button>
         </div>
       </div>
@@ -352,40 +344,36 @@ export function HistoryImport({
     return (
       <div className="flex flex-col gap-4">
         {view.consent === "nej" ? (
-          <Banner tone="neutral" title="Simon Says fick ingen läsrättighet" live={false}>
-            Det går bra. Du kan ge åtkomst senare, eller välja protokollen ett och ett i Googles egen väljare.
+          <Banner tone="neutral" title={t("noAccessTitle")} live={false}>
+            {t("noAccessText")}
           </Banner>
         ) : view.consent === "fel" ? (
-          <Banner tone="danger">Google svarade inte som väntat. Försök igen om en liten stund.</Banner>
+          <Banner tone="danger">{t("googleOdd")}</Banner>
         ) : view.consent === "konto" ? (
-          <Banner tone="warning" title="Fel Google-konto" live={false}>
-            {access.email ? `Välj samma Google-konto som du är inloggad med: ${access.email}.` : "Välj samma Google-konto som du är inloggad med."}{" "}
-            Inget sparades.
+          <Banner tone="warning" title={t("wrongAccountTitle")} live={false}>
+            {access.email ? t("wrongAccountEmail", { email: access.email }) : t("wrongAccount")} {t("nothingSaved")}
           </Banner>
         ) : view.consent === "borttagen" ? (
           <Banner tone="success" live={false}>
-            Läsåtkomsten är borttagen hos Simon Says. Dina inlästa protokoll ligger kvar.
+            {t("accessRemoved")}
           </Banner>
         ) : null}
         <DriveAccessNote />
         <form action={requestDriveAccess} className="flex flex-wrap gap-2">
           <input type="hidden" name="orgId" value={orgId} />
-          <SubmitButton variant="primary" icon={<IconGoogle size={16} />} pendingLabel="Öppnar Google …">
-            Ge åtkomst
+          <SubmitButton variant="primary" icon={<IconGoogle size={16} />} pendingLabel={t("openingGoogle")}>
+            {t("giveAccess")}
           </SubmitButton>
           {(view.consent === "nej" || view.consent === "borttagen") && (
             <Button type="button" variant="secondary" onClick={() => setView({ phase: "picker" })}>
-              Välj ett och ett i stället
+              {t("oneByOne")}
             </Button>
           )}
           <Button type="button" variant="ghost" onClick={onCancel}>
-            Avbryt
+            {common("cancel")}
           </Button>
         </form>
-        <p className="text-xs text-ink-3 max-w-[68ch]">
-          Google kan visa en varning om att appen inte är verifierad. Den gäller just den här läsrättigheten, som Google granskar
-          extra noga.
-        </p>
+        <p className="text-xs text-ink-3 max-w-[68ch]">{t("unverified")}</p>
       </div>
     );
   }
@@ -393,21 +381,17 @@ export function HistoryImport({
   // The fallback: the Google Picker, one Doc at a time (the admin said no to read access).
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-[68ch]">
-        Välj föreningens gamla protokoll i Googles väljare. Ett dokument kan innehålla ett möte eller flera (ett per flik eller
-        under var sin daterad rubrik). Simon Says läser dem i tidsordning och föreslår vilka mål ni jobbar mot nu, vilka ni
-        har nått och vilka som har runnit ut i sanden.
-      </p>
+      <p className="max-w-[68ch]">{t("pickerIntro")}</p>
       <PrivacyNote />
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={pick}>
-          Välj protokoll …
+          {t("pickProtocols")}
         </Button>
         <Button variant="ghost" onClick={() => setView({ phase: "access" })}>
-          Ge åtkomst till mapparna i stället
+          {t("accessInstead")}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
-          Avbryt
+          {common("cancel")}
         </Button>
       </div>
     </div>
@@ -416,6 +400,7 @@ export function HistoryImport({
 
 /** "Datum från filen — ändra?": meetings dated by the Doc's creation date, correctable before the goals. */
 function FileDates({ orgId, items, onDone }: { orgId: string; items: FileDated[]; onDone: () => void }) {
+  const t = useTranslations("history");
   const [dates, setDates] = useState(() => items.map((i) => i.date));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -434,13 +419,13 @@ function FileDates({ orgId, items, onDone }: { orgId: string; items: FileDated[]
         });
         if (!res.ok) {
           const json = (await res.json().catch(() => null)) as { message?: string } | null;
-          setMessage(`${items[k].label}: ${json?.message ?? "Datumet kunde inte sparas."}`);
+          setMessage(`${items[k].label}: ${json?.message ?? t("dateSaveFailed")}`);
           return;
         }
       }
       onDone();
     } catch {
-      setMessage("Vi nådde inte servern. Kontrollera nätet och försök igen.");
+      setMessage(t("offline"));
     } finally {
       setBusy(false);
     }
@@ -448,15 +433,12 @@ function FileDates({ orgId, items, onDone }: { orgId: string; items: FileDated[]
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="max-w-[68ch]">
-        {plural(items.length, "protokoll saknar", "protokoll saknar")} datum i texten. Simon Says använde dokumentets
-        skapandedatum, som kan vara fel om dokumentet kopierats. Ändra om det behövs: målen bygger på ordningen.
-      </p>
+      <p className="max-w-[68ch]">{t("missingDates", { count: items.length })}</p>
       <ul className="flex flex-col gap-3">
         {items.map((it, k) => (
           <li key={it.protocolId} className="flex flex-wrap items-center gap-3">
             <Label htmlFor={`fd-${it.protocolId}`} className="min-w-[14rem] font-medium">
-              {it.label} <span className="font-normal text-ink-3">(datum från filen — ändra?)</span>
+              {it.label} <span className="font-normal text-ink-3">{t("dateFromFile")}</span>
             </Label>
             <Input
               id={`fd-${it.protocolId}`}
@@ -472,7 +454,7 @@ function FileDates({ orgId, items, onDone }: { orgId: string; items: FileDated[]
       {message && <Banner tone="danger">{message}</Banner>}
       <div>
         <Button variant="primary" loading={busy} disabled={dates.some((d) => !d || d > today)} onClick={save}>
-          Fortsätt till målen
+          {t("toGoals")}
         </Button>
       </div>
     </div>

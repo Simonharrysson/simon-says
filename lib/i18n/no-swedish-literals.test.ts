@@ -71,10 +71,6 @@ const NOT_YET = new Set<string>([
   "components/onboarding/Onboarding.tsx",
   "components/onboarding/OnboardingShell.tsx",
   "components/onboarding/steps.tsx",
-  "components/views/DriveSteps.tsx",
-  "components/views/HistoryImport.tsx",
-  "components/views/ImportProgress.tsx",
-  "components/views/OverviewView.tsx",
   "components/views/PrepareMeeting.tsx",
 ]);
 
