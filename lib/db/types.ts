@@ -71,6 +71,11 @@ export interface OrgRow {
   arsmote_format_id?: string | null;
   /** 0037: who gets the summary e-mail after a meeting (lib/summaries). */
   summary_mode?: SummaryMode;
+  /** 0044: "Om oss" (plain text, ≤ 600) and links (https, canonical: lib/orgs/profile.ts); null = not set. */
+  about?: string | null;
+  website_url?: string | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
   created_by: string | null;
   created_at: string;
 }
