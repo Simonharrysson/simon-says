@@ -92,7 +92,9 @@ export function refreshDraft(stored: DraftItem[], fresh: DraftItem[], dropped: S
   const tasks = f?.tasks ?? [];
   // A goal's reason is always today's (never stored): from the fresh draft, or none.
   const reasons = new Map(fresh.filter((i) => i.reason).map((i) => [i.id, i.reason!]));
-  return stored.map((i) => {
+  // An unticked goal Simon Says no longer suggests (removed from the goals, or no longer due) goes.
+  const kept = stored.filter((i) => !(i.id.startsWith("goal:") && !i.on && !reasons.has(i.id)));
+  return kept.map((i) => {
     if (i.id.startsWith("goal:")) {
       const { reason: _old, ...rest } = i;
       const reason = reasons.get(i.id);

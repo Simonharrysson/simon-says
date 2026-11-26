@@ -14,8 +14,9 @@ const fail = (error: string, status: number, message: string) =>
   NextResponse.json({ error, message }, { status, headers: noStore });
 
 /**
- * The årsmöte's agenda from the förening's stadgar (Mötesformat → "Lägg in årsmötet från
- * stadgarna", todo #15). Body `{ fileId }`: a Google Doc (read as plain text) or a PDF (at most
+ * The årsmöte's agenda from the förening's stadgar (todo #15). The UI now reads the stadgar through
+ * POST …/onboarding/stadgar (StadgarArsmote.tsx, shared by onboarding and Mötesformat); this route
+ * answers the same for a browser tab opened before that change. Body `{ fileId }`: a Google Doc (read as plain text) or a PDF (at most
  * 10 MB), picked by an admin and read with the admin's own Google grant. → `{ arsmote }`. Stores
  * nothing (the admin checks the list and saves it with POST …/onboarding/formats `{ arsmote }`);
  * the stadgar text is never logged. The stadgar no longer add items to board or weekly formats.

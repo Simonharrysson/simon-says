@@ -72,6 +72,10 @@ describe("Mål att ta upp (todo #12)", () => {
     const again = refreshDraft(saved, buildDraft({ profile: VECKOMOTE, carried: [], ctx, topics: [], goals: [goals[0]] }), new Set());
     expect(again.find((i) => i.id === "goal:ny lokal")!.reason).toBeUndefined();
     expect(again.find((i) => i.id === "goal:fler medlemmar till vårens event")!.reason).toBe("Inget nytt sedan 12 okt");
+    // An unticked goal no longer suggested (e.g. the admin removed it) is not offered again.
+    const none = refreshDraft(saved, buildDraft({ profile: VECKOMOTE, carried: [], ctx, topics: [], goals: [] }), new Set());
+    expect(none.some((i) => i.id === "goal:fler medlemmar till vårens event")).toBe(false);
+    expect(none.find((i) => i.id === "goal:ny lokal")!.on).toBe(true);
   });
 });
 
