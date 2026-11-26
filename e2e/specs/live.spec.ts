@@ -96,7 +96,7 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   const voices = async () =>
     JSON.stringify((await db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label, needs_confirm").eq("meeting_id", meetingId)).data);
   await expect
-    .poll(async () => `${(await fake.mail(karin)).length} mail, summary_state ${await state()}`, { timeout: 30_000, message: `voices: ${await voices()}` })
+    .poll(async () => `${(await fake.mail(karin)).length} mail, summary_state ${await state()}`, { timeout: 30_000, message: `voices: ${await voices()} names calls: ${JSON.stringify((await fake.claudeCalls("names")).map((c) => c.text.slice(0, 300)))}` })
     .toBe("1 mail, summary_state sent");
   const [summary] = await fake.mail(karin);
   expect(summary.text).toContain(SCRIPTED.decision);
