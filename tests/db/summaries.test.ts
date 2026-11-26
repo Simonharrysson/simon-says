@@ -15,6 +15,13 @@ vi.mock("@/lib/env", async (importOriginal) => {
   return { ...mod, getEnv: () => env };
 });
 
+// The e-mail gate's database answer can be switched off (as when may_email fails): "unknown".
+const gate = vi.hoisted(() => ({ down: false }));
+vi.mock("@/lib/email/prefs", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/email/prefs")>();
+  return { ...mod, checkEmailGate: async (...a: Parameters<typeof mod.checkEmailGate>) => (gate.down ? "unknown" : mod.checkEmailGate(...a)) };
+});
+
 const { createOrg, joinOrg, setSummarySettings } = await import("@/lib/db/orgs");
 const { sendMeetingSummaries, sendPendingSummaries } = await import("@/lib/summaries/send");
 const { POST: postUnsubscribe, GET: getUnsubscribe } = await import("@/app/api/mejl/avsluta/route");
@@ -257,6 +264,34 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     await setMode("missed");
     expect(f.sent.map((m) => m.to).sort()).toEqual([admin.email, "sara@example.com"].sort());
     expect((await db().from("meetings").select("summary_state").eq("id", id).single()).data!.summary_state).toBe("sent");
+  });
+
+  it("the gate can't answer: nobody is claimed, the meeting stays 'sending' and the next sweep sends", async () => {
+    const id = await meeting();
+    gate.down = true;
+    const f = fakeMailer();
+    try {
+      expect(await sendMeetingSummaries(id, f)).toEqual({ state: "sending", sent: 0, failed: 0 });
+    } finally {
+      gate.down = false;
+    }
+    expect(f.sent).toEqual([]);
+    expect((await db().from("meeting_summary_sends").select("person_id").eq("meeting_id", id)).data).toEqual([]);
+    await sendPendingSummaries(f, { orgId });
+    expect(f.sent.map((m) => m.to)).toEqual(["sara@example.com"]);
+    expect((await db().from("meetings").select("summary_state").eq("id", id).single()).data!.summary_state).toBe("sent");
+  });
+
+  it("still 'sending' after the 48 h window: closed as 'partial' with counts, never picked up again", async () => {
+    const id = await meeting({ ended_at: new Date(Date.now() - 72 * 3600_000).toISOString(), summary_state: "sending" });
+    await db().from("meeting_summary_sends").insert({ meeting_id: id, person_id: ids.erik, sent: true });
+    const f = fakeMailer();
+    await sendPendingSummaries(f, { orgId });
+    await sendPendingSummaries(f, { orgId });
+    expect(f.sent).toEqual([]);
+    expect((await db().from("meetings").select("summary_state").eq("id", id).single()).data!.summary_state).toBe("partial");
+    const ev = (await db().from("meeting_events").select("detail").eq("meeting_id", id).eq("kind", "summary")).data!;
+    expect(ev).toEqual([{ detail: { state: "partial", sent: 1, failed: 0 } }]);
   });
 
   it("a removed member is marked and gets nothing by the old address", async () => {

@@ -570,13 +570,16 @@ end); the 5-minute cron (`sendPendingSummaries`) sends what that skipped: a Doc 
 pass), a failed attempt; only meetings that ended in the last 48 h. Once per meeting (`meetings.summary_state`
 claimed atomically: null → `sending` → `sent`) and per person (`meeting_summary_sends`, inserted before the
 mailer is called; a failed send is not retried). The loop stops before the caller's deadline and the cron resumes
-`sending` meetings, also one whose function died mid-loop. Never for a Testmöte, never when the meeting has no decision, open task or other note.
+`sending` meetings, also one whose function died mid-loop. A recipient whose preference check can't be answered
+is not claimed (the meeting stays `sending` and the next sweep retries); a meeting still `sending` after 48 h
+becomes `partial` (event with counts). Never for a Testmöte, never when the meeting has no decision, open task or other note.
 
 **Who** (`lib/summaries/recipients.ts`): only the förening's people with an address (the linked account's,
 else `people.email`), deduplicated. Present = a named voice (speaker map, merges), a Närvarande name (full or
 first name; an ambiguous first name counts all of them as present), or the starter's account. Attendance is
 *certain* only when someone was identified by voice or Närvarande (the starter alone doesn't count) and no voice
-is unnamed ("Talare 2" on a shared mic, "Anna?"); otherwise "missed" sends nothing (`uncertain`, with the count
+is unnamed ("Talare 2" on a shared mic, "Anna?") and no Närvarande text names nobody in the list ("hela
+styrelsen", "alla"); otherwise "missed" sends nothing (`uncertain`, with the count
 of unnamed voices in the event) and "alla"/"utvalda" send with neutral wording. Every send goes through the e-mail gate
 (`sendUserMail`, category `meeting_summary`, 0039): whoever said no never gets it (counted as `optedOut`); a person whose member link was removed (`summary_removed_at`) gets nothing by the old address. E-mail
 addresses are written only by the admin functions.
