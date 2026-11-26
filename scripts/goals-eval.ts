@@ -26,6 +26,7 @@ import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/mess
 import { messageUsage, NOTES_MODEL, PRICES, type NotesClient } from "@/lib/notes/engine";
 import { allSeries, type BuiltSeries } from "./lib/goals-fixtures";
 import { hardSeries } from "./lib/goals-fixtures-hard";
+import { heldoutSeries } from "./lib/goals-fixtures-heldout";
 import { flawedDigest, perfectDigest, perfectExtraction, scriptedClient } from "./lib/goals-scripted";
 import { digestDetails, extractTable, judgeExtraction, judgedRecall, runDigest, runExtraction, seriesDocs, summarize, totalsTable, truthHistory, type DigestRun, type ExtractRun } from "./lib/goals-eval";
 import { apiKey, ledgerAdd, ledgerTotal } from "./lib/notes-run";
@@ -96,9 +97,13 @@ function printDigest(label: string, runs: DigestRun[]) {
 
 const FREE = { input_tokens: 0, output_tokens: 0 };
 
-/** --set clean (4 föreningar), hard (2, real-looking minutes) or all (default). */
+/**
+ * --set clean (4 föreningar), hard (2, real-looking minutes), all (clean + hard: the TUNING sets,
+ * default) or heldout (2 more, never used for tuning: run once with the frozen prompts).
+ */
 function seriesSet(): BuiltSeries[] {
   const set = arg("set") ?? "all";
+  if (set === "heldout") return heldoutSeries();
   return set === "clean" ? allSeries() : set === "hard" ? hardSeries() : [...allSeries(), ...hardSeries()];
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allSeries, monthsBetween, FIXTURE_STALE_MONTHS } from "./goals-fixtures";
 import { hardSeries } from "./goals-fixtures-hard";
+import { heldoutSeries } from "./goals-fixtures-heldout";
 import { seriesDocs } from "./goals-eval";
 import { flawedDigest, perfectDigest, perfectExtraction, scriptedClient } from "./goals-scripted";
 import { runDigest, runExtraction, summarize, truthHistory } from "./goals-eval";
@@ -12,7 +13,7 @@ import { gradeExtraction, matchGoal } from "./goals-grade";
 const FREE = { input_tokens: 0, output_tokens: 0 };
 const series = allSeries();
 // The dry run covers the hard set too.
-const every = [...series, ...hardSeries()];
+const every = [...series, ...hardSeries(), ...heldoutSeries()];
 
 describe("goals fixtures", () => {
   it("4 föreningar, 15–30 protocols each, every status class and every hard case present", () => {
@@ -65,12 +66,24 @@ describe("goals fixtures", () => {
     expect(ko.runningDoc).toBe(true);
     const docs = seriesDocs(ko);
     expect(docs.ok && docs.parts.map((x) => x.protocol.date)).toEqual(ko.protocols.map((p) => p.date));
-    for (const s of hardSeries()) {
+    for (const s of [...hardSeries(), ...heldoutSeries()]) {
       for (const g of s.goals) {
         const quiet = monthsBetween(g.lastMentioned, s.lastDate) > FIXTURE_STALE_MONTHS;
         if (g.status === "stale") expect(quiet).toBe(true);
         if (g.status === "current") expect(quiet).toBe(false);
       }
+    }
+  });
+
+  it("the held-out set: ≥ 2 föreningar, ≥ 30 meetings, its running Doc splits, no goal id shared with the tuning sets", () => {
+    const ho = heldoutSeries();
+    expect(ho.length).toBeGreaterThanOrEqual(2);
+    expect(ho.reduce((n, s) => n + s.protocols.length, 0)).toBeGreaterThanOrEqual(30);
+    const tuning = new Set([...series, ...hardSeries()].flatMap((s) => s.goals.map((g) => g.id.split("-")[1])));
+    for (const s of ho) {
+      for (const g of s.goals) expect(tuning.has(g.id.split("-")[1]), g.id).toBe(false);
+      const docs = seriesDocs(s);
+      expect(docs.ok && docs.parts.length, s.slug).toBe(s.protocols.length);
     }
   });
 
