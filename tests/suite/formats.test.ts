@@ -395,6 +395,16 @@ describe("feature: formats (parked fixes N2, N4, N5, N6)", () => {
       ["Ekonomi", "Fakturan från hallen\nMedlemsavgifter"],
       ["Övrigt", ""],
     ]);
+    // The same bullets, but a heading item comes before the next numbered list: 4–6 are items.
+    const afterBoundary = agendaDoc([
+      num("Godkänn dagordning"), num("Må-runda"), num("Från förra veckan"),
+      bul("Kommande event"), bul("Ekonomi"), bul("Övrigt"),
+      paraEl("Extra punkt", { style: "HEADING_3" }), paraEl("Punkt A", { level: 0, listId: NUM2 }),
+    ]);
+    afterBoundary.tabs![0].documentTab!.lists![NUM2] = { listProperties: { nestingLevels: [{ glyphType: "DECIMAL" }] } };
+    expect(scanAgenda(parseNotesTab(afterBoundary, TAB), VECKOMOTE).items.map((i) => i.label).slice(0, 7)).toEqual([
+      "Godkänn dagordning", "Må-runda", "Från förra veckan", "Kommande event", "Ekonomi", "Övrigt", "Extra punkt",
+    ]);
     const underText = agendaDoc([num("Godkänn dagordning"), num("Må-runda"), num("Ekonomi"), paraEl("Vi går igenom:"), bul("Fakturan från hallen"), bul("Medlemsavgifter")]);
     for (const [id, doc, text] of [
       ["m-n6a", deeper, "Fakturan från hallen\nMedlemsavgifter"],

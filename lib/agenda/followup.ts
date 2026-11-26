@@ -92,7 +92,8 @@ export function carryPlan(input: {
 }): { adopted: NoteItemRow[]; open: NoteItemRow[] } {
   const { prev, sameDoc } = input;
   const adopted = (sameDoc?.rows ?? []).filter(
-    (r) => r.carried_from_id != null && r.range_name && !r.done && !r.deleted_by_human && input.intact(r.range_name),
+    // Never a tasks copy (c1-t): it carries its primary's source too (N3), the primary stands for it.
+    (r) => r.carried_from_id != null && !r.copy_of && !r.id.endsWith("-t") && r.range_name && !r.done && !r.deleted_by_human && input.intact(r.range_name),
   );
   if (!prev) return { adopted, open: [] };
   const sameIds = sameDoc?.id === prev.id ? new Set(adopted.map((r) => r.id)) : new Set<string>();

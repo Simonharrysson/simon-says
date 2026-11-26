@@ -262,8 +262,13 @@ export function scanAgenda(tab: NotesTab, profile: FormatProfile, opts: { anchor
     // item's own text → sub-points.
     const nothingBetween = (from: number, to: number) =>
       !region.some((p) => p.start >= from && p.start < to && !isEmpty(p)) && !(tab.tables ?? []).some((t) => t.start >= from && t.start < to);
-    const numberedAfter = (l: { first: number; minLevel: number }) =>
-      [...lists].some(([id, a]) => a.first > l.first && a.minLevel === l.minLevel && isNumberedGlyph(listGlyph(tab, id, a.minLevel)));
+    // Only up to the next boundary (a non-list item such as a heading item, or a section): a
+    // numbered list after it belongs to another part of the agenda.
+    const nextBoundary = (from: number) => region.find((p) => p.start > from && nonListItem(p))?.start ?? Infinity;
+    const numberedAfter = (l: { first: number; minLevel: number }) => {
+      const stop = nextBoundary(l.first);
+      return [...lists].some(([id, a]) => a.first > l.first && a.first < stop && a.minLevel === l.minLevel && isNumberedGlyph(listGlyph(tab, id, a.minLevel)));
+    };
     const continuesNumbered = (l: { first: number; minLevel: number }) =>
       !numberedAfter(l) && numbered.some(([, a]) => a.minLevel === l.minLevel && a.last <= l.first && nothingBetween(a.last, l.first));
     const subLists = new Set(

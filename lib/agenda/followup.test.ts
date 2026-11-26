@@ -163,6 +163,12 @@ describe("carryPlan: a false start on the same Doc (final review R1/R2)", () => 
     expect(b.open.map((r) => r.id)).toEqual(["n5"]);
   });
 
+  it("a false start's tasks copy (c1-t, carrying c1's source) is never adopted", () => {
+    const a = [carried("c1", "W1", "n1"), carried("c1-t", "W1", "n1", { copy_of: "c1" }), carried("c2-t", "W1", "n2")];
+    const b = carryPlan({ prev: null, sameDoc: { id: "A", rows: a }, intact: () => true });
+    expect(b.adopted.map((r) => r.id)).toEqual(["c1"]);
+  });
+
   it("a Doc cleared for a new week (lines gone): the open carried tasks are carried again", () => {
     const prev = [carried("c1", "W0", "n1", { meeting_id: "W1", range_name: "ss-W1-c1" })];
     const b = carryPlan({ prev: { id: "W1", rows: prev }, sameDoc: { id: "W1", rows: prev }, intact: () => false });
