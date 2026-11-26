@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { FormatCard } from "@/components/views/FormatCard";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
 import { SummarySettingsForm } from "@/components/views/SummarySettingsForm";
@@ -151,6 +151,8 @@ export default async function OrgPage({
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
+  // The Privat space (0045) is not a förening: it has its own page.
+  if (org.kind === "privat") redirect("/privat");
   const [role, people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([
     myRole(db, id),
     listPeople(db, id),

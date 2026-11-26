@@ -9,6 +9,8 @@ import { meetingTitle } from "@/lib/docs/create";
 import { canRunMeeting } from "@/lib/meetings/access";
 import { presence } from "@/lib/meetings/presence";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { privatTitle } from "@/lib/privat/format";
+import { isPrivat, privatHref } from "@/lib/privat/space";
 import { canResume, docUrl } from "@/lib/ui/meetings";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +41,7 @@ export default async function MeetingPage({
   // As the user: RLS hides meetings of other orgs.
   const { data: m, error } = await db
     .from("meetings")
-    .select("id, org_id, started_by, status, started_at, ended_at, doc_id, current_el_session_id, last_tick_ok_at, doc_paused_at, last_heartbeat_at")
+    .select("*")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(`meeting page: ${error.message}`);
@@ -60,13 +62,20 @@ export default async function MeetingPage({
   const shareFailedRaw = (started?.[0]?.detail as { shareFailed?: unknown } | undefined)?.shareFailed;
   const shareFailed = typeof shareFailedRaw === "number" ? shareFailedRaw : null;
   const missedMeetingFolder = (started?.[0]?.detail as { missedMeetingFolder?: unknown } | undefined)?.missedMeetingFolder === true;
+  // Privat (0045): back to the context; the summary has its own page; there may be no Doc.
+  const tp = await getTranslations("privat.live");
+  const context = isPrivat(org) && m.context_id ? ((await db.from("contexts").select("id, name").eq("id", m.context_id).maybeSingle()).data as { id: string; name: string } | null) : null;
+  const privat = isPrivat(org)
+    ? { summaryHref: `/privat/mote/${m.id}`, backLabel: context ? tp("back", { name: context.name }) : tp("backHome") }
+    : undefined;
   return (
     <main id="innehall">
       <LiveMeetingController
         orgId={org.id}
-        orgName={org.name}
-        orgHref={`/orgs/${org.id}`}
+        orgName={context?.name ?? org.name}
+        orgHref={privat ? privatHref(context?.id) : `/orgs/${org.id}`}
         shareTranscript={org.share_transcript}
+        privat={privat}
         autoStopped={stoppat !== undefined}
         stopReason={stoppat && stoppat !== "1" && /^[a-z_]{1,30}$/.test(stoppat) ? stoppat : null}
         shareFailed={shareFailed}
@@ -75,8 +84,8 @@ export default async function MeetingPage({
           id: m.id,
           status,
           startedAt: m.started_at,
-          docUrl: docUrl(m.doc_id),
-          title: meetingTitle(org.name, new Date(m.started_at)),
+          docUrl: m.doc_id ? docUrl(m.doc_id) : "",
+          title: context ? privatTitle(context.name, m.started_at) : meetingTitle(org.name, new Date(m.started_at)),
           currentElSessionId: m.current_el_session_id,
           resumable: canResume({ status, ended_at: m.ended_at }),
           lastTickOkAt: m.last_tick_ok_at,

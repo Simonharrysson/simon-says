@@ -25,6 +25,7 @@ export function MeetingEnded({
   onReLogin,
   onEndWithoutUnsent,
   focusOnMount,
+  privat,
 }: {
   docUrl: string | null;
   durationSeconds: number;
@@ -47,8 +48,11 @@ export function MeetingEnded({
   onEndWithoutUnsent?: () => void;
   /** Move focus to the heading (after Avsluta, so screen readers hear the new state). */
   focusOnMount?: boolean;
+  /** A Privat recording (0045): where its summary is shown, and the back link's words. */
+  privat?: { summaryHref: string | null; backLabel: string } | null;
 }) {
   const t = useTranslations("live.ended");
+  const tp = useTranslations("privat.live");
   const locale = useLocale();
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -117,7 +121,9 @@ export function MeetingEnded({
       )}
       <p className="text-ink-2">
         {autoStopped && `${autoStopText(stopReason, locale)} `}
-        {finalizing
+        {privat
+          ? tp(finalizing ? "endedFinalizing" : "endedDone", { duration: formatDuration(durationSeconds, locale) })
+          : finalizing
           ? `${t("finalizingText", { duration: formatDuration(durationSeconds, locale) })}${
               waiting || endFailed || signedOutUnsent != null ? "" : t("canClose")
             }`
@@ -131,8 +137,13 @@ export function MeetingEnded({
             {t("openDoc")}
           </ButtonLink>
         )}
+        {privat?.summaryHref && !finalizing && (
+          <ButtonLink href={privat.summaryHref} variant={docUrl ? "secondary" : "primary"} size="lg">
+            {tp("toSummary")}
+          </ButtonLink>
+        )}
         <ButtonLink href={orgHref} variant="ghost" size="lg">
-          {t("backToOrg")}
+          {privat ? privat.backLabel : t("backToOrg")}
         </ButtonLink>
       </div>
     </section>

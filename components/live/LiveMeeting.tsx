@@ -24,6 +24,8 @@ import type { TaskAnswer, TaskView } from "@/lib/notes/tasks";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
 
 export interface LiveMeetingProps {
+  /** A Privat recording (0045): Privat copy on the consent and ended screens; the summary's page. */
+  privat?: { summaryHref: string | null; backLabel: string } | null;
   phase: LivePhase;
   orgName: string;
   /** Where "← Tillbaka" leads: the förening's page. */
@@ -140,6 +142,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           agendaConfirmed={p.agendaConfirmed}
           agendaDoc={p.agendaDoc}
           onNewDocInstead={p.onNewDocInstead}
+          privat={Boolean(p.privat)}
         />
         <PrivacyNote />
       </div>
@@ -174,7 +177,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           orgHref={p.orgHref}
           autoStopped={p.autoStopped}
           stopReason={p.limitReason}
-          shareFailed={p.shareFailed}
+          shareFailed={p.privat ? null : p.shareFailed}
+          privat={p.privat}
         />
       </div>
     );
@@ -186,7 +190,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-gutter pt-6 pb-12" data-status={status.kind}>
-      <BackLink href={p.orgHref} label={p.orgName} confirm={!ending} onLeave={leave} listening={status.kind === "live" || status.kind === "reconnecting"} />
+      <BackLink href={p.orgHref} label={p.orgName} confirm={!ending} onLeave={leave} listening={status.kind === "live" || status.kind === "reconnecting"} privat={Boolean(p.privat)} />
       <header
         className={cn(
           "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-6 rounded-lg bg-surface px-6 py-4 shadow-panel transition-colors duration-200 ease-out max-[52rem]:grid-cols-[minmax(0,1fr)_auto] max-[52rem]:gap-4",
@@ -250,7 +254,8 @@ export function LiveMeeting(p: LiveMeetingProps) {
           finalizing
           autoStopped={p.autoStopped}
           stopReason={p.limitReason}
-          shareFailed={p.shareFailed}
+          shareFailed={p.privat ? null : p.shareFailed}
+          privat={p.privat}
           pendingRuns={p.pendingRuns}
           endFailed={p.endFailed}
           onRetryEnd={p.onRetryEnd}
@@ -319,6 +324,7 @@ function BackLink({
   confirm,
   onLeave,
   listening,
+  privat,
 }: {
   href: string;
   label: string;
@@ -326,8 +332,11 @@ function BackLink({
   onLeave?: () => void;
   /** Sound is (meant to be) going out right now: leaving stops it. */
   listening?: boolean;
+  /** Privat (0045): "continue it from Privat", not from the förening's page. */
+  privat?: boolean;
 }) {
   const t = useTranslations("live.meeting");
+  const tp = useTranslations("privat.live");
   const dialog = useRef<LiveDialogHandle>(null);
   return (
     <>
@@ -355,7 +364,7 @@ function BackLink({
           stayVariant="primary"
           onConfirm={() => onLeave?.()}
         >
-          {listening ? t("leaveLiveText") : t("leaveText")}
+          {privat ? (listening ? tp("leaveLiveText") : tp("leaveText")) : listening ? t("leaveLiveText") : t("leaveText")}
         </LiveDialog>
       )}
     </>

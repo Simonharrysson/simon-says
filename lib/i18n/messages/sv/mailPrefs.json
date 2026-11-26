@@ -8,6 +8,10 @@
     "invite": {
       "label": "Inbjudningar",
       "description": "När en förening bjuder in dig till Simon Says, och påminnelser om inbjudan."
+    },
+    "private_summary": {
+      "label": "Sammanfattning av mina inspelningar",
+      "description": "Sammanfattningen efter det du spelat in i Privat: beslut, uppgifter och vad som hänt sedan sist."
     }
   },
   "allOff": "Inga mejl alls",

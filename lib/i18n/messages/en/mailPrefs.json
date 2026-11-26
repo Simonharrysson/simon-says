@@ -8,6 +8,10 @@
     "invite": {
       "label": "Invitations",
       "description": "When an association invites you to Simon Says, and reminders about the invitation."
+    },
+    "private_summary": {
+      "label": "Summaries of my recordings",
+      "description": "The summary after something you recorded in Personal: decisions, tasks and what has happened since last time."
     }
   },
   "allOff": "No e-mail at all",

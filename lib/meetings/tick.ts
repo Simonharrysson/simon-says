@@ -30,6 +30,7 @@ import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
 import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { doclessRows, doclessState, isDocless } from "@/lib/privat/docless";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { defaultMailer, type Mailer } from "@/lib/mail";
 import { updateNotes, type NotesClient, type UpdateNotesInput, type UpdateNotesResult } from "@/lib/notes/engine";
@@ -848,9 +849,11 @@ export async function runTick(
     meeting = await loadMeeting(meetingId);
     if (!meeting) return "not_found";
     if (!final && meeting.status !== "live") return "busy";
-    if (!meeting.started_by) throw new GoogleAuthLostError("(deleted user)", "meeting has no starter");
+    // A Privat recording without a Doc (0045) never talks to Google: no auth, the rows are the notes.
+    const docless = isDocless(meeting);
+    if (!meeting.started_by && !docless) throw new GoogleAuthLostError("(deleted user)", "meeting has no starter");
     // Auth first: a lost grant leaves the segments untouched.
-    const auth = await deps.getAuth(meeting.started_by);
+    const auth = docless ? null! : await deps.getAuth(meeting.started_by!);
 
     assigned = await assignTick(meetingId);
     const env = getEnv();
@@ -858,7 +861,7 @@ export async function runTick(
     // Name rounds first, so this tick's transcript lines and speakerNames already have the names.
     const holdTranscript = spendOk ? await nameRounds(meeting, deps, final, opts.deadlineAt) : false;
     const ctx = await loadContext(meeting);
-    const layout = meeting.layout ?? "v1";
+    const layout = docless ? "v1" : (meeting.layout ?? "v1");
     const left = () => (opts.deadlineAt ? opts.deadlineAt.getTime() - deps.now().getTime() : Infinity);
 
     // Format layout (A12): read the Doc first; the agenda (and the Må-runda window) shape the input.
@@ -914,7 +917,9 @@ export async function runTick(
     // read → diff → Claude
     const first = fmt
       ? { ...readState(fmt.tab, ctx.rows), text: fmt.text }
-      : readState(await deps.readNotes(auth, meeting), ctx.rows, { cells: false });
+      : docless
+        ? doclessState(ctx.rows)
+        : readState(await deps.readNotes(auth, meeting), ctx.rows, { cells: false });
     let items = first.items;
     if (fmt) {
       const proxies = copyProxies(first.diff.rows);
@@ -980,7 +985,14 @@ export async function runTick(
     // After a Claude error only the final pass still writes (unchanged items, `Avslutat` header).
     let notes: "ok" | "conflict" | "skipped" = "skipped";
     let anchorsAdded = 0;
-    if (!claudeFailed || final) {
+    if (docless && (!claudeFailed || final)) {
+      // The database is the "Doc": store the items, no conflicts possible.
+      if (!(await saveRows(meetingId, leaseId, doclessRows(meetingId, first.diff.rows, desiredItems(items, first.diff))))) {
+        console.warn(`tick ${meetingId}: lease ${leaseId} moved on; not saving notes rows`);
+        return "busy";
+      }
+      notes = "ok";
+    } else if (!claudeFailed || final) {
       const target: MeetingRow = { ...meeting };
       // Format layout: the server rows, the same for every attempt.
       const server = fmt
@@ -1068,7 +1080,7 @@ export async function runTick(
 
     // Transcript after the notes write (it bumps the Doc revision). Held back while a session's
     // name round is still to come, so its first lines are written with names, not labels.
-    if (meeting.transcript_tab_id && !holdTranscript) {
+    if (!docless && meeting.transcript_tab_id && !holdTranscript) {
       const lines = transcriptLines(ctx.segments, ctx.sessions, ctx.speakers);
       if (lines.length) {
         await deps.appendTranscript(auth, meeting.doc_id, meeting.transcript_tab_id, lines);
@@ -1110,7 +1122,7 @@ export async function runTick(
       // Never sent to Claude: give the number back, so failed ticks don't pile up blocks.
       await db().from("segments").update({ tick_no: null }).eq("meeting_id", meetingId).eq("tick_no", assigned);
     }
-    if (err instanceof GoogleAuthLostError) {
+    if (err instanceof GoogleAuthLostError && !(meeting && isDocless(meeting))) {
       await updateMeeting(meetingId, { doc_paused_at: new Date().toISOString() });
       await logEvent(meetingId, "doc_paused", { final });
       return "doc_paused";

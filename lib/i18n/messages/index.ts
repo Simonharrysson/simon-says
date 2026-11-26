@@ -5,6 +5,8 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enPrivat from "./en/privat.json";
+import svPrivat from "./sv/privat.json";
 import enProfile from "./en/profile.json";
 import svProfile from "./sv/profile.json";
 import enStadgar from "./en/stadgar.json";
@@ -65,6 +67,7 @@ import enTasks from "./en/tasks.json";
 import svTasks from "./sv/tasks.json";
 
 export const sv = {
+  privat: svPrivat,
   profile: svProfile,
   stadgar: svStadgar,
   live: svLive,
@@ -99,6 +102,7 @@ export const sv = {
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  privat: enPrivat,
   profile: enProfile,
   stadgar: enStadgar,
   live: enLive,

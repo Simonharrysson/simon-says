@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PrepareMeeting } from "@/components/views/PrepareMeeting";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
@@ -25,6 +25,7 @@ export default async function PreparePage({ params, searchParams }: { params: Pr
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org || (await myRole(db, id)) === null) notFound();
+  if (org.kind === "privat") redirect("/privat");
 
   // RLS: this förening's meetings only. The last real one sets the proposed weekday and time.
   const { data: last } = await db

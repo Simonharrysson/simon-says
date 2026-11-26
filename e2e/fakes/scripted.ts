@@ -18,4 +18,12 @@ export const SCRIPTED = {
     { title: "Ett hackathon i februari", why: "Det har tagits upp på flera möten." },
   ],
   names: ["Anna Berg", "Erik Lund", "Lisa Holm", "Omar Said"],
+  /** The Privat summary (0045): first recording in a context, then later ones. */
+  privat: {
+    summary: "Genomgång av labb 2 inför inlämningen.",
+    decision: "Labb 2 lämnas in på fredag",
+    firstTask: "Läsa kapitel 4 till tentan",
+    nextTask: "Boka grupprum till labb 3",
+    question: "Får man ha formelblad på tentan?",
+  },
 };

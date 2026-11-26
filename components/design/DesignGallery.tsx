@@ -47,6 +47,8 @@ import { designViews, type DesignGroup } from "./registry";
 import { onboardingRender } from "./onboarding-demo";
 import { SummarySettingsDemo, summaryRender } from "./summary-demo";
 import { inviteRender } from "./invite-demo";
+import { privatRender } from "./privat-demo";
+import { ContextPicker } from "@/components/privat/ContextPicker";
 
 function StadgarLead() {
   return <p className="text-sm text-ink-2">{useTranslations("stadgar")("lead")}</p>;
@@ -209,6 +211,27 @@ function InteractiveLive(props: LiveMeetingProps) {
               : s,
           ),
         )
+      }
+    />
+  );
+}
+
+/** Privat (0045): the consent step with the context picker instead of the agenda step. */
+function PrivatConsentDemo({ contexts }: { contexts: { id: string; name: string }[] }) {
+  const [ok, setOk] = useState(contexts.length > 0);
+  return (
+    <LiveDemo
+      phase="consent"
+      orgName="Privat"
+      privat={{ summaryHref: null, backLabel: "Tillbaka till Privat" }}
+      agendaConfirmed={ok}
+      agenda={
+        <ContextPicker
+          contexts={contexts}
+          initialId={contexts[0]?.id ?? null}
+          create={async (name) => ({ ok: true, context: { id: `ny-${name}`, name } })}
+          onChange={(choice) => setOk(choice !== null)}
+        />
       }
     />
   );
@@ -968,6 +991,12 @@ const render: Record<string, () => ReactNode> = {
     Object.entries(summaryRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>]),
   ),
   ...Object.fromEntries(Object.entries(inviteRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(Object.entries(privatRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  "live-privat-consent": () => <PrivatConsentDemo contexts={[{ id: "c1", name: "TDDE15" }, { id: "c2", name: "Exjobb" }, { id: "c3", name: "Övrigt" }]} />,
+  "live-privat-first": () => <PrivatConsentDemo contexts={[]} />,
+  "live-privat-ended": () => (
+    <LiveDemo phase="ended" elapsedMs={52 * 60_000} docUrl={null} orgName="TDDE15" privat={{ summaryHref: "#", backLabel: "Tillbaka till TDDE15" }} />
+  ),
 };
 
 export function DesignGallery({ view }: { view: string | null }) {

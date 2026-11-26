@@ -12,6 +12,10 @@ import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { goalLabel } from "@/lib/prepare/goals";
 import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createContextAction } from "@/app/(app)/privat/actions";
+import { suggestedContext } from "@/lib/privat/contexts";
+import { listContexts } from "@/lib/privat/contexts-db";
+import { isPrivat, privatHref } from "@/lib/privat/space";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -48,8 +52,15 @@ function startFormats(
   return out;
 }
 
-export default async function NewMeetingPage({ params }: { params: Promise<{ orgId: string }> }) {
+export default async function NewMeetingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ sammanhang?: string }>;
+}) {
   const { orgId } = await params;
+  const { sammanhang } = await searchParams;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -68,6 +79,31 @@ export default async function NewMeetingPage({ params }: { params: Promise<{ org
   if (error) throw new Error(`new meeting page: ${error.message}`);
   const running = active?.[0];
   if (running) redirect(running.started_by === user.id ? `/meetings/${running.id}` : `/orgs/${orgId}`);
+
+  // Privat (0045): pick a context instead of an agenda; no Doc unless asked for.
+  if (isPrivat(org)) {
+    const contexts = await listContexts(db, orgId);
+    const from = contexts.find((c) => c.id === sammanhang);
+    const tp = await getTranslations("privat");
+    return (
+      <main id="innehall">
+        <LiveMeetingController
+          orgId={org.id}
+          orgName={from?.name ?? tp("home.title")}
+          orgHref={from ? privatHref(from.id) : privatHref()}
+          shareTranscript={false}
+          meeting={null}
+          privat={{
+            contexts: contexts.map(({ id, name }) => ({ id, name })),
+            initialContextId: from?.id ?? suggestedContext(contexts)?.id ?? null,
+            createContext: createContextAction,
+            summaryHref: null,
+            backLabel: from ? tp("live.back", { name: from.name }) : tp("live.backHome"),
+          }}
+        />
+      </main>
+    );
+  }
 
   const [def, rows, goals] = await Promise.all([orgDefaultFormat(db, orgId), listOrgFormats(db, orgId), goalSuggestionsFor(db, orgId)]);
 

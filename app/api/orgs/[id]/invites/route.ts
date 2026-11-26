@@ -75,6 +75,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const org = await getOrg(db, id);
     if (!org) return fail("not_found", 404, t("api.orgNotFound"));
+    // Nobody can be invited into a Privat space (0045; the database refuses the membership too).
+    if (org.kind === "privat") return fail("forbidden", 403, t("api.privatNoInvites"));
     const { data: person } = await admin.from("people").select("name").eq("org_id", id).eq("member_user_id", gate.userId).maybeSingle();
     const inviterName = inviterNameFor(person?.name as string | undefined, gate.metadata);
     // Mail clients link anything that looks like a domain: never carry one in our mail (I1).

@@ -8,6 +8,7 @@ import { NAMES_SYSTEM_PROMPT } from "@/lib/names/extract";
 import { AGENDA_SYSTEM_PROMPT } from "@/lib/notes/agenda-prompt";
 import { CHECKIN_SYSTEM_PROMPT } from "@/lib/notes/checkin";
 import { SYSTEM_PROMPT } from "@/lib/notes/prompt";
+import { PRIVAT_SUMMARY_SYSTEM_PROMPT } from "@/lib/privat/summary";
 import { readBody, send } from "./google";
 import { SCRIPTED } from "./scripted";
 
@@ -18,9 +19,10 @@ export { SCRIPTED };
 // test/meeting-sim.ts `scriptedClient` does, and answered with fixed, schema-valid JSON. An
 // unknown prompt is a 500 and lands in `problems`: a call nobody scripted never passes quietly.
 
-export type ClaudeKind = "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles";
+export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles";
 
 const KINDS: [string, ClaudeKind][] = [
+  [PRIVAT_SUMMARY_SYSTEM_PROMPT, "privat-summary"],
   [AGENDA_SYSTEM_PROMPT, "agenda-notes"],
   [SYSTEM_PROMPT, "notes"],
   [NAMES_SYSTEM_PROMPT, "names"],
@@ -91,6 +93,22 @@ function answer(kind: ClaudeKind, text: string): unknown {
         return name && known.includes(name) ? name : undefined;
       };
       return { speakers: labels.filter((l) => nameOf(l)).map((speaker) => ({ speaker, name: nameOf(speaker), needs_confirm: false })) };
+    }
+    case "privat-summary": {
+      // The open tasks come in as "[t1] text …": the first is done, the rest still open. A first
+      // recording (no open tasks) gets the first task, later ones a new task.
+      const keys = [...text.matchAll(/^\[(t\d+)\] /gm)].map((m) => m[1]);
+      const p = SCRIPTED.privat;
+      return {
+        summary: p.summary,
+        decisions: keys.length ? [] : [p.decision],
+        facts: [],
+        tasks: [{ text: keys.length ? p.nextTask : p.firstTask, owner: null, due: null }],
+        questions: [p.question],
+        people: [],
+        topics: ["labb 2"],
+        previous: keys.map((id, i) => ({ id, status: i === 0 ? "done" : "open" })),
+      };
     }
     case "checkin":
       return { start_at: null, end_at: null };

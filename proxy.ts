@@ -60,7 +60,27 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // The Privat space (0045) is not a förening: every förening page below /orgs/<id>/ (protokoll,
+  // förbered, kom igång) and every /api/orgs/<id>/… route answers 404 for it. One guard here
+  // instead of one per route; /orgs/<id> itself redirects to /privat (the page does it).
+  const guarded = privatGuardedOrgId(request.nextUrl.pathname);
+  if (user && guarded !== null && isUuid(guarded)) {
+    const { data } = await supabase.from("orgs").select("*").eq("id", guarded).maybeSingle();
+    if ((data as { kind?: string } | null)?.kind === "privat") {
+      const notFound = request.nextUrl.pathname.startsWith("/api/")
+        ? NextResponse.json({ error: "not_found" }, { status: 404, headers: { "cache-control": "no-store" } })
+        : NextResponse.rewrite(new URL("/_finns-inte", request.url), { status: 404 });
+      for (const cookie of response.cookies.getAll()) notFound.cookies.set(cookie);
+      return notFound;
+    }
+  }
+
   return response;
+}
+
+/** The org id of a route a Privat space must not reach: `/api/orgs/<id>[/…]` and `/orgs/<id>/<page>`. */
+export function privatGuardedOrgId(pathname: string): string | null {
+  return /^\/api\/orgs\/([^/]+)(\/|$)/.exec(pathname)?.[1] ?? /^\/orgs\/([^/]+)\/[^/]/.exec(pathname)?.[1] ?? null;
 }
 
 /** The förening id of an org page (`/orgs/<id>` and below), or null. */
