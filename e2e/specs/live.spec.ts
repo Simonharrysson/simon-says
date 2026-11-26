@@ -72,7 +72,7 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   const { data } = await db.from("meetings").select("status").eq("id", meetingId).single();
   expect(data?.status).toBe("done");
   // The transcript tab got the fake's lines (held during the name round, written by the final pass).
-  expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toContain("välkomna");
+  expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toMatch(/S1-speaker_\d 00:00:\d\d: \S/);
 
   await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
   const meetings = page.getByRole("list", { name: "Möten" });
