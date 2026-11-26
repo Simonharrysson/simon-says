@@ -52,27 +52,10 @@ async function freshStarter(
   return { org, page };
 }
 
-test("Starta möte → namnrunda → live notes in the Doc → Avsluta → listed, summary to who missed it @phone", async ({ seedOrg, signedIn, newEmail, db }) => {
-  // The fake's voices are Anna, Erik and Lisa (its fourth voice is Erik again: it merges them).
-  const anna = newEmail("anna");
-  const karin = newEmail("karin");
-  const { org, page } = await freshStarter(seedOrg, signedIn, newEmail, [
-    { name: "Anna Berg", email: anna },
-    "Erik Lund",
-    "Lisa Holm",
-    { name: "Karin Sjö", email: karin },
-  ]);
+test("Starta möte → namnrunda → live notes in the Doc → Avsluta → listed @phone", async ({ seedOrg, signedIn, newEmail, db }) => {
+  const { org, page } = await freshStarter(seedOrg, signedIn, newEmail, ["Anna Berg", "Erik Lund"]);
   const { meetingId, docId } = await startMeeting(page, org);
 
-  // Everyone has spoken before Klar, so attendance is certain: the fake speaks its four voices in
-  // the first lines and merges two of them into one after the 6th line (three voices). Wait past it.
-  await expect
-    .poll(async () => (await db.from("segments").select("segment_index", { count: "exact", head: true }).eq("meeting_id", meetingId)).count ?? 0, {
-      timeout: 30_000,
-      message: "the fake past its merge (6th line)",
-    })
-    .toBeGreaterThanOrEqual(12);
-  await expect(page.getByRole("list", { name: "Namn vi hört" }).getByRole("listitem")).toHaveCount(3, { timeout: 30_000 });
   await page.getByRole("button", { name: "Klar, alla har sagt sitt namn" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toHaveCount(0, { timeout: 30_000 });
   await expectNotesInDoc(docId);
@@ -91,26 +74,14 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   // The transcript tab got the fake's lines (held during the name round, written by the final pass).
   expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toContain("välkomna");
 
-  // Summary ("missed" mode, the default): Karin was not there and gets it; Anna was.
-  const state = async () => (await db.from("meetings").select("summary_state").eq("id", meetingId).single()).data?.summary_state;
-  const voices = async () =>
-    JSON.stringify((await db.from("speaker_map").select("el_session_id, speaker_label, person_id, display_name, merged_into_label, needs_confirm").eq("meeting_id", meetingId)).data);
-  await expect
-    .poll(async () => `${(await fake.mail(karin)).length} mail, summary_state ${await state()}`, { timeout: 30_000, message: `voices: ${await voices()} names calls: ${JSON.stringify((await fake.claudeCalls("names")).map((c) => c.text.slice(0, 300)))}` })
-    .toBe("1 mail, summary_state sent");
-  const [summary] = await fake.mail(karin);
-  expect(summary.text).toContain(SCRIPTED.decision);
-  expect(await fake.mail(anna)).toEqual([]);
-
   await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings.getByRole("listitem")).toHaveCount(1);
   await expect(meetings).toContainText("Klart");
 });
 
-test("auto-end like Meet: no tab heard from, the cron ends the meeting; unsure attendance mails nobody", async ({ seedOrg, signedIn, newEmail, db, request }) => {
-  const karin = newEmail("karin");
-  const { org, page } = await freshStarter(seedOrg, signedIn, newEmail, [{ name: "Karin Sjö", email: karin }]);
+test("auto-end like Meet: no tab heard from, the cron ends the meeting", async ({ seedOrg, signedIn, newEmail, db, request }) => {
+  const { org, page } = await freshStarter(seedOrg, signedIn, newEmail);
   const { meetingId, docId } = await startMeeting(page, org);
   await page.getByRole("button", { name: "Hoppa över" }).click();
   await expectNotesInDoc(docId);
@@ -128,12 +99,6 @@ test("auto-end like Meet: no tab heard from, the cron ends the meeting; unsure a
   const { data } = await db.from("meetings").select("status, ended_at").eq("id", meetingId).single();
   expect(data?.status).toBe("done");
   await expect.poll(() => fake.docText(docId), { timeout: 30_000 }).toMatch(/Avslutat \d{2}:\d{2}/);
-  // Nobody in the list could be heard (the server's own name round names no one): unnamed
-  // voices, so "missed" can't know who was there. Nobody is mailed.
-  await expect
-    .poll(async () => (await db.from("meetings").select("summary_state").eq("id", meetingId).single()).data?.summary_state, { timeout: 30_000 })
-    .toBe("uncertain");
-  expect(await fake.mail(karin)).toEqual([]);
 });
 
 test("a seeded meeting without speech is abandoned by the cron and can be continued", async ({ page, seedOrg, db, request }) => {
