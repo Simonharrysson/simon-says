@@ -186,8 +186,15 @@ export function sameLine(want: string, got: string): boolean {
   return w.filter((x) => g.includes(x.slice(0, Math.max(4, x.length - 2)))).length / w.length >= 0.6;
 }
 
-export function gradeExtraction(truth: HistoryMeeting, got: { date: string | null; items: HistoryItem[] }, allNames: string[]): ExtractGrade {
+export function gradeExtraction(
+  truth: HistoryMeeting,
+  got: { date: string | null; items: HistoryItem[] },
+  allNames: string[],
+  routineTopics: string[] = [],
+): ExtractGrade {
   const missing: string[] = [];
+  // Routine lines (the treasurer's report …) say nothing about goals: an extractor may skip them.
+  truth = { ...truth, items: truth.items.filter((i) => !(i.topic && routineTopics.includes(i.topic))) };
   const recall = (kind: HistoryItem["kind"], pool: HistoryItem["kind"][]) => {
     const want = truth.items.filter((i) => i.kind === kind);
     const have = got.items.filter((i) => pool.includes(i.kind));

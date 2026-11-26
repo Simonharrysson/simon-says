@@ -41,7 +41,7 @@ export interface FixtureGoal {
   keywords: string[];
   /** Renamed goals: phrases of the newest name (the title should use it). */
   newNameKeywords?: string[];
-  tags: ("renamed" | "revived" | "report-only" | "late-start" | "boundary")[];
+  tags: ("renamed" | "revived" | "report-only" | "late-start" | "boundary" | "implicit" | "dropped-then-revived" | "paused" | "tasks-only" | "object-lives-on")[];
   events: FixtureEvent[];
 }
 
@@ -55,6 +55,8 @@ export interface FixtureSeries {
   extras: string[];
   routine: (i: number) => FixtureEvent[];
   goals: FixtureGoal[];
+  /** From this protocol on, the meetings are Simon Says' own (source "simonsays" in the truth history). */
+  ownFrom?: number;
 }
 
 export interface FixtureProtocol {
@@ -93,6 +95,8 @@ export interface BuiltSeries {
   allNames: string[];
   /** Latest meeting date. */
   lastDate: string;
+  /** Agenda items of the routine lines (Ekonomi …): not graded in the extraction. */
+  routineTopics: string[];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -409,7 +413,7 @@ const RIDAN: FixtureSeries = {
       id: "ridan-var",
       status: "achieved",
       summary: "Sätta upp en vårföreställning (premiär i april, slutsålt; bara som lägesrapport)",
-      keywords: ["vårföreställning", "varforestallning", "föreställning", "premiär", "uppsättning"],
+      keywords: ["vårföreställning", "varforestallning", "pjäs", "premiär", "uppsättning"],
       tags: ["report-only"],
       events: [
         { at: 0, item: "Vårföreställningen", kind: "decision", text: "sätta upp en egen pjäs som vårföreställning" },
@@ -447,14 +451,14 @@ const RIDAN: FixtureSeries = {
     {
       id: "ridan-impro",
       status: "current",
-      summary: "Starta en improgrupp (nämns i september, väcks igen i mars)",
+      summary: "En improgrupp som sätter upp en egen improföreställning (nämns i september, väcks igen i mars)",
       keywords: ["impro", "improvisation"],
       tags: ["revived"],
       events: [
         { at: 1, item: "Improgrupp", kind: "report", text: "Några medlemmar vill starta en improgrupp." },
-        { at: 12, item: "Improgrupp", kind: "decision", text: "starta improgruppen nu i vår med träning varannan måndag" },
+        { at: 12, item: "Improgrupp", kind: "decision", text: "starta improgruppen nu i vår och sätta upp en improföreställning i höst" },
         { at: 13, item: "Improgrupp", kind: "task", text: "Boka replokal för improgruppen", owner: "prod", done: true },
-        { at: 15, item: "Improgrupp", kind: "report", text: "Improgruppen har haft två träningar med tolv deltagare." },
+        { at: 15, item: "Improgrupp", kind: "report", text: "Improgruppen har haft två träningar; improföreställningen i höst planeras." },
       ],
     },
     {
@@ -501,7 +505,146 @@ const RIDAN: FixtureSeries = {
   ],
 };
 
-export const SERIES: FixtureSeries[] = [RUTAN, STROMSNACK, RIDAN];
+// The hard one: signals that are implicit (an achievement only as a thank-you, a drop only as
+// "instead we …"), a goal dropped and later revived, a goal paused and then forgotten, a goal
+// that lives only in tasks, an achieved goal whose result keeps being talked about, a stale
+// boundary just past 3 months, and more routine noise. The last four meetings are Simon Says'
+// own (in the digest stage).
+const FJALL: FixtureSeries = {
+  slug: "fjall",
+  name: "Friluftsföreningen Fjällrävarna",
+  style: "a",
+  dates: dates("2025-09-08", 18, 14, { 6: 21 }),
+  ownFrom: 14,
+  roles: [
+    { key: "ordf", title: "Ordförande", definite: "ordföranden", holders: [{ name: "Märta Jonsson", from: 0 }] },
+    {
+      key: "kass",
+      title: "Kassör",
+      definite: "kassören",
+      holders: [
+        { name: "Halvar Nygren", from: 0 },
+        { name: "Idun Sandström", from: 7 },
+      ],
+    },
+    { key: "tur", title: "Turansvarig", definite: "turansvarig", holders: [{ name: "Assar Blom", from: 0 }] },
+    { key: "sekr", title: "Sekreterare", definite: "sekreteraren", holders: [{ name: "Vera Lönnqvist", from: 0 }] },
+  ],
+  extras: ["Knut Ahlström", "Stina Malm"],
+  routine: (i) => [
+    { at: i, item: "Ekonomi", kind: "report", text: `{kass} gick igenom kassan; ${9000 + ((i * 640) % 4000)} kr, inga konstigheter.` },
+    {
+      at: i,
+      item: "Turer",
+      kind: "report",
+      text: ["Helgens dagstur till Omberg samlade 14 deltagare.", "Kvällspaddlingen ställdes in på grund av blåst.", "Vandringen i Tiveden hade 9 deltagare.", "Skidturen i Kolmården lockade 21 personer."][i % 4],
+    },
+    ...(i % 3 === 1 ? [{ at: i, item: "Turer", kind: "task" as const, text: "Lägga ut nästa månads turer i kalendern", owner: "tur", done: true }] : []),
+    ...(i === 14 || i === 16 ? [{ at: i, item: "Stugan", kind: "task" as const, text: "Kalla till städdag i stugan vid Ljungsjön", owner: "sekr", done: false }] : []),
+  ],
+  goals: [
+    {
+      id: "fjall-loppis",
+      status: "achieved",
+      summary: "Samla in pengar till nya tält med en loppis (lyckas: bara ett tack och en summa)",
+      keywords: ["loppis", "insamling", "tältkassa", "tältkassan"],
+      tags: ["implicit", "report-only"],
+      events: [
+        { at: 1, item: "Loppis", kind: "decision", text: "hålla en loppis i november för att samla in pengar till nya tält" },
+        { at: 3, item: "Loppis", kind: "task", text: "Boka gympasalen till loppisen", owner: "sekr", done: true },
+        { at: 5, item: "Loppis", kind: "report", text: "Tack till alla som jobbade på loppisen i lördags – det blev 12 400 kr till tältkassan." },
+      ],
+    },
+    {
+      id: "fjall-talt",
+      status: "achieved",
+      summary: "Köpa nya tält (används första gången på påskturen)",
+      keywords: ["tält", "talt"],
+      tags: ["implicit", "report-only"],
+      events: [
+        { at: 5, item: "Nya tält", kind: "decision", text: "köpa fyra nya tält för de insamlade pengarna" },
+        { at: 7, item: "Nya tält", kind: "task", text: "Beställa tälten", owner: "kass", done: true },
+        { at: 9, item: "Nya tält", kind: "report", text: "Tälten är beställda men leveransen är försenad." },
+        { at: 12, item: "Nya tält", kind: "report", text: "De nya tälten användes för första gången på påskturen och höll tätt hela natten." },
+      ],
+    },
+    {
+      id: "fjall-abisko",
+      status: "current",
+      summary: "Fjällvecka i Abisko (inställd i oktober, blir av ändå i april)",
+      keywords: ["abisko", "fjällvecka", "fjallvecka"],
+      tags: ["revived", "dropped-then-revived"],
+      events: [
+        { at: 2, item: "Fjällveckan", kind: "decision", text: "planera en fjällvecka i Abisko i juni" },
+        { at: 4, item: "Fjällveckan", kind: "decision", text: "ställa in fjällveckan i Abisko, för få har anmält sig" },
+        { at: 13, item: "Fjällveckan", kind: "report", text: "Fjällveckan i Abisko blir av ändå: studentkåren sponsrar resan och anmälan öppnar nästa vecka." },
+        { at: 15, item: "Fjällveckan", kind: "task", text: "Boka tåg till Abisko", owner: "tur", done: false },
+        { at: 17, item: "Fjällveckan", kind: "report", text: "16 anmälda till fjällveckan, tågen är bokade." },
+      ],
+    },
+    {
+      id: "fjall-hemsida",
+      status: "stale",
+      summary: "En egen hemsida (pausas till efter jul och nämns sedan aldrig mer)",
+      keywords: ["hemsida", "webbplats"],
+      tags: ["paused"],
+      events: [
+        { at: 2, item: "Hemsida", kind: "report", text: "{sekr} vill att föreningen får en egen hemsida med turkalender." },
+        { at: 3, item: "Hemsida", kind: "task", text: "Ta fram ett förslag på hemsida", owner: "sekr", done: false },
+        { at: 6, item: "Hemsida", kind: "report", text: "Hemsidan pausas till efter jul, ingen har tid nu." },
+      ],
+    },
+    {
+      id: "fjall-klattervagg",
+      status: "dropped",
+      summary: "En egen klättervägg i lokalen (ersätts av rabatt på klätterhallen: bara ett 'istället')",
+      keywords: ["klättervägg", "klattervagg", "klättervägg"],
+      tags: ["implicit"],
+      events: [
+        { at: 7, item: "Klättervägg", kind: "decision", text: "undersöka om vi kan bygga en egen klättervägg i föreningslokalen" },
+        { at: 9, item: "Klättervägg", kind: "task", text: "Fråga hyresvärden om klättervägg i lokalen", owner: "ordf", done: true },
+        { at: 11, item: "Klättervägg", kind: "report", text: "Istället för en egen klättervägg har vi fått rabatt för medlemmar på klätterhallen." },
+      ],
+    },
+    {
+      id: "fjall-samarbete",
+      status: "stale",
+      summary: "Samarbete med friluftsförbundets lokalavdelning (sista gången nämnt drygt 3 månader före sista mötet)",
+      keywords: ["samarbete", "lokalavdelning", "friluftsförbund"],
+      tags: ["boundary"],
+      events: [
+        { at: 8, item: "Samarbete", kind: "report", text: "Friluftsförbundets lokalavdelning vill samarbeta om gemensamma turer." },
+        { at: 10, item: "Samarbete", kind: "task", text: "Boka ett möte med lokalavdelningen om samarbete", owner: "ordf", done: false },
+      ],
+    },
+    {
+      id: "fjall-ledare",
+      status: "current",
+      summary: "Utbilda fler turledare (syns bara i uppgifter)",
+      keywords: ["ledarutbildning", "turledare", "ledare"],
+      tags: ["tasks-only"],
+      events: [
+        { at: 12, item: "Turer", kind: "task", text: "Anmäla tre medlemmar till förbundets turledarutbildning", owner: "tur", done: false },
+        { at: 14, item: "Turer", kind: "task", text: "Betala kursavgiften för turledarutbildningen", owner: "kass", done: true },
+        { at: 16, item: "Turer", kind: "task", text: "Planera en övningstur för de nya turledarna", owner: "tur", done: false },
+      ],
+    },
+    {
+      id: "fjall-stuga",
+      status: "achieved",
+      summary: "Hyra en egen stuga (Projekt Fyren; stugan vid Ljungsjön hyrd i februari, och städas sedan)",
+      keywords: ["stuga", "stugan", "fyren", "ljungsjön"],
+      tags: ["object-lives-on"],
+      events: [
+        { at: 3, item: "Projekt Fyren", kind: "decision", text: "undersöka att hyra en egen stuga vid sjön, arbetsnamn Projekt Fyren" },
+        { at: 6, item: "Projekt Fyren", kind: "report", text: "Två stugor har visats, den vid Ljungsjön är bäst." },
+        { at: 10, item: "Projekt Fyren", kind: "decision", text: "skriva hyresavtal för stugan vid Ljungsjön från och med maj; Projekt Fyren är därmed klart" },
+      ],
+    },
+  ],
+};
+
+export const SERIES: FixtureSeries[] = [RUTAN, STROMSNACK, RIDAN, FJALL];
 
 // ---------------------------------------------------------------------------------------------
 // Building
@@ -614,7 +757,7 @@ export function buildSeries(series: FixtureSeries): BuiltSeries {
       date,
       title,
       text,
-      truth: { date, source: "import", items: truthItems(series, i, events) },
+      truth: { date, source: series.ownFrom !== undefined && i >= series.ownFrom ? "simonsays" : "import", items: truthItems(series, i, events) },
       goals: [...new Set(goalEvents.map((x) => x.id))],
     };
   });
@@ -648,6 +791,7 @@ export function buildSeries(series: FixtureSeries): BuiltSeries {
     people: series.roles.map((r) => holderAt(r, lastIdx)),
     allNames: [...new Set([...series.roles.flatMap((r) => r.holders.map((h) => h.name)), ...series.extras])],
     lastDate,
+    routineTopics: [...new Set(series.dates.flatMap((_, i) => series.routine(i).map((e) => e.item)))],
   };
 }
 

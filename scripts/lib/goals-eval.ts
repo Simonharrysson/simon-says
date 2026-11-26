@@ -70,7 +70,7 @@ export async function runExtraction(series: BuiltSeries, p: FixtureProtocol, cli
     slug: series.slug,
     index: p.index,
     ok: true,
-    grade: gradeExtraction(p.truth, res.protocol, series.allNames),
+    grade: gradeExtraction(p.truth, res.protocol, series.allNames, series.routineTopics),
     history: meeting,
     usd: res.usage.usd,
     usage: res.usage,

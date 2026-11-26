@@ -11,8 +11,8 @@ const FREE = { input_tokens: 0, output_tokens: 0 };
 const series = allSeries();
 
 describe("goals fixtures", () => {
-  it("3 föreningar, 15–30 protocols each, every status class and every hard case present", () => {
-    expect(series).toHaveLength(3);
+  it("4 föreningar, 15–30 protocols each, every status class and every hard case present", () => {
+    expect(series).toHaveLength(4);
     for (const s of series) {
       expect(s.protocols.length).toBeGreaterThanOrEqual(15);
       expect(s.protocols.length).toBeLessThanOrEqual(30);
@@ -20,7 +20,7 @@ describe("goals fixtures", () => {
     }
     const goals = series.flatMap((s) => s.goals);
     for (const status of ["current", "achieved", "dropped", "stale"]) expect(goals.some((g) => g.status === status)).toBe(true);
-    for (const tag of ["renamed", "revived", "report-only", "late-start", "boundary"]) expect(goals.some((g) => g.tags.includes(tag as never))).toBe(true);
+    for (const tag of ["renamed", "revived", "report-only", "late-start", "boundary", "implicit", "dropped-then-revived", "paused", "tasks-only", "object-lives-on"]) expect(goals.some((g) => g.tags.includes(tag as never))).toBe(true);
   });
 
   it("stale and current agree with the 3-month rule; revived goals have a gap of more than 3 months", () => {
@@ -79,20 +79,22 @@ describe("goals eval dry run", () => {
     for (const s of series) runs.push(await runDigest(s, truthHistory(s), scriptedClient([flawedDigest(s)], FREE)));
     const { raw, guarded } = summarize(runs);
     const cls = (t: typeof raw, s: string) => t.classes.find((c) => c.status === s)!;
-    // Dropped goal left out in each series.
-    expect(raw.found).toBe(raw.goals - 3);
-    expect(cls(raw, "dropped").found).toBe(0);
-    // Stale called current: wrong raw, fixed by the guard.
-    expect(cls(raw, "stale").statusOk).toBe(0);
-    expect(cls(guarded, "stale").statusOk).toBe(3);
+    const n = series.length;
+    const withTag = (tag: string) => series.filter((x) => x.goals.some((g) => g.tags.includes(tag as never))).length;
+    // The first dropped goal left out in each series.
+    expect(raw.found).toBe(raw.goals - n);
+    expect(cls(raw, "dropped").found).toBe(cls(raw, "dropped").truth - n);
+    // The first stale goal called current: wrong raw, fixed by the guard.
+    expect(cls(raw, "stale").statusOk).toBe(cls(raw, "stale").truth - n);
+    expect(cls(guarded, "stale").statusOk).toBe(cls(guarded, "stale").truth);
     // Report-only achievement called current: wrong either way (guarded it is stale, still not achieved).
-    expect(cls(guarded, "achieved").statusOk).toBe(cls(guarded, "achieved").truth - 3);
+    expect(cls(guarded, "achieved").statusOk).toBe(cls(guarded, "achieved").truth - withTag("report-only"));
     // Renamed goal reported twice, Ekonomi as a goal, invented evidence date dropped.
-    expect(raw.duplicates).toBe(3);
+    expect(raw.duplicates).toBe(withTag("renamed"));
     expect(raw.renamedOk).toBe(0);
-    expect(raw.spurious).toBe(3);
-    expect(runs.reduce((n, r) => n + r.droppedEvidence, 0)).toBe(3);
-    expect(runs.reduce((n, r) => n + r.demoted, 0)).toBeGreaterThanOrEqual(3);
+    expect(raw.spurious).toBe(n);
+    expect(runs.reduce((k, r) => k + r.droppedEvidence, 0)).toBe(n);
+    expect(runs.reduce((n, r) => n + r.demoted, 0)).toBeGreaterThanOrEqual(n);
   });
 
   it("scripted extraction of every protocol: dates right, all lines recalled, no name stored", async () => {
