@@ -8,6 +8,8 @@ export interface OpenTask {
   text: string;
   owner: string | null;
   created_at: string;
+  /** Order within its recording (tasks of one summary share created_at). */
+  position?: number;
 }
 
 export interface SinceLastItem {
@@ -19,7 +21,9 @@ export interface SinceLastItem {
 
 /** Short ids for the prompt ("t1", "t2", …), oldest task first. */
 export function taskKeys<T extends OpenTask>(tasks: T[]): { key: string; task: T }[] {
-  return [...tasks].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)).map((task, i) => ({ key: `t${i + 1}`, task }));
+  return [...tasks]
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at) || (a.position ?? 0) - (b.position ?? 0) || a.id.localeCompare(b.id))
+    .map((task, i) => ({ key: `t${i + 1}`, task }));
 }
 
 /**

@@ -52,14 +52,21 @@ test("Privat: record without a Doc → summary e-mail → the context keeps the 
   await expect(page.getByRole("heading", { name: "Privat", level: 1 })).toBeVisible();
   await expect(page.getByText("Inga inspelningar än")).toBeVisible();
   await expectAccessible(page);
+  // The top rail (now with Privat) never scrolls sideways, also at 390 px.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth), "horizontal overflow in px").toBeLessThanOrEqual(0);
 
   // First recording: a new context, typed inline.
   await page.getByRole("link", { name: "Spela in" }).click();
   const first = await record(page, db, async (p) => {
     const name = p.getByRole("textbox", { name: "Vad gäller inspelningen?" });
-    await name.fill("TDDE15");
-    await p.getByRole("button", { name: "Lägg till" }).click();
-    await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" })).toHaveValue(/[0-9a-f-]{36}/);
+    // First time: a text field, prefilled with the catch-all context.
+    await expect(name).toHaveValue("Övrigt");
+    // Retried: a click before hydration does nothing.
+    await expect(async () => {
+      await name.fill("TDDE15");
+      await p.getByRole("button", { name: "Lägg till" }).click();
+      await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" })).toHaveValue(/[0-9a-f-]{36}/, { timeout: 3000 });
+    }).toPass({ timeout: 30_000 });
     await expect(p.getByRole("combobox", { name: "Vad gäller inspelningen?" }).locator("option:checked")).toHaveText("TDDE15");
     await expect(p.getByRole("checkbox", { name: /Skriv även i ett Google-dokument/ })).not.toBeChecked();
   });

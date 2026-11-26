@@ -163,7 +163,7 @@ export async function sendPrivatSummary(
       db.from("note_items").select("section, text, owner, due, deleted_by_human, position").eq("meeting_id", m.id).order("section").order("position"),
       db
         .from("context_tasks")
-        .select("id, text, owner, created_at")
+        .select("id, text, owner, created_at, position")
         .eq("context_id", m.context_id)
         .eq("done", false)
         .neq("meeting_id", m.id)

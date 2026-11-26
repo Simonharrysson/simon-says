@@ -79,13 +79,8 @@ export function ContextPicker({
           </NativeSelect>
         )}
         {selected === NEW && (
-          <form
-            className="flex items-start gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void add();
-            }}
-          >
+          // Not a <form>: Enter or the button adds, and nothing can submit (or navigate) before hydration.
+          <div className="flex items-start gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch">
             <Input
               id={contexts.length ? `${id}-new` : `${id}-ctx`}
               aria-label={contexts.length ? t("newLabel") : undefined}
@@ -93,15 +88,21 @@ export function ContextPicker({
               aria-invalid={error ? true : undefined}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && name.trim() && !saving) {
+                  e.preventDefault();
+                  void add();
+                }
+              }}
               placeholder={t("placeholder")}
               maxLength={80}
               disabled={disabled || saving}
               className="min-w-0 flex-1"
             />
-            <Button type="submit" icon={<IconPlus size={18} />} loading={saving} disabled={disabled || !name.trim()}>
+            <Button type="button" icon={<IconPlus size={18} />} loading={saving} disabled={disabled || !name.trim()} onClick={() => void add()}>
               {t("add")}
             </Button>
-          </form>
+          </div>
         )}
         <p id={`${id}-hint`} className={hintClass}>
           {t("hint", { fallback: t("defaultName") })}
