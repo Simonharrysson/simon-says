@@ -107,7 +107,8 @@ export function InviteByEmail(p: InviteByEmailProps) {
     p.onInvitesChange?.(res.invites);
     if (one) {
       // A retry from the results or the list: update that address only.
-      setResults((prev) => (prev ? prev.map((r) => (r.email === one ? (res.results[0] ?? r) : r)) : res.results));
+      const outcome = res.results[0];
+      if (outcome) setResults((prev) => (prev?.some((r) => r.email === one) ? prev.map((r) => (r.email === one ? outcome : r)) : [...(prev ?? []), outcome]));
       return;
     }
     setResults([...already.map((email) => ({ email, result: "member" as const })), ...parsed.invalid.map((email) => ({ email, result: "invalid" as const })), ...res.results.filter((r) => r.result !== "invalid")]);
@@ -168,7 +169,7 @@ export function InviteByEmail(p: InviteByEmailProps) {
       {results && results.length > 0 && (
         <ul className="flex flex-col rounded-md border border-line" aria-label="Resultat">
           {results.map((r) => (
-            <li key={r.email} className="flex min-h-11 items-center gap-3 border-t border-line px-3 py-2 text-sm first:border-t-0">
+            <li key={r.email} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-sm first:border-t-0">
               <span className="min-w-0 flex-1 wrap-anywhere">{r.email}</span>
               <span className={cn("flex-none", tone(r.result))}>
                 {RESULT_LABEL[r.result]}
@@ -238,7 +239,7 @@ export function EmailPreview({ id, orgName, inviterName, inviteUrl }: { id?: str
       <div className="rounded-md bg-[#fafafa] p-4 text-[#171717] max-md:p-2">
         <div className="mb-3 px-1 font-serif text-xl">Simon Says</div>
         <div className="rounded-lg border border-[#ebebeb] bg-white p-6 max-md:p-4">
-          <p className="m-0 mb-3 text-2xl font-semibold tracking-tight">Gå med i {orgName}</p>
+          <p className="m-0 mb-3 text-xl font-semibold tracking-tight wrap-anywhere">Gå med i {orgName}</p>
           <p className="m-0 mb-5 text-sm leading-relaxed text-[#4d4d4d]">{inviteBody(inviterName)}</p>
           <span className="inline-block rounded-md bg-[#171717] px-4 py-2.5 text-sm font-medium text-white">Gå med i {orgName}</span>
           <p className="m-0 mt-4 text-xs text-[#666]">
