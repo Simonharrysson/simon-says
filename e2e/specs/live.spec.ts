@@ -65,8 +65,14 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   ]);
   const { meetingId, docId } = await startMeeting(page, org);
 
-  // Everyone has spoken before Klar, so attendance is certain (the fake merges two of its four
-  // diarized voices into one after the 6th line: three voices).
+  // Everyone has spoken before Klar, so attendance is certain: the fake speaks its four voices in
+  // the first lines and merges two of them into one after the 6th line (three voices). Wait past it.
+  await expect
+    .poll(async () => (await db.from("segments").select("segment_index", { count: "exact", head: true }).eq("meeting_id", meetingId)).count ?? 0, {
+      timeout: 30_000,
+      message: "the fake past its merge (6th line)",
+    })
+    .toBeGreaterThanOrEqual(12);
   await expect(page.getByRole("list", { name: "Namn vi hört" }).getByRole("listitem")).toHaveCount(3, { timeout: 30_000 });
   await page.getByRole("button", { name: "Klar, alla har sagt sitt namn" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toHaveCount(0, { timeout: 30_000 });
@@ -87,11 +93,11 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toContain("välkomna");
 
   // Summary ("missed" mode, the default): Karin was not there and gets it; Anna was.
-  await expect.poll(async () => (await fake.mail(karin)).length, { timeout: 30_000, message: "summary to Karin" }).toBe(1);
+  const state = async () => (await db.from("meetings").select("summary_state").eq("id", meetingId).single()).data?.summary_state;
+  await expect.poll(async () => `${(await fake.mail(karin)).length} mail, summary_state ${await state()}`, { timeout: 30_000 }).toBe("1 mail, summary_state sent");
   const [summary] = await fake.mail(karin);
   expect(summary.text).toContain(SCRIPTED.decision);
   expect(await fake.mail(anna)).toEqual([]);
-  expect((await db.from("meetings").select("summary_state").eq("id", meetingId).single()).data?.summary_state).toBe("sent");
 
   await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
   const meetings = page.getByRole("list", { name: "Möten" });
