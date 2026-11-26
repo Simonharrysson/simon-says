@@ -1,4 +1,5 @@
 import { PRICES } from "@/lib/notes/engine";
+import { importMode, type ImportMode } from "./progress";
 
 // The cost estimate an admin sees BEFORE confirming an import (todo #7). Local arithmetic only:
 // counting tokens with the API would send the protocol text to Anthropic before the admin said
@@ -18,17 +19,25 @@ export function digestUsd(meetings: number): number {
   return usd(1500 + 250 * meetings, 2500 + 30 * meetings);
 }
 
+/** The Message Batches API bills every token at half the standard price. */
+export const BATCH_DISCOUNT = 0.5;
+
 export interface ImportEstimate {
   protocols: number;
-  /** Reading every protocol (one call each). */
+  /** "direct" (the browser, a few at a time) or "batch" (one Anthropic batch, half price). */
+  mode: ImportMode;
+  /** Reading every protocol (one call each; halved for a batch). */
   importUsd: number;
   /** One goals digest over them plus `ownMeetings`. */
   digestUsd: number;
   totalUsd: number;
 }
 
+/** The digest stays a normal call (full price); only the extraction goes in the batch. */
 export function estimateImport(chars: number[], ownMeetings = 0): ImportEstimate {
-  const importUsd = chars.reduce((n, c) => n + extractionUsd(c), 0);
+  const mode = importMode(chars.length);
+  const full = chars.reduce((n, c) => n + extractionUsd(c), 0);
+  const importUsd = mode === "batch" ? full * BATCH_DISCOUNT : full;
   const d = digestUsd(chars.length + ownMeetings);
-  return { protocols: chars.length, importUsd, digestUsd: d, totalUsd: importUsd + d };
+  return { protocols: chars.length, mode, importUsd, digestUsd: d, totalUsd: importUsd + d };
 }

@@ -2,14 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
-import { DriveAccessMissingError, getGoogleAuth, getImportGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
-import { MANY_MEETINGS_MESSAGE } from "@/lib/history/doc-text";
-import { extractProtocol } from "@/lib/history/extract";
-import { MAX_DOC_CHARS, validDate } from "@/lib/history/extract-prompt";
-import { IMPORT_RATE_LIMITED, OWN_DOC_MESSAGE } from "@/lib/history/limits";
-import { fileCreatedDate, googleStatus, readProtocolDoc } from "@/lib/history/read-doc";
-import { ownDocIds, saveImportedProtocol, transcriptTabIds } from "@/lib/history/store";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { importOneSection } from "@/lib/history/import-one";
 import { checkTicket } from "@/lib/history/ticket";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -62,89 +55,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (viaListing && !checkTicket(body?.ticket, user.id, id, docId)) {
     return fail("stale_list", 400, "Listan är för gammal. Gå tillbaka och visa mötena i mapparna igen.");
   }
-  const sec = section as number;
-  const secs = sections as number;
-
-  let names: string[];
-  let skipTabIds: Set<string>;
-  try {
-    skipTabIds = await transcriptTabIds(db, id);
-    if ((await ownDocIds(db, id, [docId])).size) return fail("own_doc", 422, OWN_DOC_MESSAGE);
-    const { data: people, error: peopleError } = await db.from("people").select("name").eq("org_id", id);
-    if (peopleError) throw new Error(peopleError.message);
-    names = ((people ?? []) as { name: string }[]).map((p) => p.name);
-  } catch (err) {
-    console.error(`history/import: ${(err as Error).message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
-  }
-
-  let auth;
-  let doc: Awaited<ReturnType<typeof readProtocolDoc>>;
-  try {
-    auth = viaListing ? await getImportGoogleAuth(user.id) : await getGoogleAuth(user.id);
-    doc = await readProtocolDoc(auth, docId, { skipTabIds });
-  } catch (err) {
-    if (err instanceof DriveAccessMissingError) return fail("google_auth_lost", 401, "Simon Says läsrättighet till din Drive har gått ut. Ge åtkomst igen.");
-    if (err instanceof GoogleAuthLostError) return fail("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
-    const status = googleStatus(err);
-    if (status === 403 || status === 404) return fail("doc_unreadable", 403, "Simon Says kan inte läsa dokumentet. Kontrollera att du fortfarande har åtkomst till det i Google Drive och välj det igen.");
-    console.error(`history/import: doc: ${(err as Error).message}`.slice(0, 200));
-    return fail("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
-  }
-  if (!doc.split.ok) {
-    if (doc.split.reason === "empty") return fail("empty", 422, "Dokumentet är tomt.");
-    return fail("many_meetings", 422, MANY_MEETINGS_MESSAGE);
-  }
-  // The split is deterministic: a different count means the Doc changed since the estimate.
-  if (doc.split.sections.length !== secs) return fail("doc_changed", 409, "Dokumentet har ändrats sedan du valde det. Välj det igen.");
-  const part = doc.split.sections[sec];
-  if (part.text.length > MAX_DOC_CHARS) return fail("too_long", 422, "Mötet är för långt för att vara ett protokoll och lästes inte in.");
-
-  // At most 60 per förening per 24 h: the daily Claude cap is shared by every förening's live notes.
-  const { data: claimId, error: claimError } = await db.rpc("claim_history_import", { p_org_id: id });
-  if (claimError) {
-    if (claimError.code === "42501") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
-    console.error(`history/import: claim: ${claimError.message}`.slice(0, 200));
-    return fail("error", 500, "Något gick fel. Försök igen om en liten stund.");
-  }
-  if (claimId === null || claimId === undefined) return fail("rate_limited", 429, IMPORT_RATE_LIMITED);
-
-  const res = await extractProtocol({ orgId: id, title: part.title, text: part.text, people: names });
-  if (!res.ok) {
-    // Only the spend gate stops BEFORE any request: give that claim back (service role, the
-    // server decides). A failed or timed-out request may have run at Claude: the claim stays.
-    if (res.error === "spend") {
-      const { error } = await supabaseAdmin().rpc("release_history_import", { p_org_id: id, p_claim_id: claimId });
-      if (error) console.error(`history/import: release: ${error.message}`.slice(0, 200));
-    }
-    if (res.error === "spend") return fail("spend", 503, "Simon Says kan inte läsa protokoll just nu. Försök igen i morgon.");
-    return fail(res.error, 502, "Simon Says kunde inte läsa protokollet. Försök igen.");
-  }
-
-  // The date: what Claude read, else the section's dated heading, else the Doc's creation date.
-  // A heading whose year was inferred counts as "file": the admin is asked to check it.
-  let date = res.protocol.date ?? validDate(part.date);
-  let dateFrom: "doc" | "file" = !res.protocol.date && part.dateInferred ? "file" : "doc";
-  if (!date) {
-    dateFrom = "file";
-    try {
-      date = validDate(await fileCreatedDate(auth, docId));
-    } catch (err) {
-      console.error(`history/import: created: ${(err as Error).message}`.slice(0, 200));
-    }
-  }
-  if (!date) return fail("no_date", 422, "Simon Says hittade inget datum i protokollet. Skriv datumet i dokumentet och försök igen.");
-
-  const saved = await saveImportedProtocol(db, { orgId: id, driveFileId: docId, section: sec, sections: secs, date, dateFrom, items: res.protocol.items });
-  if (!saved.ok) {
-    if (saved.code === "42501") return fail("forbidden", 403, "Bara administratörer kan läsa in gamla protokoll.");
-    console.error(`history/import: save: ${saved.message}`.slice(0, 200));
-    return fail("save_failed", 500, "Protokollet kunde inte sparas. Försök igen.");
-  }
-  const count = (k: string) => res.protocol.items.filter((i) => i.kind === k).length;
-  console.info(`history/import: section ${sec + 1}/${secs}, ${res.protocol.items.length} items, date from ${dateFrom}`);
-  return NextResponse.json(
-    { protocolId: saved.id, date, dateFrom, decisions: count("decision"), tasks: count("task"), reports: count("report") },
-    { headers: noStore },
-  );
+  const res = await importOneSection(db, { userId: user.id, orgId: id, docId, section: section as number, sections: sections as number, viaListing });
+  if (!res.ok) return fail(res.error, res.status, res.message);
+  const { ok: _ok, ...out } = res;
+  return NextResponse.json(out, { headers: noStore });
 }

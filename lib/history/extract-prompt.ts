@@ -146,3 +146,23 @@ export function cleanExtraction(answer: ExtractAnswer, people: string[], now = n
     items: items.filter((i) => i.text.length > 0).slice(0, MAX_ITEMS_PER_PROTOCOL),
   };
 }
+
+/**
+ * A protocol's date: what Claude read (`claude`, already a validDate), else the section's dated
+ * heading (a heading whose year was inferred counts as "file": the admin is asked to check it),
+ * else the Drive file's creation date ("file"). Null: no date anywhere.
+ */
+export function protocolDate(
+  claude: string | null,
+  heading: string | null | undefined,
+  headingInferred: boolean,
+  fileDate?: string | null,
+  now = new Date(),
+): { date: string; dateFrom: "doc" | "file" } | null {
+  const c = validDate(claude, now);
+  if (c) return { date: c, dateFrom: "doc" };
+  const h = validDate(heading, now);
+  if (h) return { date: h, dateFrom: headingInferred ? "file" : "doc" };
+  const f = validDate(fileDate, now);
+  return f ? { date: f, dateFrom: "file" } : null;
+}
