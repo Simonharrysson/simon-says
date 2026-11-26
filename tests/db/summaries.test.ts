@@ -97,6 +97,9 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     expect((await member.db.from("people").update({ summary_unsubscribed_at: new Date().toISOString() }).eq("id", ids.sara)).error).not.toBeNull();
     expect((await member.db.from("people").insert({ org_id: orgId, name: "Ny", summary_selected: true })).error).not.toBeNull();
     expect((await member.db.from("people").update({ name: "Sara Holm" }).eq("id", ids.sara)).error).toBeNull();
+    // E-mail addresses are written only by the admin functions (an e-mail-only recipient is always admin-added).
+    expect((await member.db.from("people").update({ email: "fel@example.com" }).eq("id", ids.nils)).error).not.toBeNull();
+    expect((await member.db.from("people").insert({ org_id: orgId, name: "Ny", email: "ny@example.com" })).error).not.toBeNull();
     // The send ledger is server-only.
     expect((await admin.db.from("meeting_summary_sends").select("person_id")).error).not.toBeNull();
   });
@@ -219,6 +222,91 @@ describe.skipIf(!hasLocalSupabase)("meeting summaries (0037)", () => {
     await sendMeetingSummaries(next, g);
     await setSummarySettings(admin.db as SupabaseClient, orgId, "missed", []);
     expect(g.sent.map((m) => m.to)).toEqual(["erik@example.com"]);
+  });
+
+  async function voices(meetingId: string, names: (string | null)[]) {
+    const session = `el-${randomUUID()}`;
+    expect((await db().from("el_sessions").insert({ id: session, meeting_id: meetingId, max_seconds: 3600 })).error).toBeNull();
+    const rows = names.map((n, i) => ({
+      meeting_id: meetingId,
+      el_session_id: session,
+      speaker_label: `speaker_${i}`,
+      display_name: n ?? `Talare ${i + 1}`,
+    }));
+    expect((await db().from("speaker_map").insert(rows)).error).toBeNull();
+  }
+
+  it("shared mic, unnamed voices: 'missed' sends nothing (uncertain, counted); 'all' sends with neutral wording", async () => {
+    const f = fakeMailer();
+    const id = await meeting();
+    await voices(id, [null, null]);
+    expect(await sendMeetingSummaries(id, f)).toEqual({ state: "uncertain", sent: 0, failed: 0 });
+    expect(f.sent).toEqual([]);
+    const ev = (await db().from("meeting_events").select("detail").eq("meeting_id", id).eq("kind", "summary")).data!;
+    expect(ev[0].detail).toMatchObject({ state: "uncertain", unnamedVoices: 2 });
+
+    await setMode("all");
+    const all = await meeting();
+    await voices(all, [null, null]);
+    await sendMeetingSummaries(all, f);
+    await setMode("missed");
+    expect(f.sent.length).toBeGreaterThan(0);
+    expect(f.sent.every((m) => !m.text.includes("missade"))).toBe(true);
+  });
+
+  it("stops before its deadline and leaves the meeting 'sending'; the cron sends the rest exactly once", async () => {
+    await setMode("all");
+    const id = await meeting();
+    let clock = Date.now();
+    const deadlineAt = new Date(clock + 60_000);
+    const first: MailMessage[] = [];
+    const slow = {
+      mailer: { send: async (m: MailMessage) => (first.push(m), (clock += 3600_000), true) },
+      now: () => new Date(clock),
+      sleep: async () => {},
+    };
+    expect(await sendMeetingSummaries(id, slow, { deadlineAt })).toEqual({ state: "sending", sent: 1, failed: 0 });
+    expect((await db().from("meetings").select("summary_state").eq("id", id).single()).data!.summary_state).toBe("sending");
+
+    const rest = fakeMailer();
+    await sendPendingSummaries(rest, { orgId });
+    await sendPendingSummaries(rest, { orgId });
+    await setMode("missed");
+    const to = [...first, ...rest.sent].map((m) => m.to).sort();
+    expect(to).toEqual([admin.email, "erik@example.com", "sara@example.com"].sort());
+    expect(new Set(to).size).toBe(to.length);
+    expect((await db().from("meetings").select("summary_state").eq("id", id).single()).data!.summary_state).toBe("sent");
+    expect((await db().from("meeting_summary_sends").select("person_id").eq("meeting_id", id)).data).toHaveLength(3);
+  });
+
+  it("a run that died mid-loop (ledger row, still 'sending'): the cron mails only the others", async () => {
+    await setMode("all");
+    const id = await meeting();
+    await db().from("meetings").update({ summary_state: "sending" }).eq("id", id);
+    await db().from("meeting_summary_sends").insert({ meeting_id: id, person_id: ids.erik });
+    const f = fakeMailer();
+    await sendPendingSummaries(f, { orgId });
+    await setMode("missed");
+    expect(f.sent.map((m) => m.to).sort()).toEqual([admin.email, "sara@example.com"].sort());
+    expect((await db().from("meetings").select("summary_state").eq("id", id).single()).data!.summary_state).toBe("sent");
+  });
+
+  it("a removed member is marked and gets nothing by the old address", async () => {
+    const rut = await person("Rut Borttagen", { member_user_id: member.id, email: member.email });
+    expect((await admin.db.rpc("remove_member", { p_org_id: orgId, p_user_id: member.id })).error).toBeNull();
+    const row = (await db().from("people").select("member_user_id, summary_removed_at").eq("id", rut).single()).data!;
+    expect(row.member_user_id).toBeNull();
+    expect(row.summary_removed_at).not.toBeNull();
+    await setMode("all");
+    const id = await meeting();
+    const f = fakeMailer();
+    await sendMeetingSummaries(id, f);
+    await setMode("missed");
+    expect(f.sent.map((m) => m.to)).not.toContain(member.email);
+    // An admin setting an e-mail again clears the mark.
+    expect((await admin.db.rpc("set_person_email", { p_person_id: rut, p_email: "rut@example.com" })).data).toBe("ok");
+    expect((await db().from("people").select("summary_removed_at").eq("id", rut).single()).data!.summary_removed_at).toBeNull();
+    await db().from("people").delete().eq("id", rut);
   });
 
   it("meeting_events accepts 'summary' and keeps the older kinds", async () => {

@@ -561,13 +561,18 @@ avslutat prenumerationen"). Other modes show how many people have an address. Ti
 **When**: `finishMeeting` sets the meeting `done`, then `trySendMeetingSummaries` (best effort, never changes the
 end); the 5-minute cron (`sendPendingSummaries`) sends what that skipped: a Doc paused at the end (after its final
 pass), a failed attempt; only meetings that ended in the last 48 h. Once per meeting (`meetings.summary_state`
-claimed atomically) and per person (`meeting_summary_sends`, inserted before the mailer is called; a failed send
-is not retried). Never for a Testmöte, never when the meeting has no decision, open task or other note.
+claimed atomically: null → `sending` → `sent`) and per person (`meeting_summary_sends`, inserted before the
+mailer is called; a failed send is not retried). The loop stops before the caller's deadline and the cron resumes
+`sending` meetings, also one whose function died mid-loop. Never for a Testmöte, never when the meeting has no decision, open task or other note.
 
 **Who** (`lib/summaries/recipients.ts`): only the förening's people with an address (the linked account's,
 else `people.email`), deduplicated. Present = a named voice (speaker map, merges), a Närvarande name (full or
-first name; an ambiguous first name counts all of them as present), or the starter's account. "Missed" with
-nobody identified sends nothing. Unsubscribed people never get it.
+first name; an ambiguous first name counts all of them as present), or the starter's account. Attendance is
+*certain* only when someone was identified by voice or Närvarande (the starter alone doesn't count) and no voice
+is unnamed ("Talare 2" on a shared mic, "Anna?"); otherwise "missed" sends nothing (`uncertain`, with the count
+of unnamed voices in the event) and "alla"/"utvalda" send with neutral wording. Unsubscribed people never get
+it; a person whose member link was removed (`summary_removed_at`) gets nothing by the old address. E-mail
+addresses are written only by the admin functions.
 
 **The e-mail** (`lib/summaries/email.ts`, design A "Calm Geist" from the invite e-mail): subject
 "Sammanfattning: <förening> <24 november>", "Du missade mötet 24 november" (or "Mötet 24 november"),

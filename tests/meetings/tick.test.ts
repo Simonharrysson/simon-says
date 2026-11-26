@@ -1074,10 +1074,16 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
         { org_id: orgId, name: "Ture Startare", member_user_id: starter.id },
         { org_id: orgId, name: "Zelda Frånvarande", email: "zelda@example.com" },
       ])
-      .select("id");
+      .select("id, name");
     try {
       const { id, sessionId } = await meeting({ heartbeatAgoSec: 6 * 60 });
       await say(id, sessionId, "hej", 1000);
+      // The voice is named (Ture), so attendance is certain.
+      const ture = (added ?? []).find((p) => p.name === "Ture Startare")!.id as string;
+      const named = await adminClient()
+        .from("speaker_map")
+        .upsert({ meeting_id: id, el_session_id: sessionId, speaker_label: "speaker_0", person_id: ture, display_name: "Ture Startare", needs_confirm: false });
+      expect(named.error).toBeNull();
       const f = fakes();
       await tick.finalizeSweep({ deps: f.deps, orgId });
       await tick.finalizeSweep({ deps: f.deps, orgId });

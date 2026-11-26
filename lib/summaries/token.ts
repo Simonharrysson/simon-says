@@ -3,6 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // The one-click unsubscribe link in a summary e-mail: proves "this link was mailed to this person"
 // and opens nothing but their own unsubscribe. HMAC-SHA256 under a key derived from TOKEN_ENC_KEY
 // with its own label (like presence-token.ts). No expiry: an old e-mail's link must keep working.
+// Rotating TOKEN_ENC_KEY invalidates every unsubscribe link already mailed (the page then says the
+// link doesn't work; the person can still ask an admin or mail us). Mention it when rotating.
 
 const b64 = (b: Buffer | string) => Buffer.from(b).toString("base64url");
 
