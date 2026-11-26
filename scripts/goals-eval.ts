@@ -53,13 +53,16 @@ function paidClient(budget: number): NotesClient {
           finalMessage: async () => {
             const key = createHash("sha256").update(JSON.stringify(body)).digest("hex").slice(0, 24);
             const file = join(CACHE, `${key}.json`);
-            if (!flag("fresh") && existsSync(file)) {
+            const isDigest = JSON.stringify(body).includes("historik");
+            // --fresh-digest: new digest answers on cached extractions (a cheap variance check).
+            const fresh = flag("fresh") || (flag("fresh-digest") && isDigest);
+            if (!fresh && existsSync(file)) {
               console.log(`  (cached ${key})`);
               return JSON.parse(readFileSync(file, "utf8")) as BetaMessage;
             }
             // Output: the largest measured was 3 652 (digest) and ~400 (extraction); twice that as the worst case.
             if (flag("cache-only")) throw new Error(`cache-only: no cached answer for ${key}`);
-            const worst = estimateUsd(body, JSON.stringify(body).includes("historik") ? 8_000 : 1_500);
+            const worst = estimateUsd(body, isDigest ? 8_000 : 1_500);
             const spent = ledgerTotal(LEDGER);
             if (spent + worst > budget) throw new Error(`budget: ledger $${spent.toFixed(4)} + estimate $${worst.toFixed(4)} > $${budget}`);
             const t0 = Date.now();
