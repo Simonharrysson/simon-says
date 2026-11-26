@@ -123,12 +123,28 @@ describe.skipIf(!hasLocalSupabase)("admin handover: the DB keeps an admin", () =
     expect(await roles(orgId)).toEqual({ [first.id]: "admin", [second.id]: "member" });
   });
 
-  it("deleting the account of an org's only member still works", async () => {
+  it("deleting the account of an org's only member still works; the next to join becomes admin", async () => {
     const solo = await createTestUser("del-solo");
     const orgId = await orgWith(solo, "Tomrummet");
+    const code = await inviteCode(orgId);
     const { error } = await adminClient().auth.admin.deleteUser(solo.id);
     expect(error).toBeNull();
     expect(await roles(orgId)).toEqual({});
+    const [next, after] = await Promise.all([createTestUser("del-next"), createTestUser("del-after")]);
+    expect(await joinOrg(next.db, code)).toBe(orgId);
+    expect(await joinOrg(after.db, code)).toBe(orgId);
+    expect(await roles(orgId)).toEqual({ [next.id]: "admin", [after.id]: "member" });
+  });
+
+  it("two direct demotes at once (service role, trigger only): exactly one succeeds", async () => {
+    const [a, b] = await Promise.all([createTestUser("trig-a"), createTestUser("trig-b")]);
+    const orgId = await orgWith(a, "Utlösaren", b);
+    expect(await setMemberRole(a.db, orgId, b.id, "admin")).toBe("ok");
+    const demote = (id: string) =>
+      adminClient().from("org_members").update({ role: "member" }).eq("org_id", orgId).eq("user_id", id);
+    const results = await Promise.all([demote(a.id), demote(b.id)]);
+    expect(results.map((r) => r.error?.code ?? "ok").sort()).toEqual(["23514", "ok"]);
+    expect(Object.values(await roles(orgId)).filter((r) => r === "admin")).toHaveLength(1);
   });
 
   it("deleting a förening still removes all its members", async () => {

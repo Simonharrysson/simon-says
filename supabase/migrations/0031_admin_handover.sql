@@ -11,7 +11,9 @@
 --     - member row deleted because the account was   -> the oldest remaining member becomes
 --       deleted (auth.users cascade)                     admin (or nobody is left: allowed)
 --     - anything else (demote / remove / leave)      -> raises 'last_admin' (23514)
--- * Backfill: orgs that already lost their only admin (account deleted before this) get their
+--   An insert into an org without an admin (someone joins an org whose only member deleted
+--   their account) makes the newcomer admin, so the förening is never stuck without one.
+-- * Backfill (updates existing rows): orgs that already lost their only admin (account deleted before this) get their
 --   oldest member promoted.
 -- No audit row: the only event log (meeting_events) is per meeting; there is no org-level log.
 -- Backward compatible: a new function, a trigger that only refuses what the deployed code
@@ -53,6 +55,26 @@ create trigger org_members_keep_admin
   after update of role or delete on public.org_members
   for each row execute function public.keep_org_admin();
 
+create function public.keep_org_admin_on_join()
+returns trigger
+language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  if new.role = 'admin' then
+    return null;
+  end if;
+  perform 1 from public.orgs o where o.id = new.org_id for update;
+  if found and not exists (select 1 from public.org_members m where m.org_id = new.org_id and m.role = 'admin') then
+    update public.org_members m set role = 'admin' where m.org_id = new.org_id and m.user_id = new.user_id;
+  end if;
+  return null;
+end;
+$$;
+
+create trigger org_members_keep_admin_on_join
+  after insert on public.org_members
+  for each row execute function public.keep_org_admin_on_join();
+
 -- Admins set a member's role. The last admin can't be demoted (not even by themselves).
 create function public.set_member_role(p_org_id uuid, p_user_id uuid, p_role text)
 returns text
@@ -89,6 +111,7 @@ end;
 $$;
 
 revoke all on function public.keep_org_admin() from public, anon, authenticated;
+revoke all on function public.keep_org_admin_on_join() from public, anon, authenticated;
 revoke all on function public.set_member_role(uuid, uuid, text) from public, anon;
 grant execute on function public.set_member_role(uuid, uuid, text) to authenticated;
 
