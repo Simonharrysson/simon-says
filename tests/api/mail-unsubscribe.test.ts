@@ -9,7 +9,7 @@ const m = vi.hoisted(() => ({
 vi.mock("@/lib/email/prefs", () => ({ loadEmailPrefs: m.load, saveAddressEmailPrefs: m.save }));
 
 useTestEnv();
-const { POST } = await import("@/app/api/mejl/avsluta/route");
+const { GET, POST } = await import("@/app/api/mejl/avsluta/route");
 const { saveLinkEmailPrefsAction } = await import("@/app/mejl/actions");
 const { emailPrefsToken, oneClickUnsubscribeUrl } = await import("@/lib/email/token");
 
@@ -38,6 +38,19 @@ describe("one-click unsubscribe and the /mejl action", () => {
     const badCategory = new URL(good);
     badCategory.searchParams.set("k", "spam");
     expect((await post(badCategory.toString())).status).toBe(400);
+    expect(m.save).not.toHaveBeenCalled();
+  });
+
+  it("GET only redirects to the /mejl page on APP_URL, changing nothing", async () => {
+    const url = oneClickUnsubscribeUrl("anna@example.com", "invite").replace("https://example.com", "https://evil.test");
+    const res = await GET(new Request(url));
+    expect(res.status).toBe(303);
+    const to = new URL(res.headers.get("location")!);
+    expect(to.origin).toBe("https://example.com");
+    expect(to.pathname).toBe("/mejl");
+    expect(to.searchParams.get("k")).toBe("invite");
+    expect(to.searchParams.get("t")).toBe(new URL(url).searchParams.get("t"));
+    expect(m.load).not.toHaveBeenCalled();
     expect(m.save).not.toHaveBeenCalled();
   });
 

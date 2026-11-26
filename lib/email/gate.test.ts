@@ -47,6 +47,11 @@ describe("the e-mail gate", () => {
       "opted_out",
     );
     expect(no.sent).toEqual([]);
+    const down = fakeMailer();
+    expect(
+      await sendUserMail(down.mailer, { email: "a@example.com" }, "invite", msg, fakeDb({ error: { message: "down" } }).db),
+    ).toBe("failed");
+    expect(down.sent).toEqual([]);
     const broken: Mailer = { send: async () => false };
     expect(await sendUserMail(broken, { email: "a@example.com" }, "invite", msg, fakeDb({ data: true }).db)).toBe("failed");
   });

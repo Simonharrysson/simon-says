@@ -27,25 +27,35 @@ export async function mayEmail(
   category: EmailCategory,
   db: SupabaseClient = supabaseAdmin(),
 ): Promise<boolean> {
+  return (await checkEmailGate(recipient, category, db)) === "allowed";
+}
+
+/** The gate's three answers: "unknown" = the database could not answer (retry later, don't record a no). */
+export async function checkEmailGate(
+  recipient: Recipient,
+  category: EmailCategory,
+  db: SupabaseClient = supabaseAdmin(),
+): Promise<"allowed" | "opted_out" | "unknown"> {
   const email = recipient.email ? cleanEmail(recipient.email) : null;
-  if (!recipient.userId && !email) return false;
+  if (!recipient.userId && !email) return "unknown";
   const { data, error } = await db.rpc("may_email", {
     p_user_id: recipient.userId ?? null,
     p_email: email,
     p_category: category,
   });
-  if (error) {
-    console.error(`mail: preference check failed (${category}): ${error.code ?? error.message}`);
-    return false;
+  if (error || typeof data !== "boolean") {
+    console.error(`mail: preference check failed (${category}): ${error?.code ?? error?.message ?? "no answer"}`);
+    return "unknown";
   }
-  return data === true;
+  return data ? "allowed" : "opted_out";
 }
 
 export type UserMailResult = "sent" | "opted_out" | "failed";
 
 /**
- * The gate plus the send. "opted_out" means nothing was handed to the provider because the
- * recipient said no; callers record it like any other outcome.
+ * The gate plus the send. "opted_out" means the recipient said no (final: don't retry);
+ * "failed" means nothing went out, either the provider refused or the preference check could not
+ * be answered (retry like any failed send).
  */
 export async function sendUserMail(
   mailer: Mailer,
@@ -54,7 +64,9 @@ export async function sendUserMail(
   message: Omit<MailMessage, "to">,
   db: SupabaseClient = supabaseAdmin(),
 ): Promise<UserMailResult> {
-  if (!(await mayEmail(recipient, category, db))) return "opted_out";
+  const gate = await checkEmailGate(recipient, category, db);
+  if (gate === "opted_out") return "opted_out";
+  if (gate === "unknown") return "failed";
   try {
     return (await mailer.send({ ...message, to: recipient.email })) ? "sent" : "failed";
   } catch (e) {
