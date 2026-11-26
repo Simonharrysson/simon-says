@@ -12,25 +12,27 @@ import type { DigestGoal, HistoryMeeting } from "./types";
 
 export const DIGEST_SYSTEM_PROMPT = `You read the whole meeting history of a Swedish förening (a student association, club or board), oldest meeting first, and find the GOALS it has worked towards: what it set out to achieve, and where each of those stands now.
 
-The history is a list of meetings with their date: agenda items (Punkter), decisions (Beslut), tasks (Uppgifter, with the owner's role and [klar]/[ej klar]) and status lines (Läge). Older meetings come from imported protocols, newer ones may come from Simon Says.
+The history is a list of meetings with their date: agenda items (Punkter), decisions (Beslut), tasks (Uppgifter, with the owner's role and [klar]/[ej klar]) and status lines (Läge). Older meetings come from imported protocols, newer ones may come from Simon Says. The protocols may be in Swedish, English or a mix, and may be terse.
 
-A goal is something the förening set out to achieve, build or change and followed across at least two meetings: a project, an event to arrange, a target to reach, a change to how it works. Small practical changes count too when they span meetings (say, a shared calendar or a new member register being set up). NOT a goal: routine that recurs at every meeting (the treasurer's report, booking the room for the next evening, checking equipment), formalities, errands that start and finish within one meeting, and recurring chores however often they come up (cleaning days, bookings, equipment checks), also when they concern something a goal produced.
+What is a goal:
+- Something the förening set out to achieve, build or change and that it followed across at least two meetings: a project, an event to arrange, a target to reach, a change to how the förening works. Small practical changes count when they are followed across meetings.
+- Not a goal: items that recur at (almost) every meeting as routine (finances, bookings, upkeep), formalities, errands opened and closed in the same meeting, and recurring upkeep of something a goal already produced (the upkeep belongs to nobody's goal; the goal stays achieved).
 
-For every goal, decide its status as of the reference date (the latest meeting):
-- "achieved": a meeting says it was reached, finished or carried out (a status line is enough: "vi passerade 150 medlemmar", "premiären gick bra", "kommunen har beviljat bidraget").
-- "dropped": a meeting says it was given up, cancelled, shelved with no plan to return ("läggs på is", "skippar") or replaced by something else. A pause with a time to come back ("pausas till efter jul", "on hold until spring") is NOT dropped: if nobody takes it up again it becomes stale.
-- "stale": neither achieved nor dropped, and not mentioned at all in the ${STALE_MONTHS} months before the reference date. It went quiet; nobody decided anything.
+Status, as of the reference date (the latest meeting):
+- "achieved": a meeting says it was reached, finished or carried out. A status line saying so is enough; no formal decision is needed.
+- "dropped": a meeting says it was given up, cancelled, abandoned indefinitely or replaced by something else, in any wording, including informal or slang.
+- "stale": neither achieved nor dropped, and not mentioned at all in the ${STALE_MONTHS} months before the reference date. A goal that was only paused or postponed and then never taken up again is stale, not dropped.
 - "current": still being worked on, mentioned in the ${STALE_MONTHS} months before the reference date.
 
 How to read the history:
-- Go through it in date order and follow each goal from its first to its last mention. Newer meetings override older ones: a goal that was dropped and later taken up again ("väcks igen", "återuppta") is current again if the revival is recent; a goal that was achieved is achieved even if it was discussed for months before.
-- A goal can be RENAMED ("heter från och med nu …", "blir …"). It is still ONE goal: use the newest name as the title and list the older names in earlier_names. Never report a renamed goal twice.
-- Work out last_mentioned from the dates, not from a feeling: it is the date of the latest meeting that mentions the goal under any of its names. Count months from that date to the reference date before you say current or stale.
-- Every goal needs evidence: 2 to 6 short lines, each with the date of a meeting in the history where it was mentioned and what was said then (a decision, a task or a status line, shortened). Include the meeting that set the status (the achievement, the drop, the revival or the latest mention). Use only dates that appear in the history.
+- Go through it in date order and follow each goal from its first to its last mention. Newer meetings override older ones: a goal that was dropped or paused and later taken up again is current if the revival is recent; a goal that was achieved stays achieved even if it was discussed before and after.
+- The same goal is often called different things over time (a short name, a nickname, another language, a formal rename). It is still ONE goal: use its newest name as the title, list older names in earlier_names, and never report it twice.
+- last_mentioned is the date of the latest meeting that mentions the goal under any of its names (not later mentions of routine upkeep after it was achieved). Count the months from that date to the reference date before you choose current or stale.
+- Every goal needs evidence: 2 to 6 short lines, each with the date of a meeting in the history where it was mentioned and what was said then (shortened). Include the meeting that set the status. Use only dates that appear in the history.
 
 Write in Swedish:
-- title: at most 8 words, concrete ("Spelkafé på stadsbiblioteket varje månad"), the goal's newest name, no ending full stop.
-- why: one sentence (at most 200 characters) with where the goal stands and since when ("Beslutades i september; senast uppe 14 april, då 19 hade anmält intresse.").
+- title: at most 8 words, concrete, the goal's newest name, no ending full stop.
+- why: one sentence (at most 200 characters) saying where the goal stands and since when.
 - first_mentioned, last_mentioned: YYYY-MM-DD dates of meetings in the history.
 - explanation: one or two sentences to the admin on what you read and how many goals you found per status.
 
