@@ -3,8 +3,7 @@
 // `?flik=` picks it; Inställningar is for admins only (anyone else gets Möten). Server actions
 // redirect to the bare page with `?fel=` / `?klart=`: a code that belongs to a setting opens
 // Inställningar, so the message shows next to what it is about (the actions stay unchanged).
-// "Koppla kalender" returns with `?kalender=`: before the förening has a calendar, the admin
-// connected from Inställningar to choose one, so it opens there too.
+// "Koppla kalender" in Inställningar returns through `/orgs/<id>/installningar` (a plain path).
 
 export type OrgTabId = "moten" | "oversikt" | "installningar";
 
@@ -19,10 +18,6 @@ export function orgTab(input: {
   isAdmin: boolean;
   /** The page notice's code (`?fel=` / `?klart=`), if any. */
   noticeCode?: string | null;
-  /** `?kalender=` came back from "Koppla kalender". */
-  calendarResult?: boolean;
-  /** The förening has chosen its meeting calendar (orgs.calendar_id). */
-  hasOrgCalendar?: boolean;
 }): OrgTabId {
   const { flik, isAdmin } = input;
   if (flik === "oversikt") return "oversikt";
@@ -30,7 +25,6 @@ export function orgTab(input: {
   if (flik === "installningar") return "installningar";
   if (flik) return "moten";
   if (isSettingsCode(input.noticeCode)) return "installningar";
-  if (input.calendarResult && !input.hasOrgCalendar) return "installningar";
   return "moten";
 }
 

@@ -2,11 +2,12 @@ import { OPERATORS } from "../env";
 import { expect, expectAccessible, fake, queuePick, seedMeeting, test } from "../fixtures";
 
 // The förening page: the Mötesformat "Ändra" menu, settings, deleting a meeting and the förening,
-// and the service admin's Testmöte menu.
+// and the service admin's Testmöte menu. Format, settings and Radera live on the admin's
+// Inställningar tab (`?flik=installningar`).
 
 test("Mötesformat: Ändra → Byt format, and Välj mötesmapp in the Picker @phone", async ({ page, seedOrg, db }) => {
   const org = await seedOrg();
-  await page.goto(org.url);
+  await page.goto(`${org.url}?flik=installningar`);
   const card = page.locator("section", { has: page.getByRole("heading", { name: "Mötesformat" }) });
   await expect(card).toBeVisible();
 
@@ -32,8 +33,8 @@ test("Mötesformat: Ändra → Byt format, and Välj mötesmapp in the Picker @p
 
 test("settings: rename the förening and stop sharing the transcript", async ({ page, seedOrg }) => {
   const org = await seedOrg();
-  await page.goto(org.url);
-  const settings = page.locator("section", { has: page.getByRole("heading", { name: "Inställningar" }) });
+  await page.goto(`${org.url}?flik=installningar`);
+  const settings = page.locator("section", { has: page.getByRole("heading", { name: "Allmänt" }) });
   const newName = `${org.name} (ny)`;
   await settings.getByRole("textbox", { name: "Namn", exact: true }).fill(newName);
   await settings.getByRole("checkbox", { name: /Dela transkriptionen i dokumentet/ }).uncheck();
@@ -75,7 +76,9 @@ test("delete a meeting, then the förening (confirm dialogs)", async ({ page, se
   // The Doc stays in Drive.
   expect((await fake.doc(meeting.docId))?.trashed).toBe(false);
 
-  // Radera föreningen needs the name typed.
+  // Radera föreningen (Inställningar) needs the name typed.
+  await page.getByRole("link", { name: "Inställningar" }).click();
+  await expect(page).toHaveURL(/flik=installningar/);
   await page.getByRole("button", { name: "Radera föreningen" }).click();
   const confirm = page.getByRole("dialog", { name: `Radera ${org.name}?` });
   const go = confirm.getByRole("button", { name: "Radera för alltid" });

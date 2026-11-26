@@ -7,11 +7,11 @@ import { expect, expectAccessible, test } from "../fixtures";
 test("Om oss: the admin adds text and links, a member sees them @phone", async ({ page, seedOrg, newEmail, signedIn, db }) => {
   const member = newEmail("medlem");
   const org = await seedOrg({ members: [member] });
-  await page.goto(org.url);
+  await page.goto(`${org.url}?flik=installningar`);
   const header = page.locator("header").filter({ has: page.getByRole("heading", { level: 1 }) });
   await expect(header.getByRole("list", { name: "Föreningen på nätet" })).toHaveCount(0);
 
-  const settings = page.locator("section", { has: page.getByRole("heading", { name: "Inställningar" }) });
+  const settings = page.locator("section", { has: page.getByRole("heading", { name: "Allmänt" }) });
   const form = settings.locator("form", { has: page.getByRole("button", { name: "Spara Om oss" }) });
   await form.getByLabel("Om oss").fill("Vi spelar golf varje tisdag.\nAlla är välkomna.");
   await form.getByLabel("Webbplats").fill("exempel.se");

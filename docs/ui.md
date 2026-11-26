@@ -233,12 +233,38 @@ buttons keep `title` + a visually hidden label instead of a tooltip.
 3. Pin any new dependency to an exact version in `package.json`.
 4. Show it on `/design?vy=primitives` and check light and dark.
 
-**Förening tabs.** The förening page has two tabs, "Möten" and "Översikt" (`?flik=oversikt`): server
-links with `aria-current` (`OrgDetailView` `tabs` prop). Översikt is `OverviewView`: only "Mål" (propose → approve, "Skriv egna mål", "Läs in gamla protokoll"
-with its import progress), full width, under a line on what the goals build on ("Målen bygger på …",
-own meetings and imported protocols). Open tasks, decisions, recurring topics and attendance were
-removed as not helping the förening; the data helpers in `lib/dashboard` stay for the goals proposal
-and Förbered möte. Gallery: `org-overview`, `org-overview-goals`, `org-overview-empty`,
+**Förening tabs.** The förening page has three tabs: "Möten", "Översikt" (`?flik=oversikt`) and,
+for admins only, "Inställningar" (`?flik=installningar`; anyone else gets Möten there). They are
+server links in a `nav` with `aria-current` (`OrgDetailView` `tabs` prop, `lib/orgs/tabs.ts`), not
+ARIA `role="tab"`: each tab is its own page view, shareable and reloadable, with no client panels
+or arrow-key handling to fake. `/orgs/<id>/installningar` redirects to the tab (a plain path for
+sign-in `next` and "Koppla kalender"'s return); a server action's `?fel=`/`?klart=` code that
+belongs to a setting (`isSettingsCode`) opens Inställningar; old `#installningar`-style links
+(summary e-mails) are forwarded client-side (`SettingsHashRedirect`).
+
+- **Möten**: Starta möte (or the running meeting) and the meeting list. Members also get a side
+  column: Personer (add/rename names), the invite link and "Lämna föreningen".
+- **Översikt**: `OverviewView`: only "Mål" (propose → approve, "Skriv egna mål", "Läs in gamla
+  protokoll" with its import progress), full width, under a line on what the goals build on.
+  Open tasks, decisions, recurring topics and attendance were removed as not helping the förening;
+  the data helpers in `lib/dashboard` stay for the goals proposal and Förbered möte.
+- **Inställningar** (admins): "Styrelsen och medlemmar" (Kom igång's Styrelsen list, `BoardStep`
+  via `OrgBoard`: name, role, e-mail and account status in ONE list, each account row with the
+  admin handover controls: make/remove admin, step down, remove, leave; the last admin is told to
+  hand over first), "Bjud in" (e-mail invites and the link), Mötesformat, "Allmänt" (name, status
+  page, transcript, Om oss, the meetings' calendar, the summary e-mail, a link to Kom igång) and
+  "Radera föreningen".
+
+**Meeting list.** Each row: the meeting's title as the main line (`lib/meetings/title.ts`: the
+calendar event's title, else the title the final notes pass gave (meetings.title, 0048), else the
+agenda's first two topics, "Ekonomi och spelkväll"), the date small under it with the duration and
+"3 beslut · 5 uppgifter" (`lib/meetings/list.ts`; nothing when both are 0); an old meeting without
+any of them shows its date as the main line. Status badges only when not done. Newest first, five
+shown, the rest under "Visa fler (n)"; finished Testmöten (labelled "Testmöte") fold under "Visa
+testmöten (n)" (native `details`), while a running or resumable one stays in the list.
+
+Gallery: `org-admin` (Möten: titles, Visa fler, testmöten), `org-settings` (Inställningar),
+`org-member` (a member's two tabs), `org-overview`, `org-overview-goals`, `org-overview-empty`,
 `org-overview-history`, `org-overview-history-only`.
 
 Pages are split: a thin server page (auth, data, `?fel=` mapping, actions) renders a

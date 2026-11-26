@@ -20,12 +20,6 @@ describe("orgTab", () => {
     // An explicit tab wins.
     expect(orgTab({ flik: "oversikt", isAdmin: true, noticeCode: "namn" })).toBe("oversikt");
   });
-
-  it("back from Koppla kalender: Inställningar until the förening has a calendar", () => {
-    expect(orgTab({ isAdmin: true, calendarResult: true, hasOrgCalendar: false })).toBe("installningar");
-    expect(orgTab({ isAdmin: true, calendarResult: true, hasOrgCalendar: true })).toBe("moten");
-    expect(orgTab({ isAdmin: false, calendarResult: true, hasOrgCalendar: false })).toBe("moten");
-  });
 });
 
 describe("isSettingsCode", () => {

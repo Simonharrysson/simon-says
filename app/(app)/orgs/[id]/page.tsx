@@ -172,7 +172,7 @@ export default async function OrgPage({
   if (org.kind === "privat") redirect("/privat");
   const role = await myRole(db, id);
   const notice = orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale);
-  const tab: OrgTab = orgTab({ flik, isAdmin: role === "admin", noticeCode: notice?.code, calendarResult: Boolean(calendarResult(kalender)), hasOrgCalendar: Boolean(org.calendar_id) });
+  const tab: OrgTab = orgTab({ flik, isAdmin: role === "admin", noticeCode: notice?.code });
   const [people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([
     listPeople(db, id),
     listMeetings(db, id),
