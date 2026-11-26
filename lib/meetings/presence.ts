@@ -11,6 +11,9 @@ export const PRESENCE_GRACE_SEC = 5 * 60;
 /** A tab counts as connected when it was heard from this recently (heartbeat every 10 s). */
 export const CONNECTED_WITHIN_SEC = 45;
 
+/** The heartbeat header carrying the tab's presence token (lib/meetings/presence-token.ts). */
+export const PRESENCE_TOKEN_HEADER = "x-presence-token";
+
 export type Presence = "connected" | "grace" | "gone";
 
 /** The last sign of a tab: its heartbeat, or the start when no heartbeat came yet. */

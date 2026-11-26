@@ -9,6 +9,7 @@ import { MAX_MINTS_PER_MEETING, mintSpacingSeconds } from "@/lib/limits";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { memberRole } from "@/lib/db/orgs";
 import { canRunMeeting } from "@/lib/meetings/access";
+import { issuePresenceToken } from "@/lib/meetings/presence-token";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 /**
  * Mint an ElevenLabs single-use token for the meeting's next transcription session.
  * Body: `{ "closingSessionId"?: string }` — the session whose socket just closed (reconnect).
- * Returns `{ token, wsUrl, sessionId }`; connect to `${wsUrl}&token=${token}`.
+ * Returns `{ token, wsUrl, sessionId, presenceToken }` (presenceToken: lib/meetings/presence-token); connect to `${wsUrl}&token=${token}`.
  *
  * Any member of the förening (one tab at a time: a new session takes over), only while it is live and consent is confirmed,
  * at most one mint per 5 s and 14 per meeting, and only while every cap has time left. The
@@ -135,5 +136,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  return NextResponse.json({ token, wsUrl: realtimeWsUrl(), sessionId }, { headers: noStore });
+  const presenceToken = issuePresenceToken(getEnv().TOKEN_ENC_KEY, meeting.id, user.id, Date.now());
+  return NextResponse.json({ token, wsUrl: realtimeWsUrl(), sessionId, presenceToken }, { headers: noStore });
 }
