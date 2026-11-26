@@ -189,14 +189,6 @@ create policy contexts_insert on public.contexts for insert to authenticated
   with check (public.is_org_member(org_id));
 create policy contexts_update on public.contexts for update to authenticated
   using (public.is_org_member(org_id)) with check (public.is_org_member(org_id));
--- Deleting a context deletes its meetings (cascade below), so never while one of them runs.
-create policy contexts_delete on public.contexts for delete to authenticated
-  using (
-    public.is_org_member(org_id)
-    and not exists (
-      select 1 from public.meetings mt where mt.context_id = contexts.id and mt.status in ('live', 'ending')
-    )
-  );
 
 -- ---------------------------------------------------------------------------------------------
 -- meetings: the context, and no Doc for a Privat recording
@@ -207,6 +199,15 @@ create index meetings_context_idx on public.meetings (context_id, started_at des
 
 alter table public.meetings alter column doc_id drop not null;
 alter table public.meetings alter column notes_tab_id drop not null;
+
+-- Deleting a context deletes its meetings (the cascade above), so never while one of them runs.
+create policy contexts_delete on public.contexts for delete to authenticated
+  using (
+    public.is_org_member(org_id)
+    and not exists (
+      select 1 from public.meetings mt where mt.context_id = contexts.id and mt.status in ('live', 'ending')
+    )
+  );
 
 -- ---------------------------------------------------------------------------------------------
 -- private_summaries: the one Claude summary after a Privat meeting (written by the server).
