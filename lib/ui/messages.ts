@@ -56,11 +56,18 @@ const orgNotices: Record<string, Notice> = {
   medlem: { tone: "success", text: "Medlemmen är borttagen. Mötesdokument som redan delats med hen är fortfarande delade." },
   "medlem-last_admin": {
     tone: "danger",
-    text: "Föreningen måste ha kvar minst en admin, så den enda admin kan inte lämna. Radera föreningen i stället om den inte ska användas längre.",
+    text: "Föreningen måste ha minst en admin. Gör någon annan till admin först – eller radera föreningen om den inte ska användas längre.",
   },
   "medlem-not_member": { tone: "danger", text: "Personen är inte medlem längre." },
   "medlem-forbidden": { tone: "danger", text: "Bara admins kan ta bort medlemmar." },
   "medlem-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
+  "admin-ny": { tone: "success", text: "Medlemmen är nu admin." },
+  "admin-bort": { tone: "success", text: "Adminrollen är borttagen. Personen är kvar som medlem." },
+  "admin-last_admin": { tone: "danger", text: "Föreningen måste ha minst en admin. Gör någon annan till admin först." },
+  "admin-forbidden": { tone: "danger", text: "Bara admins kan ändra vem som är admin." },
+  "admin-not_member": { tone: "danger", text: "Personen är inte medlem längre." },
+  "admin-not_found": { tone: "danger", text: "Föreningen finns inte längre." },
+  "admin-invalid": { tone: "danger", text: "Rollen gick inte att ändra. Ladda om sidan och försök igen." },
 };
 
 function pick(map: Record<string, Notice>, fel?: string, klart?: string): Notice | null {

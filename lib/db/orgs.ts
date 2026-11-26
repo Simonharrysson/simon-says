@@ -167,6 +167,22 @@ export async function removeMember(db: Db, orgId: string, userId: string): Promi
   return data as RemoveMemberResult;
 }
 
+/** ok | unchanged | not_member | last_admin (the org must keep an admin) | not_found | invalid | forbidden. */
+export type SetMemberRoleResult = "ok" | "unchanged" | "not_member" | "last_admin" | "not_found" | "invalid" | "forbidden";
+
+/** An admin makes a member admin, or takes admin away (migration 0031). The last admin stays. */
+export async function setMemberRole(
+  db: Db,
+  orgId: string,
+  userId: string,
+  role: "admin" | "member",
+): Promise<SetMemberRoleResult> {
+  const { data, error } = await db.rpc("set_member_role", { p_org_id: orgId, p_user_id: userId, p_role: role });
+  if (error?.code === "42501") return "forbidden";
+  if (error) fail("setMemberRole", error);
+  return data as SetMemberRoleResult;
+}
+
 /** Leave an org yourself; the last admin can't (0018). */
 export async function leaveOrg(db: Db, orgId: string): Promise<RemoveMemberResult> {
   const { data, error } = await db.rpc("leave_org", { p_org_id: orgId });
