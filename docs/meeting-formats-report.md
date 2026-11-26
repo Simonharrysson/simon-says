@@ -2,11 +2,12 @@
 
 ## What works on prod (simonsays.harrysson.co = branch v1, migrations 0023–0027)
 
-- **Agenda mode:** start a meeting in the ordförande's own agenda Doc. Notes are written live under the right agenda item, tasks by role in "Vad ska vi göra till nästa gång?", "Från förra veckan" pre-filled from last meeting's open tasks ("✓ klart" flows back to earlier meetings), Må-runda kept out of the notes, Närvarande/Tid filled, "Simon Says · avslutat" at the end. Human edits always win.
+- **Agenda mode:** start a meeting in the ordförande's own agenda Doc. Notes are written live under the right agenda item, tasks by role in "Vad ska vi göra till nästa gång?", "Från förra veckan" pre-filled from last meeting's open tasks ("✓ klart" flows back to earlier meetings), Närvarande/Tid filled, "Simon Says · avslutat" at the end. Human edits always win.
 - **No agenda:** a new Doc in the förening's format.
 - **Formats:** Veckomöte, Styrelseprotokoll (upload the stadgar and Simon Says adds the required items), Enkel. Or "Lär Simon Says ert format" from a template or old minutes (only structure leaves the Doc), or "Anpassa format" to edit the current one (e.g. remove Må-runda).
+- **Må-runda:** by default it is an ordinary agenda item: notes may land under it, and it is word for word in the transcript. Hiding it from the notes is opt-in per format ("Anpassa format" → "Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)"), because the detector's precision (never hiding real discussion) is not proven. Off means no detector call at all. Existing formats read as off (no migration).
 - **Roles:** give each person a role ("Kassör"); tasks are written by role. Saying a name, a first name or a role ("kassören") all work; otherwise the owner is written as said.
-- **Checks:** three Testmöten on prod with a fictional Veckomöte agenda; paid eval (placement 20/20, roles 14/14, Från förra veckan 8/8, Må-runda leaks 0, $1.18 per meeting hour); `npm run suite` scorecard (all features PASS); three final reviews, all fixes re-reviewed.
+- **Checks:** three Testmöten on prod with a fictional Veckomöte agenda; paid eval (placement 20/20, roles 14/14, Från förra veckan 8/8, Må-runda leaks 0 with hiding on — the run before it became opt-in, $1.18 per meeting hour; `npm run notes-eval -- --hide-checkin` replays that mode); `npm run suite` scorecard (all features PASS); three final reviews, all fixes re-reviewed.
 
 ## Already set up for Hook & Look (done 2026-11-26, structure only)
 
@@ -27,4 +28,5 @@ Still needs live ElevenLabs credits (docs/checklist-11-28.md) before a real meet
 
 - Simon Says can't auto-suggest an agenda Doc it didn't create (Google's drive.file). Idea: a "Skapa dagordning" button that makes next week's agenda through Simon Says.
 - Styrelseprotokoll placement was 9–10/11 in eval runs (one point occasionally under the wrong §).
+- Må-runda hiding (opt-in) was only checked for leaks (nothing from the Må-runda in the notes), not for over-hiding (real discussion masked as Må-runda).
 - If two people start in the same Doc at the same second, the loser's Datum/Tid text can stay in the cells.

@@ -383,6 +383,11 @@ disabled and shows "Google-väljaren är inte inställd än."
   - the fixed items, each with a label, a type (Formalia / Må-runda / Från förra veckan / Ämne /
     Övrigt), "Sist", ↑ ↓ and **Ta bort**. Removing the Må-runda is valid: not every förening has one.
     The hint says so.
+  - with a Må-runda item: the checkbox "Dölj må-rundan i anteckningarna (experimentellt — kan ibland
+    dölja annat som sägs)", unchecked by default, with the hint "Utan bocken antecknas må-rundan som
+    de andra punkterna." Ticked, the format stores `hideCheckin: true` and its meetings mask the
+    Må-runda out of the notes. Unchecked (and for every format saved before), the Må-runda is an
+    ordinary item.
   - numbering (1. / § / none);
   - tasks heading on/off with group by role/person;
   - notes heading on/off;

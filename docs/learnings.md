@@ -485,3 +485,9 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - Meeting folder: Hook & Look's real meeting folder (shared by another board member) picked with "Byt mötesmapp" → visible to Simon Says, but the listing shows only the one Doc already granted (the template). Confirms the drive.file finding on real data: the start screen offers "Välj dagordning" in the folder, not an automatic suggestion.
 
 - 2026-11-26 · N6 ruling (Simon): bullets directly after numbered agenda items are sloppily written notes, never agenda items: a bulleted list after numbered items is always the sub-points of the item above it (pre-N6 behaviour; the "mixed agenda → items" path is removed).
+
+## 2026-11-26 · Må-runda hiding is opt-in (Simon's ruling)
+
+- Simon: "I don't think it's very easy for you to tell what's Må-runda and what's not … it has to be 10 out of 10, you have to just transcribe everything." The detector's precision (never hiding real discussion) was never measured, only leaks.
+- Now off by default for every format (standard, learned, stored). `FormatProfile.hideCheckin` (absent = off, stored only when true; no migration). At the start `meetingRoles` turns a checkin item into a procedural one when off, so the meeting has no checkin role and no `checkin_window`: no detector call, no masking, no hidden Doc text, notes may land under the item, and it stays out of the dashboard's recurring topics.
+- Opt-in: "Anpassa format" → "Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)". The masking code path is unchanged behind it. `notes-eval --hide-checkin` replays it; without the flag the Må-runda content bar is off.
