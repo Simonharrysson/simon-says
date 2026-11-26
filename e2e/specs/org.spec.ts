@@ -102,3 +102,12 @@ test("Testmöte menu: Utan dagordning starts a replay, Avsluta mötet ends it fr
   await expect(page.getByText("Mötet avslutas.")).toBeVisible();
   await expect.poll(async () => (await db.from("meetings").select("status").eq("id", m!.id).single()).data?.status, { timeout: 60_000 }).toBe("done");
 });
+
+test("an unknown förening shows one 404 inside the signed-in layout", async ({ page }) => {
+  await page.goto("/orgs/00000000-0000-4000-8000-000000000001");
+  await expect(page.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
+  // One header, one <main>, no "Logga in" for someone signed in.
+  await expect(page.getByRole("main")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Logga in" })).toHaveCount(0);
+  await expectAccessible(page);
+});
