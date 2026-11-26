@@ -1,4 +1,5 @@
 import type { docs_v1 } from "@googleapis/docs";
+import { applyTaskAnswers, markPlaceholders, withDueDates, type TaskAnswer, type TaskMode } from "@/lib/notes/tasks";
 import type { BetaMessage, BetaMessageStreamParams } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { INITIAL_LIVE_LINE, planAnchoring } from "@/lib/agenda/anchor";
 import { fuzzyRoles } from "@/lib/agenda/roles";
@@ -157,6 +158,10 @@ abstract class Sim {
   protected blocks: string[] = [];
   protected sentTick = 0;
   protected nextId: string | undefined;
+  /** Concrete tasks (0047): "require" renders placeholders, as runTick for a förening with the setting on. */
+  taskMode: TaskMode = "suggest";
+  /** The Avsluta dialog's answers (meetings.task_answers), applied on the final tick after Claude. */
+  taskAnswers: TaskAnswer[] = [];
   constructor(
     public doc: Doc,
     public meeting: MeetingRow,
@@ -304,6 +309,7 @@ export class FormatSim extends Sim {
       );
       items = out.items;
     }
+    if (final) items = applyTaskAnswers(items, this.taskAnswers);
     // Re-read right before the write, as the tick does.
     const tab2 = this.tab();
     const st = readState(tab2, this.rows);
@@ -320,7 +326,7 @@ export class FormatSim extends Sim {
       startedAt: new Date(m.started_at),
       endedAt: m.ended_at ? new Date(m.ended_at) : FMT_ENDED,
     });
-    const desired = formatDesired(unproxy(items, proxies.proxied), st.diff, server, this.profile);
+    const desired = markPlaceholders(formatDesired(unproxy(items, proxies.proxied), st.diff, server, this.profile), this.taskMode);
     const header = final ? endedHeader(new Date(m.ended_at!), "format") : liveHeader(opts.now ?? NOW, "format");
     const plan = planFormatRender(m, tab2, st.diff.rows, desired, { profile: this.profile, ownerLabel: this.ownerLabel, headerText: header, newAnchors });
     applyDoc(this.doc, plan.requests);
@@ -328,7 +334,7 @@ export class FormatSim extends Sim {
       m.section_ranges = { ...ranges, ...Object.fromEntries(newAnchors.map((a) => [a.key, itemRangeName(m.id, a.key)])) };
       m.agenda_roles = { ...m.agenda_roles, ...Object.fromEntries(newAnchors.map((a) => [a.key, "topic" as const])) };
     }
-    this.rows = withOwnerIds(renderedRows(m.id, st.diff.rows, desired, plan), this.testPeople ? [] : this.people);
+    this.rows = withDueDates(withOwnerIds(renderedRows(m.id, st.diff.rows, desired, plan), this.testPeople ? [] : this.people), m.started_at);
     if (plan.header !== null) m.header_rendered = plan.header;
     if (final) m.status = "done";
     return out;
@@ -380,7 +386,7 @@ export class V1Sim extends Sim {
           transcriptBlocks: send,
           speakerNames: this.speakerNames,
           notesTabText: first.text,
-          items: first.items,
+          items: markPlaceholders(first.items, this.taskMode),
           locked: first.diff.locked,
           deletedIds: first.diff.deletedIds,
           final,
@@ -390,13 +396,14 @@ export class V1Sim extends Sim {
       );
       items = out.items;
     }
+    if (final) items = applyTaskAnswers(items, this.taskAnswers);
     const tab2 = this.tab();
     const st = readState(tab2, this.rows);
     const header = final ? endedHeader(new Date(this.meeting.ended_at!)) : liveHeader(opts.now ?? NOW);
-    const desired = desiredItems(items, st.diff);
+    const desired = desiredItems(markPlaceholders(items, this.taskMode), st.diff);
     const plan = planRender(this.meeting, tab2, st.diff.rows, desired, header);
     applyDoc(this.doc, plan.requests);
-    this.rows = renderedRows(this.meeting.id, st.diff.rows, desired, plan);
+    this.rows = withDueDates(renderedRows(this.meeting.id, st.diff.rows, desired, plan), this.meeting.started_at);
     if (plan.header !== null) this.meeting.header_rendered = plan.header;
     if (final) this.meeting.status = "done";
     return out;
