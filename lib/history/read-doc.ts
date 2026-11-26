@@ -1,14 +1,16 @@
 import "server-only";
 import type { OAuth2Client } from "google-auth-library";
 import { docsApi, driveApi } from "@/lib/google/docs";
-import { docPlainText } from "./doc-text";
+import { docTabs, splitProtocols, type SplitResult } from "./doc-text";
 
 // Reads one picked protocol with the admin's own Google grant (drive.file: the Picker granted
 // exactly the picked files). The text goes to the extraction call only; never stored or logged.
 
-export async function readProtocolDoc(auth: OAuth2Client, documentId: string): Promise<{ title: string; text: string }> {
+/** The picked Doc split into one section per meeting (transcript tabs never read; see doc-text.ts). */
+export async function readProtocolDoc(auth: OAuth2Client, documentId: string): Promise<{ title: string; split: SplitResult }> {
   const doc = (await docsApi(auth).documents.get({ documentId, includeTabsContent: true })).data;
-  return { title: (doc.title ?? "").trim(), text: docPlainText(doc) };
+  const title = (doc.title ?? "").trim();
+  return { title, split: splitProtocols(title, docTabs(doc)) };
 }
 
 /** The Drive file's creation date (YYYY-MM-DD), the fallback when the protocol holds no date. */

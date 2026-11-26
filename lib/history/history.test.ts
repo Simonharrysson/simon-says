@@ -56,6 +56,8 @@ describe("cleanExtraction", () => {
     expect(validDate("2025-02-30", now)).toBeNull();
     expect(validDate("2/9-25", now)).toBeNull();
     expect(validDate("2031-01-01", now)).toBeNull();
+    expect(validDate("2026-11-26", now)).toBe("2026-11-26");
+    expect(validDate("2026-11-27", now)).toBeNull();
     expect(cleanExtraction({ ...empty, date: "nyss" }, []).date).toBeNull();
   });
 
@@ -273,7 +275,7 @@ describe("docPlainText", () => {
         },
       ],
     } as unknown as docs_v1.Schema$Document;
-    expect(docPlainText(doc)).toBe("Protokoll\nDatum | 2025-09-02\n§1 Mötets öppnande\nBilaga");
+    expect(docPlainText(doc)).toBe("Protokoll\nDatum | 2025-09-02\n§1 Mötets öppnande\n\nBilaga");
   });
 });
 
