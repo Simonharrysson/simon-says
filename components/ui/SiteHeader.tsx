@@ -13,7 +13,7 @@ export const navLinkClass =
 export function SiteHeader({ nav, homeHref = "/", wideNav = false }: { nav?: ReactNode; homeHref?: string; wideNav?: boolean }) {
   const t = useTranslations("common");
   return (
-    <header style={{ viewTransitionName: "site-header" }} className="sticky top-0 z-20 border-b border-line bg-[color-mix(in_srgb,var(--board)_92%,transparent)] backdrop-blur-[10px] backdrop-saturate-[1.4]">
+    <header style={{ viewTransitionName: "site-header" }} className="sticky top-0 z-20 border-b border-line bg-board">
       <div className={`mx-auto flex min-h-16 w-full max-w-page items-center gap-4 px-gutter ${wideNav ? "max-[30rem]:flex-wrap max-[30rem]:gap-y-0 max-[30rem]:pb-1" : ""}`}>
         <Wordmark href={homeHref} />
         {nav && (

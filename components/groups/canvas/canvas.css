@@ -169,3 +169,8 @@
 .tree-canvas .react-flow__node:focus-within .add-report {
   opacity: 1;
 }
+
+/* Until the first fit has placed the cards (PeopleCanvas `fitted`). */
+.tree-canvas:not([data-fitted]) .react-flow__viewport {
+  visibility: hidden;
+}
