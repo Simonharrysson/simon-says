@@ -71,12 +71,12 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0056, RLS)", () => {
     must(
       "notes",
       await admin.from("note_items").insert([
-        { meeting_id: devMeeting, id: "t1", section: "action", text: "Maja gör bilden till lanseringen", owner: "Maja" },
-        { meeting_id: devMeeting, id: "d1", section: "decision", text: "Vi lanserar hemligprojektet" },
-        { meeting_id: allMeeting, id: "d1", section: "decision", text: "Julfest den 18 december" },
+        { meeting_id: devMeeting, id: "t1", section: "action", text: "Maja gör bilden till lanseringen", owner: "Maja", deleted_by_human: false },
+        { meeting_id: devMeeting, id: "d1", section: "decision", text: "Vi lanserar hemligprojektet", deleted_by_human: false },
+        { meeting_id: allMeeting, id: "d1", section: "decision", text: "Julfest den 18 december", deleted_by_human: false },
         // Rows the app never shows: a line a human deleted, and one under a Må-runda item.
         { meeting_id: allMeeting, id: "n1", section: "note", text: "Raderad dolkstöt", deleted_by_human: true },
-        { meeting_id: allMeeting, id: "n2", section: "note", text: "Mående dolkstöt", anchor: "ag-1" },
+        { meeting_id: allMeeting, id: "n2", section: "note", text: "Mående dolkstöt", anchor: "ag-1", deleted_by_human: false },
       ]),
     );
     fOrg = (must("forening", await admin.from("orgs").insert({ name: "MCP-föreningen", created_by: anna.id }).select("id").single()) as { id: string }).id;
