@@ -9,8 +9,13 @@ import { safeCalendarConnected } from "@/lib/calendar/load";
 import { disconnectCalendar, requestCalendarAccess } from "../calendar-actions";
 import { loadEmailPrefs } from "@/lib/email/prefs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { AiConnections } from "@/components/views/AiConnections";
+import { loadConnections } from "@/lib/mcp/account";
+import { mcpConfigured } from "@/lib/mcp/deps";
+import { resourceUri } from "@/lib/mcp/oauth";
+import { appOrigin } from "@/lib/origin";
 import { loadMyBriefForeningar } from "@/lib/brief/prefs";
-import { saveBriefForeningarAction, saveEmailPrefsAction, saveLocaleAction } from "./actions";
+import { revokeConnectionAction, saveBriefForeningarAction, saveEmailPrefsAction, saveLocaleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +29,15 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     data: { user },
   } = await db.auth.getUser();
   if (!user) redirect("/login");
-  const [emailPrefs, { fel, kalender }, calendarConnected, briefForeningar] = await Promise.all([
+  const [emailPrefs, { fel, kalender }, calendarConnected, briefForeningar, ai] = await Promise.all([
     loadEmailPrefs({ userId: user.id }),
     searchParams,
     safeCalendarConnected(user.id),
     loadMyBriefForeningar(db, user.id),
+    loadConnections(db),
   ]);
+  // Kopplade AI-assistenter: for everyone while MCP is on, and for anyone who still has a connection.
+  const showAi = mcpConfigured() || ai.connections.length > 0;
   return (
     <AccountView
       email={user.email ?? ""}
@@ -39,6 +47,17 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       briefForeningar={{ initial: briefForeningar, save: saveBriefForeningarAction }}
       saveLocale={saveLocaleAction}
       localeFailed={fel === "sprak"}
+      ai={
+        showAi ? (
+          <AiConnections
+            connections={ai.connections}
+            audit={ai.audit}
+            revoke={revokeConnectionAction}
+            revokeFailed={fel === "aterkalla"}
+            mcpUrl={resourceUri(appOrigin())}
+          />
+        ) : undefined
+      }
       calendar={
         <CalendarConnect
           connected={calendarConnected}
