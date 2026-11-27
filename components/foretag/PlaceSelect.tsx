@@ -18,6 +18,7 @@ export function PlaceSelect({
   options,
   label,
   savingLabel,
+  name = "groupId",
 }: {
   action: FormAction;
   hidden: Record<string, string>;
@@ -26,6 +27,8 @@ export function PlaceSelect({
   /** The select's accessible name ("Flytta Anna till"). */
   label: string;
   savingLabel: string;
+  /** The posted field (0062's "Rapporterar till" posts `to`). */
+  name?: string;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const [current, setCurrent] = useState(value);
@@ -35,7 +38,7 @@ export function PlaceSelect({
         <input key={k} type="hidden" name={k} value={v} />
       ))}
       <NativeSelect
-        name="groupId"
+        name={name}
         aria-label={label}
         value={current}
         className="w-[min(14rem,52vw)]"

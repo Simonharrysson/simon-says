@@ -214,6 +214,15 @@ export async function expectAccessible(page: Page, opts: { exclude?: string[] } 
   ).toEqual([]);
 }
 
+/**
+ * The tree editor as the list (0055: a desktop gets the canvas by default; "Lista" is remembered
+ * per browser). For specs that drive the list's forms; the canvas has its own spec.
+ */
+export async function treeAsList(page: Page): Promise<void> {
+  await page.addInitScript(() => window.localStorage.setItem("tree-view", "list"));
+  if (page.url().startsWith("http")) await page.evaluate(() => window.localStorage.setItem("tree-view", "list"));
+}
+
 export interface Fixtures {
   /** Non-loopback requests this test's pages tried (aborted); must stay empty. */
   blocked: string[];

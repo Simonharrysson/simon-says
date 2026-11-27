@@ -22,7 +22,7 @@ import type { GroupRow } from "@/lib/foretag/tree";
 import { formatDateTime } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Notice } from "@/lib/ui/messages";
-import { GroupTree } from "@/components/groups/GroupTree";
+import { PeopleTreeViews } from "@/components/groups/PeopleTreeViews";
 import { NextMeetingHero, type HeroMeetingInfo } from "@/components/views/NextMeetingHero";
 import type { HeroState } from "@/lib/meetings/next-meeting";
 import type { SummaryStatus } from "@/lib/meetings/recap";
@@ -33,9 +33,8 @@ import type { SummaryStatus } from "@/lib/meetings/recap";
 export type ForetagTab = Extract<OrgTabId, "moten" | "kunder" | "personer" | "installningar">;
 
 export interface ForetagActions {
-  saveGroup: FormAction;
-  archiveGroup: FormAction;
-  place: FormAction;
+  setManager: FormAction;
+  addPerson: FormAction;
   rename: FormAction;
   rotateInvite: FormAction;
   setMemberRole: FormAction;
@@ -205,14 +204,14 @@ function CustomersTab({ org, data }: ForetagViewProps) {
 }
 
 function PeopleTab({ org, isAdmin, userId, data, actions }: ForetagViewProps) {
-  const t = useTranslations("foretag.people");
+  const t = useTranslations("foretag.tree");
   const ts = useTranslations("foretag.settings");
   return (
     <>
       <p className="max-w-[68ch] text-sm text-ink-2">
         {t("intro")} {!isAdmin && t("readOnly")}
       </p>
-      <GroupTree orgId={org.id} isAdmin={isAdmin} userId={userId} groups={data.groups} people={data.people} members={data.members} actions={actions} />
+      <PeopleTreeViews orgId={org.id} isAdmin={isAdmin} userId={userId} groups={data.groups} people={data.people} members={data.members} actions={actions} />
 
       {!isAdmin && (
         <div className="flex justify-end">

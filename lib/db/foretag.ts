@@ -15,7 +15,7 @@ function fail(what: string, error: { message: string }): never {
 export async function listGroups(db: Db, orgId: string): Promise<GroupRow[]> {
   const { data, error } = await db
     .from("groups")
-    .select("id, name, parent_group_id, depth, position, archived_at")
+    .select("id, name, parent_group_id, depth, position, archived_at, head_person_id")
     .eq("org_id", orgId)
     .order("depth")
     .order("position");
@@ -32,6 +32,50 @@ export async function saveGroup(db: Db, orgId: string, input: { id?: string | nu
     fail("set_group", error);
   }
   return data !== null;
+}
+
+export type ManagerResult = "ok" | "forbidden" | "invalid" | "not_placed" | "cycle" | "has_reports";
+type ManagerTo = { manager: string } | "top" | "none";
+const managerArgs = (to: ManagerTo) => ({ p_mode: typeof to === "string" ? to : "manager", p_manager_id: typeof to === "string" ? null : to.manager });
+function managerResult(what: string, data: unknown, error: { code?: string; message: string } | null): ManagerResult {
+  if (error) {
+    // The tree trigger's own refusals (a cycle, too deep), should the function's check ever miss one.
+    if (error.code === "22023") return "cycle";
+    fail(what, error);
+  }
+  return (["ok", "forbidden", "invalid", "not_placed", "cycle", "has_reports"] as const).find((r) => r === data) ?? "invalid";
+}
+
+/** 0062: "Rapporterar till" for a person row. `manager`: a person id; "top": no manager; "none": out of the tree. */
+export async function setManager(db: Db, personId: string, to: ManagerTo): Promise<ManagerResult> {
+  const { data, error } = await db.rpc("set_manager", { p_person_id: personId, ...managerArgs(to) });
+  return managerResult("set_manager", data, error);
+}
+
+/** 0062: the same for a member account without a person row: its row and the line in one transaction. */
+export async function setAccountManager(db: Db, orgId: string, userId: string, name: string, to: ManagerTo): Promise<ManagerResult> {
+  const { data, error } = await db.rpc("set_account_manager", { p_org_id: orgId, p_user_id: userId, p_name: name, ...managerArgs(to) });
+  return managerResult("set_account_manager", data, error);
+}
+
+/** 0062: save card positions on the canvas (admins; the database decides). False when refused. */
+export async function savePeopleCanvas(db: Db, orgId: string, positions: { id: string; x: number; y: number }[]): Promise<boolean> {
+  const { data, error } = await db.rpc("set_people_canvas", { p_org_id: orgId, p_positions: positions });
+  if (error) {
+    if (error.code === "22023") return false;
+    fail("set_people_canvas", error);
+  }
+  return typeof data === "number";
+}
+
+export type AddPersonResult = { ok: true; id: string } | { ok: false; reason: "forbidden" | "invalid" | "duplicate" | "taken" };
+
+/** 0062 "Lägg till person": a person row (add_board_person, 0035: name, role, e-mail and its invite link). */
+export async function addPerson(db: Db, orgId: string, input: { name: string; role: string; email: string }): Promise<AddPersonResult> {
+  const { data, error } = await db.rpc("add_board_person", { p_org_id: orgId, p_name: input.name, p_role: input.role, p_email: input.email, p_member_user_id: null });
+  if (error) fail("add_board_person", error);
+  const r = data as { result: string; id?: string };
+  return r.result === "ok" && r.id ? { ok: true, id: r.id } : { ok: false, reason: (r.result as "forbidden") ?? "invalid" };
 }
 
 export async function archiveGroup(db: Db, groupId: string): Promise<boolean> {

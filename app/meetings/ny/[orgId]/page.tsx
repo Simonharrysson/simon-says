@@ -19,7 +19,7 @@ import { createContextAction } from "@/app/(app)/privat/actions";
 import { suggestedContext } from "@/lib/privat/contexts";
 import { listContexts } from "@/lib/privat/contexts-db";
 import { isPrivat, privatHref } from "@/lib/privat/space";
-import { listGroups } from "@/lib/db/foretag";
+import { listTeams } from "@/lib/foretag/teams";
 import { hasTree, treeRows } from "@/lib/foretag/tree";
 
 export const dynamic = "force-dynamic";
@@ -110,7 +110,7 @@ export default async function NewMeetingPage({
   // Företag (0050): "Möte för" (the starter's own group preselected) and Privat möte; always a new Enkel Doc.
   if (org.kind === "foretag") {
     const [groups, mine, event, members, people] = await Promise.all([
-      listGroups(db, orgId),
+      listTeams(db, orgId),
       db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
       foretagEventNow(user.id),
       orgMemberList(orgId),
@@ -161,7 +161,7 @@ export default async function NewMeetingPage({
     event ? orgEvent(user.id, org, event) : Promise.resolve(null),
     hasTree(org)
       ? Promise.all([
-          listGroups(db, orgId),
+          listTeams(db, orgId),
           db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
         ])
       : Promise.resolve(null),

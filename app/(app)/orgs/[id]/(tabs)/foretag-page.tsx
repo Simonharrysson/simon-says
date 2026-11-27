@@ -10,7 +10,7 @@ import { orgNotice } from "@/lib/ui/messages";
 import { stockholmDay } from "@/lib/home/tasks";
 import { nextMeetingState } from "@/lib/meetings/next-meeting";
 import { loadSummaryStatus } from "@/lib/meetings/recap";
-import { archiveGroupAction, placeAction, renameForetagAction, saveGroupAction } from "../../foretag-actions";
+import { addTreePersonAction, renameForetagAction, setManagerAction } from "../../foretag-actions";
 import { deleteOrgAction, leaveOrgAction, rotateInviteAction, setMemberRoleAction } from "../../actions";
 
 const TABS: ForetagTab[] = ["moten", "kunder", "personer", "installningar"];
@@ -71,9 +71,8 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
         ) : undefined
       }
       actions={{
-        saveGroup: saveGroupAction,
-        archiveGroup: archiveGroupAction,
-        place: placeAction,
+        setManager: setManagerAction,
+        addPerson: addTreePersonAction,
         rename: renameForetagAction,
         rotateInvite: rotateInviteAction,
         setMemberRole: setMemberRoleAction,
