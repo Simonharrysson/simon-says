@@ -39,7 +39,15 @@ export interface OneShotInput<T> {
   checkSpend?: boolean;
   /** output_config.effort; default "medium". */
   effort?: "low" | "medium" | "high";
+  /**
+   * Default NOTES_MODEL (with server-side fallbacks). CHEAP_MODEL for simple extraction: Haiku has
+   * no server-side fallback, so none is sent; a refusal is a stop_reason failure like any other.
+   */
+  model?: typeof NOTES_MODEL | typeof CHEAP_MODEL;
 }
+
+/** The cheap model for small structured extractions. */
+export const CHEAP_MODEL = "claude-haiku-5-5";
 
 /** False under KILL_SWITCH or when today's Claude spend has reached GLOBAL_DAILY_USD. */
 export async function claudeAllowed(): Promise<boolean> {
@@ -49,17 +57,17 @@ export async function claudeAllowed(): Promise<boolean> {
 }
 
 export function buildOneShotRequest(
-  input: Pick<OneShotInput<unknown>, "system" | "user" | "jsonSchema" | "maxTokens" | "pdfs" | "effort">,
+  input: Pick<OneShotInput<unknown>, "system" | "user" | "jsonSchema" | "maxTokens" | "pdfs" | "effort" | "model">,
 ): BetaMessageStreamParams {
   const documents = (input.pdfs ?? []).map((data) => ({
     type: "document",
     source: { type: "base64", media_type: "application/pdf", data },
   }));
+  const model = input.model ?? NOTES_MODEL;
   return {
-    model: NOTES_MODEL,
+    model,
     max_tokens: input.maxTokens ?? 4000,
-    betas: [FALLBACK_BETA],
-    fallbacks: "default",
+    ...(model === NOTES_MODEL ? { betas: [FALLBACK_BETA], fallbacks: "default" } : {}),
     output_config: { effort: input.effort ?? "medium", format: { type: "json_schema", schema: input.jsonSchema } },
     system: input.system,
     messages: [{ role: "user", content: [...documents, { type: "text", text: input.user }] }],
@@ -107,7 +115,7 @@ export async function oneShot<T>(input: OneShotInput<T>): Promise<OneShotResult<
   }
 
   // Usage first: a refusal or a max_tokens stop costs tokens too.
-  const usage = messageUsage(message.usage, message.model ?? NOTES_MODEL);
+  const usage = messageUsage(message.usage, message.model ?? input.model ?? NOTES_MODEL);
   if (input.orgId) {
     try {
       await recordClaudeUsage(input.orgId, usage);

@@ -19,7 +19,7 @@ export interface OrgsViewProps {
   /** True when the last create failed validation (?fel=invalid), to mark the field. */
   nameError?: string;
   /** Företag (0050): the user's companies, and "Skapa ett företag" for the allow-list only. */
-  companies?: { id: string; name: string; role: "admin" | "member" }[];
+  companies?: { id: string; name: string; role: "admin" | "member"; logoUrl?: string | null }[];
   createForetag?: FormAction;
 }
 
@@ -66,7 +66,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError, companies = [], c
               <ListRow
                 key={c.id}
                 href={`/orgs/${c.id}`}
-                leading={<OrgLogo name={c.name} size="sm" />}
+                leading={<OrgLogo name={c.name} src={c.logoUrl} size="sm" />}
                 title={c.name}
                 actions={
                   <>

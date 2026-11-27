@@ -110,7 +110,12 @@
     "leave": "Leave the company",
     "leaveTitle": "Leave {org}?",
     "leaveText": "You'll no longer see the company's meetings. An admin can invite you again.",
-    "leaving": "Leaving…"
+    "leaving": "Leaving…",
+    "detailsTitle": "Logo and website",
+    "logoHint": "PNG, JPEG or WebP. Simon Says crops it to a square. It only shows here in Simon Says – on the company page and in the list – never in the meeting documents.",
+    "websiteLegend": "Website",
+    "websiteIntro": "Shown at the top of the company page for all colleagues. Optional.",
+    "onlineLabel": "The company online"
   },
   "picker": {
     "label": "Meeting for",

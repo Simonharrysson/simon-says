@@ -9,6 +9,8 @@ import { AGENDA_SYSTEM_PROMPT } from "@/lib/notes/agenda-prompt";
 import { CHECKIN_SYSTEM_PROMPT } from "@/lib/notes/checkin";
 import { SYSTEM_PROMPT } from "@/lib/notes/prompt";
 import { PRIVAT_SUMMARY_SYSTEM_PROMPT } from "@/lib/privat/summary";
+import { BOARD_SYSTEM_PROMPT } from "@/lib/website/board";
+import { FAKE_BOARD } from "./website";
 import { readBody, send } from "./google";
 import { SCRIPTED } from "./scripted";
 
@@ -19,7 +21,7 @@ export { SCRIPTED };
 // test/meeting-sim.ts `scriptedClient` does, and answered with fixed, schema-valid JSON. An
 // unknown prompt is a 500 and lands in `problems`: a call nobody scripted never passes quietly.
 
-export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles";
+export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles" | "website-board";
 
 const KINDS: [string, ClaudeKind][] = [
   [PRIVAT_SUMMARY_SYSTEM_PROMPT, "privat-summary"],
@@ -32,6 +34,7 @@ const KINDS: [string, ClaudeKind][] = [
   [EXTRACT_SYSTEM_PROMPT, "extract"],
   [DIGEST_SYSTEM_PROMPT, "digest"],
   [ROLES_SYSTEM_PROMPT, "roles"],
+  [BOARD_SYSTEM_PROMPT, "website-board"],
 ];
 
 export interface ClaudeCall {
@@ -154,6 +157,9 @@ function answer(kind: ClaudeKind, text: string): unknown {
       const keys = [...new Set(text.match(/ag-\d+/g) ?? [])];
       return { roles: keys.map((key) => ({ key, role: "topic" })) };
     }
+    case "website-board":
+      // The fake site's board, plus one name that is NOT on the site: the app must drop it.
+      return text.includes(FAKE_BOARD[0].name) ? { board: [...FAKE_BOARD, { name: "Påhittad Persson", role: "Ledamot" }] } : { board: [] };
   }
 }
 

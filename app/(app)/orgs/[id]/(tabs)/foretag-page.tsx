@@ -1,7 +1,9 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { ForetagView, type ForetagTab } from "@/components/foretag/ForetagView";
 import type { OrgRow } from "@/lib/db/types";
+import { CompanyDetailsForm } from "@/components/settings/OrgDetails";
 import { loadForetagPage } from "@/lib/foretag/page";
+import { logoUrl } from "@/lib/orgs/logo";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgNotice } from "@/lib/ui/messages";
@@ -31,7 +33,7 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
   const data = await loadForetagPage(db, org.id, userId, t("titleAnd"));
   return (
     <ForetagView
-      org={{ id: org.id, name: org.name }}
+      org={{ id: org.id, name: org.name, logoUrl: logoUrl(org.id, org.logo_updated_at), website_url: org.website_url ?? null }}
       isAdmin={isAdmin}
       userId={userId}
       tab={foretagTab(flik, isAdmin, notice?.code)}
@@ -39,6 +41,13 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
       inviteUrl={`${appOrigin()}/join/${org.invite_code}`}
       notice={notice}
       data={data}
+      detailsSettings={
+        isAdmin ? (
+          <CompanyDetailsForm
+            org={{ id: org.id, name: org.name, logoUpdatedAt: org.logo_updated_at ?? null, profile: { about: org.about ?? null, website_url: org.website_url ?? null, facebook_url: org.facebook_url ?? null, instagram_url: org.instagram_url ?? null } }}
+          />
+        ) : undefined
+      }
       actions={{
         saveGroup: saveGroupAction,
         archiveGroup: archiveGroupAction,

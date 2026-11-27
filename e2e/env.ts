@@ -68,6 +68,7 @@ export function e2eEnv(): Record<string, string> {
     ANTHROPIC_BASE_URL: `${FAKE_URL}/anthropic`,
     RESEND_API_KEY: "",
     E2E_MAIL_URL: `${FAKE_URL}/resend/emails`,
+    E2E_WEB_ROOT: `${FAKE_URL}/web/`,
     ALARM_EMAIL: "alarm@e2e.test",
     ADMIN_EMAILS: [ADMIN_EMAIL, ...OPERATORS].join(","),
     CRON_SECRET: runSecret("E2E_CRON_SECRET", () => randomBytes(16).toString("hex")),

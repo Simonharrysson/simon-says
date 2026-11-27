@@ -27,7 +27,7 @@ export default async function OrgsPage({ searchParams }: { searchParams: Promise
       notice={fel === "invalid" ? null : notice}
       nameError={fel === "invalid" ? notice?.text : undefined}
       createOrg={createOrgAction}
-      companies={companies}
+      companies={companies.map(({ id, name, role, logo_updated_at }) => ({ id, name, role, logoUrl: logoUrl(id, logo_updated_at) }))}
       // Företag (0050): only the allow-list may create one until a DPA exists.
       createForetag={canCreateForetag(me.user?.email) ? createForetagAction : undefined}
     />

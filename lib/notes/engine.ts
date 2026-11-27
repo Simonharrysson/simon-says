@@ -48,6 +48,8 @@ export const MODEL_PRICES: Record<string, Price> = {
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  // Haiku 5.5 (cheap extraction, e.g. the board from a website): prompts ≤ 100K tokens.
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
 };
 export const PRICES = MODEL_PRICES[NOTES_MODEL];
 

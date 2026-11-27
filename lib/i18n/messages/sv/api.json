@@ -128,5 +128,12 @@
   "libAgendaBusy": "Någon annan uppdaterar dagordningen just nu. Försök igen om en liten stund.",
   "futureDate": "Ange ett datum som inte ligger i framtiden.",
   "protocolNotFound": "Protokollet finns inte.",
-  "libBadGroup": "Gruppen finns inte längre. Ladda om sidan och välj igen."
+  "libBadGroup": "Gruppen finns inte längre. Ladda om sidan och välj igen.",
+  "websiteBoard": {
+    "adminsOnly": "Bara administratörer kan hämta styrelsen från webbplatsen.",
+    "noWebsite": "Spara föreningens webbplats först.",
+    "limit": "Ni har hämtat från webbplatsen många gånger nyss. Försök igen om en stund.",
+    "failed": "Vi kunde inte läsa webbplatsen just nu.",
+    "robots": "Webbplatsen ber automatiska läsare att inte hämta sidorna, så vi lät bli."
+  }
 }
