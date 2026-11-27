@@ -47,9 +47,11 @@ async function sample(page: Page, kind: "indicator" | "row", arg: string, ms: nu
   );
 }
 
+// TEMPORARY (recordings for the PR): video on. Removed before the PR leaves draft.
+test.use({ video: { mode: "on", size: { width: 1280, height: 800 } } });
+
 test.describe("transitions", () => {
-  // TEMPORARY (recordings for the PR): video on. Removed before the PR leaves draft.
-  test.use({ contextOptions: { reducedMotion: "no-preference" }, video: { mode: "on", size: { width: 1280, height: 800 } }, viewport: { width: 1280, height: 800 } });
+  test.use({ contextOptions: { reducedMotion: "no-preference" }, viewport: { width: 1280, height: 800 } });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
