@@ -1,7 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { fakeReader } from "@/test/mcp-kit";
 import { describe, expect, it, vi } from "vitest";
-import { likePattern, page, parseTaskId, prepareAgenda, snippet, type ToolCtx, type ToolDeps } from "./tools";
+import { actorFor, completeTask, likePattern, page, parseTaskId, prepareAgenda, snippet, type ToolCtx, type ToolDeps } from "./tools";
 
 const ORG = "55555555-5555-4555-8555-555555555555";
 const M = "66666666-6666-4666-8666-666666666666";
@@ -98,5 +98,43 @@ describe("helpers", () => {
     expect(s).toContain("budgeten antas");
     expect(snippet("kort", "x")).toBe("kort");
     expect(likePattern("100%_a\\b")).toBe("%100\\%\\_a\\\\b%");
+  });
+});
+
+describe("actorFor: the write paths' visibility re-check", () => {
+  const user = { id: "u1", email: "a@b.se" } as User;
+  const base = (over: Parameters<typeof fakeReader>[1], actor = vi.fn(() => ({}) as SupabaseClient)) => {
+    const completeNoteTask = vi.fn(async () => ({ ok: true as const, doc: "none" as const }));
+    const c: ToolCtx = {
+      reader: fakeReader("u1", over),
+      user,
+      deps: { actorClient: actor, completeNoteTask, upcomingPrepared: vi.fn(), loadDraft: vi.fn(), savePrepared: vi.fn() } as unknown as ToolDeps,
+      now: new Date(),
+      ids: {},
+    };
+    return { c, actor, completeNoteTask };
+  };
+
+  it("never hands out the actor client for a meeting or förening the reader doesn't show", async () => {
+    const { c, actor } = base({});
+    expect(await actorFor(c, { meetingId: M })).toBeNull();
+    expect(await actorFor(c, { foreningId: ORG })).toBeNull();
+    const { c: c2, actor: a2 } = base({ orgs: async () => [{ id: ORG, name: "B", kind: "foretag", role: "admin" }] });
+    expect(await actorFor(c2, { foreningId: ORG })).toBeNull();
+    expect(actor).not.toHaveBeenCalled();
+    expect(a2).not.toHaveBeenCalled();
+  });
+
+  it("complete_task on a hidden meeting never reaches the write path", async () => {
+    const { c, completeNoteTask, actor } = base({});
+    expect(await completeTask(c, { task_id: `n:${M}:t1` })).toMatchObject({ ok: false });
+    expect(completeNoteTask).not.toHaveBeenCalled();
+    expect(actor).not.toHaveBeenCalled();
+  });
+
+  it("a visible meeting gets the actor and the app's own checks", async () => {
+    const { c, completeNoteTask } = base({ meetings: async () => [{ id: M, org_id: ORG, started_at: "2026-11-26T17:00:00Z", status: "done" }] });
+    expect(await completeTask(c, { task_id: `n:${M}:t1` })).toMatchObject({ ok: true });
+    expect(completeNoteTask).toHaveBeenCalledWith(expect.anything(), "u1", M, "t1");
   });
 });

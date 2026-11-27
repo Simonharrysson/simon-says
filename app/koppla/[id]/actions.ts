@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { mcpConfigured, mcpStore } from "@/lib/mcp/deps";
 import { approve, deny } from "@/lib/mcp/endpoints";
+import { redirectAudience } from "@/lib/mcp/oauth";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -17,8 +18,11 @@ export async function approveConnection(formData: FormData): Promise<void> {
   } = await db.auth.getUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/koppla/${id}`)}`);
   const store = mcpStore();
-  // The kill switch again: the page may have been open since before it was turned off.
-  const to = mcpConfigured() ? await approve(id, user.id, store, appOrigin()) : await deny(id, store, appOrigin());
+  // The kill switch again (the page may have been open since it was turned off), and never a
+  // redirect outside Claude's callbacks and loopback, even for a client registered before the rule.
+  const req = await store.getRequest(id);
+  const known = req !== null && redirectAudience(req.redirect_uri).kind !== "unknown";
+  const to = mcpConfigured() && known ? await approve(id, user.id, store, appOrigin()) : await deny(id, store, appOrigin());
   redirect(to ?? `/koppla/${id}`);
 }
 

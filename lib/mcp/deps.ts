@@ -5,6 +5,7 @@ import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { McpDeps } from "./handler";
 import { dbReader } from "./reader";
+import { usableUser } from "./user";
 import { dbStore, type McpStore } from "./store";
 import { defaultToolDeps } from "./tools";
 
@@ -27,7 +28,7 @@ export function mcpDeps(): McpDeps {
     loadUser: async (userId) => {
       const { data, error } = await supabaseAdmin().auth.admin.getUserById(userId);
       if (error || !data.user) return null;
-      return data.user;
+      return usableUser(data.user);
     },
     enabled: mcpConfigured,
     toolDeps: defaultToolDeps,
@@ -39,3 +40,4 @@ export function ipKey(request: Request, scope: string): string {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
   return `${scope}:${createHash("sha256").update(ip).digest("hex").slice(0, 32)}`;
 }
+

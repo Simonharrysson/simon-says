@@ -1,7 +1,6 @@
 {
   "metaTitle": "Connect Claude to Simon Says",
-  "title": "Give Claude access to your meetings in Simon Says",
-  "requestFrom": "The request comes from {client} ({host}).",
+  "title": "Give {app} access to your meetings in Simon Says",
   "signedInAs": "You are signed in as {email}.",
   "canTitle": "Claude will be able to",
   "canSearch": "search and read the meetings and recordings you can see in Simon Says, your private ones included",
@@ -34,5 +33,11 @@
   "revokeFailed": "Access could not be revoked. Try again.",
   "auditTitle": "Recent calls",
   "auditIntro": "What the assistants did: tool and time, never content.",
-  "auditFailed": "failed"
+  "auditFailed": "failed",
+  "accessTo": "Access goes to: {host}",
+  "appClaude": "Claude",
+  "appLocal": "an app on your computer",
+  "appUnknown": "Unknown app",
+  "localWarning": "Access goes to a program on this computer (for example Claude Code). Only allow it if you just started the connection yourself.",
+  "unknownWarning": "Simon Says does not recognise where the access would go, so it can't be allowed."
 }

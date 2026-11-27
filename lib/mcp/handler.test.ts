@@ -95,7 +95,7 @@ describe("the SDK client through the whole connector flow", () => {
     expect((await post({ ...d, loadUser: async () => null }, auth)).status).toBe(401);
   });
 
-  it("rate-limits per grant", async () => {
+  it("rate-limits per user", async () => {
     const { d } = deps();
     const { provider } = await connectAs(USER.id, d);
     const auth = { authorization: `Bearer ${provider.saved!.access_token}` };

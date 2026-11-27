@@ -11,7 +11,7 @@ import type { McpReader } from "./reader";
 // one stateless MCP exchange as the user. Every refusal before the transport is plain HTTP (401
 // with the RFC 9728 challenge, 403, 429, 503); the token itself is never logged.
 
-/** Calls per minute per grant (one connected assistant). */
+/** Calls per minute per user, across all their connected assistants. */
 export const RATE_PER_MINUTE = 60;
 
 export interface McpDeps {
@@ -52,7 +52,8 @@ export async function handleMcp(request: Request, deps: McpDeps): Promise<Respon
   if (!grant || grant.resource !== resourceUri(deps.origin)) return unauthorized("invalid_token");
   const user = await deps.loadUser(grant.user_id);
   if (!user) return unauthorized("invalid_token");
-  if (!(await deps.store.rateTake(`grant:${grant.id}`, RATE_PER_MINUTE, 60))) {
+  // Per user (every connection of theirs together), so more connections never mean more calls.
+  if (!(await deps.store.rateTake(`user:${user.id}`, RATE_PER_MINUTE, 60))) {
     return json(429, { error: "rate_limited", error_description: `At most ${RATE_PER_MINUTE} calls a minute.` }, { "retry-after": "60" });
   }
   deps.store.touchGrant(grant.id).catch((err) => console.error(`mcp: touch: ${(err as Error).message}`));

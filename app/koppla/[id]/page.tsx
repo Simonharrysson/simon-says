@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ConnectMessage, ConnectView } from "@/components/views/ConnectView";
 import { PublicShell } from "@/components/views/PublicShell";
 import { mcpConfigured, mcpStore } from "@/lib/mcp/deps";
-import { looksLike } from "@/lib/mcp/oauth";
+import { looksLike, redirectAudience } from "@/lib/mcp/oauth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { approveConnection, denyConnection } from "./actions";
 
@@ -28,11 +28,12 @@ export default async function ConnectPage({ params }: { params: Promise<{ id: st
   if (!req || Date.parse(req.expires_at) <= Date.now()) return shell(<ConnectMessage kind="expired" />, true);
   const client = await store.getClient(req.client_id);
   if (!client) return shell(<ConnectMessage kind="expired" />, true);
+  const to = redirectAudience(req.redirect_uri);
   return shell(
     <ConnectView
       requestId={id}
-      clientName={client.client_name}
-      host={new URL(req.redirect_uri).host}
+      audience={to.kind}
+      host={to.host}
       email={user.email ?? ""}
       allowed={mcpConfigured()}
       approve={approveConnection}

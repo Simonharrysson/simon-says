@@ -110,3 +110,17 @@ describe("token", () => {
     expect(m.grants.size).toBe(1);
   });
 });
+
+describe("redirect allow-list", () => {
+  it("refuses registering any https host but Claude's callback", async () => {
+    const m = memoryStore();
+    expect((await register({ redirect_uris: ["https://evil.example/api/mcp/auth_callback"] }, m.store)).body).toMatchObject({ error: "invalid_redirect_uri" });
+    expect((await register({ redirect_uris: ["http://127.0.0.1:5000/callback"] }, m.store)).status).toBe(201);
+  });
+  it("never redirects for a client stored with a non-allow-listed URI (registered before the rule)", async () => {
+    const m = memoryStore();
+    await m.store.createClient({ id: "ssk_" + "a".repeat(43), client_name: "Old", redirect_uris: ["https://old.example/cb"] });
+    const p = new URLSearchParams({ client_id: "ssk_" + "a".repeat(43), redirect_uri: "https://old.example/cb", response_type: "code", code_challenge: "x".repeat(43), code_challenge_method: "S256" });
+    expect(await authorize(p, m.store, O)).toEqual({ kind: "error_page", reason: "bad_redirect" });
+  });
+});

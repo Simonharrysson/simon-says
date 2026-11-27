@@ -372,8 +372,9 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- Retention (the daily cron, /api/cron/alarm): audit rows after 90 days; expired requests, codes
--- and tokens; dead rate windows.
+-- Retention (the daily cron, /api/cron/alarm): audit rows after 90 days; pending authorize
+-- requests after 15 minutes; expired codes and tokens; registered clients that never got a grant
+-- after 24 hours (DCR is open, so registrations must not pile up); dead rate windows.
 create function public.mcp_cleanup()
 returns int
 language plpgsql volatile security definer set search_path = ''
@@ -382,10 +383,13 @@ declare v_n int := 0; v_k int;
 begin
   delete from public.mcp_audit where at < now() - interval '90 days';
   get diagnostics v_k = row_count; v_n := v_n + v_k;
-  delete from public.mcp_auth_requests where expires_at < now();
+  delete from public.mcp_auth_requests where created_at < now() - interval '15 minutes' or expires_at < now();
   delete from public.mcp_auth_codes where expires_at < now();
   delete from public.mcp_tokens where expires_at < now() - interval '1 day';
   delete from public.mcp_rate where window_start < now() - interval '1 day';
+  delete from public.mcp_clients c
+    where c.created_at < now() - interval '24 hours'
+      and not exists (select 1 from public.mcp_grants g where g.client_id = c.id);
   return v_n;
 end;
 $$;

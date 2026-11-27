@@ -1,7 +1,6 @@
 {
   "metaTitle": "Koppla Claude till Simon Says",
-  "title": "Ge Claude tillgång till dina möten i Simon Says",
-  "requestFrom": "Begäran kommer från {client} ({host}).",
+  "title": "Ge {app} tillgång till dina möten i Simon Says",
   "signedInAs": "Du är inloggad som {email}.",
   "canTitle": "Claude kommer att kunna",
   "canSearch": "söka i och läsa de möten och inspelningar du själv kan se i Simon Says, även dina privata",
@@ -34,5 +33,11 @@
   "revokeFailed": "Åtkomsten kunde inte återkallas. Försök igen.",
   "auditTitle": "Senaste anrop",
   "auditIntro": "Vad assistenterna har gjort: verktyg och tid, aldrig innehåll.",
-  "auditFailed": "misslyckades"
+  "auditFailed": "misslyckades",
+  "accessTo": "Åtkomsten går till: {host}",
+  "appClaude": "Claude",
+  "appLocal": "en app på din dator",
+  "appUnknown": "Okänd app",
+  "localWarning": "Åtkomsten går till ett program på den här datorn (till exempel Claude Code). Godkänn bara om du själv just startade kopplingen.",
+  "unknownWarning": "Simon Says känner inte igen vart åtkomsten skulle gå, så den kan inte godkännas."
 }

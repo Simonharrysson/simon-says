@@ -93,13 +93,30 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/** May a client register this redirect URI? https anywhere, http only on loopback; no fragment, no credentials. */
+/**
+ * The hosted Claude apps' callback (claude.ai on the web, Desktop, mobile, Cowork:
+ * claude.com/docs/connectors/building/authentication.md "Callback URLs"), and its claude.com twin.
+ * Nothing else on https may be registered: a look-alike app can't get a consent page that ends
+ * at its own server (consent phishing).
+ */
+export const CLAUDE_CALLBACKS = new Set(["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback"]);
+
+/** May a client register this redirect URI? Claude's hosted callback exactly, or http on loopback (Claude Code: any port); no fragment, no credentials. */
 export function registrableRedirect(uri: string): boolean {
   if (typeof uri !== "string" || uri.length > 500 || !URL.canParse(uri)) return false;
   const u = new URL(uri);
   if (u.hash || uri.includes("#") || u.username || u.password) return false;
-  if (u.protocol === "https:") return u.hostname.length > 0;
+  if (u.protocol === "https:") return CLAUDE_CALLBACKS.has(`${u.origin}${u.pathname}`) && !u.search;
   return u.protocol === "http:" && LOOPBACK.has(u.hostname);
+}
+
+/** Who the consent page says the access goes to, from the redirect URI (never from the client's own name). */
+export function redirectAudience(uri: string): { kind: "claude" | "local" | "unknown"; host: string } {
+  if (!URL.canParse(uri)) return { kind: "unknown", host: "?" };
+  const u = new URL(uri);
+  if (u.protocol === "https:" && CLAUDE_CALLBACKS.has(`${u.origin}${u.pathname}`)) return { kind: "claude", host: u.host };
+  if (u.protocol === "http:" && LOOPBACK.has(u.hostname)) return { kind: "local", host: u.host };
+  return { kind: "unknown", host: u.host };
 }
 
 /**
@@ -150,7 +167,7 @@ export function parseRegistration(body: unknown): RegistrationResult {
     return { ok: false, error: "invalid_redirect_uri", description: "redirect_uris: 1 to 5 URIs." };
   }
   if (!uris.every((u) => registrableRedirect(u as string))) {
-    return { ok: false, error: "invalid_redirect_uri", description: "Redirect URIs must be https, or http on a loopback host." };
+    return { ok: false, error: "invalid_redirect_uri", description: "Only Claude's callback (https://claude.ai/api/mcp/auth_callback) or a loopback http URI." };
   }
   const method = b.token_endpoint_auth_method;
   if (method !== undefined && method !== "none") {

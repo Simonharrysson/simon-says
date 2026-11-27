@@ -9,6 +9,7 @@ import {
   newToken,
   parseRegistration,
   redirectMatches,
+  redirectAudience,
   registrableRedirect,
   resourceMatches,
   verifyPkce,
@@ -50,11 +51,22 @@ describe("redirect URIs", () => {
     expect(registrableRedirect("https://claude.ai/api/mcp/auth_callback")).toBe(true);
     expect(registrableRedirect("http://localhost:33418/callback")).toBe(true);
     expect(registrableRedirect("http://127.0.0.1/cb")).toBe(true);
+    expect(registrableRedirect("https://claude.com/api/mcp/auth_callback")).toBe(true);
     expect(registrableRedirect("http://evil.example/cb")).toBe(false);
+    // Consent phishing: no other https host or path, look-alikes included.
+    expect(registrableRedirect("https://evil.example/api/mcp/auth_callback")).toBe(false);
+    expect(registrableRedirect("https://claude.ai.evil.example/api/mcp/auth_callback")).toBe(false);
+    expect(registrableRedirect("https://claude.ai/other")).toBe(false);
+    expect(registrableRedirect("https://claude.ai/api/mcp/auth_callback?x=1")).toBe(false);
     expect(registrableRedirect("https://a.example/cb#x")).toBe(false);
     expect(registrableRedirect("https://u:p@a.example/cb")).toBe(false);
     expect(registrableRedirect("javascript:alert(1)")).toBe(false);
     expect(registrableRedirect("custom-app://cb")).toBe(false);
+  });
+  it("names the audience from the redirect, never from the client's name", () => {
+    expect(redirectAudience("https://claude.ai/api/mcp/auth_callback")).toEqual({ kind: "claude", host: "claude.ai" });
+    expect(redirectAudience("http://localhost:3118/callback")).toEqual({ kind: "local", host: "localhost:3118" });
+    expect(redirectAudience("https://evil.example/cb")).toEqual({ kind: "unknown", host: "evil.example" });
   });
   it("matches exactly, except any port on loopback", () => {
     expect(redirectMatches("https://claude.ai/cb", "https://claude.ai/cb")).toBe(true);
@@ -80,18 +92,18 @@ describe("resource (audience)", () => {
 
 describe("registration", () => {
   it("public clients with valid redirect URIs only", () => {
-    expect(parseRegistration({ redirect_uris: ["https://claude.ai/cb"], client_name: "Claude" })).toMatchObject({ ok: true, value: { client_name: "Claude" } });
+    expect(parseRegistration({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], client_name: "Claude" })).toMatchObject({ ok: true, value: { client_name: "Claude" } });
     expect(parseRegistration({ redirect_uris: [] })).toMatchObject({ ok: false, error: "invalid_redirect_uri" });
     expect(parseRegistration({ redirect_uris: ["http://evil.example/cb"] })).toMatchObject({ ok: false, error: "invalid_redirect_uri" });
-    expect(parseRegistration({ redirect_uris: ["https://a.example/cb"], token_endpoint_auth_method: "client_secret_post" })).toMatchObject({ ok: false });
-    expect(parseRegistration({ redirect_uris: ["https://a.example/cb"], grant_types: ["client_credentials"] })).toMatchObject({ ok: false });
+    expect(parseRegistration({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], token_endpoint_auth_method: "client_secret_post" })).toMatchObject({ ok: false });
+    expect(parseRegistration({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], grant_types: ["client_credentials"] })).toMatchObject({ ok: false });
     expect(parseRegistration(null)).toMatchObject({ ok: false });
   });
   it("cleans the shown name", () => {
-    const r = parseRegistration({ redirect_uris: ["https://a.example/cb"], client_name: "  A\n\tB " + "x".repeat(200) });
+    const r = parseRegistration({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"], client_name: "  A\n\tB " + "x".repeat(200) });
     expect(r.ok && r.value.client_name.startsWith("A B")).toBe(true);
     expect(r.ok && r.value.client_name.length).toBe(100);
-    expect(parseRegistration({ redirect_uris: ["https://a.example/cb"] })).toMatchObject({ value: { client_name: "AI-assistent" } });
+    expect(parseRegistration({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] })).toMatchObject({ value: { client_name: "AI-assistent" } });
   });
 });
 

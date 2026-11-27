@@ -6,13 +6,13 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 
-// The MCP consent page (/koppla/<id>): who asks, what Claude will and won't be able to do, and
-// Godkänn / Avbryt. The client's name is whatever it registered: the redirect host is shown next
-// to it so a look-alike can be told apart.
+// The MCP consent page (/koppla/<id>): where the access goes (the redirect host, prominently),
+// what the app will and won't be able to do, and Godkänn / Avbryt. The app is named from the
+// redirect URI (lib/mcp/oauth.ts redirectAudience), never from the name the client registered.
 
 export function ConnectView({
   requestId,
-  clientName,
+  audience,
   host,
   email,
   allowed,
@@ -20,7 +20,8 @@ export function ConnectView({
   deny,
 }: {
   requestId: string;
-  clientName: string;
+  /** From the redirect URI: Claude's hosted callback, a loopback app, or (never registrable) unknown. */
+  audience: "claude" | "local" | "unknown";
   host: string;
   email: string;
   /** MCP is on (MCP_ENABLED); otherwise only Avbryt. */
@@ -29,15 +30,25 @@ export function ConnectView({
   deny: FormAction;
 }) {
   const t = useTranslations("connect");
+  const app = audience === "claude" ? t("appClaude") : audience === "local" ? t("appLocal") : t("appUnknown");
+  const can = allowed && audience !== "unknown";
   return (
     <div className="mx-auto w-full px-gutter max-w-[36rem] flex flex-col gap-6">
-      <PageHeader title={t("title")} />
+      <PageHeader title={t("title", { app })} />
       <Panel>
         <div className="flex flex-col gap-4">
-          <p className="text-ink-2">
-            {t("requestFrom", { client: clientName, host })} {t("signedInAs", { email })}
-          </p>
-          {allowed ? (
+          <p className="text-lg font-semibold wrap-anywhere">{t("accessTo", { host })}</p>
+          <p className="text-ink-2">{t("signedInAs", { email })}</p>
+          {audience === "local" && (
+            <Banner tone="warning" live={false}>
+              {t("localWarning")}
+            </Banner>
+          )}
+          {audience === "unknown" ? (
+            <Banner tone="danger" live={false}>
+              {t("unknownWarning")}
+            </Banner>
+          ) : allowed ? (
             <>
               <div>
                 <h2 className="text-sm font-semibold">{t("canTitle")}</h2>
@@ -62,7 +73,7 @@ export function ConnectView({
             </Banner>
           )}
           <div className="flex flex-wrap gap-3">
-            {allowed && (
+            {can && (
               <form action={approve}>
                 <input type="hidden" name="request" value={requestId} />
                 <SubmitButton variant="primary" pendingLabel={t("approving")}>

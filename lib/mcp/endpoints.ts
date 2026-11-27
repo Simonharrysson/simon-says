@@ -8,6 +8,7 @@ import {
   REFRESH_TTL_S,
   REQUEST_TTL_S,
   redirectMatches,
+  registrableRedirect,
   redirectWith,
   resourceMatches,
   resourceUri,
@@ -81,6 +82,8 @@ export async function authorize(params: URLSearchParams, store: McpStore, origin
   } else {
     return { kind: "error_page", reason: "bad_redirect" };
   }
+  // Only Claude's callbacks and loopback, also for a client registered before that rule.
+  if (!registrableRedirect(redirectUri)) return { kind: "error_page", reason: "bad_redirect" };
   const state = params.get("state");
   const back = (error: string, description: string) => ({
     kind: "redirect" as const,

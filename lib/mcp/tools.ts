@@ -49,6 +49,23 @@ export function actorClient(user: User): SupabaseClient {
 
 export const defaultToolDeps: ToolDeps = { completeNoteTask, upcomingPrepared, loadDraft, savePrepared, actorClient };
 
+/**
+ * The ONLY way a tool gets the actor client: the reader (the mcp_* functions, RLS predicates for
+ * this user) must show the scope first, here, right before the write. Never call
+ * `ctx.deps.actorClient` directly: a write path that skipped this would act on rows the user can't
+ * see (the actor client is the service role). Null when the scope isn't the user's.
+ */
+export async function actorFor(ctx: ToolCtx, scope: { meetingId: string } | { foreningId: string }): Promise<SupabaseClient | null> {
+  if ("meetingId" in scope) {
+    const [m] = await ctx.reader.meetings({ ids: [scope.meetingId], done: false, limit: 1 });
+    if (!m || m.id !== scope.meetingId) return null;
+  } else {
+    const org = (await ctx.reader.orgs()).find((o) => o.id === scope.foreningId);
+    if (!org || org.kind !== "forening") return null;
+  }
+  return ctx.deps.actorClient(ctx.user);
+}
+
 export interface ToolCtx {
   reader: McpReader;
   user: User;
@@ -318,10 +335,10 @@ export async function completeTask(ctx: ToolCtx, args: { task_id: string }): Pro
     return (await ctx.reader.setPrivatTaskDone(parsed.id, true)) ? ok({ done: true, doc: "none" }) : refuse("Task not found, or you can't see it.");
   }
   ctx.ids.meeting_id = parsed.meetingId;
-  // The meeting must be one the user sees (the reader); then the app's own path decides (owner or admin).
-  const [m] = await ctx.reader.meetings({ ids: [parsed.meetingId], done: false, limit: 1 });
-  if (!m) return refuse("Task not found, or you can't see it.");
-  const result = await ctx.deps.completeNoteTask(ctx.deps.actorClient(ctx.user), ctx.user.id, parsed.meetingId, parsed.itemId);
+  // The meeting must be one the user sees (actorFor re-checks); then the app's own path decides (owner or admin).
+  const db = await actorFor(ctx, { meetingId: parsed.meetingId });
+  if (!db) return refuse("Task not found, or you can't see it.");
+  const result = await ctx.deps.completeNoteTask(db, ctx.user.id, parsed.meetingId, parsed.itemId);
   if (!result.ok) {
     if (result.error === "forbidden") return refuse("Only the task's owner or an admin of the förening can complete it.");
     if (result.error === "not_open") return refuse("That meeting is not finished yet; tasks are completed after it ends.");
@@ -355,7 +372,8 @@ export async function prepareAgenda(ctx: ToolCtx, args: { org_id?: string; meeti
   if (org.kind !== "forening") return refuse("Agendas are prepared only for a förening's meetings (not a Företag, and not Privat recordings).");
 
   // A member of this förening (shown by the reader): Förbered möte's own path, with this user as actor.
-  const db = ctx.deps.actorClient(ctx.user);
+  const db = await actorFor(ctx, { foreningId: orgId });
+  if (!db) return refuse("Unknown org_id (or you are not a member).");
   const [next] = await ctx.deps.upcomingPrepared(db, orgId, localDate(ctx.now));
   let when: { type: "veckomote" | "styrelsemote" | "arsmote"; date: string; time: string | null };
   if (next) {

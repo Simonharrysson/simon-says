@@ -30,6 +30,8 @@ claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mc
 | `complete_task(task_id)` | Same as ticking on /hem: the owner or an admin, and the Doc gets "✓ klart" |
 | `prepare_agenda(org_id \| meeting_id, point)` | Förening meetings only. Adds a point to the next agenda; creates it (Förbered möte's proposed date) when none is prepared |
 
+**Write tools:** `complete_task` and `prepare_agenda` change real things (a line in a Google Doc, an agenda Doc every member sees). They are annotated as non-read-only. **Don't set them to "Always allow"** in Claude; keep "Ask" so you confirm each one. The read tools can be allowed freely.
+
 Claude cannot change or delete notes, and it cannot see more than you can. Every call is logged with tool, ids and time, never content.
 
 ## Operations
@@ -44,7 +46,10 @@ Claude cannot change or delete notes, and it cannot see more than you can. Every
   - `/koppla/<id>` (consent)
   - `/api/mcp`
 - **Tokens:** access tokens live 1 h and refresh tokens 30 days. Refresh tokens rotate, and reusing one revokes the connection. Only SHA-256 hashes are stored.
-- **Limits:** 60 calls a minute per connection. Per IP: 20 registrations and 60 token requests per 10 minutes.
+- **Limits:** 60 calls a minute per user (all their connections together). Per IP, per 10 minutes: 20 registrations, 30 authorizations and 60 token requests.
+- **Redirect URIs:** only `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback` and loopback `http://localhost|127.0.0.1:<any port>/…` (Claude Code). Anything else is refused at registration and at authorize. The consent page names the app from the redirect host, never from the name the client registered, and warns for loopback.
+- **Cleanup (daily cron):** audit rows after 90 days, pending authorizations after 15 minutes, and registered clients that never got a grant after 24 hours.
+- **Banned or deleted accounts** get 401, whatever their tokens.
 - **Tests:**
   - `lib/mcp/*.test.ts` (unit, plus the SDK client through the whole flow in-process)
   - `tests/db/mcp.test.ts` (RLS through the tools: Företag tree, removed member, revoke, audit)
