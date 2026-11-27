@@ -8,6 +8,7 @@ import { createOrg, joinOrg } from "@/lib/db/orgs";
 // and its Ångra, against the local stack as real signed-in users. Fictional data only.
 const m = vi.hoisted(() => ({ db: null as SupabaseClient | null }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => m.db }));
+vi.mock("@/lib/supabase/admin", async () => ({ supabaseAdmin: (await import("@/test/local-supabase")).adminClient }));
 
 const route = (await import("@/app/api/orgs/[id]/task-fields/route")).POST;
 const call = (orgId: string, body: unknown) =>
