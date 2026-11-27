@@ -111,9 +111,9 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect(erik).toEqual([{ id: m.priv }]);
   });
 
-  it("everything under a meeting follows; own tasks are always visible", async () => {
+  it("everything under a meeting follows, the owner's own task row included", async () => {
     const maja = await u.maja.db.from("note_items").select("id").eq("meeting_id", m.dev);
-    expect(maja.data).toEqual([{ id: "t1" }]);
+    expect(maja.data).toEqual([]);
     for (const table of ["speaker_map", "meeting_events", "el_sessions"]) {
       const { data } = await u.maja.db.from(table).select("meeting_id").eq("meeting_id", m.dev);
       expect(data, table).toEqual([]);
@@ -173,6 +173,42 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     const del = await u.anna.db.from("contexts").delete().eq("id", id).select("id");
     expect(del.data ?? []).toEqual([]);
     expect(await u.jonas.db.rpc("customer_for_domain", { p_org_id: orgId, p_domain: "x.se", p_name: "X" }).then((r) => r.error)).not.toBeNull();
+  });
+
+  it("a task across the boundary waits for approval; the owner then sees only the reviewed task", async () => {
+    const admin = adminClient();
+    // A CEO meeting (root group) with a task for Kim at the bottom.
+    const ceo = await meeting("anna", g.vd);
+    const kim = (must("kim", await admin.from("people").select("id").eq("org_id", orgId).eq("name", "Kim").single()) as { id: string }).id;
+    must(
+      "notes",
+      await admin.from("note_items").insert([
+        { meeting_id: ceo, id: "h1", section: "action", text: "Förbered nedskärningen i Ekonomi", owner_person_id: kim, due: "fredag" },
+        { meeting_id: ceo, id: "h2", section: "decision", text: "Hemligt beslut" },
+      ]),
+    );
+    expect(must("create", await admin.rpc("create_task_handoffs", { p_meeting_id: ceo }))).toBe(1);
+    expect(must("again", await admin.rpc("create_task_handoffs", { p_meeting_id: ceo }))).toBe(0);
+    expect(await u.jonas.db.rpc("create_task_handoffs", { p_meeting_id: ceo }).then((r) => r.error)).not.toBeNull();
+
+    // Pending: invisible to Kim, who can't approve it either.
+    expect((await u.kim.db.from("task_handoffs").select("id").eq("meeting_id", ceo)).data).toEqual([]);
+    const pending = must("pending", await u.anna.db.from("task_handoffs").select("id, status, text").eq("meeting_id", ceo)) as { id: string; status: string; text: string }[];
+    expect(pending).toEqual([{ id: pending[0].id, status: "pending", text: "Förbered nedskärningen i Ekonomi" }]);
+    expect((await u.kim.db.rpc("approve_task_handoff", { p_id: pending[0].id, p_text: "x" })).data).toBe(false);
+    expect((await u.erik.db.rpc("approve_task_handoff", { p_id: pending[0].id, p_text: "x" })).data).toBe(false);
+
+    // Approved with new wording: Kim reads exactly that, never the meeting, its title or notes.
+    expect((await u.anna.db.rpc("approve_task_handoff", { p_id: pending[0].id, p_text: "Ta fram siffror till fredag" })).data).toBe(true);
+    const mine = must("mine", await u.kim.db.from("task_handoffs").select("text, from_name, due, status")) as unknown[];
+    expect(mine).toEqual([{ text: "Ta fram siffror till fredag", from_name: "Anna", due: "fredag", status: "approved" }]);
+    expect((await u.kim.db.from("meetings").select("id, title").eq("id", ceo)).data).toEqual([]);
+    expect((await u.kim.db.from("note_items").select("id").eq("meeting_id", ceo)).data).toEqual([]);
+    expect((await u.kim.db.rpc("set_task_handoff_done", { p_id: pending[0].id, p_done: true })).data).toBe(true);
+    expect((await u.maja.db.rpc("set_task_handoff_done", { p_id: pending[0].id, p_done: true })).data).toBe(false);
+    // No client writes to the table.
+    const write = await u.anna.db.from("task_handoffs").update({ status: "approved" }).eq("id", pending[0].id);
+    expect(write.error?.message).toMatch(/permission denied/i);
   });
 
   it("föreningar are unchanged: every member sees every meeting", async () => {

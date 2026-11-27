@@ -4,8 +4,11 @@
 -- The rule (Simon 2026-11-27): you see the meetings of your own group, plus every meeting of any
 -- group deeper in the tree than your own level. Company admins see everything. A meeting for
 -- Hela företaget (no group) is seen by every member. The starter and the attendees always see the
--- meeting. A "Privat möte" is seen only by its attendees (and starter) and admins. You always see
--- your own tasks (note_items you own), not the meeting they came from.
+-- meeting. A "Privat möte" is seen only by its attendees (and starter) and admins.
+-- Task delivery across visibility: note_items stay readable by the meeting's viewers only. A task
+-- whose owner can't see the meeting is copied to task_handoffs as pending; the starter or an admin
+-- approves it (optionally reworded) before the owner sees it, and the owner sees only the
+-- reviewed text, the giver's name and the due date, never the meeting.
 --
 -- Strictly additive and backward compatible with the deployed code:
 -- * orgs.kind already allows 'foretag' (0045); only create_foretag() (service role) makes one;
@@ -206,20 +209,6 @@ as $$ select public.foretag_can_see(auth.uid(), p_meeting_id) $$;
 drop policy meetings_select on public.meetings;
 create policy meetings_select on public.meetings for select to authenticated
   using (public.can_see_meeting(id));
-
--- Own tasks: a task row whose owner is a person linked to me, even in a meeting I can't see.
-drop policy note_items_select on public.note_items;
-create policy note_items_select on public.note_items for select to authenticated
-  using (
-    public.is_meeting_member(meeting_id)
-    or (
-      owner_person_id is not null
-      and exists (
-        select 1 from public.people p
-        where p.id = note_items.owner_person_id and p.member_user_id = (select auth.uid())
-      )
-    )
-  );
 
 -- The accounts that can see a meeting (Doc shares, summary recipients). Service role only.
 create function public.foretag_viewer_ids(p_meeting_id uuid)
@@ -481,5 +470,145 @@ create policy contexts_delete on public.contexts for delete to authenticated
       select 1 from public.meetings mt where mt.context_id = contexts.id and mt.status in ('live', 'ending')
     )
   );
+
+-- ---------------------------------------------------------------------------------------------
+-- task_handoffs: a task crossing the visibility boundary, held for review.
+
+create table public.task_handoffs (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.orgs (id) on delete cascade,
+  meeting_id uuid not null references public.meetings (id) on delete cascade,
+  item_id text not null,
+  owner_person_id uuid not null references public.people (id) on delete cascade,
+  -- The task's text: the AI's copy while pending, the reviewed text once approved.
+  text text not null check (length(btrim(text)) between 1 and 500),
+  due text check (due is null or length(due) <= 100),
+  due_date date,
+  from_user_id uuid references auth.users (id) on delete set null,
+  from_name text check (from_name is null or length(from_name) <= 100),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'dropped')),
+  decided_by uuid references auth.users (id) on delete set null,
+  decided_at timestamptz,
+  done boolean not null default false,
+  done_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (meeting_id, item_id)
+);
+create index task_handoffs_owner_idx on public.task_handoffs (owner_person_id, status);
+create index task_handoffs_org_idx on public.task_handoffs (org_id, status);
+
+-- May this account approve the meeting's handoffs? Its starter or an admin (who can see it).
+create function public.can_approve_handoff(p_meeting_id uuid)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (
+    select 1 from public.meetings mt
+    where mt.id = p_meeting_id
+      and public.foretag_can_see(auth.uid(), mt.id)
+      and (mt.started_by = auth.uid() or public.is_org_admin(mt.org_id))
+  );
+$$;
+revoke all on function public.can_approve_handoff(uuid) from public, anon;
+grant execute on function public.can_approve_handoff(uuid) to authenticated, service_role;
+
+alter table public.task_handoffs enable row level security;
+revoke all on table public.task_handoffs from anon, authenticated, service_role;
+grant select, insert, update, delete on table public.task_handoffs to service_role;
+grant select on table public.task_handoffs to authenticated;
+create policy task_handoffs_select on public.task_handoffs for select to authenticated
+  using (
+    public.can_approve_handoff(meeting_id)
+    or (
+      status = 'approved'
+      and exists (select 1 from public.people p where p.id = task_handoffs.owner_person_id and p.member_user_id = (select auth.uid()))
+    )
+  );
+
+-- After a Företag meeting: every open task whose owner is an account that can't see the meeting
+-- becomes a pending handoff (once per task). Returns the number of new rows. Service role.
+create function public.create_task_handoffs(p_meeting_id uuid)
+returns int
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_n int;
+begin
+  insert into public.task_handoffs (org_id, meeting_id, item_id, owner_person_id, text, due, due_date, from_user_id, from_name)
+  select mt.org_id, mt.id, n.id, p.id, left(btrim(n.text), 500), left(n.due, 100), n.due_date, mt.started_by,
+    (select s.name from public.people s where s.org_id = mt.org_id and s.member_user_id = mt.started_by limit 1)
+  from public.meetings mt
+  join public.orgs o on o.id = mt.org_id and o.kind = 'foretag'
+  join public.note_items n on n.meeting_id = mt.id
+  join public.people p on p.id = n.owner_person_id and p.member_user_id is not null
+  where mt.id = p_meeting_id
+    and n.section = 'action' and not n.deleted_by_human and not coalesce(n.done, false)
+    and length(btrim(n.text)) between 1 and 500
+    and not public.foretag_can_see(p.member_user_id, mt.id)
+  on conflict (meeting_id, item_id) do nothing;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+revoke all on function public.create_task_handoffs(uuid) from public, anon, authenticated;
+grant execute on function public.create_task_handoffs(uuid) to service_role;
+
+-- Approve (with the reviewed wording) or drop a pending handoff. Approvers only.
+create function public.approve_task_handoff(p_id uuid, p_text text)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_meeting uuid;
+begin
+  select h.meeting_id into v_meeting from public.task_handoffs h where h.id = p_id and h.status = 'pending';
+  if v_meeting is null or not public.can_approve_handoff(v_meeting) then
+    return false;
+  end if;
+  if length(btrim(coalesce(p_text, ''))) not between 1 and 500 then
+    return false;
+  end if;
+  update public.task_handoffs
+  set text = btrim(p_text), status = 'approved', decided_by = auth.uid(), decided_at = now()
+  where id = p_id and status = 'pending';
+  return found;
+end;
+$$;
+revoke all on function public.approve_task_handoff(uuid, text) from public, anon;
+grant execute on function public.approve_task_handoff(uuid, text) to authenticated;
+
+create function public.drop_task_handoff(p_id uuid)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_meeting uuid;
+begin
+  select h.meeting_id into v_meeting from public.task_handoffs h where h.id = p_id and h.status = 'pending';
+  if v_meeting is null or not public.can_approve_handoff(v_meeting) then
+    return false;
+  end if;
+  update public.task_handoffs set status = 'dropped', decided_by = auth.uid(), decided_at = now() where id = p_id and status = 'pending';
+  return found;
+end;
+$$;
+revoke all on function public.drop_task_handoff(uuid) from public, anon;
+grant execute on function public.drop_task_handoff(uuid) to authenticated;
+
+-- The owner ticks an approved task done (or open again).
+create function public.set_task_handoff_done(p_id uuid, p_done boolean)
+returns boolean
+language plpgsql volatile security definer set search_path = ''
+as $$
+begin
+  update public.task_handoffs h
+  set done = p_done, done_at = case when p_done then now() else null end
+  where h.id = p_id and h.status = 'approved'
+    and exists (select 1 from public.people p where p.id = h.owner_person_id and p.member_user_id = auth.uid());
+  return found;
+end;
+$$;
+revoke all on function public.set_task_handoff_done(uuid, boolean) from public, anon;
+grant execute on function public.set_task_handoff_done(uuid, boolean) to authenticated;
 
 -- Invite links lead into a Företag like into a förening (join_org, 0045): unchanged.
