@@ -6,6 +6,7 @@ import { useId } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
 import { IconCheck, IconGlobe, IconMic } from "@/components/ui/icons";
+import { tileClass, tileOnClass } from "@/components/ui/tile";
 import type { CaptureSource, TabAudioSupport } from "@/lib/audio/call";
 import { cn } from "@/lib/utils";
 
@@ -26,8 +27,9 @@ export function SourcePicker({ value, onChange, disabled }: { value: CaptureSour
           <label
             key={s}
             className={cn(
-              "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-control px-4 py-3 text-sm font-medium transition-colors duration-120 hover:border-ink-3",
-              value === s && "border-ink bg-sunk hover:border-ink",
+              // Tiles on the card, no frames (docs/ui.md "No double borders"): a tint, darker when chosen.
+              "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-120",
+              value === s ? tileOnClass : tileClass,
             )}
           >
             <input type="radio" name={`${id}-source`} value={s} checked={value === s} onChange={() => onChange(s)} className="size-4 accent-[var(--ink)]" />
@@ -67,7 +69,7 @@ function ShareDialogIllustration() {
   const t = useTranslations("live.call");
   return (
     <figure className="flex flex-col gap-2">
-      <div aria-hidden="true" className="overflow-hidden rounded-lg border border-line bg-surface text-xs shadow-panel select-none">
+      <div aria-hidden="true" className="overflow-hidden rounded-lg bg-surface text-xs shadow-panel select-none">
         <div className="border-b border-line px-3 py-2 font-semibold">{t("dlgTitle")}</div>
         <div className="flex gap-4 border-b border-line px-3 pt-2">
           <span className="border-b-2 border-ink pb-1.5 font-semibold">{t("dlgTab")}</span>
@@ -154,11 +156,11 @@ export function CallSetup({
   }
   const bothHeard = levels != null && levels.mic >= HEARD && (levels.call ?? 0) >= HEARD;
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-line p-4">
+    <div className="flex flex-col gap-4 rounded-lg bg-sunk/60 p-4">
       <ol className="flex flex-col gap-2 text-sm">
         {(["step1", "step2", "step3"] as const).map((k, i) => (
           <li key={k} className="grid grid-cols-[1.5rem_1fr] items-baseline gap-2">
-            <span className="grid size-6 place-items-center rounded-full bg-sunk text-xs font-semibold">{i + 1}</span>
+            <span className="grid size-6 place-items-center rounded-full bg-surface text-xs font-semibold">{i + 1}</span>
             <span>{t(k)}</span>
           </li>
         ))}

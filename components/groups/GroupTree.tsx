@@ -94,7 +94,7 @@ export function GroupTree({ orgId, isAdmin, userId, groups, people, members, act
                 key={group.id}
                 data-group={group.name}
                 style={{ marginInlineStart: `${Math.min(depth, 6) * 1.25}rem` }}
-                className="rounded-md border border-line bg-surface px-4 py-3 transition-shadow duration-150 hover:shadow-panel"
+                className="rounded-md bg-sunk/60 px-4 py-3"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <h3 className="text-base font-semibold wrap-anywhere">{group.name}</h3>

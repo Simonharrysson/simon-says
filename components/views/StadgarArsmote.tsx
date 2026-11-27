@@ -191,7 +191,7 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
       {items.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
       ) : (
-        <ol className="flex flex-col rounded-lg bg-surface shadow-panel">
+        <ol className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-4 in-card:bg-transparent in-card:shadow-none">
           {items.map((item, i) => (
             <li key={`${i}-${item}`} className="flex min-h-11 items-center gap-3 border-t border-line px-4 py-1 first:border-t-0">
               <span className="w-6 flex-none font-mono text-xs text-ink-3">{i + 1}.</span>

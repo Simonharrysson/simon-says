@@ -97,7 +97,7 @@ export function GroupPicker({
         {t("privateHint")}
       </Check>
       {event && (
-        <div className="flex flex-col gap-3 rounded-md border border-line p-4">
+        <div className="flex flex-col gap-3 rounded-md bg-sunk/60 p-4">
           <Check id={`${id}-event`} title={t("eventLink", { title: event.title })} checked={linked} onCheckedChange={(on) => setLinked(on === true)} disabled={disabled}>
             {t("eventHint")}
           </Check>

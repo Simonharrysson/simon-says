@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Checkbox } from "@/components/ui/checkbox";
 import { hintClass } from "@/components/ui/Field";
+import { tileClass, tileOnClass } from "@/components/ui/tile";
 import { SaveState, useSavedValue } from "@/components/settings/SaveState";
 import { saveSummaryAction, type SettingResult } from "@/app/(app)/orgs/settings-actions";
 import type { SummaryMode } from "@/lib/db/types";
@@ -59,8 +60,9 @@ export function SummarySettingsForm({
             <label
               key={o.mode}
               className={cn(
-                "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4 transition-colors duration-120",
-                checked ? "border-ink" : "border-line hover:border-control",
+                // Tiles on the card, no frames (docs/ui.md "No double borders"): a tint, darker when chosen.
+                "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg p-4 transition-colors duration-120",
+                checked ? tileOnClass : tileClass,
               )}
             >
               <input
@@ -86,7 +88,7 @@ export function SummarySettingsForm({
           {people.length === 0 ? (
             <p className="text-sm text-ink-3">{t("emptyList")}</p>
           ) : (
-            <ul className="flex flex-col rounded-lg border border-line bg-surface">
+            <ul className="-mx-4 flex flex-col">
               {people.map((p) => {
                 const id = `summary-person-${p.id}`;
                 const note = !p.hasEmail ? t("noEmail") : null;

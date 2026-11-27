@@ -43,7 +43,7 @@ export function ResumeMeeting({
   const locale = useLocale();
   const dialog = useRef<LiveDialogHandle>(null);
   return (
-    <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="resume-title">
+    <section data-card className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="resume-title">
       <div className="flex flex-col gap-2">
         <h1 id="resume-title" className="text-2xl">
           {connectedElsewhere ? t("resume.elsewhereTitle") : t("resume.notEndedTitle")}
