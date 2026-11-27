@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { FormatCard } from "@/components/views/FormatCard";
-import { StartMeetingForm } from "@/components/views/StartMeetingForm";
+import { NextMeetingHero, type NextMeetingHeroProps } from "@/components/views/NextMeetingHero";
+import { MeetingMoreMenu } from "@/components/views/MeetingMoreMenu";
+import { nextMeetingState, type HeroInput } from "@/lib/meetings/next-meeting";
+import { loadSummaryStatus } from "@/lib/meetings/recap";
+import { stockholmDay } from "@/lib/home/tasks";
 import { SummarySettingsForm } from "@/components/views/SummarySettingsForm";
 import { summaryOptions } from "@/lib/summaries/recipients";
 import { OrgDetailView, type OrgTab } from "@/components/views/OrgDetailView";
@@ -30,25 +34,35 @@ import { docUrl } from "@/lib/ui/meetings";
 import { localDate } from "@/lib/docs/create";
 import { upcomingPrepared } from "@/lib/prepare/store";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
-import { InviteByEmail } from "@/components/views/InviteByEmail";
+import { WelcomeCard } from "@/components/views/WelcomeCard";
+import { dueDayLabel } from "@/lib/home/tasks";
 import { inviterNameFor, listInvites } from "@/lib/invites/send";
 import type { InviteRow } from "@/lib/invites/rules";
 import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
-import { dismissAction, saveProfileAction } from "../kom-igang/actions";
-import { Suspense } from "react";
-import { OrgCalendarSlot, StartCalendarSlot } from "@/components/calendar/CalendarSlots";
+import { dismissAction } from "../kom-igang/actions";
+import { Suspense, type ReactNode } from "react";
+import { HeroCalendarSlot, OrgCalendarSlot } from "@/components/calendar/CalendarSlots";
 import { calendarResult } from "@/lib/calendar/events";
 import type { Notice } from "@/lib/ui/messages";
 import type { Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
-import { OrgProfileForm } from "@/components/views/OrgProfileForm";
+import { OrgDetailsForm } from "@/components/settings/OrgDetails";
+import { ReopenKomIgang } from "@/components/settings/ReopenKomIgang";
+import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
+import { Skeleton } from "@/components/ui/skeleton";
 import { OrgBoard } from "@/components/views/OrgBoard";
 import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
 import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
-import { orgTab, orgTabHref } from "@/lib/orgs/tabs";
+import { orgTab, orgTabHref, sectionForCode } from "@/lib/orgs/tabs";
+import { ForetagPage } from "./foretag-page";
 import { boardRows } from "@/lib/people/board";
+import { ForeningGroups } from "@/components/groups/ForeningGroups";
+import type { PersonRow } from "@/lib/groups/people";
+import { listTeams } from "@/lib/foretag/teams";
+import type { GroupRow } from "@/lib/foretag/tree";
+import { addTreePersonAction, setGroupsAction, setManagerAction } from "../../foretag-actions";
 import {
   addPersonAction,
   changeFormatAction,
@@ -63,7 +77,6 @@ import {
   setPersonRoleAction,
   rotateInviteAction,
   updateOrgAction,
-  updateSummaryAction,
 } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -153,17 +166,39 @@ function calendarNotice(raw: string | undefined, locale: Locale): Notice | null 
   return { tone: result === "ok" || result === "fran" ? "success" : "danger", text: messages[locale].calendar.result[result], code: `kalender-${result}` };
 }
 
+/** Grupper's data (0054): the groups and each person's place. A failed read leaves the section out. */
+async function loadGroupSettings(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<{ groups: GroupRow[]; people: PersonRow[] } | null> {
+  try {
+    const [groups, people] = await Promise.all([listTeams(db, orgId), db.from("people").select("*").eq("org_id", orgId).order("name")]);
+    if (people.error) throw new Error(people.error.message);
+    return { groups, people: (people.data ?? []) as PersonRow[] };
+  } catch (err) {
+    console.error(`org page: groups: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+/** Group names by id (0054), read as the user; a failed read only leaves the names out. */
+async function safeGroupNames(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<Map<string, string> | null> {
+  try {
+    return new Map((await listTeams(db, orgId)).map((g) => [g.id, g.name]));
+  } catch (err) {
+    console.error(`org page: group names: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 export default async function OrgPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string; valkommen?: string }>;
 }) {
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("org");
-  const { fel, klart, flik, import: openImport, drive, kalender } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive, kalender, valkommen } = await searchParams;
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
@@ -171,6 +206,12 @@ export default async function OrgPage({
   // The Privat space (0045) is not a förening: it has its own page.
   if (org.kind === "privat") redirect("/privat");
   const role = await myRole(db, id);
+  // A Företag (0050) has its own page; nothing of the förening page below runs for it.
+  if (org.kind === "foretag") {
+    const { data: me } = await db.auth.getUser();
+    if (!role || !me.user) notFound();
+    return <ForetagPage org={org} role={role} userId={me.user.id} flik={flik} fel={fel} klart={klart} />;
+  }
   const notice = orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale);
   const tab: OrgTab = orgTab({ flik, isAdmin: role === "admin", noticeCode: notice?.code });
   const [people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([
@@ -195,14 +236,74 @@ export default async function OrgPage({
   const importJob = isAdmin && tab === "oversikt" ? await safeImportJob(id) : null;
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
+  // After "Gå med" + "Vem av dessa är du?" (0051): who they are here and the next prepared meeting.
+  const nextPrepared = prepared[0];
+  const welcome =
+    valkommen === "1" ? (
+      <WelcomeCard
+        orgId={org.id}
+        orgName={org.name}
+        name={people.find((p) => p.member_user_id === me)?.name ?? null}
+        nextMeeting={nextPrepared ? `${dueDayLabel(nextPrepared.meeting_date, locale === "en" ? "en" : "sv")}${nextPrepared.meeting_time ? ` ${nextPrepared.meeting_time.slice(0, 5)}` : ""}` : null}
+      />
+    ) : null;
   const invites = isAdmin && tab === "installningar" ? await safeInvites(id) : [];
+  const settings = isAdmin && tab === "installningar";
+  const board = boardRows(people, members ?? []);
+  // Grupper (0054): the tree and everyone's place, read as the admin (RLS).
+  const tree = settings ? await loadGroupSettings(db, id) : null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
+  // A förening with groups (0054): each meeting's group by name ("Hela föreningen" without one).
+  const groupNames = org.groups_enabled && tab === "moten" ? await safeGroupNames(db, id) : null;
+  const tp = await getTranslations("foretag.picker.forening");
+  const listed = groupNames
+    ? meetings.map((m) => ({ ...m, forGroup: m.group_id ? (groupNames.get(m.group_id) ?? null) : tp("whole") }))
+    : meetings.map((m) => ({ ...m, private: false }));
   const docAccess = docAccessFor(
     meetings.map((m) => ({ ...m, app_created_doc: flags.get(m.id) ?? null })),
     me,
     shared,
   );
+
+  // The Möten tab's Nästa möte card (the weekly loop), from the lists read above as the viewer.
+  let hero: ReactNode = null;
+  if (tab === "moten") {
+    const now = new Date();
+    const input: HeroInput = {
+      meetings: meetings.map((m) => ({ ...m, isTest: meetingInfo[m.id]?.isTest ?? false })),
+      prepared: prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) })),
+      now,
+      today: stockholmDay(now),
+      canPrepare: true,
+    };
+    const state = nextMeetingState(input);
+    const about = state.kind === "ended" ? meetings.find((m) => m.id === state.meetingId) : undefined;
+    const heroProps: Omit<NextMeetingHeroProps, "state" | "calendar"> = {
+      orgId: org.id,
+      meeting: about
+        ? {
+            id: about.id,
+            title: meetingInfo[about.id]?.title ?? null,
+            startedAt: about.started_at,
+            endedAt: about.ended_at,
+            decisions: meetingInfo[about.id]?.decisions ?? 0,
+            tasks: meetingInfo[about.id]?.tasks ?? 0,
+          }
+        : null,
+      summary: about ? await loadSummaryStatus(db, about.id) : null,
+      more: canRunTestMeeting(userResult.data.user?.email) && (state.kind !== "live" && state.kind !== "ending") ? <MeetingMoreMenu orgId={org.id} /> : null,
+    };
+    // Only "not prepared" and "prepared" can change with the calendar; the card holds its size meanwhile.
+    hero =
+      me && org.calendar_id && (state.kind === "prepared" || state.kind === "unprepared") ? (
+        <Suspense fallback={<NextMeetingHero {...heroProps} state={state} pending />}>
+          <HeroCalendarSlot org={org} userId={me} input={input} hero={heroProps} />
+        </Suspense>
+      ) : (
+        <NextMeetingHero {...heroProps} state={state} />
+      );
+  }
 
   return (
     <OrgDetailView
@@ -212,11 +313,12 @@ export default async function OrgPage({
       inviteUrl={inviteUrl}
       members={members}
       people={people}
-      meetings={meetings}
+      meetings={listed}
       meetingInfo={meetingInfo}
       logoUrl={logoUrl(org.id, org.logo_updated_at)}
       komIgang={
         <>
+          {welcome}
           {role === "admin" && showCard(onboarding) && tab !== "installningar" && (
             <KomIgangCard orgId={org.id} state={onboarding} onDismiss={dismissAction.bind(null, org.id, true)} />
           )}
@@ -248,49 +350,74 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
+      settingsSection={settings ? (sectionForCode(notice?.code) ?? undefined) : undefined}
       boardList={
-        isAdmin && tab === "installningar"
-          ? (memberControls) => (
+        settings
+          ? (memberControls, linkActions) => (
               <OrgBoard
                 orgId={org.id}
                 orgName={org.name}
-                rows={boardRows(people, members ?? [])}
+                rows={board}
                 inviteUrl={inviteUrl}
                 myEmail={userResult.data.user?.email?.toLowerCase() ?? null}
                 invites={invites}
+                inviterName={inviterNameFor(people.find((p) => p.member_user_id === me)?.name, userResult.data.user?.user_metadata)}
                 memberControls={memberControls}
+                linkActions={linkActions}
               />
             )
           : undefined
       }
-      profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
+      groupSettings={
+        tree && me ? (
+          <ForeningGroups
+            org={org}
+            userId={me}
+            groups={tree.groups}
+            people={tree.people}
+            members={members ?? []}
+            actions={{ setManager: setManagerAction, addPerson: addTreePersonAction, setGroups: setGroupsAction }}
+          />
+        ) : undefined
+      }
+      detailsSettings={
+        settings ? (
+          <OrgDetailsForm
+            org={{
+              id: org.id,
+              name: org.name,
+              logoUpdatedAt: org.logo_updated_at ?? null,
+              profile: { about: org.about ?? null, website_url: org.website_url ?? null, facebook_url: org.facebook_url ?? null, instagram_url: org.instagram_url ?? null },
+            }}
+          />
+        ) : undefined
+      }
+      reopenKomIgang={
+        settings && onboarding && (onboarding.dismissedAt || onboarding.completedAt) ? (
+          <ReopenKomIgang orgId={org.id} reopen={onboarding.dismissedAt ? dismissAction.bind(null, org.id, false) : undefined} />
+        ) : undefined
+      }
+      folderSettings={
+        settings ? (
+          <MeetingFolderSetting orgId={org.id} folderName={org.meeting_folder_name ?? null} folderSet={Boolean(org.meeting_folder_id)} pickerEnabled={pickerEnabled(getEnv())} />
+        ) : undefined
+      }
+      voiceSettings={settings ? <VoicesSetting orgId={org.id} board={board} /> : undefined}
       calendarSettings={
-        isAdmin && tab === "installningar" && me ? (
-          // Google's answer streams in; the rest of the page never waits for it (todo #14).
-          <Suspense fallback={null}>
+        settings && me ? (
+          // Google's answer streams in; the rest of the page never waits for it (todo #14). The
+          // placeholder holds the form's place, so nothing below it moves.
+          <Suspense fallback={<Skeleton className="h-36 rounded-md" />}>
             <OrgCalendarSlot orgId={org.id} userId={me} org={org} />
           </Suspense>
         ) : undefined
       }
       summarySettings={
-        isAdmin ? (
+        settings ? (
           <SummarySettingsForm
             orgId={org.id}
             mode={org.summary_mode ?? "missed"}
             people={summaryOptions(people, members)}
-            action={updateSummaryAction}
-          />
-        ) : undefined
-      }
-      inviteByEmail={
-        isAdmin ? (
-          <InviteByEmail
-            orgId={org.id}
-            orgName={org.name}
-            inviterName={inviterNameFor(people.find((p) => p.member_user_id === me)?.name, userResult.data.user?.user_metadata)}
-            inviteUrl={inviteUrl}
-            invites={invites}
-            memberEmails={(members ?? []).map((m) => m.email.toLowerCase()).filter(Boolean)}
           />
         ) : undefined
       }
@@ -299,25 +426,13 @@ export default async function OrgPage({
           orgId={org.id}
           current={{ kind: format.profile.kind, name: formatName(format.profile.kind, locale), id: format.id, profile: format.profile }}
           isAdmin={role === "admin"}
-          meetingFolder={{ id: org.meeting_folder_id ?? null, name: org.meeting_folder_name ?? null }}
           formats={formats}
           changeFormat={changeFormatAction}
           pickerEnabled={pickerEnabled(getEnv())}
         />
       }
       liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}
-      startMeeting={<StartMeetingForm
-          orgId={org.id}
-          showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
-          prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
-          calendar={
-            me && tab === "moten" && org.calendar_id ? (
-              <Suspense fallback={null}>
-                <StartCalendarSlot orgId={org.id} userId={me} org={org} />
-              </Suspense>
-            ) : undefined
-          }
-        />}
+      startMeeting={hero}
       actions={{
         rotateInvite: rotateInviteAction,
         addPerson: addPersonAction,

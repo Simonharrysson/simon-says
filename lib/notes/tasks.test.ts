@@ -6,6 +6,8 @@ import {
   applyTaskAnswers,
   endAnswers,
   endReady,
+  endStats,
+  parseEndStats,
   incompleteTasks,
   stripPlaceholders,
   isOverdue,
@@ -236,6 +238,41 @@ describe("Avsluta dialog: complete or dismiss each incomplete task", () => {
         n2: { kind: "dismissed" },
       }),
     ).toEqual([{ id: "n1", due: "fredag", doneWhen: "bokat" }]);
+  });
+
+  it("answers: typed but unsaved fields count too (Avsluta ändå), never for a dismissed or locked task", () => {
+    expect(
+      endAnswers(
+        tasks,
+        { n2: { kind: "dismissed" } },
+        { n1: { due: "torsdag", doneWhen: "  " }, n2: { owner: "Anna" }, n3: { doneWhen: "x" } },
+      ),
+    ).toEqual([{ id: "n1", due: "torsdag" }]);
+    expect(endAnswers(tasks, {}, { n1: { due: " " } })).toEqual([]);
+  });
+
+  it("stats: counts only; skipped when ended before every task was handled", () => {
+    const handled = { n2: { kind: "dismissed" as const } };
+    const answers = endAnswers(tasks, handled, { n1: { due: "torsdag" } });
+    expect(endStats(tasks, handled, answers)).toEqual({ incomplete: 3, filled: 1, dismissed: 1, untouched: 1, skipped: true });
+    const all = { n1: { kind: "completed" as const, values: { due: "x", doneWhen: "y" } }, n2: { kind: "dismissed" as const }, n3: { kind: "dismissed" as const } };
+    expect(endStats(tasks, all, endAnswers(tasks, all))).toEqual({ incomplete: 3, filled: 1, dismissed: 2, untouched: 0, skipped: false });
+    // One tap on Avsluta ändå: nothing handled.
+    expect(endStats(tasks, {}, [])).toEqual({ incomplete: 3, filled: 0, dismissed: 0, untouched: 3, skipped: true });
+  });
+
+  it("parseEndStats: whole counts and a boolean only; filled from the parsed answers", () => {
+    const ok = { incomplete: 3, filled: 99, dismissed: 1, untouched: 1, skipped: true, text: "Köpa fika" };
+    expect(parseEndStats(ok, [{ id: "n1", due: "x" }])).toEqual({ incomplete: 3, filled: 1, dismissed: 1, untouched: 1, skipped: true });
+    expect(parseEndStats(null, [])).toBeNull();
+    expect(parseEndStats([], [])).toBeNull();
+    expect(parseEndStats({ ...ok, incomplete: 0 }, [])).toBeNull();
+    expect(parseEndStats({ ...ok, dismissed: -1 }, [])).toBeNull();
+    expect(parseEndStats({ ...ok, untouched: 1.5 }, [])).toBeNull();
+    expect(parseEndStats({ ...ok, untouched: "1" }, [])).toBeNull();
+    expect(parseEndStats({ ...ok, incomplete: 501 }, [])).toBeNull();
+    expect(parseEndStats({ ...ok, skipped: "yes" }, [])).toBeNull();
+    expect(parseEndStats({ ...ok, untouched: 3 }, [])).toBeNull(); // more than there were
   });
 });
 

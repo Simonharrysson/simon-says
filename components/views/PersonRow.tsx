@@ -1,5 +1,6 @@
 "use client";
 
+import { PresenceLi } from "@/components/motion/Presence";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -43,7 +44,7 @@ export function PersonRow({
 
   if (editingRole && setPersonRole) {
     return (
-      <li>
+      <PresenceLi>
         <form
           className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap"
           action={async (form) => {
@@ -78,13 +79,13 @@ export function PersonRow({
             </Button>
           </span>
         </form>
-      </li>
+      </PresenceLi>
     );
   }
 
   if (editing) {
     return (
-      <li>
+      <PresenceLi>
         <form
           className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap"
           action={async (form) => {
@@ -119,12 +120,12 @@ export function PersonRow({
             </Button>
           </span>
         </form>
-      </li>
+      </PresenceLi>
     );
   }
 
   return (
-    <li>
+    <PresenceLi>
       <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
         <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold tracking-[0.02em] text-ink-2" aria-hidden="true">
           {initials(person.name)}
@@ -166,7 +167,7 @@ export function PersonRow({
           />
         </span>
       </div>
-    </li>
+    </PresenceLi>
   );
 }
 

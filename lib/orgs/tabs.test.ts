@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSettingsCode, orgTab, orgTabHref } from "./tabs";
+import { isSettingsCode, orgTab, orgTabHref, settingsHref, settingsSection } from "./tabs";
 
 describe("orgTab", () => {
   it("?flik= picks the tab; Inställningar only for admins", () => {
@@ -34,5 +34,32 @@ describe("orgTabHref", () => {
     expect(orgTabHref("o", "moten")).toBe("/orgs/o");
     expect(orgTabHref("o", "oversikt")).toBe("/orgs/o?flik=oversikt");
     expect(orgTabHref("o", "installningar")).toBe("/orgs/o?flik=installningar");
+  });
+});
+
+describe("settingsSection", () => {
+  it("?del= picks the section; anything else is Föreningen", () => {
+    expect(settingsSection({})).toBe("foreningen");
+    expect(settingsSection({ del: "moten" })).toBe("moten");
+    expect(settingsSection({ del: "efter-motet" })).toBe("efter-motet");
+    expect(settingsSection({ del: "nagot" })).toBe("foreningen");
+  });
+
+  it("a form's message opens the section it is about; ?del= wins", () => {
+    expect(settingsSection({ noticeCode: "namn" })).toBe("foreningen");
+    expect(settingsSection({ noticeCode: "admin-ny" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "medlem-last_admin" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "personnamn" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "grupper" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "grupp-arkiv" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "sammanfattning" })).toBe("efter-motet");
+    expect(settingsSection({ noticeCode: "kalender-ok" })).toBe("moten");
+    expect(settingsSection({ noticeCode: "org-active" })).toBe("radera");
+    expect(settingsSection({ noticeCode: "mote" })).toBe("foreningen");
+    expect(settingsSection({ del: "radera", noticeCode: "namn" })).toBe("radera");
+  });
+
+  it("links a section", () => {
+    expect(settingsHref("x", "moten")).toBe("/orgs/x?flik=installningar&del=moten");
   });
 });

@@ -10,7 +10,7 @@ import { expect, expectAccessible, fake, test, type Fixtures, type SeededOrg } f
 
 async function startMeeting(page: Page, org: SeededOrg): Promise<{ meetingId: string; docId: string }> {
   await page.goto(org.url);
-  await page.getByRole("link", { name: "Starta möte", exact: true }).click();
+  await page.getByRole("link", { name: "Starta utan förberedelse" }).click();
   await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
   // No agenda in the folder: a new Doc in the förening's format, chosen without a click.
   await expect(page.locator("p").filter({ hasText: /^Nytt dokument i / })).toBeVisible();
@@ -70,23 +70,34 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Avsluta mötet" }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/meetings/${meetingId}`));
-  await expect(page.getByRole("heading", { name: "Mötet är avslutat" })).toBeVisible({ timeout: 60_000 });
+  // The meeting ends on its page in the app: the live page says the notes are being finished,
+  // then (once they are final) moves on by itself to /orgs/<id>/mote/<id> with the recap.
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}/mote/${meetingId}$`), { timeout: 60_000 });
+  const recap = page.getByRole("region", { name: "Mötet är avslutat" });
+  await expect(recap).toBeVisible();
+  await expect(recap.getByRole("definition").first()).toHaveText("1");
+  await expect(page.getByRole("heading", { name: "Beslut" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Öppna dokumentet" })).toBeVisible();
+  await expectAccessible(page);
   await expect.poll(() => fake.docText(docId), { timeout: 30_000 }).toMatch(/Avslutat \d{2}:\d{2}/);
   const { data } = await db.from("meetings").select("status").eq("id", meetingId).single();
   expect(data?.status).toBe("done");
   // The transcript tab got the fake's lines (held during the name round, written by the final pass).
   expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toMatch(/S1-speaker_\d 00:00:\d\d: \S/);
-
-  // The ended screen leads on to the meeting's page (decisions and tasks), then back to the förening.
-  await page.getByRole("link", { name: "Se beslut och uppgifter" }).click();
+  // The live page's address of a finished meeting leads here too.
+  await page.goto(`/meetings/${meetingId}`);
   await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}/mote/${meetingId}$`));
+
+  // Back on the förening: the Nästa möte card is the recap, with the way to the meeting's page.
+  const card = page.getByRole("region", { name: SCRIPTED.title });
+  await expect.poll(async () => (await db.from("meetings").select("title").eq("id", meetingId).single()).data?.title).toBe(SCRIPTED.title);
   await page.goto(org.url);
+  await expect(card).toContainText("Senaste mötet");
+  await expect(card).toContainText("1 beslut · 1 uppgift");
+  await expect(card.getByRole("link", { name: "Se beslut och uppgifter" })).toHaveAttribute("href", `/orgs/${org.id}/mote/${meetingId}`);
+  // Below it the list. The final pass named the meeting (0048): the title is the row's main line, with the counts.
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings.getByRole("listitem")).toHaveCount(1);
-  // The final pass named the meeting (0048): the title is the row's main line, with the counts.
-  await expect.poll(async () => (await db.from("meetings").select("title").eq("id", meetingId).single()).data?.title).toBe(SCRIPTED.title);
-  await page.reload();
   await expect(meetings.getByRole("listitem").first()).toContainText(SCRIPTED.title);
   await expect(meetings.getByRole("listitem").first()).toContainText("1 beslut · 1 uppgift");
 });

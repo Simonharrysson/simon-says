@@ -178,6 +178,13 @@ export const IconClock = (p: IconProps) => (
   </Svg>
 );
 
+export const IconUser = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="8.5" r="3.5" />
+    <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" />
+  </Svg>
+);
+
 export const IconUsers = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="9" cy="8.5" r="3.5" />

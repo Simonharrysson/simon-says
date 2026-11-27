@@ -1,5 +1,7 @@
 "use client";
 
+import type { CaptureSource, TabAudioSupport } from "@/lib/audio/call";
+import { CallSetup, type CallShareError } from "@/components/live/CallSetup";
 import { useLocale, useTranslations } from "next-intl";
 import { Fragment, useCallback, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import type { Locale } from "@/lib/i18n/config";
@@ -25,17 +27,24 @@ import { AccountView } from "@/components/views/AccountView";
 import { MailPrefsView } from "@/components/views/MailPrefsView";
 import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
+import { WhoamiView } from "@/components/views/WhoamiView";
+import { WelcomeCard } from "@/components/views/WelcomeCard";
 import { LoginView } from "@/components/views/LoginView";
 import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps, type OrgTab } from "@/components/views/OrgDetailView";
 import { BoardStep } from "@/components/onboarding/steps";
 import type { BoardRow } from "@/lib/people/board";
-import { OrgProfileForm } from "@/components/views/OrgProfileForm";
-import { parseProfile } from "@/lib/orgs/profile";
+import { OrgDetailsForm } from "@/components/settings/OrgDetails";
+import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
+import { OrgCalendarForm } from "@/components/calendar/OrgCalendarForm";
+import { InviteByEmail } from "@/components/views/InviteByEmail";
+import type { SettingsSectionId } from "@/lib/orgs/tabs";
 import { OrgsView } from "@/components/views/OrgsView";
 import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
-import { StartMeetingForm } from "@/components/views/StartMeetingForm";
+import { NextMeetingHero, type NextMeetingHeroProps } from "@/components/views/NextMeetingHero";
+import { MeetingMoreMenu } from "@/components/views/MeetingMoreMenu";
+import type { HeroState } from "@/lib/meetings/next-meeting";
 import type { DraftItem, MeetingType } from "@/lib/prepare/types";
 import { OverviewView, type GoalsPhase, type OverviewGoal } from "@/components/views/OverviewView";
 import type { Overview } from "@/lib/dashboard/overview";
@@ -50,8 +59,16 @@ import { onboardingRender } from "./onboarding-demo";
 import { SummarySettingsDemo, summaryRender } from "./summary-demo";
 import { inviteRender } from "./invite-demo";
 import { privatRender } from "./privat-demo";
+import { briefRender } from "./brief-demo";
 import { homeRender } from "./home-demo";
+import { treeCanvasRender } from "./tree-canvas-demo";
 import { ContextPicker } from "@/components/privat/ContextPicker";
+
+const WHOAMI_PEOPLE = [
+  { id: "p1", name: "Erik Lund", role: "Ledamot" },
+  { id: "p2", name: "Johan Ek", role: null },
+  { id: "p3", name: "Sara Nyström", role: "Kassör" },
+];
 
 function StadgarLead() {
   return <p className="text-sm text-ink-2">{useTranslations("stadgar")("lead")}</p>;
@@ -146,7 +163,7 @@ const liveBase: LiveMeetingProps = {
   onEndUnfinished: noop,
   onRetry: noop,
   tasks: demoTasks,
-  askTasks: async () => demoTasks.filter((t) => t.missing.length > 0),
+  askTasks: async () => ({ tasks: demoTasks.filter((t) => t.missing.length > 0), owners: ["Anna Berg", "Erik Lund"], setAsking: async () => true }),
 };
 
 /** The protocol import's meeting list (fictional förening and titles). */
@@ -254,6 +271,40 @@ function MicCheckDemo({ settingsOpen = false, silent = false }: { settingsOpen?:
       }}
       onMicCheckStop={() => setLevel(null)}
       agenda={<AgendaDemoStep view={{ state: "none" }} />}
+    />
+  );
+}
+
+/** A video call on the start screen: the steps and Chrome's dialog, then the two meters (local state). */
+function CallDemo({ initial = "none", support = "ok", foretag = false }: { initial?: "none" | "shared" | "no-audio"; support?: TabAudioSupport; foretag?: boolean }) {
+  const [source, setSource] = useState<CaptureSource>("call");
+  const [shared, setShared] = useState(initial === "shared");
+  const [micOnly, setMicOnly] = useState(false);
+  const [error, setError] = useState<CallShareError | null>(initial === "no-audio" ? "no-audio" : null);
+  return (
+    <LiveDemo
+      phase="consent"
+      agenda={<AgendaDemoStep view={{ state: "none" }} />}
+      source={source}
+      onSourceChange={setSource}
+      foretag={foretag}
+      callReady={support !== "ok" ? micOnly : shared}
+      callHint={support !== "ok" ? "Välj Spela in med bara mikrofonen, eller öppna sidan i Chrome eller Edge." : undefined}
+      callSetup={
+        <CallSetup
+          support={support}
+          micOnly={micOnly}
+          onMicOnly={() => setMicOnly(true)}
+          shared={shared}
+          sharing={false}
+          error={error}
+          levels={shared ? { mic: 0.42, call: 0.7 } : null}
+          onShare={() => {
+            setError(null);
+            setShared(true);
+          }}
+        />
+      }
     />
   );
 }
@@ -514,6 +565,71 @@ function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginL
   );
 }
 
+/** The förening page's Inställningar, one section open (fictional data). */
+function SettingsDemo({ section }: { section: SettingsSectionId }) {
+  return (
+    <AppChrome>
+      <WithLocale
+        render={(locale) => (
+          <OrgDetailView
+            org={{ ...org, ...orgProfile }}
+            isAdmin
+            userId={ME}
+            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+            members={adminMembers}
+            people={people}
+            meetings={meetings}
+            notice={section === "styrelsen" ? orgNotice(undefined, "admin-ny", locale) : null}
+            settingsSection={section}
+            boardList={(memberControls, linkActions) => (
+              <BoardStep
+                orgName={org.name}
+                rows={demoBoard}
+                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                myEmail="anna.berg@example.com"
+                memberControls={memberControls}
+                linkActions={linkActions}
+                inviteEmail={
+                  <InviteByEmail
+                    orgId={ORG_ID}
+                    orgName={org.name}
+                    inviterName="Anna Berg"
+                    inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                    invites={[]}
+                    send={async () => ({ ok: true, results: [], invites: [] })}
+                  />
+                }
+                onInvite={async () => null}
+                onAdd={async () => null}
+                onUpdate={async () => null}
+                onRemove={async () => null}
+              />
+            )}
+            detailsSettings={<OrgDetailsForm org={{ id: ORG_ID, name: org.name, logoUpdatedAt: null, profile: orgProfile }} />}
+            folderSettings={<MeetingFolderSetting orgId={ORG_ID} folderName="Styrelsen 2026–2027" folderSet pickerEnabled />}
+            calendarSettings={
+              <OrgCalendarForm
+                orgId={ORG_ID}
+                connected
+                calendars={[{ id: "kal-1", name: "Styrelsen" }, { id: "kal-2", name: "Föreningens möten" }]}
+                current={{ id: "kal-1", name: "Styrelsen", filter: null }}
+                save={async () => ({ ok: true })}
+                connect={noopAction}
+              />
+            }
+            voiceSettings={<VoicesSetting orgId={ORG_ID} board={demoBoard} />}
+            summarySettings={<SummarySettingsDemo />}
+            formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={noopAction} />}
+            startMeetingHref="#"
+            tabs={{ active: "installningar", href: orgTabsHref }}
+            actions={actions}
+          />
+        )}
+      />
+    </AppChrome>
+  );
+}
+
 const meetings: OrgDetailViewProps["meetings"] = [
   { id: "m1", status: "live", started_at: ago(42), ended_at: null, doc_id: "exempel1", started_by: "other" },
   { id: "m2", status: "done", started_at: ago(7 * 24 * 60), ended_at: ago(7 * 24 * 60 - 84), doc_id: "exempel2", started_by: ME },
@@ -555,6 +671,42 @@ const demoBoard: BoardRow[] = [
   { personId: "p5", name: "Johan Ek", role: null, email: null, status: "name", member: null, voiceConsent: false },
   { personId: null, name: null, role: null, email: "sara@example.com", status: "account", member: adminMembers[2], voiceConsent: false },
 ];
+
+/**
+ * The Möten tab with the Nästa möte card in a given state (the weekly loop). Without `state` the
+ * list decides: a live or ending meeting in it shows the card's running states.
+ */
+function HeroOrgDemo({
+  state,
+  list = meetings.slice(1),
+  calendar,
+  hero,
+}: {
+  state?: HeroState;
+  list?: OrgDetailViewProps["meetings"];
+  calendar?: NextMeetingHeroProps["calendar"];
+  hero?: Partial<NextMeetingHeroProps>;
+}) {
+  return (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={adminMembers}
+        people={people}
+        meetings={list}
+        meetingInfo={meetingInfo}
+        notice={null}
+        startMeeting={state && <NextMeetingHero orgId={ORG_ID} state={state} calendar={calendar} more={<MeetingMoreMenu orgId={ORG_ID} />} {...hero} />}
+        liveMeetingHref={() => "/design?vy=live"}
+        tabs={{ active: "moten", href: orgTabsHref }}
+        actions={actions}
+      />
+    </AppChrome>
+  );
+}
 
 const render: Record<string, () => ReactNode> = {
   tokens: () => <Tokens />,
@@ -612,18 +764,12 @@ const render: Record<string, () => ReactNode> = {
             people={people}
             meetings={meetings}
             notice={orgNotice("mote-active", undefined, locale)}
-            profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async (_id, input) => {
-              const r = parseProfile(input);
-              return r.ok ? { ok: true, profile: r.profile } : { ok: false, message: "Kontrollera fälten och försök igen.", errors: r.errors };
-            }} />}
             summarySettings={<SummarySettingsDemo />}
-            startMeetingHref="#"
             formatCard={
               <FormatCard
                 orgId={ORG_ID}
                 current={{ kind: "veckomote", name: "Veckomöte" }}
                 isAdmin
-                meetingFolder={{ id: null }}
                 formats={[]}
                 changeFormat={noopAction}
               />
@@ -637,43 +783,11 @@ const render: Record<string, () => ReactNode> = {
       />
     </AppChrome>
   ),
-  "org-settings": () => (
-    <AppChrome>
-      <WithLocale
-        render={(locale) => (
-          <OrgDetailView
-            org={org}
-            isAdmin
-            userId={ME}
-            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-            members={adminMembers}
-            people={people}
-            meetings={meetings}
-            notice={orgNotice(undefined, "admin-ny", locale)}
-            boardList={(memberControls) => (
-              <BoardStep
-                orgName={org.name}
-                rows={demoBoard}
-                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-                myEmail="anna.berg@example.com"
-                showInvite={false}
-                memberControls={memberControls}
-                onAdd={async () => null}
-                onUpdate={async () => null}
-                onRemove={async () => null}
-              />
-            )}
-            profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async () => ({ ok: true, profile: orgProfile })} />}
-            summarySettings={<SummarySettingsDemo />}
-            formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: null }} formats={[]} changeFormat={noopAction} />}
-            startMeetingHref="#"
-            tabs={{ active: "installningar", href: orgTabsHref }}
-            actions={actions}
-          />
-        )}
-      />
-    </AppChrome>
-  ),
+  "org-settings": () => <SettingsDemo section="foreningen" />,
+  "org-settings-styrelsen": () => <SettingsDemo section="styrelsen" />,
+  "org-settings-moten": () => <SettingsDemo section="moten" />,
+  "org-settings-efter": () => <SettingsDemo section="efter-motet" />,
+  "org-settings-radera": () => <SettingsDemo section="radera" />,
   "org-member": () => (
     <AppChrome>
       <OrgDetailView
@@ -733,7 +847,7 @@ const render: Record<string, () => ReactNode> = {
             meetings={[]}
             notice={orgNotice(undefined, "admin-ny", locale)}
             startMeetingHref="#"
-            boardList={(memberControls) => (
+            boardList={(memberControls, linkActions) => (
               <BoardStep
                 orgName={org.name}
                 rows={[
@@ -743,8 +857,8 @@ const render: Record<string, () => ReactNode> = {
                 ]}
                 inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
                 myEmail="anna.berg@example.com"
-                showInvite={false}
                 memberControls={memberControls}
+                linkActions={linkActions}
                 onAdd={async () => null}
                 onUpdate={async () => null}
                 onRemove={async () => null}
@@ -812,7 +926,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "veckomote", name: "Veckomöte", id: null, profile: VECKOMOTE }}
       isAdmin
-      meetingFolder={{ id: null }}
+     
       formats={[]}
       changeFormat={noopAction}
       pickerEnabled
@@ -822,7 +936,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
       isAdmin
-      meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
+     
       formats={savedFormats}
       changeFormat={noopAction}
       pickerEnabled
@@ -832,7 +946,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "veckomote", name: "Veckomöte", id: null, profile: VECKOMOTE }}
       isAdmin
-      meetingFolder={{ id: null }}
+     
       formats={[]}
       changeFormat={noopAction}
     />
@@ -841,7 +955,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
       isAdmin={false}
-      meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
+     
       formats={savedFormats}
     />
   ),
@@ -863,50 +977,55 @@ const render: Record<string, () => ReactNode> = {
     </AppChrome>
   ),
   "org-prepared": () => (
-    <AppChrome>
-      <OrgDetailView
-        org={org}
-        isAdmin
-        userId={ME}
-        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
-        people={people}
-        meetings={meetings.slice(1)}
-        notice={null}
-        startMeeting={
-          <StartMeetingForm
-            orgId={ORG_ID}
-            showTestMeeting
-            prepared={[{ date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }]}
-          />
-        }
-        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
-        tabs={{ active: "moten", href: orgTabsHref }}
-        actions={actions}
-      />
-    </AppChrome>
+    <HeroOrgDemo
+      state={{ kind: "prepared", prepared: { date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }, event: null, day: { type: "weekday", weekday: 2 } }}
+    />
   ),
-  "org-start": () => (
+  "org-start": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} />,
+  "org-calendar": () => (
+    <HeroOrgDemo
+      state={{ kind: "unprepared", event: { id: "ev1", title: "Styrelsemöte", date: "2026-12-01", time: "18:00", now: false }, day: { type: "weekday", weekday: 2 } }}
+      calendar={{ state: "ok", events: [{ id: "ev1", title: "Styrelsemöte", date: "2026-12-01", time: "18:00", now: false }] }}
+      hero={{
+        later: [
+          { id: "ev3", title: "Medlemsmöte", date: "2026-12-03", time: "18:30", now: false },
+          { id: "ev4", title: "Styrelsemöte", date: "2026-12-08", time: "18:00", now: false },
+        ],
+      }}
+    />
+  ),
+  "org-calendar-prepared": () => (
+    <HeroOrgDemo
+      state={{ kind: "prepared", prepared: { date: "2026-12-01", time: "18:00", kind: "styrelsemote", docUrl: "#" }, event: null, day: { type: "weekday", weekday: 2 } }}
+      calendar={{ state: "ok", events: [{ id: "ev2", title: "Styrelsemöte med valberedningen", date: "2026-12-08", time: "18:00", now: false }] }}
+      hero={{ later: [{ id: "ev2", title: "Styrelsemöte med valberedningen", date: "2026-12-08", time: "18:00", now: false }] }}
+    />
+  ),
+  "org-calendar-disconnected": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "disconnected", connect: noopAction }} />,
+  "org-calendar-unavailable": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "unavailable" }} />,
+  "org-calendar-loading": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} hero={{ pending: true }} />,
+  "org-ending": () => (
+    <HeroOrgDemo list={[{ ...meetings[0], status: "ending" }, ...meetings.slice(1)]} />
+  ),
+  "org-ended": () => (
+    <HeroOrgDemo
+      list={[{ ...meetings[1], started_at: ago(130), ended_at: ago(46) }, ...meetings.slice(2)]}
+      state={{ kind: "ended", meetingId: "m2" }}
+      hero={{ meeting: { id: "m2", title: "Budget och prova-på-kväll", startedAt: ago(130), endedAt: ago(46), decisions: 3, tasks: 5 }, summary: { state: "sent", sent: 3, mode: "missed" } }}
+    />
+  ),
+  "org-ended-pending": () => (
+    <HeroOrgDemo
+      list={[{ ...meetings[1], started_at: ago(70), ended_at: ago(1) }, ...meetings.slice(2)]}
+      state={{ kind: "ended", meetingId: "m2" }}
+      hero={{ meeting: { id: "m2", title: null, startedAt: ago(70), endedAt: ago(1), decisions: 0, tasks: 2 }, summary: { state: "pending" } }}
+    />
+  ),
+  "org-hero-foretag": () => (
     <AppChrome>
-      <OrgDetailView
-        org={org}
-        isAdmin
-        userId={ME}
-        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
-        people={people}
-        meetings={meetings.slice(1)}
-        notice={null}
-        startMeeting={
-          <StartMeetingForm
-            orgId={ORG_ID}
-            showTestMeeting
-          />
-        }
-        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
-        tabs={{ active: "moten", href: orgTabsHref }}
-        actions={actions}
-      />
+      <div className="mx-auto flex w-full max-w-[56rem] flex-col gap-6 px-gutter">
+        <NextMeetingHero orgId={ORG_ID} state={{ kind: "start" }} foretag />
+      </div>
     </AppChrome>
   ),
   "prepare-type": () => <PrepareDemo phase={{ step: "type" }} />,
@@ -991,7 +1110,7 @@ const render: Record<string, () => ReactNode> = {
             orgId={ORG_ID}
             current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll" }}
             isAdmin={false}
-            meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
+           
             formats={[]}
           />
         }
@@ -1013,6 +1132,28 @@ const render: Record<string, () => ReactNode> = {
     <PublicChrome>
       <JoinView state="invalid" />
     </PublicChrome>
+  ),
+  "whoami-pick": () => (
+    <AppChrome>
+      <WhoamiView orgId="o1" orgName="Exempelföreningen" people={WHOAMI_PEOPLE} adding={false} error={null} suggestedName="Sara Nyström" claim={noopAction} addSelf={noopAction} />
+    </AppChrome>
+  ),
+  "whoami-add": () => (
+    <AppChrome>
+      <WhoamiView orgId="o1" orgName="Exempelföreningen" people={WHOAMI_PEOPLE} adding error="namn" suggestedName="" claim={noopAction} addSelf={noopAction} />
+    </AppChrome>
+  ),
+  "whoami-none": () => (
+    <AppChrome>
+      <WhoamiView orgId="o1" orgName="Exempelföreningen" people={[]} adding={false} error={null} suggestedName="Sara Nyström" claim={noopAction} addSelf={noopAction} />
+    </AppChrome>
+  ),
+  "org-welcome": () => (
+    <AppChrome>
+      <div className="mx-auto w-full max-w-[60rem] px-gutter pt-8">
+        <WelcomeCard orgId="o1" orgName="Exempelföreningen" name="Sara Nyström" nextMeeting="tis 8 dec 18:00" />
+      </div>
+    </AppChrome>
   ),
   account: () => (
     <AppChrome>
@@ -1087,6 +1228,11 @@ const render: Record<string, () => ReactNode> = {
   "live-consent": () => <MicCheckDemo />,
   "live-consent-settings": () => <MicCheckDemo settingsOpen />,
   "live-consent-silent": () => <MicCheckDemo silent settingsOpen />,
+  "live-call": () => <CallDemo />,
+  "live-call-shared": () => <CallDemo initial="shared" />,
+  "live-call-no-audio": () => <CallDemo initial="no-audio" />,
+  "live-call-foretag": () => <CallDemo initial="shared" foretag />,
+  "live-call-unsupported": () => <CallDemo support="browser" />,
   "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" agenda={<AgendaDemoStep view={{ state: "none" }} />} />,
   "live-agenda-loading": () => <AgendaDemo view={{ state: "loading" }} inFolder={false} />,
   "live-agenda-today": () => (
@@ -1138,6 +1284,8 @@ const render: Record<string, () => ReactNode> = {
   ...Object.fromEntries(Object.entries(inviteRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   ...Object.fromEntries(Object.entries(homeRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   ...Object.fromEntries(Object.entries(privatRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(Object.entries(treeCanvasRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(Object.entries(briefRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   "live-privat-consent": () => <PrivatConsentDemo contexts={[{ id: "c1", name: "TDDE15" }, { id: "c2", name: "Exjobb" }, { id: "c3", name: "Övrigt" }]} />,
   "live-privat-first": () => <PrivatConsentDemo contexts={[]} />,
   "live-privat-ended": () => (

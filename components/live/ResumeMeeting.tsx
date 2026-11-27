@@ -23,6 +23,7 @@ export function ResumeMeeting({
   resuming,
   error,
   errorText,
+  callHint,
 }: {
   startedAt: string;
   orgName: string;
@@ -35,12 +36,14 @@ export function ResumeMeeting({
   /** Why "Fortsätt mötet" did not get going (mic blocked, server refused). */
   error?: StartError;
   errorText?: string | null;
+  /** The meeting is a video call: Fortsätt opens the share picker again (say so first). */
+  callHint?: boolean;
 }) {
   const t = useTranslations("live");
   const locale = useLocale();
   const dialog = useRef<LiveDialogHandle>(null);
   return (
-    <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="resume-title">
+    <section data-card className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="resume-title">
       <div className="flex flex-col gap-2">
         <h1 id="resume-title" className="text-2xl">
           {connectedElsewhere ? t("resume.elsewhereTitle") : t("resume.notEndedTitle")}
@@ -54,6 +57,7 @@ export function ResumeMeeting({
           </p>
         )}
       </div>
+      {callHint && <p className="text-sm text-ink-2">{t("call.resumeHint")}</p>}
       {error && <StartErrorBanner error={error} text={errorText} />}
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="primary" size="lg" icon={<IconPlay size={18} />} onClick={onResume} loading={resuming}>

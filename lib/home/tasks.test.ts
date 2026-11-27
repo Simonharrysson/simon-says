@@ -5,9 +5,12 @@ import {
   isOverdue,
   meetingCounts,
   myForeningTasks,
+  myHandoffTasks,
   myPrivatTasks,
+  pendingHandoffs,
   sortTasks,
   stockholmDay,
+  type HandoffRow,
   type HomeMeeting,
   type HomeNoteRow,
   type HomePerson,
@@ -200,5 +203,45 @@ describe("meetingCounts", () => {
       row("m", "note", { section: "note", kind: "note" }),
     ];
     expect(meetingCounts(rows, { maruna: "checkin" })).toEqual({ decisions: 1, tasks: 1 });
+  });
+});
+
+describe("Företag handoffs (0050)", () => {
+  const spaces = [{ id: "ftg", name: "Testbolag", kind: "foretag" as const, isAdmin: false }];
+  const people = [
+    { id: "p-kim", org_id: "ftg", name: "Kim", role: null, member_user_id: "kim" },
+    { id: "p-anna", org_id: "ftg", name: "Anna", role: null, member_user_id: "anna" },
+  ];
+  const row = (over: Partial<HandoffRow>): HandoffRow => ({
+    id: "h1",
+    org_id: "ftg",
+    meeting_id: "m-ceo",
+    owner_person_id: "p-kim",
+    text: "Ta fram siffror",
+    due: "fredag",
+    due_date: "2026-12-04",
+    from_name: "Anna",
+    status: "approved",
+    done: false,
+    created_at: "2026-11-27T10:00:00Z",
+    ...over,
+  });
+
+  it("an approved task: the reviewed text, the giver and the deadline, never its meeting", () => {
+    const [task, ...rest] = myHandoffTasks({ userId: "kim", spaces, handoffs: [row({})], people });
+    expect(rest).toEqual([]);
+    expect(task).toMatchObject({ key: "h:h1", kind: "handoff", text: "Ta fram siffror", fromName: "Anna", due: "fredag", dueDate: "2026-12-04", meetingId: "" });
+    expect(JSON.stringify(task)).not.toContain("m-ceo");
+  });
+
+  it("pending or someone else's: not in my tasks", () => {
+    expect(myHandoffTasks({ userId: "kim", spaces, handoffs: [row({ status: "pending" })], people })).toEqual([]);
+    expect(myHandoffTasks({ userId: "anna", spaces, handoffs: [row({})], people })).toEqual([]);
+  });
+
+  it("pending ones become approvals, with the owner's name", () => {
+    expect(pendingHandoffs({ spaces, handoffs: [row({ status: "pending" }), row({ id: "h2" })], people })).toEqual([
+      { id: "h1", spaceId: "ftg", spaceName: "Testbolag", meetingId: "m-ceo", text: "Ta fram siffror", due: "fredag", ownerName: "Kim", createdAt: "2026-11-27T10:00:00Z" },
+    ]);
   });
 });

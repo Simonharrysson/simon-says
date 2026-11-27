@@ -16,7 +16,7 @@ export function MailPrefsView(props: MailPrefsViewProps) {
   const t = useTranslations("mailPrefs");
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] grid items-start justify-items-center pt-[clamp(1rem,6vh,4rem)]">
-      <div className="w-full max-w-[34rem] rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel flex flex-col gap-6">
+      <div data-card className="w-full max-w-[34rem] rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel flex flex-col gap-6">
         {props.state === "ready" && (
           <>
             <div className="flex flex-col gap-2">

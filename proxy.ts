@@ -90,10 +90,11 @@ export function orgPageId(pathname: string): string | null {
 
 /** The pages of app/(app) (its layout requires a user). */
 export function isSignedInArea(pathname: string): boolean {
-  return /^\/(orgs|installningar)(\/|$)/.test(pathname);
+  return /^\/(orgs|foretag|installningar)(\/|$)/.test(pathname);
 }
 
 export const config = {
   // Skip static assets (incl. public/pcm-worklet.js), the OAuth callback (it sets the session itself) and cron/health.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js)$).*)"],
+  // The MCP server and its OAuth endpoints (Bearer tokens, no session cookies) skip it too.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback|api/health|api/mcp|api/oauth/|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js)$).*)"],
 };

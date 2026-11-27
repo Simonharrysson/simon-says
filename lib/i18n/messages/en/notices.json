@@ -40,6 +40,15 @@
     },
     "lamnat": {
       "text": "You have left the association. Documents already shared with you stay in your Drive."
+    },
+    "foretag": {
+      "text": "Your account can't create companies yet. During the trial it's invite only. E-mail simon@harrysson.co."
+    },
+    "foretag-raderat": {
+      "text": "The company has been deleted. The Google Docs stay in Drive."
+    },
+    "foretag-lamnat": {
+      "text": "You have left the company. Documents already shared with you stay in your Drive."
     }
   },
   "org": {
@@ -129,6 +138,33 @@
     },
     "kalender": {
       "text": "The calendar could not be saved. Choose one of your own calendars and try again. Only an admin can change it."
+    },
+    "grupp": {
+      "text": "The group couldn't be saved. The name may be taken, or the group ended up under itself."
+    },
+    "grupp-arkiv": {
+      "text": "The group couldn't be archived. First move the groups below it, and wait until a running meeting in the group is over."
+    },
+    "placering": {
+      "text": "The person couldn't be placed. Reload the page and try again."
+    },
+    "kundnamn": {
+      "text": "The customer's name couldn't be saved. There may already be a customer with that name."
+    },
+    "grupper": {
+      "text": "The groups couldn't be turned on or off. Try again."
+    },
+    "rapporterar": {
+      "text": "Couldn't change who the person reports to. Nobody can report to someone below them, and someone with people under them can't leave the tree."
+    },
+    "person": {
+      "text": "Couldn't add the person. Check the name and the e-mail address."
+    },
+    "person-finns": {
+      "text": "There's already a person with that name."
+    },
+    "chef-utan-plats": {
+      "text": "That person has no place in the tree yet and can't be a manager. Give them a place first."
     }
   }
 }

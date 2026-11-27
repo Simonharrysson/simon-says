@@ -11,5 +11,39 @@
   "joining": "Går med…",
   "join": "Gå med i {org}",
   "joiningAs": "Du går med som <strong>{email}</strong>.",
-  "switchAccount": "Byt konto"
+  "switchAccount": "Byt konto",
+  "whoami": {
+    "metaTitle": "Vem är du?",
+    "eyebrow": "Du är med i {org}",
+    "title": "Vem av dessa är du?",
+    "text": "Tryck på ditt namn. Då hamnar dina uppgifter hos dig, och anteckningarna vet vem som pratar.",
+    "listLabel": "Namn i {org} som inte har något konto än",
+    "linking": "Kopplar…",
+    "notListed": "Jag finns inte med",
+    "noneTitle": "Lägg till dig själv",
+    "noneText": "Alla i listan har redan ett konto. Skriv ditt namn, så lägger vi till dig.",
+    "notListedText": "Skriv ditt namn, så lägger vi till dig i listan.",
+    "nameLabel": "Ditt namn",
+    "nameHint": "För- och efternamn, som det ska stå i protokollet.",
+    "roleLabel": "Roll (valfritt)",
+    "roleHint": "Till exempel Kassör eller Ledamot.",
+    "add": "Lägg till mig",
+    "adding": "Lägger till…",
+    "later": "Gör det senare",
+    "error": {
+      "upptagen": "Någon annan har redan det namnet. Välj ett annat, eller be en admin om hjälp.",
+      "redan": "Du är redan kopplad till ett namn här. En admin kan ändra det under Inställningar.",
+      "namn": "Skriv ditt namn med bokstäver, högst fyra ord.",
+      "roll": "Skriv rollen med högst fyra ord, till exempel Kassör.",
+      "fel": "Det gick inte just nu. Försök igen."
+    }
+  },
+  "welcome": {
+    "title": "Välkommen till {org}!",
+    "youAre": "Du finns i listan som <strong>{name}</strong>.",
+    "nextMeeting": "Nästa möte: <strong>{when}</strong>",
+    "tasks": "Dina uppgifter från mötena hamnar under <link>Hem</link>.",
+    "docs": "Mötesanteckningarna delas med ditt Google-konto och finns under fliken Möten.",
+    "close": "Stäng välkomstrutan"
+  }
 }

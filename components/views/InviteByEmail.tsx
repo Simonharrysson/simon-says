@@ -57,7 +57,8 @@ export interface InviteByEmailProps {
   send?: SendInvites;
 }
 
-async function postInvites(orgId: string, emails: string[], resend: boolean, copy: { failed: string; offline: string }): Promise<SendResponse> {
+/** POST the addresses to the invites route (also a board row's own "Skicka inbjudan"). */
+export async function sendInvites(orgId: string, emails: string[], resend: boolean, copy: { failed: string; offline: string }): Promise<SendResponse> {
   try {
     const res = await fetch(`/api/orgs/${orgId}/invites`, {
       method: "POST",
@@ -78,13 +79,19 @@ export function InviteByEmail(p: InviteByEmailProps) {
   const t = useTranslations("invites");
   const locale = useLocale();
   const id = useId();
-  const send: SendInvites = p.send ?? ((emails, resend) => postInvites(p.orgId, emails, resend, { failed: t("sendFailed"), offline: t("offline") }));
+  const send: SendInvites = p.send ?? ((emails, resend) => sendInvites(p.orgId, emails, resend, { failed: t("sendFailed"), offline: t("offline") }));
   const [text, setText] = useState(p.initialText ?? "");
   const [preview, setPreview] = useState(Boolean(p.initialPreview));
   const [sending, setSending] = useState(false);
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
   const [results, setResults] = useState<AddressOutcome[] | null>(p.initialResults ?? null);
   const [invites, setInvites] = useState<InviteRow[]>(p.invites);
+  const [seenInvites, setSeenInvites] = useState(p.invites);
+  // An invite sent elsewhere (a board row's own button): the list follows.
+  if (seenInvites !== p.invites) {
+    setSeenInvites(p.invites);
+    setInvites(p.invites);
+  }
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -195,9 +202,9 @@ export function InviteByEmail(p: InviteByEmailProps) {
       {error && <Banner tone="danger">{error}</Banner>}
 
       {results && results.length > 0 && (
-        <ul className="flex flex-col rounded-md border border-line" aria-label={t("results")}>
+        <ul className="flex flex-col" aria-label={t("results")}>
           {results.map((r) => (
-            <li key={r.email} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-sm first:border-t-0">
+            <li key={r.email} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm first:border-t-0">
               <span className="min-w-0 flex-1 wrap-anywhere">{r.email}</span>
               <span className={cn("flex-none", tone(r.result))}>
                 {t(`result.${r.result}`)}
@@ -218,7 +225,7 @@ export function InviteByEmail(p: InviteByEmailProps) {
           <span className="text-sm font-medium" id={`${id}-sent`}>
             {t("sentInvites")}
           </span>
-          <ul className="flex flex-col rounded-md border border-line" aria-labelledby={`${id}-sent`}>
+          <ul className="flex flex-col" aria-labelledby={`${id}-sent`}>
             {invites.map((inv) => (
               <InviteListRow key={inv.email} invite={inv} busy={busyEmail === inv.email} disabled={sending || (busyEmail !== null && busyEmail !== inv.email)} onResend={() => run([inv.email], true, inv.email)} />
             ))}
@@ -236,7 +243,7 @@ function InviteListRow({ invite: inv, busy, disabled, onResend }: { invite: Invi
   const locale = useLocale();
   const resendable = canResend(inv);
   return (
-    <li className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-3 py-2 text-sm first:border-t-0">
+    <li className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 text-sm first:border-t-0">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="wrap-anywhere">{inv.email}</span>
         <span className={cn("text-xs", inv.status === "accepted" ? "text-green" : inv.status === "failed" ? "text-red" : "text-ink-3")}>
@@ -266,7 +273,7 @@ export function EmailPreview({ id, orgName, inviterName, inviteUrl }: { id?: str
   // The mail itself is in the recipient's language: Swedish unless their account chose English.
   const mail = translator(MAIL_LOCALE);
   return (
-    <figure id={id} className="m-0 flex flex-col gap-2" aria-label={t("previewLabel")}>
+    <figure id={id} data-picture className="m-0 flex flex-col gap-2" aria-label={t("previewLabel")}>
       <figcaption className="flex flex-col text-xs text-ink-3">
         <span>
           <span className="font-medium text-ink-2">{t("subject")}</span> {inviteSubject(inviterName, orgName, MAIL_LOCALE)}

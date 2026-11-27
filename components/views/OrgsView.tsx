@@ -76,6 +76,7 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
           <p className="text-xs text-ink-3">{t("limit")}</p>
         </form>
       </Panel>
+
     </div>
   );
 }

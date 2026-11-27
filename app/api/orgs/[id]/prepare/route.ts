@@ -1,3 +1,4 @@
+import { refuseForetag } from "@/lib/foretag/guard";
 import { NextResponse, type NextRequest } from "next/server";
 import { apiT, localizeMessage, requestLocale } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
@@ -29,6 +30,9 @@ async function signedIn() {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const { db, user } = await signedIn();
   if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
   if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));
@@ -54,6 +58,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const { db, user } = await signedIn();
   if (!user) return fail("unauthenticated", 401, t("api.unauthenticated"));
   if (!isUuid(id)) return fail("not_found", 404, t("api.orgNotFound"));

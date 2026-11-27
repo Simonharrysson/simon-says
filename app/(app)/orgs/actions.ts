@@ -6,12 +6,18 @@ import { redirect } from "next/navigation";
 import { getEnv } from "@/lib/env";
 import { isAdminEmail } from "@/lib/testmeeting/admin";
 import { isUuid } from "@/lib/db/ids";
+import { validName } from "@/lib/names/validate";
+import { afterJoinPath, welcomePath, whoamiError } from "@/lib/people/whoami";
 import {
   addPerson,
+  addSelfPerson,
+  claimPerson,
   createOrg,
+  isLinkedIn,
   deleteMeeting,
   deleteOrg,
   deletePerson,
+  getOrg,
   joinOrg,
   leaveOrg,
   listPeople,
@@ -28,6 +34,7 @@ import type { SummaryMode } from "@/lib/db/types";
 import { shareOrgDocsWithNewMember } from "@/lib/docs/access";
 import { adoptFormat, chooseStandardFormat } from "@/lib/formats/store";
 import { endFromOrgPage } from "@/lib/meetings/end-from-org";
+import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { END_BUDGET_MS, finishMeeting } from "@/lib/meetings/tick";
 import { validRole } from "@/lib/people/roles";
 import { LOGO_BUCKET, logoPath } from "@/lib/orgs/logo";
@@ -42,6 +49,11 @@ function orgIdFrom(form: FormData): string {
   const id = field(form, "orgId");
   if (!isUuid(id)) redirect("/orgs");
   return id;
+}
+
+/** Where an org's list page is: /foretag for a company (0050), /orgs for a förening. */
+async function listPathOf(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<"/foretag" | "/orgs"> {
+  return (await getOrg(db, orgId))?.kind === "foretag" ? "/foretag" : "/orgs";
 }
 
 export async function createOrgAction(form: FormData): Promise<void> {
@@ -59,19 +71,57 @@ export async function createOrgAction(form: FormData): Promise<void> {
 
 export async function joinOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
-  const orgId = await joinOrg(db, field(form, "code"));
-  if (orgId) {
-    // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
-    const { data } = await db.auth.getUser();
-    const user = data.user;
-    if (user?.email) {
-      const member = { id: user.id, email: user.email };
-      after(() =>
-        shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
-      );
-    }
+  const code = field(form, "code");
+  // Already a member (RLS shows a förening's row to its members only): reopening the invite
+  // link is no new join, so no welcome and no Doc sharing again.
+  const { data: existing } = code ? await db.from("orgs").select("id").eq("invite_code", code).maybeSingle() : { data: null };
+  const wasMember = Boolean(existing);
+  const orgId = await joinOrg(db, code);
+  if (!orgId) redirect("/orgs?fel=inbjudan");
+  const { data } = await db.auth.getUser();
+  const user = data.user;
+  const org = await getOrg(db, orgId);
+  // Företag (0050): admins place people; no "Vem av dessa är du?" (0051 is föreningar only).
+  if (org?.kind === "foretag") {
+    // The top rail gains Företag (from the layout) with the first company.
+    revalidatePath("/", "layout");
+    redirect(`/orgs/${orgId}`);
   }
-  redirect(orgId ? `/orgs/${orgId}` : "/orgs?fel=inbjudan");
+  if (user?.email && !wasMember) {
+    // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
+    // Only Docs of meetings this member can see under the visibility rule (lib/docs/access.ts):
+    // never a Privat möte, nor a group's meeting outside their place.
+    const member = { id: user.id, email: user.email };
+    after(() =>
+      shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
+    );
+  }
+  // The join trigger (0035) already linked them when an admin wrote their e-mail at their name;
+  // otherwise "Vem av dessa är du?" (0051).
+  const linked = user ? await isLinkedIn(db, orgId, user.id) : false;
+  redirect(wasMember && linked ? `/orgs/${orgId}` : afterJoinPath(orgId, linked));
+}
+
+/** "Vem av dessa är du?": the member taps their name (0051 checks: a member, an unlinked person, only themselves). */
+export async function claimPersonAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const personId = field(form, "personId");
+  const db = await createSupabaseServerClient();
+  const error = whoamiError(isUuid(personId) ? await claimPerson(db, personId) : "forbidden");
+  redirect(error ? `/orgs/${orgId}/vem?fel=${error}` : welcomePath(orgId));
+}
+
+/** "Jag finns inte med": the member adds their own name (+ optional role), linked to them. */
+export async function addSelfAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const name = validName(field(form, "name"));
+  if (!name) redirect(`/orgs/${orgId}/vem?fel=namn&ny=1`);
+  const rawRole = field(form, "role");
+  const role = validRole(rawRole);
+  if (rawRole.trim() !== "" && role === null) redirect(`/orgs/${orgId}/vem?fel=roll&ny=1`);
+  const db = await createSupabaseServerClient();
+  const error = whoamiError(await addSelfPerson(db, orgId, name, role));
+  redirect(error ? `/orgs/${orgId}/vem?fel=${error}&ny=1` : welcomePath(orgId));
 }
 
 export async function updateOrgAction(form: FormData): Promise<void> {
@@ -113,6 +163,8 @@ export async function addPersonAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
   if (!(await addPerson(db, orgId, field(form, "name")))) redirect(`/orgs/${orgId}?fel=personnamn`);
+  // A Företag: a new person may be linked to an account on the way (by e-mail).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -140,6 +192,8 @@ export async function setPersonRoleAction(form: FormData): Promise<void> {
   if (!people.some((p) => p.id === personId) || !(await setPersonRole(db, personId, role))) {
     redirect(`/orgs/${orgId}?fel=rollnamn`);
   }
+  // A Företag: task owners are also found by role (handoffs are re-checked).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -148,6 +202,8 @@ export async function deletePersonAction(form: FormData): Promise<void> {
   const personId = field(form, "personId");
   const db = await createSupabaseServerClient();
   if (isUuid(personId)) await deletePerson(db, personId);
+  // A Företag: their account loses what the person row gave it (Doc access, tasks).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -184,11 +240,14 @@ export async function endMeetingAction(form: FormData): Promise<void> {
 export async function deleteOrgAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
+  // A company goes back to Företag, a förening to Föreningar (read before it is gone).
+  const list = await listPathOf(db, orgId);
   const result = await deleteOrg(db, orgId, field(form, "confirmName"));
   if (result === "deleted") {
     // The logo is not under the org's cascade (storage): remove it as the service role.
     await supabaseAdmin().storage.from(LOGO_BUCKET).remove([logoPath(orgId)]).catch(() => null);
-    redirect("/orgs?klart=raderad");
+    if (list === "/foretag") revalidatePath("/", "layout");
+    redirect(list === "/foretag" ? "/foretag?klart=foretag-raderat" : "/orgs?klart=raderad");
   }
   redirect(`/orgs/${orgId}?fel=org-${result}`);
 }
@@ -197,6 +256,8 @@ export async function removeMemberAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const userId = field(form, "userId");
   const db = await createSupabaseServerClient();
+  // A Företag (0050): whoever can no longer see a meeting loses its Doc (no-op for a förening).
+  reconcileAfter(orgId);
   const result = isUuid(userId) ? await removeMember(db, orgId, userId) : "not_member";
   redirect(`/orgs/${orgId}?${result === "removed" ? "klart=medlem" : `fel=medlem-${result}`}`);
 }
@@ -204,8 +265,14 @@ export async function removeMemberAction(form: FormData): Promise<void> {
 export async function leaveOrgAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
+  // A Företag (0050): whoever can no longer see a meeting loses its Doc (no-op for a förening).
+  reconcileAfter(orgId);
+  const list = await listPathOf(db, orgId);
   const result = await leaveOrg(db, orgId);
-  if (result === "removed") redirect("/orgs?klart=lamnat");
+  if (result === "removed") {
+    if (list === "/foretag") revalidatePath("/", "layout");
+    redirect(list === "/foretag" ? "/foretag?klart=foretag-lamnat" : "/orgs?klart=lamnat");
+  }
   redirect(`/orgs/${orgId}?fel=medlem-${result}`);
 }
 
@@ -215,6 +282,8 @@ export async function setMemberRoleAction(form: FormData): Promise<void> {
   const userId = field(form, "userId");
   const role = field(form, "role");
   const db = await createSupabaseServerClient();
+  // A Företag (0050): whoever can no longer see a meeting loses its Doc (no-op for a förening).
+  reconcileAfter(orgId);
   const result =
     isUuid(userId) && (role === "admin" || role === "member") ? await setMemberRole(db, orgId, userId, role) : "invalid";
   if (result === "ok" || result === "unchanged") redirect(`/orgs/${orgId}?klart=${role === "admin" ? "admin-ny" : "admin-bort"}`);

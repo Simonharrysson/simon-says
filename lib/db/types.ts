@@ -53,7 +53,9 @@ export type MeetingEventKind =
   | "format_learned"
   | "followup_prefilled"
   | "checkin"
-  | "summary";
+  | "summary"
+  | "end_tasks"
+  | "task_setting";
 
 /** 0045: a förening (the default), the user's own Privat space, or (later) a company. */
 export type SpaceKind = "forening" | "privat" | "foretag";
@@ -87,6 +89,8 @@ export interface OrgRow {
   calendar_filter?: string | null;
   /** 0045: the kind of space; absent on rows read before 0045 (= förening). */
   kind?: SpaceKind;
+  /** 0054: a förening that organises its people in groups (the Företag tree and its visibility rule). Off by default. */
+  groups_enabled?: boolean;
   created_by: string | null;
   created_at: string;
 }
@@ -109,6 +113,8 @@ export interface PersonRow {
   /** 0035: voice consent recorded for the coming voice feature (when, by whom). */
   voice_consent_at?: string | null;
   voice_consent_by?: string | null;
+  /** 0051: when the member linked themselves to this person ("Nyss kopplad" for the admins). */
+  self_linked_at?: string | null;
   /** 0037: ticked for summary_mode 'selected' (only through set_summary_settings). */
   summary_selected?: boolean;
   /** 0037: set when the linked member was removed (or deleted their account); no e-mail by the old address. */
@@ -173,6 +179,8 @@ export interface MeetingRow {
   context_id?: string | null;
   /** 0048: the short title the final notes pass gave (lib/meetings/title.ts). */
   title?: string | null;
+  /** 0058: 'room' (the laptop's mic) or 'call' (a video call's tab audio + the mic). */
+  capture_source?: "room" | "call";
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */

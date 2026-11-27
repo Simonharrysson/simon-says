@@ -17,7 +17,7 @@ import { resolveOwner, type RolePerson } from "@/lib/people/roles";
 // - a task is done on its row or on its tasks-section copy (`<id>-t`, "✓ klart");
 // - never a Må-runda row (private to the meeting) or an info cell, never one a human deleted.
 
-export type SpaceKind = "forening" | "privat";
+export type SpaceKind = "forening" | "privat" | "foretag";
 
 export interface HomeSpace {
   id: string;
@@ -25,6 +25,8 @@ export interface HomeSpace {
   kind: SpaceKind;
   /** The user is an admin of this förening (may tick anyone's task). */
   isAdmin: boolean;
+  /** Follows the tree (a Företag, or a förening with groups, 0054): tasks may arrive as reviewed handoffs. */
+  tree?: boolean;
 }
 
 export interface HomePerson extends RolePerson {
@@ -61,9 +63,9 @@ export interface PrivatTaskRow {
 }
 
 export interface MyTask {
-  /** "n:<meetingId>:<itemId>" (förening) or "p:<taskId>" (Privat). */
+  /** "n:<meetingId>:<itemId>" (förening, Företag), "p:<taskId>" (Privat) or "h:<handoffId>" (a reviewed Företag task, 0050). */
   key: string;
-  kind: "note" | "privat";
+  kind: "note" | "privat" | "handoff";
   spaceId: string;
   spaceName: string;
   spaceKind: SpaceKind;
@@ -80,9 +82,38 @@ export interface MyTask {
   /** Privat: the context's name ("TDDE15"). */
   contextName: string | null;
   done: boolean;
-  /** Start of the meeting the task came from. */
+  /** Start of the meeting the task came from (a handoff: when it was held, never shown). */
   meetingAt: string;
   position: number;
+  /** A handoff (0050): who gave it ("Från Anna"). The meeting is never named or linked. */
+  fromName?: string | null;
+}
+
+/** A task_handoffs row (0050) as RLS shows it: approved ones to their owner, pending ones to approvers. */
+export interface HandoffRow {
+  id: string;
+  org_id: string;
+  meeting_id: string;
+  owner_person_id: string;
+  text: string;
+  due: string | null;
+  due_date: string | null;
+  from_name: string | null;
+  status: "pending" | "approved" | "dropped";
+  done: boolean;
+  created_at: string;
+}
+
+/** A pending handoff this user may approve, for "Väntar på godkännande". */
+export interface PendingHandoff {
+  id: string;
+  spaceId: string;
+  spaceName: string;
+  meetingId: string;
+  text: string;
+  due: string | null;
+  ownerName: string;
+  createdAt: string;
 }
 
 const key = (meetingId: string, id: string) => `${meetingId}\u0000${id}`;
@@ -150,7 +181,8 @@ export function myForeningTasks(input: {
   rows: HomeNoteRow[];
   people: HomePerson[];
 }): MyTask[] {
-  const spaces = new Map(input.spaces.filter((s) => s.kind === "forening").map((s) => [s.id, s]));
+  // Föreningar and Företag (whose rows RLS shows only to people who can see the meeting).
+  const spaces = new Map(input.spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => [s.id, s]));
   const meetings = input.meetings.filter((m) => spaces.has(m.org_id));
   const byId = new Map(meetings.map((m) => [m.id, m]));
   const out: MyTask[] = [];
@@ -165,7 +197,7 @@ export function myForeningTasks(input: {
       kind: "note",
       spaceId: space.id,
       spaceName: space.name,
-      spaceKind: "forening",
+      spaceKind: space.kind,
       meetingId: r.meeting_id,
       itemId: r.id,
       text: trimmed(r.text)!,
@@ -179,6 +211,59 @@ export function myForeningTasks(input: {
     });
   }
   return out;
+}
+
+/**
+ * Reviewed tasks for this user from a Företag or a förening with groups (0050/0054 task_handoffs, approved, owner linked to them): only
+ * the reviewed text, the giver and the deadline. No meeting id leaves here (nothing to link).
+ */
+export function myHandoffTasks(input: { userId: string; spaces: HomeSpace[]; handoffs: HandoffRow[]; people: HomePerson[] }): MyTask[] {
+  // A Företag, or a förening with groups (0054): the same handoffs.
+  const spaces = new Map(input.spaces.filter((s) => s.kind === "foretag" || s.kind === "forening").map((s) => [s.id, s]));
+  const out: MyTask[] = [];
+  for (const h of input.handoffs) {
+    const space = spaces.get(h.org_id);
+    if (!space || h.status !== "approved") continue;
+    if (!myPersonIds(input.people, h.org_id, input.userId).has(h.owner_person_id)) continue;
+    out.push({
+      key: `h:${h.id}`,
+      kind: "handoff",
+      spaceId: space.id,
+      spaceName: space.name,
+      spaceKind: space.kind,
+      meetingId: "",
+      itemId: h.id,
+      text: trimmed(h.text)!,
+      due: trimmed(h.due),
+      dueDate: h.due_date ?? null,
+      doneWhen: null,
+      contextName: null,
+      done: h.done,
+      meetingAt: h.created_at,
+      position: 0,
+      fromName: trimmed(h.from_name),
+    });
+  }
+  return out;
+}
+
+/** Pending handoffs this user may approve (RLS shows them only to approvers), oldest first. */
+export function pendingHandoffs(input: { spaces: HomeSpace[]; handoffs: HandoffRow[]; people: Pick<HomePerson, "id" | "name">[] }): PendingHandoff[] {
+  const spaces = new Map(input.spaces.map((s) => [s.id, s]));
+  const names = new Map(input.people.map((p) => [p.id, p.name]));
+  return input.handoffs
+    .filter((h) => h.status === "pending" && spaces.has(h.org_id))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    .map((h) => ({
+      id: h.id,
+      spaceId: h.org_id,
+      spaceName: spaces.get(h.org_id)!.name,
+      meetingId: h.meeting_id,
+      text: h.text,
+      due: trimmed(h.due),
+      ownerName: names.get(h.owner_person_id) ?? "",
+      createdAt: h.created_at,
+    }));
 }
 
 /** The user's Privat tasks: those without another owner. */

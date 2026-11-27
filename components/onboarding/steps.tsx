@@ -8,7 +8,7 @@ import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Check, Field, hintClass } from "@/components/ui/Field";
-import { IconCheck, IconChevronDown, IconFolder, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
+import { IconCheck, IconChevronDown, IconFolder, IconLink, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
@@ -17,10 +17,9 @@ import { formatDateTime } from "@/lib/format";
 import type { InviteRow } from "@/lib/invites/rules";
 import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
-import { StadgarArsmote, type StadgarPhase } from "@/components/views/StadgarArsmote";
 import { OrgLogo } from "./OrgLogo";
 import { OrgProfileFields } from "@/components/views/OrgProfileForm";
-import type { ProfileErrors, ProfileInput } from "@/lib/orgs/profile";
+import type { ProfileErrors, ProfileField, ProfileInput } from "@/lib/orgs/profile";
 
 // Kom igång's six steps and the end, presentational (no fetching): the container
 // (Onboarding.tsx) and the /design gallery give them data and callbacks.
@@ -52,6 +51,15 @@ export interface LogoStepProps {
   profile?: ProfileInput;
   onProfile?: (field: keyof ProfileInput, text: string) => void;
   profileErrors?: ProfileErrors;
+  /** Inställningar → Föreningen: Om oss and the links always shown (no disclosure). */
+  profileOpen?: boolean;
+  /** Företag: the name has its own form, so no name field here. */
+  hideName?: boolean;
+  /** Företag: its own hint under the logo, and only some of the profile fields with their own legend. */
+  logoHint?: string;
+  profileFields?: ProfileField[];
+  profileLegend?: string;
+  profileIntro?: string;
 }
 
 export function LogoStep(p: LogoStepProps) {
@@ -67,15 +75,17 @@ export function LogoStep(p: LogoStepProps) {
   };
   return (
     <div className="flex flex-col gap-8">
-      <Field
-        id={`${id}-name`}
-        label={t("orgName")}
-        value={p.name}
-        maxLength={100}
-        autoComplete="organization"
-        onChange={(e) => p.onName(e.target.value)}
-        error={p.nameError}
-      />
+      {!p.hideName && (
+        <Field
+          id={`${id}-name`}
+          label={t("orgName")}
+          value={p.name}
+          maxLength={100}
+          autoComplete="organization"
+          onChange={(e) => p.onName(e.target.value)}
+          error={p.nameError}
+        />
+      )}
       <div className="flex flex-col gap-3">
         <span className="text-sm font-medium">{t("label")}</span>
         <div className="flex items-center gap-6 max-[30rem]:flex-col max-[30rem]:items-start">
@@ -123,7 +133,7 @@ export function LogoStep(p: LogoStepProps) {
               )}
             </div>
             <p id={`${id}-hint`} className={cn(hintClass, "max-w-[22rem]")}>
-              {t("hint")}
+              {p.logoHint ?? t("hint")}
             </p>
           </div>
         </div>
@@ -142,14 +152,54 @@ export function LogoStep(p: LogoStepProps) {
         />
         <Note tone={p.message?.tone}>{p.message?.text}</Note>
       </div>
-      {p.profile && p.onProfile && <ProfileSection value={p.profile} onChange={p.onProfile} errors={p.profileErrors} />}
+      {p.profile && p.onProfile && (
+        <ProfileSection
+          value={p.profile}
+          onChange={p.onProfile}
+          errors={p.profileErrors}
+          alwaysOpen={p.profileOpen}
+          fields={p.profileFields}
+          legend={p.profileLegend}
+          intro={p.profileIntro}
+        />
+      )}
     </div>
   );
 }
 
-function ProfileSection({ value, onChange, errors }: { value: ProfileInput; onChange: (field: keyof ProfileInput, text: string) => void; errors?: ProfileErrors }) {
+function ProfileSection({
+  value,
+  onChange,
+  errors,
+  alwaysOpen,
+  fields,
+  legend,
+  intro,
+}: {
+  value: ProfileInput;
+  onChange: (field: keyof ProfileInput, text: string) => void;
+  errors?: ProfileErrors;
+  alwaysOpen?: boolean;
+  fields?: ProfileField[];
+  legend?: string;
+  intro?: string;
+}) {
   const pt = useTranslations("profile");
   const id = useId();
+  if (alwaysOpen) {
+    return (
+      <fieldset className="flex flex-col gap-4 border-t border-line pt-6">
+        <legend className="float-left mb-1 font-medium">{legend ?? pt("legend")}</legend>
+        <p className={cn(hintClass, "clear-left -mt-2 max-w-[40rem]")}>{intro ?? pt("intro")}</p>
+        <OrgProfileFields value={value} onChange={onChange} errors={errors} fields={fields} />
+      </fieldset>
+    );
+  }
+  return <ProfileDisclosure value={value} onChange={onChange} errors={errors} id={id} />;
+}
+
+function ProfileDisclosure({ value, onChange, errors, id }: { value: ProfileInput; onChange: (field: keyof ProfileInput, text: string) => void; errors?: ProfileErrors; id: string }) {
+  const pt = useTranslations("profile");
   const [open, setOpen] = useState(() => Object.values(value).some((v) => v.trim()) || Boolean(errors && Object.values(errors).some(Boolean)));
   const shown = open || Boolean(errors && Object.values(errors).some(Boolean));
   return (
@@ -205,15 +255,18 @@ export interface BoardStepProps {
    * also offers those (the trash still deletes only the name and role, after a confirm).
    */
   memberControls?: Record<string, ReactNode>;
-  /** False: no invite area under the list (the page has its own "Bjud in" panel). Default true. */
-  showInvite?: boolean;
+  /** Under "Dela länk": e.g. Inställningar's "Skapa ny länk". */
+  linkActions?: ReactNode;
+  /** Sends the invite e-mail to a person's address from their row; an error sentence, or null. */
+  onInvite?: (email: string) => Promise<string | null>;
+  /** "Det stämmer inte" on a "Nyss kopplad" row (0051): unlinks a member's self link. */
+  onUndoSelfLink?: (personId: string) => Promise<string | null>;
 }
 
 export function BoardStep(p: BoardStepProps) {
   const id = useId();
   const [editing, setEditing] = useState<string | null>(null);
   const t = useTranslations("onboarding.board");
-  const invited = p.rows.filter((r) => r.status === "invited");
   return (
     <div className="flex flex-col gap-6">
       <datalist id={`${id}-roles`}>
@@ -226,7 +279,7 @@ export function BoardStep(p: BoardStepProps) {
           <p>{t("emptyText")}</p>
         </EmptyState>
       ) : (
-        <ul className="flex flex-col rounded-lg bg-surface shadow-panel" aria-label={t("listLabel")}>
+        <ul className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-6 in-card:bg-transparent in-card:shadow-none" aria-label={t("listLabel")}>
           {p.rows.map((row) => {
             const key = row.personId ?? `m:${row.member?.userId}`;
             return (
@@ -254,6 +307,8 @@ export function BoardStep(p: BoardStepProps) {
                     onEdit={() => setEditing(key)}
                     onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined}
                     controls={row.member ? p.memberControls?.[row.member.userId] : undefined}
+                    onInvite={p.onInvite}
+                    onUndoSelfLink={row.personId && row.selfLinkedAt && p.onUndoSelfLink ? () => p.onUndoSelfLink!(row.personId!) : undefined}
                   />
                 )}
               </li>
@@ -262,26 +317,53 @@ export function BoardStep(p: BoardStepProps) {
         </ul>
       )}
 
-      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-rail p-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-rail p-4 in-card:border-0 in-card:bg-sunk/60">
         <span className="text-sm font-medium">{t("addSomeone")}</span>
         <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel={t("add")} onSubmit={(input) => p.onAdd(input)} onEditExisting={setEditing} resetOnSuccess />
       </div>
 
-      {invited.length > 0 && p.showInvite !== false && (
-        <div className="flex flex-col gap-3">
-          {p.inviteEmail ? (
-            <>
-              <span className="text-sm font-medium">{t("inviteByEmail")}</span>
-              <p className="text-sm text-ink-2">{t("inviteText")}</p>
-              {p.inviteEmail}
-              <CopyField id={`${id}-invite`} value={p.inviteUrl} label={t("orShare")} />
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-ink-2">{t("shareText")}</p>
-              <CopyField id={`${id}-invite`} value={p.inviteUrl} label={t("inviteLink")} />
-            </>
-          )}
+      <InviteArea inviteUrl={p.inviteUrl} inviteEmail={p.inviteEmail} linkActions={p.linkActions} />
+    </div>
+  );
+}
+
+/**
+ * Under the board list: the other two ways in, folded so the list stays the one place. "Bjud in
+ * via mejl" (several addresses at once, the e-mail's preview, every invite sent) and "Dela länk"
+ * (the invite link to pass on). Someone on the list gets theirs from their own row.
+ */
+function InviteArea({ inviteUrl, inviteEmail, linkActions }: { inviteUrl: string; inviteEmail?: ReactNode; linkActions?: ReactNode }) {
+  const t = useTranslations("onboarding.board");
+  const id = useId();
+  const [mail, setMail] = useState(false);
+  const [link, setLink] = useState(false);
+  const mailShown = mail;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {inviteEmail && (
+          <Button variant="secondary" size="sm" icon={<IconChevronDown size={16} className={cn("transition-transform duration-200 ease-out", !mailShown && "-rotate-90")} />} aria-expanded={mailShown} aria-controls={`${id}-mail`} onClick={() => setMail(!mailShown)}>
+            {t("inviteByEmail")}
+          </Button>
+        )}
+        <Button variant="ghost" size="sm" icon={<IconLink size={16} />} aria-expanded={link} aria-controls={`${id}-link`} onClick={() => setLink(!link)}>
+          {t("shareLink")}
+        </Button>
+      </div>
+      {inviteEmail && mailShown && (
+        <section id={`${id}-mail`} aria-labelledby={`${id}-mail-h`} className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel animate-notice-in in-card:bg-sunk/60 in-card:shadow-none">
+          <h3 id={`${id}-mail-h`} className="text-sm font-semibold">
+            {t("inviteByEmail")}
+          </h3>
+          <p className="text-sm text-ink-2">{t("inviteText")}</p>
+          {inviteEmail}
+        </section>
+      )}
+      {link && (
+        <div id={`${id}-link`} className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel animate-notice-in in-card:bg-sunk/60 in-card:shadow-none">
+          <p className="text-sm text-ink-2">{t("shareText")}</p>
+          <CopyField id={`${id}-invite`} value={inviteUrl} label={t("inviteLink")} />
+          {linkActions && <div>{linkActions}</div>}
         </div>
       )}
     </div>
@@ -323,22 +405,30 @@ function BoardRowView({
   onEdit,
   onRemove,
   controls,
+  onInvite,
+  onUndoSelfLink,
 }: {
   row: BoardRow;
   me: boolean;
   invite?: InviteRow;
   onEdit: () => void;
   onRemove?: () => Promise<string | null>;
+  onInvite?: (email: string) => Promise<string | null>;
   /** Account controls (the förening page's Inställningar), under the status line. */
   controls?: ReactNode;
+  onUndoSelfLink?: () => Promise<string | null>;
 }) {
   const t = useTranslations("onboarding.board");
   const orgT = useTranslations("org");
   const [removing, setRemoving] = useState(false);
+  const [undoing, setUndoing] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const locale = useLocale();
   const display = row.name ?? row.email ?? t("unknown");
+  const canInvite = Boolean(onInvite && row.status === "invited" && row.email && !invite);
   return (
-    <div className="flex flex-col gap-1 px-4 py-3">
+    <div className="flex flex-col gap-1 px-4 py-3 in-card:px-6">
       <div className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
         <span className="mt-0.5 grid size-9 flex-none place-items-center rounded-full bg-sunk text-sm font-medium text-ink-2" aria-hidden="true">
           {(row.name ?? "?").trim().charAt(0).toUpperCase()}
@@ -351,6 +441,40 @@ function BoardRowView({
           <span className="text-sm text-ink-3">
             <StatusLine row={row} me={me} invite={invite} />
           </span>
+          {row.selfLinkedAt && onUndoSelfLink && (
+            <span className="mt-1 flex flex-wrap items-center gap-x-2 text-sm">
+              <span className="text-ink-2">{t("selfLinked", { when: formatDateTime(row.selfLinkedAt, locale) })}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={undoing}
+                aria-label={t("undoSelfLinkLabel", { name: display })}
+                onClick={async () => {
+                  setUndoing(true);
+                  setError(await onUndoSelfLink());
+                  setUndoing(false);
+                }}
+              >
+                {t("undoSelfLink")}
+              </Button>
+            </span>
+          )}
+          {canInvite && (
+            <span className="mt-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={inviting}
+                onClick={async () => {
+                  setInviting(true);
+                  setError(await onInvite!(row.email!));
+                  setInviting(false);
+                }}
+              >
+                {t("sendInvite")}
+              </Button>
+            </span>
+          )}
           {controls && <span className="mt-1 -ml-3 flex flex-wrap items-center gap-1">{controls}</span>}
           {!row.personId && (
             <span className="mt-2">
@@ -452,7 +576,7 @@ function PersonForm({
     }
   };
   return (
-    <form onSubmit={submit} className={cn("flex flex-col gap-3", onCancel && "bg-board px-4 py-4")} noValidate>
+    <form onSubmit={submit} className={cn("flex flex-col gap-3", onCancel && "bg-board px-4 py-4 in-card:px-6")} noValidate>
       <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-3 max-[36rem]:grid-cols-1">
         <div className="flex flex-col gap-2">
           <Label htmlFor={`${uid}-name`}>{t("name")}</Label>
@@ -512,8 +636,8 @@ export function FolderStep(p: FolderStepProps) {
   return (
     <div className="flex flex-col gap-6">
       {p.folderSet ? (
-        <div className="flex items-center gap-4 rounded-lg bg-surface p-4 shadow-panel">
-          <span className="grid size-11 flex-none place-items-center rounded-md bg-sunk text-ink-2">
+        <div className="flex items-center gap-4 rounded-lg bg-surface p-4 shadow-panel in-card:bg-sunk/60 in-card:shadow-none">
+          <span className="grid size-11 flex-none place-items-center rounded-md bg-sunk text-ink-2 in-card:bg-surface">
             <IconFolder size={22} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
@@ -546,90 +670,6 @@ export function FolderStep(p: FolderStepProps) {
         </Banner>
       )}
       <Note>{p.message}</Note>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------------------------
-// 4. Så brukar ni ha möten
-
-export type WeeklyChoice = "veckomote" | "learn" | "current";
-
-export type { StadgarPhase } from "@/components/views/StadgarArsmote";
-
-export interface FormatStepProps {
-  choice: WeeklyChoice;
-  onChoice: (c: WeeklyChoice) => void;
-  /** The förening's current default when it is not plain Veckomöte/Enkel (e.g. "Eget (2026-11-02)"). */
-  currentName?: string | null;
-  /** The "learn from old minutes" flow (FormatEditor's LearnFormatView), shown under its option. */
-  learn?: ReactNode;
-  pickerEnabled: boolean;
-  stadgar: StadgarPhase;
-  /** An årsmöte from the stadgar is already saved (an earlier visit). */
-  stadgarSaved?: boolean;
-  onStadgarPick: () => void;
-  onStadgarChange: (arsmote: string[]) => void;
-  onStadgarSave: () => void;
-  onStadgarCancel: () => void;
-}
-
-
-export function FormatStep(p: FormatStepProps) {
-  const t = useTranslations("onboarding.format");
-  const stadgarCopy = useTranslations("stadgar");
-  const id = useId();
-  // The Veckomöte's items as they will stand in the (Swedish) Doc.
-  const preview = t.raw("preview") as string[];
-  const options: { value: WeeklyChoice; title: string; hint: ReactNode }[] = [
-    ...(p.currentName ? [{ value: "current" as const, title: t("keep", { name: p.currentName }), hint: t("keepHint") }] : []),
-    { value: "veckomote", title: t("weekly"), hint: t("weeklyHint", { items: preview.join(" · ") }) },
-    { value: "learn", title: t("learn"), hint: t("learnHint") },
-  ];
-  return (
-    <div className="flex flex-col gap-10">
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-3 text-lg font-semibold">{t("legend")}</legend>
-        {options.map((o) => {
-          const checked = p.choice === o.value;
-          return (
-            <div key={o.value} className={cn("rounded-lg border bg-surface transition-colors duration-120", checked ? "border-ink" : "border-line hover:border-control")}>
-              <label className="flex min-h-11 cursor-pointer items-start gap-3 p-4">
-                <input type="radio" name={`${id}-weekly`} value={o.value} checked={checked} onChange={() => p.onChoice(o.value)} className="mt-1 size-4 accent-[var(--ink)]" />
-                <span className="flex flex-col gap-1">
-                  <span className="font-medium">
-                    {o.title}
-                    {o.value === "veckomote" && !p.currentName && <span className="font-normal text-ink-3">{t("default")}</span>}
-                  </span>
-                  <span className={hintClass}>{o.hint}</span>
-                </span>
-              </label>
-              {checked && o.value === "learn" && p.learn && <div className="border-t border-line px-4 py-4 animate-notice-in">{p.learn}</div>}
-            </div>
-          );
-        })}
-      </fieldset>
-
-      <section className="flex flex-col gap-4" aria-labelledby={`${id}-stadgar`}>
-        <div className="flex flex-col gap-1">
-          <h2 id={`${id}-stadgar`} className="text-lg">
-            {t("statutes")} <span className="font-normal text-ink-3">{t("optional")}</span>
-          </h2>
-          <p className="max-w-[34rem] text-sm text-ink-2">
-            {stadgarCopy("lead")} {stadgarCopy("edit")}
-          </p>
-        </div>
-        <StadgarArsmote
-          uid={`${id}-stadgar`}
-          stadgar={p.stadgar}
-          pickerEnabled={p.pickerEnabled}
-          saved={p.stadgarSaved}
-          onPick={p.onStadgarPick}
-          onChange={p.onStadgarChange}
-          onSave={p.onStadgarSave}
-          onCancel={p.onStadgarCancel}
-        />
-      </section>
     </div>
   );
 }
@@ -689,7 +729,7 @@ export function VoicesStep(p: VoicesStepProps) {
   const id = useId();
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel">
+      <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel in-card:bg-sunk/60 in-card:shadow-none">
         <p className="font-medium">{t("soon")}</p>
         <p className="text-sm text-ink-2">{t("idea")}</p>
         <p className="text-sm text-ink-3">{t("notYet")}</p>
@@ -701,9 +741,9 @@ export function VoicesStep(p: VoicesStepProps) {
       ) : (
         <fieldset className="flex flex-col gap-1">
           <legend className="mb-3 text-sm font-medium">{t("legend")}</legend>
-          <ul className="flex flex-col rounded-lg bg-surface shadow-panel">
+          <ul className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-6 in-card:bg-transparent in-card:shadow-none">
             {p.people.map((person) => (
-              <li key={person.personId} className="border-t border-line px-4 py-3 first:border-t-0">
+              <li key={person.personId} className="border-t border-line px-4 py-3 first:border-t-0 in-card:px-6">
                 <Check
                   id={`${id}-${person.personId}`}
                   title={
@@ -732,7 +772,22 @@ export function VoicesStep(p: VoicesStepProps) {
 // ---------------------------------------------------------------------------------------------
 // Klart
 
-export function DoneStep({ done, skipped, prepareHref, orgHref, onGo }: { done: StepId[]; skipped: StepId[]; prepareHref: string; orgHref: string; onGo?: (s: StepId) => void }) {
+export function DoneStep({
+  done,
+  skipped,
+  prepareHref,
+  orgHref,
+  onGo,
+  editHref,
+}: {
+  done: StepId[];
+  skipped: StepId[];
+  prepareHref: string;
+  orgHref: string;
+  onGo?: (s: StepId) => void;
+  /** Where a done step's setting lives now (Inställningar's section): "Ändra" links there. */
+  editHref?: (s: StepId) => string;
+}) {
   const t = useTranslations("onboarding");
   return (
     <div className="flex flex-col gap-8">
@@ -752,6 +807,12 @@ export function DoneStep({ done, skipped, prepareHref, orgHref, onGo }: { done: 
                 <Button variant="ghost" size="sm" onClick={() => onGo(s.id)}>
                   {skipped.includes(s.id) ? t("done.doNow") : t("done.open")}
                 </Button>
+              )}
+              {isDone && editHref && (
+                <ButtonLink href={editHref(s.id)} variant="ghost" size="sm">
+                  {t("done.change")}
+                  <span className="sr-only">: {t(`steps.${s.id}.title`)}</span>
+                </ButtonLink>
               )}
             </li>
           );

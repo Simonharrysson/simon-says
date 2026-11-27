@@ -246,7 +246,7 @@ export function AgendaStepView(p: AgendaStepViewProps) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-line p-4" aria-labelledby={`${id}-title`} aria-busy={p.busy || undefined}>
+    <section className="flex flex-col gap-3 rounded-lg bg-sunk/60 p-4" aria-labelledby={`${id}-title`} aria-busy={p.busy || undefined}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h2 id={`${id}-title`} className="text-sm font-semibold text-ink-2">

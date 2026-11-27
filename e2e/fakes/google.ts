@@ -159,6 +159,18 @@ export class GoogleFake {
       if (path === "drive/v3/drives" && method === "GET") return send(res, 200, { drives: [] });
       if ((m = path.match(/^drive\/v3\/files\/([^/]+)\/export$/)) && method === "GET") return sendRaw(res, this.exportText(m[1]), "text/plain; charset=utf-8");
       if ((m = path.match(/^drive\/v3\/files\/([^/]+)\/permissions$/)) && method === "POST") return send(res, 200, this.share(m[1], json()));
+      if ((m = path.match(/^drive\/v3\/files\/([^/]+)\/permissions$/)) && method === "GET") {
+        const f = this.file(m[1]);
+        return send(res, 200, { permissions: f.permissions.map((p) => ({ kind: "drive#permission", id: p.id, emailAddress: p.emailAddress, role: p.role, type: "user" })) });
+      }
+      if ((m = path.match(/^drive\/v3\/files\/([^/]+)\/permissions\/([^/]+)$/)) && method === "DELETE") {
+        const f = this.file(m[1]);
+        const before = f.permissions.length;
+        f.permissions = f.permissions.filter((p) => p.id !== m![2]);
+        if (f.permissions.length === before) throw new HttpError(404, `Permission not found: ${m[2]}.`, "notFound");
+        res.writeHead(204);
+        return void res.end();
+      }
       if ((m = path.match(/^drive\/v3\/files\/([^/]+)$/))) {
         const file = this.file(m[1]);
         if (method === "GET") {
@@ -248,8 +260,10 @@ export class GoogleFake {
     const f = this.file(id);
     const email = String(body.emailAddress ?? "").toLowerCase();
     if (!email || this.unshareable.has(email)) throw new HttpError(400, `Invalid sharing request: ${email} has no Google account.`, "invalidSharingRequest");
-    const perm = { id: newId(), emailAddress: email, role: String(body.role ?? "writer") };
-    f.permissions.push(perm);
+    // As Drive: an address that already has access gets its existing permission back.
+    const had = f.permissions.find((p) => p.emailAddress === email);
+    const perm = had ?? { id: newId(), emailAddress: email, role: String(body.role ?? "writer") };
+    if (!had) f.permissions.push(perm);
     return { kind: "drive#permission", id: perm.id, role: perm.role, type: "user" };
   }
 

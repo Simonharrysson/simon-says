@@ -27,14 +27,14 @@
   "save": "Spara kalender",
   "saving": "Sparar …",
   "saved": "Sparat",
-  "upcomingLabel": "Från kalendern",
-  "prepare": "Förbered",
-  "start": "Starta",
-  "prepareLabel": "Förbered {title}",
-  "startLabel": "Starta {title}",
   "nothingUpcoming": "Inga kommande möten i kalendern.",
   "connectHint": "Koppla din kalender så visas föreningens kommande möten här.",
   "unavailable": "Kalendern gick inte att läsa med ditt Google-konto.",
   "untitled": "Möte utan namn",
-  "fromCalendar": "Från kalendern: {title}"
+  "fromCalendar": "Från kalendern: {title}",
+  "prepare": "Förbered",
+  "start": "Starta",
+  "prepareLabel": "Förbered {title}",
+  "startLabel": "Starta {title}",
+  "laterLabel": "Senare i kalendern"
 }

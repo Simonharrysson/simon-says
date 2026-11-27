@@ -48,9 +48,9 @@ jobs:
       - name: local Supabase env
         run: |
           supabase status -o env \
-            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
+            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
           cut -d= -f1 local.env
-          test "$(wc -l < local.env)" -eq 3
+          test "$(wc -l < local.env)" -eq 4
           cat local.env >> "$GITHUB_ENV"
           rm local.env
 
@@ -108,9 +108,9 @@ jobs:
       - name: local Supabase env
         run: |
           supabase status -o env \
-            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
+            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
           cut -d= -f1 local.env
-          test "$(wc -l < local.env)" -eq 3
+          test "$(wc -l < local.env)" -eq 4
           cat local.env >> "$GITHUB_ENV"
           rm local.env
 

@@ -1,16 +1,20 @@
+import { isForetagOrg } from "@/lib/foretag/guard";
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { Onboarding } from "@/components/onboarding/Onboarding";
 import { isUuid } from "@/lib/db/ids";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { getOrg, listPeople, myRole } from "@/lib/db/orgs";
 import { getEnv, pickerEnabled } from "@/lib/env";
-import { FORMAT_NAMES } from "@/lib/formats/standard";
-import { orgDefaultFormat } from "@/lib/formats/store";
+import { FormatCard } from "@/components/views/FormatCard";
+import { formatName } from "@/lib/formats/standard";
+import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { historySummary } from "@/lib/history/store";
 import { loadOnboarding } from "@/lib/onboarding/store";
 import { resumeStep, stepFromNumber, type OnboardingState } from "@/lib/onboarding/steps";
+import { orgTabHref } from "@/lib/orgs/tabs";
+import { changeFormatAction } from "../../actions";
 import { appOrigin } from "@/lib/origin";
 import { boardRows } from "@/lib/people/board";
 import type { InviteRow } from "@/lib/invites/rules";
@@ -29,11 +33,15 @@ const EMPTY: OnboardingState = { done: [], skipped: [], completedAt: null, dismi
  * Kom igång (todo #5): the förening's admins set it up one calm step at a time. `?steg=1..6`
  * (or `klart`) opens a step; without it the first step not done yet. Members go to the förening.
  * A förening from before onboarding has no row: the steps still work, progress is not stored.
+ * Once an admin has hidden it ("Fortsätt senare" on the card) it is gone: every setting it touched
+ * lives in Inställningar, so the link leads there.
  */
 export default async function OnboardingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ steg?: string }> }) {
   const { id } = await params;
   const { steg } = await searchParams;
   if (!isUuid(id)) notFound();
+  // Förening only: a Företag (0050) has none of this.
+  if (await isForetagOrg(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org) notFound();
@@ -43,15 +51,18 @@ export default async function OnboardingPage({ params, searchParams }: { params:
   if (role !== "admin") redirect(`/orgs/${id}`);
 
   // Service role for the invites: only after the admin check above.
-  const [state, people, members, format, history, user, invites] = await Promise.all([
+  const locale = await getLocale();
+  const [state, people, members, format, formats, history, user, invites] = await Promise.all([
     loadOnboarding(db, id),
     listPeople(db, id),
     orgMemberList(id).catch((): OrgMember[] => []),
     orgDefaultFormat(db, id),
+    listOrgFormats(db, id),
     historySummary(db, id).catch(() => ({ count: 0 })),
     db.auth.getUser(),
     listInvites(supabaseAdmin(), id).catch((): InviteRow[] => []),
   ]);
+  if (state?.dismissedAt) redirect(orgTabHref(id, "installningar"));
   const s = state ?? EMPTY;
   const step = steg === "klart" ? "klart" : (stepFromNumber(steg) ?? resumeStep(s) ?? "klart");
 
@@ -73,8 +84,21 @@ export default async function OnboardingPage({ params, searchParams }: { params:
       invites={invites}
       inviterName={inviterNameFor(people.find((x) => x.member_user_id === user.data.user?.id)?.name, user.data.user?.user_metadata)}
       pickerEnabled={pickerEnabled(getEnv())}
-      format={{ kind: format.id ? format.profile.kind : null, name: format.profile.kind === "learned" ? "ert eget format" : FORMAT_NAMES[format.profile.kind], profile: format.id ? format.profile : null }}
-      stadgarSaved={Boolean(org.arsmote_format_id)}
+      formatCard={
+        // Nothing saved yet: the card shows the Veckomöte that Fortsätt makes (as the step did).
+        <FormatCard
+          orgId={id}
+          current={
+            format.id
+              ? { kind: format.profile.kind, name: formatName(format.profile.kind, locale), id: format.id, profile: format.profile }
+              : { kind: "veckomote", name: formatName("veckomote", locale) }
+          }
+          isAdmin
+          formats={formats}
+          changeFormat={changeFormatAction}
+          pickerEnabled={pickerEnabled(getEnv())}
+        />
+      }
       historyCount={history.count}
     />
   );

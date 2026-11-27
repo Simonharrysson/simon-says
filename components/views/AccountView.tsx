@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { EmailPrefs } from "@/lib/email/categories";
-import { EmailPrefsForm, type SaveEmailPrefs } from "./EmailPrefsForm";
+import { EmailPrefsForm, type BriefForeningarPref, type SaveEmailPrefs } from "./EmailPrefsForm";
 import { LanguageSelect } from "./LanguageSelect";
 
 export function AccountView({
@@ -16,25 +16,32 @@ export function AccountView({
   signOut,
   emailPrefs,
   saveEmailPrefs,
+  briefForeningar,
   saveLocale,
   localeFailed,
   calendar,
+  ai,
 }: {
   email: string;
   signOut: FormAction;
   /** null: the choices could not be loaded (the panel says so instead of guessing). */
   emailPrefs: EmailPrefs | null;
   saveEmailPrefs: SaveEmailPrefs;
+  /** Inför möten for föreningar (opt-in, 0059); absent: not offered. */
+  briefForeningar?: BriefForeningarPref;
   /** Saves the language (form field `locale`): the account's row and the `lang` cookie. */
   saveLocale: FormAction;
   /** The last save reached the cookie but not the account (`?fel=sprak`). */
   localeFailed?: boolean;
   /** "Kalender" (todo #14): connect or disconnect the Google Calendar (CalendarConnect). */
   calendar?: ReactNode;
+  /** "Kopplade AI-assistenter" (the MCP server, components/views/AiConnections.tsx). */
+  ai?: ReactNode;
 }) {
   const t = useTranslations("account");
   const common = useTranslations("common");
   const calT = useTranslations("calendar");
+  const connectT = useTranslations("connect");
   const locale = useLocale();
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">
@@ -67,7 +74,7 @@ export function AccountView({
         <div className="flex flex-col gap-4">
           <p className="text-ink-2 max-w-[68ch]">{t("mailIntro")}</p>
           {emailPrefs ? (
-            <EmailPrefsForm initial={emailPrefs} save={saveEmailPrefs} idPrefix="account-mail" />
+            <EmailPrefsForm initial={emailPrefs} save={saveEmailPrefs} idPrefix="account-mail" briefForeningar={briefForeningar} />
           ) : (
             <Banner tone="warning" title={t("mailLoadErrorTitle")}>
               {t("mailLoadErrorText")}
@@ -78,6 +85,11 @@ export function AccountView({
       {calendar && (
         <Panel title={calT("connectTitle")} titleId="calendar-title" id="kalender">
           {calendar}
+        </Panel>
+      )}
+      {ai && (
+        <Panel title={connectT("panelTitle")} titleId="ai-title" id="ai">
+          {ai}
         </Panel>
       )}
       <Panel title={t("orgsTitle")} titleId="orgs-link-title">

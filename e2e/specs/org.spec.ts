@@ -2,12 +2,12 @@ import { OPERATORS } from "../env";
 import { expect, expectAccessible, fake, queuePick, seedMeeting, test } from "../fixtures";
 
 // The förening page: the Mötesformat "Ändra" menu, settings, deleting a meeting and the förening,
-// and the service admin's Testmöte menu. Format, settings and Radera live on the admin's
-// Inställningar tab (`?flik=installningar`).
+// and the service admin's Testmöte menu (the Nästa möte card's "Mer"). Format, settings and Radera live in the sections of the
+// admin's Inställningar tab (`?flik=installningar&del=…`).
 
-test("Mötesformat: Ändra → Byt format, and Välj mötesmapp in the Picker @phone", async ({ page, seedOrg, db }) => {
+test("Möten: Ändra → Byt format, and Välj mötesmapp in the Picker @phone", async ({ page, seedOrg, db }) => {
   const org = await seedOrg();
-  await page.goto(`${org.url}?flik=installningar`);
+  await page.goto(`${org.url}?flik=installningar&del=moten`);
   const card = page.locator("section", { has: page.getByRole("heading", { name: "Mötesformat" }) });
   await expect(card).toBeVisible();
 
@@ -24,26 +24,34 @@ test("Mötesformat: Ändra → Byt format, and Välj mötesmapp in the Picker @p
   // Välj mötesmapp: the Picker hands back a folder the admin owns.
   const folder = await fake.createDoc({ name: `Möten ${org.name}`, mimeType: "application/vnd.google-apps.folder" });
   await queuePick(page, [{ id: folder.id, name: folder.name, mimeType: "application/vnd.google-apps.folder" }]);
-  await card.getByRole("button", { name: "Ändra" }).click();
-  await page.getByRole("menuitem", { name: /Välj mötesmapp/ }).click();
-  await expect(card.getByText(`Mötesmapp: ${folder.name}`)).toBeVisible();
+  const folderPanel = page.locator("section", { has: page.getByRole("heading", { name: "Mötesmapp", exact: true }) });
+  await folderPanel.getByRole("button", { name: "Välj mapp i Google Drive" }).click();
+  await expect(folderPanel.getByText(folder.name)).toBeVisible();
   const { data } = await db.from("orgs").select("meeting_folder_id").eq("id", org.id).single();
   expect(data?.meeting_folder_id).toBe(folder.id);
 });
 
-test("settings: rename the förening and stop sharing the transcript", async ({ page, seedOrg }) => {
+test("settings: rename the förening (Spara) and stop sharing the transcript (saved on change)", async ({ page, seedOrg, db }) => {
   const org = await seedOrg();
   await page.goto(`${org.url}?flik=installningar`);
-  const settings = page.locator("section", { has: page.getByRole("heading", { name: "Allmänt" }) });
+  const details = page.locator("section", { has: page.getByRole("heading", { name: "Namn, logga och om oss" }) });
   const newName = `${org.name} (ny)`;
-  await settings.getByRole("textbox", { name: "Namn", exact: true }).fill(newName);
-  await settings.getByRole("checkbox", { name: /Dela transkriptionen i dokumentet/ }).uncheck();
-  await settings.getByRole("button", { name: "Spara ändringar" }).click();
-  await expect(settings.getByText("Sparat")).toBeVisible();
+  await details.getByRole("textbox", { name: "Föreningens namn" }).fill(newName);
+  await details.getByRole("button", { name: "Spara", exact: true }).click();
+  await expect(details.getByText("Sparat")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(newName);
+
+  // A switch saves on change, with the saved name (never a draft typed meanwhile).
+  await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Möten" }).click();
+  const during = page.locator("section", { has: page.getByRole("heading", { name: "Under mötet" }) });
+  await during.getByRole("checkbox", { name: /Dela transkriptionen i dokumentet/ }).uncheck();
+  await expect(during.getByText("Sparat")).toBeVisible();
+  const { data } = await db.from("orgs").select("name, share_transcript, require_task_fields").eq("id", org.id).single();
+  expect(data).toMatchObject({ name: newName, share_transcript: false, require_task_fields: true });
 
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(newName);
-  await expect(settings.getByRole("checkbox", { name: /Dela transkriptionen i dokumentet/ })).not.toBeChecked();
+  await expect(during.getByRole("checkbox", { name: /Dela transkriptionen i dokumentet/ })).not.toBeChecked();
   await expectAccessible(page);
 
   // The account page.
@@ -79,6 +87,7 @@ test("delete a meeting, then the förening (confirm dialogs)", async ({ page, se
   // Radera föreningen (Inställningar) needs the name typed.
   await page.getByRole("navigation", { name: "Föreningens vyer" }).getByRole("link", { name: "Inställningar" }).click();
   await expect(page).toHaveURL(/flik=installningar/);
+  await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Radera" }).click();
   await page.getByRole("button", { name: "Radera föreningen" }).click();
   const confirm = page.getByRole("dialog", { name: `Radera ${org.name}?` });
   const go = confirm.getByRole("button", { name: "Radera för alltid" });
@@ -93,11 +102,17 @@ test("Testmöte menu: Utan dagordning starts a replay, Avsluta mötet ends it fr
   const operator = OPERATORS[testInfo.retry % OPERATORS.length];
   const org = await seedOrg({ admin: operator });
   const { page } = await signedIn(operator, org.url);
-  await page.getByRole("button", { name: "Testmöte" }).click();
+  // Testmöte lives in the Nästa möte card's quiet "Mer" menu, out of the way of Förbered and Starta.
+  const card = page.getByRole("region", { name: "Ingen dagordning än" });
+  await card.getByRole("button", { name: "Mer" }).click();
   await expect(page.getByRole("menuitem", { name: /Med dagordning/ })).toBeVisible();
   await page.getByRole("menuitem", { name: /Utan dagordning/ }).click();
 
-  await expect(page.getByText("Ett möte pågår")).toBeVisible({ timeout: 30_000 });
+  // The card turns live: "Ett möte pågår", and no "Mer" while it runs.
+  const live = page.getByRole("region", { name: "Ett möte pågår" });
+  await expect(live).toBeVisible({ timeout: 30_000 });
+  await expect(live.getByText("Pågår", { exact: true })).toBeVisible();
+  await expect(live.getByRole("button", { name: "Mer" })).toHaveCount(0);
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings).toContainText("Pågår");
   const { data: m } = await db.from("meetings").select("id, doc_id, is_test").eq("org_id", org.id).single();
