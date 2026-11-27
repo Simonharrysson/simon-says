@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// The OAuth and audit tables (0056_mcp.sql) behind one interface, so the endpoints' rules are
+// The OAuth and audit tables (0060_mcp.sql) behind one interface, so the endpoints' rules are
 // unit-tested against memoryStore() and run on the service role in production (dbStore). Nothing
-// here ever reads meetings: tool data goes through the user's own client (lib/mcp/user-client.ts).
+// here ever reads meetings: tool data goes through the mcp_* functions (lib/mcp/reader.ts).
 
 export interface ClientRow {
   id: string;

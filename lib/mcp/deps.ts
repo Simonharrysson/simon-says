@@ -1,10 +1,10 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { getEnv } from "@/lib/env";
 import { canCreateForetag } from "@/lib/foretag/gate";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { McpDeps } from "./handler";
+import { dbReader } from "./reader";
 import { dbStore, type McpStore } from "./store";
 import { defaultToolDeps } from "./tools";
 
@@ -14,19 +14,16 @@ export function mcpStore(): McpStore {
   return dbStore(supabaseAdmin());
 }
 
-/** MCP is configured (SUPABASE_JWT_SECRET set); every endpoint answers 503 otherwise. */
+/** MCP is on (kept as a switch for the routes; the allow-list gates who may use it). */
 export function mcpConfigured(): boolean {
-  return Boolean(getEnv().SUPABASE_JWT_SECRET);
+  return true;
 }
 
 export function mcpDeps(): McpDeps {
-  const env = getEnv();
   return {
     origin: appOrigin(),
-    supabaseUrl: env.SUPABASE_URL,
-    anonKey: env.SUPABASE_ANON_KEY,
-    jwtSecret: env.SUPABASE_JWT_SECRET,
     store: mcpStore(),
+    reader: (userId) => dbReader(supabaseAdmin(), userId),
     loadUser: async (userId) => {
       const { data, error } = await supabaseAdmin().auth.admin.getUserById(userId);
       if (error || !data.user) return null;

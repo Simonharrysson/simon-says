@@ -1,42 +1,38 @@
 import type { User } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
-import { connectAs, MCP_URL, ORIGIN, resultOf } from "@/test/mcp-kit";
+import { connectAs, fakeReader, MCP_URL, ORIGIN, resultOf } from "@/test/mcp-kit";
 import { handleMcp, RATE_PER_MINUTE, type McpDeps } from "./handler";
 import { memoryStore } from "./store";
 import type { ToolDeps } from "./tools";
 
 // The MCP SDK client against handleMcp in-process (test/mcp-kit.ts): the full connector flow with
-// a test user, no Google, no database (memory store; the tools' loaders are mocked here; the DB
-// test tests/db/mcp.test.ts runs them for real under RLS).
+// a test user, no Google, no database (memory store and a fixed reader; tests/db/mcp.test.ts runs
+// the real mcp_* functions).
 
 const USER = { id: "22222222-2222-4222-8222-222222222222", email: "simon@example.com" } as User;
 
-function deps(over: Partial<McpDeps> = {}, tools: Partial<ToolDeps> = {}) {
+const ORG = "88888888-8888-4888-8888-888888888888";
+const PERSON = "99999999-9999-4999-8999-999999999999";
+const HANDOFF = "33333333-3333-4333-8333-333333333333";
+
+function deps(over: Partial<McpDeps> = {}) {
   const m = memoryStore();
+  const setHandoffDone = vi.fn(async (id: string) => id === HANDOFF);
   const d: McpDeps = {
     origin: ORIGIN,
-    supabaseUrl: "http://127.0.0.1:1",
-    anonKey: "anon",
-    jwtSecret: "secret",
     store: m.store,
+    reader: (userId) =>
+      fakeReader(userId, {
+        orgs: async () => [{ id: ORG, name: "Bolaget", kind: "foretag", role: "member" }],
+        people: async () => [{ id: PERSON, org_id: ORG, name: "Simon", role: null, member_user_id: USER.id }],
+        handoffs: async () => [
+          { id: HANDOFF, org_id: ORG, meeting_id: "secret-meeting", owner_person_id: PERSON, text: "Gör bilden", due: "fredag", due_date: "2026-12-04", from_name: "Jonas", status: "approved", done: false, created_at: "2026-11-20T10:00:00Z" },
+        ],
+        setHandoffDone,
+      }),
     loadUser: async (id) => (id === USER.id ? USER : null),
     allowed: () => true,
-    toolDeps: {
-      loadHome: vi.fn(async () => ({
-        spaces: [],
-        recent: [],
-        brandNew: false,
-        unlinked: [],
-        docs: {},
-        approvals: [],
-        tasks: [
-          { key: "h:33333333-3333-4333-8333-333333333333", kind: "handoff", spaceId: "o", spaceName: "Bolaget", spaceKind: "foretag", meetingId: "secret-meeting", itemId: "x", text: "Gör bilden", due: "fredag", dueDate: "2026-12-04", doneWhen: null, contextName: null, done: false, meetingAt: "2026-11-20T10:00:00Z", position: 0, fromName: "Jonas" },
-          { key: "p:44444444-4444-4444-8444-444444444444", kind: "privat", spaceId: "p", spaceName: "Privat", spaceKind: "privat", meetingId: "m", itemId: "y", text: "Läs kapitel 3", due: null, dueDate: null, doneWhen: null, contextName: "TDDE15", done: true, meetingAt: "2026-11-21T10:00:00Z", position: 0 },
-        ],
-      })) as unknown as ToolDeps["loadHome"],
-      setHandoffDone: vi.fn(async () => true),
-      ...tools,
-    } as ToolDeps,
+    toolDeps: {} as ToolDeps,
     ...over,
   };
   return { d, m };
@@ -53,10 +49,9 @@ describe("handleMcp refusals", () => {
     expect(r.headers.get("www-authenticate")).toContain(`resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/api/mcp"`);
     expect((await post(d, { authorization: "Bearer ssa_" + "x".repeat(43) })).status).toBe(401);
   });
-  it("403 for a foreign Origin, 503 without the JWT secret", async () => {
+  it("403 for a foreign Origin", async () => {
     const { d } = deps();
     expect((await post(d, { origin: "https://evil.example" })).status).toBe(403);
-    expect((await post({ ...d, jwtSecret: undefined })).status).toBe(503);
   });
 });
 
@@ -71,6 +66,7 @@ describe("the SDK client through the whole connector flow", () => {
     expect(open.isError).toBe(false);
     const tasks = (open.data as { tasks: Record<string, unknown>[] }).tasks;
     expect(tasks).toHaveLength(1);
+    expect(JSON.stringify(open.data)).not.toContain("meeting_id");
     // A reviewed Företag task never names its meeting.
     expect(tasks[0]).toMatchObject({ task_id: "h:33333333-3333-4333-8333-333333333333", from: "Jonas" });
     expect(JSON.stringify(tasks[0])).not.toContain("secret-meeting");

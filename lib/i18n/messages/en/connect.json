@@ -6,7 +6,7 @@
   "canTitle": "Claude will be able to",
   "canSearch": "search and read the meetings you can see in Simon Says",
   "canTasks": "see your tasks and tick them off, as when you tick them in the app",
-  "canAgenda": "add points to an agenda that is already prepared",
+  "canAgenda": "add points to the next agenda in a förening, and prepare it if needed",
   "cannotTitle": "Claude will not be able to",
   "cannotEdit": "change or delete notes and minutes",
   "cannotMore": "see more than you see in Simon Says",

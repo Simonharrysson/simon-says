@@ -6,7 +6,7 @@
   "canTitle": "Claude kommer att kunna",
   "canSearch": "söka i och läsa de möten du själv kan se i Simon Says",
   "canTasks": "se dina uppgifter och bocka av dem, som när du bockar av i appen",
-  "canAgenda": "lägga till punkter på en dagordning som redan är förberedd",
+  "canAgenda": "lägga till punkter på nästa dagordning i en förening, och förbereda den om det behövs",
   "cannotTitle": "Claude kommer inte att kunna",
   "cannotEdit": "ändra eller radera anteckningar och protokoll",
   "cannotMore": "se mer än du själv ser i Simon Says",

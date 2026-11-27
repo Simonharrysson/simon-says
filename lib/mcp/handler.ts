@@ -5,22 +5,20 @@ import { allowedOrigin, bearerChallenge, bearerToken, hashToken, looksLike, reso
 import { buildServer } from "./server";
 import type { McpStore } from "./store";
 import type { ToolDeps } from "./tools";
-import { userClient } from "./user-client";
+import type { McpReader } from "./reader";
 
 // POST /api/mcp: authenticate the Bearer token, check the allow-list and the rate limit, then run
 // one stateless MCP exchange as the user. Every refusal before the transport is plain HTTP (401
-// with the RFC 9728 challenge, 403, 429, 503); the token itself is never logged.
+// with the RFC 9728 challenge, 403, 429); the token itself is never logged.
 
 /** Calls per minute per grant (one connected assistant). */
 export const RATE_PER_MINUTE = 60;
 
 export interface McpDeps {
   origin: string;
-  supabaseUrl: string;
-  anonKey: string;
-  /** SUPABASE_JWT_SECRET; without it MCP is off (503). */
-  jwtSecret: string | undefined;
   store: McpStore;
+  /** The user's reads (the mcp_* functions of 0060, for this user only). */
+  reader: (userId: string) => McpReader;
   /** The user behind a grant, freshly loaded (null: deleted). */
   loadUser: (userId: string) => Promise<User | null>;
   /** The allow-list (lib/foretag/gate.ts) by the user's current e-mail. */
@@ -33,7 +31,6 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
 
 export async function handleMcp(request: Request, deps: McpDeps): Promise<Response> {
-  if (!deps.jwtSecret) return json(503, { error: "mcp_not_configured" });
   if (!allowedOrigin(request.headers.get("origin"), deps.origin)) return json(403, { error: "origin_not_allowed" });
 
   const unauthorized = (error?: "invalid_token") =>
@@ -60,8 +57,7 @@ export async function handleMcp(request: Request, deps: McpDeps): Promise<Respon
   }
   deps.store.touchGrant(grant.id).catch((err) => console.error(`mcp: touch: ${(err as Error).message}`));
 
-  const db = userClient({ url: deps.supabaseUrl, anonKey: deps.anonKey, jwtSecret: deps.jwtSecret, user });
-  const server = buildServer({ db, user, deps: deps.toolDeps, now }, { store: deps.store, grantId: grant.id });
+  const server = buildServer({ reader: deps.reader(user.id), user, deps: deps.toolDeps, now }, { store: deps.store, grantId: grant.id });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {
     await server.connect(transport);

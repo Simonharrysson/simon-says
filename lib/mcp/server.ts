@@ -121,7 +121,7 @@ export function buildServer(ctx: Omit<ToolCtx, "ids">, audit: { store: McpStore;
     {
       title: "Add an agenda point",
       description:
-        "Add one point to a förening's next prepared agenda (Förbered möte → Lägg till punkt). The agenda's Google Doc is updated and every member sees it. Works only when an agenda for an upcoming meeting already exists; give org_id, or meeting_id of one of its meetings. Confirm the wording with the user first.",
+        "Add one point to a förening's next agenda (Förbered möte → Lägg till punkt). If no agenda is prepared yet, it creates one for the next meeting (same weekday and time as the last), as a Google Doc shared with every member. Give org_id, or meeting_id of one of its meetings. Confirm the wording with the user first.",
       inputSchema: {
         org_id: uuid.optional().describe("The förening (from list_orgs)"),
         meeting_id: uuid.optional().describe("Any meeting of the förening, instead of org_id"),

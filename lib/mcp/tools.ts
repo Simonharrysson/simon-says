@@ -1,51 +1,56 @@
 import "server-only";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { ItemRole } from "@/lib/db/types";
 import { isUuid } from "@/lib/db/ids";
-import { setHandoffDone } from "@/lib/db/foretag";
 import { localDate } from "@/lib/docs/create";
-import { completeNoteTask, setPrivatTaskDone } from "@/lib/home/complete";
-import { loadHome } from "@/lib/home/load";
-import { loadOrgMeeting } from "@/lib/home/meeting";
-import { visible, type HomeNoteRow } from "@/lib/home/tasks";
-import { loadMeetingPage } from "@/lib/privat/load";
-import { bodyItems, addItem } from "@/lib/prepare/edit";
+import { getEnv } from "@/lib/env";
+import { completeNoteTask } from "@/lib/home/complete";
+import { buildOrgMeeting } from "@/lib/home/meeting";
+import { myForeningTasks, myHandoffTasks, myPrivatTasks, sortTasks, visible, type HomeNoteRow, type HomeSpace } from "@/lib/home/tasks";
+import { addItem, bodyItems } from "@/lib/prepare/edit";
 import { loadDraft, savePrepared } from "@/lib/prepare/prepare";
 import { upcomingPrepared } from "@/lib/prepare/store";
+import { proposedWhen } from "@/lib/prepare/when";
 import { summaryContent } from "@/lib/summaries/content";
 import { docUrl } from "@/lib/ui/meetings";
+import type { McpMeeting, McpOrg, McpReader } from "./reader";
 
-// The MCP tools (docs/superpowers/specs/2026-11-27-mcp-design.md "Tools v1"). Every one runs on
-// the user's own client (`ctx.db`, RLS) and reuses the app's loaders, so a tool never shows more
-// than the app shows that user. Results are compact JSON; lists are paginated. The ids each call
-// touched go to the audit log (`ctx.ids`), never any text.
+// The MCP tools (docs/superpowers/specs/2026-11-27-mcp-design.md "Tools v1").
+// - Reads go only through `ctx.reader` (the mcp_* functions of 0060: the RLS predicates, for this
+//   user) and the app's pure builders (buildOrgMeeting, myForeningTasks …, summaryContent, visible),
+//   so a tool never shows more than the app shows that user.
+// - Writes go through the app's own server paths with this user as the actor and their permission
+//   checks unchanged: completeNoteTask (owner or admin), set_task_handoff_done, the Privat update,
+//   Förbered möte (loadDraft → addItem → savePrepared), each only after the reader has shown the
+//   meeting or förening to be the user's.
+// Results are compact JSON; lists are paginated. The ids a call touched go to the audit log
+// (`ctx.ids`), never any text.
 
 export interface ToolDeps {
-  loadHome: typeof loadHome;
-  loadOrgMeeting: typeof loadOrgMeeting;
-  loadMeetingPage: typeof loadMeetingPage;
   completeNoteTask: typeof completeNoteTask;
-  setPrivatTaskDone: typeof setPrivatTaskDone;
-  setHandoffDone: typeof setHandoffDone;
   upcomingPrepared: typeof upcomingPrepared;
   loadDraft: typeof loadDraft;
   savePrepared: typeof savePrepared;
+  /**
+   * The client the app's write paths run on for this actor: their checks read by explicit ids
+   * (meeting, org, user), and `auth.getUser()` answers with the actor. Used only after the reader
+   * has shown the meeting or förening to be the user's.
+   */
+  actorClient: (user: User) => SupabaseClient;
 }
 
-export const defaultToolDeps: ToolDeps = {
-  loadHome,
-  loadOrgMeeting,
-  loadMeetingPage,
-  completeNoteTask,
-  setPrivatTaskDone,
-  setHandoffDone,
-  upcomingPrepared,
-  loadDraft,
-  savePrepared,
-};
+/** A fresh service-role client whose auth.getUser() is the actor (never the shared singleton). */
+export function actorClient(user: User): SupabaseClient {
+  const env = getEnv();
+  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  db.auth.getUser = (async () => ({ data: { user }, error: null })) as typeof db.auth.getUser;
+  return db;
+}
+
+export const defaultToolDeps: ToolDeps = { completeNoteTask, upcomingPrepared, loadDraft, savePrepared, actorClient };
 
 export interface ToolCtx {
-  db: SupabaseClient;
+  reader: McpReader;
   user: User;
   deps: ToolDeps;
   now: Date;
@@ -63,13 +68,12 @@ export const MAX_LIMIT = 25;
 export const DEFAULT_LIMIT = 10;
 /** search_meetings looks at this many of the newest meetings in range (narrow with from/to). */
 export const SEARCH_WINDOW = 300;
+/** my_tasks reads this many finished meetings per space (as /hem). */
+const MEETINGS_PER_SPACE = 60;
 const SNIPPET = 160;
 const MAX_SUMMARY_LINES = 8;
 
 const clean = (s: string | null | undefined) => (s ?? "").normalize("NFC").replace(/\s+/g, " ").trim();
-const fail = (what: string, error: { message: string }): never => {
-  throw new Error(`mcp tool: ${what}: ${error.message}`);
-};
 
 /** The page of `all` after `cursor` (an offset as text) and the next cursor, if any. */
 export function page<T>(all: T[], cursor: string | undefined, limit: number | undefined): { items: T[]; next_cursor: string | null } {
@@ -91,85 +95,37 @@ export function snippet(text: string, q: string): string {
 /** A query for ilike: % _ and \ are literal. */
 export const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
-type SpaceKind = "forening" | "foretag" | "privat";
-interface Space {
-  id: string;
-  name: string;
-  kind: SpaceKind;
-  role: "admin" | "member";
-}
-
-async function mySpaces(ctx: ToolCtx): Promise<Space[]> {
-  const { data: members, error } = await ctx.db.from("org_members").select("org_id, role").eq("user_id", ctx.user.id);
-  if (error) fail("members", error);
-  const roleOf = new Map((members ?? []).map((m) => [m.org_id as string, m.role as Space["role"]]));
-  if (!roleOf.size) return [];
-  const { data: orgs, error: e2 } = await ctx.db.from("orgs").select("id, name, kind").in("id", [...roleOf.keys()]);
-  if (e2) fail("orgs", e2);
-  return ((orgs ?? []) as { id: string; name: string; kind: string }[])
-    .map((o) => ({
-      id: o.id,
-      name: o.name,
-      kind: (o.kind === "privat" || o.kind === "foretag" ? o.kind : "forening") as SpaceKind,
-      role: roleOf.get(o.id) ?? "member",
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name, "sv"));
-}
-
-// ---------------------------------------------------------------------------------------------
+const spacesOf = (orgs: McpOrg[]) => [...orgs].sort((a, b) => a.name.localeCompare(b.name, "sv"));
 
 export async function listOrgs(ctx: ToolCtx): Promise<ToolResult> {
-  const spaces = await mySpaces(ctx);
+  const spaces = spacesOf(await ctx.reader.orgs());
   return ok({ orgs: spaces.map((s) => ({ org_id: s.id, name: s.name, kind: s.kind, role: s.role })) });
-}
-
-interface MeetingLite {
-  id: string;
-  org_id: string;
-  started_at: string;
-  title: string | null;
-  context_id: string | null;
-  agenda_roles: Record<string, ItemRole> | null;
 }
 
 export async function searchMeetings(
   ctx: ToolCtx,
   args: { query?: string; org_id?: string; from?: string; to?: string; cursor?: string; limit?: number },
 ): Promise<ToolResult> {
-  const spaces = await mySpaces(ctx);
+  const spaces = await ctx.reader.orgs();
   if (args.org_id) ctx.ids.org_id = args.org_id;
-  const inScope = args.org_id ? spaces.filter((s) => s.id === args.org_id) : spaces;
-  if (args.org_id && !inScope.length) return refuse("Unknown org_id (or you are not a member). Call list_orgs for your orgs.");
-  if (!inScope.length) return ok({ meetings: [], next_cursor: null });
+  if (args.org_id && !spaces.some((s) => s.id === args.org_id)) return refuse("Unknown org_id (or you are not a member). Call list_orgs for your orgs.");
   const q = clean(args.query);
   if (q && (q.length < 2 || q.length > 100)) return refuse("query must be 2 to 100 characters.");
 
-  let query = ctx.db
-    .from("meetings")
-    .select("id, org_id, started_at, title, context_id, agenda_roles")
-    .in("org_id", inScope.map((s) => s.id))
-    .eq("status", "done")
-    .eq("is_test", false)
-    .order("started_at", { ascending: false })
-    .limit(SEARCH_WINDOW);
-  if (args.from) query = query.gte("started_at", `${args.from}T00:00:00Z`);
-  if (args.to) query = query.lte("started_at", `${args.to}T23:59:59Z`);
-  const { data, error } = await query;
-  if (error) fail("meetings", error);
-  const meetings = (data ?? []) as MeetingLite[];
+  const meetings = await ctx.reader.meetings({
+    org: args.org_id ?? null,
+    from: args.from ? `${args.from}T00:00:00Z` : null,
+    to: args.to ? `${args.to}T23:59:59Z` : null,
+    done: true,
+    limit: SEARCH_WINDOW,
+  });
   const spaceOf = new Map(spaces.map((s) => [s.id, s]));
-
   // Privat recordings are titled by their context ("TDDE15").
-  const privatIds = inScope.filter((s) => s.kind === "privat").map((s) => s.id);
-  const contextName = new Map<string, string>();
-  if (privatIds.length) {
-    const { data: ctxs, error: e } = await ctx.db.from("contexts").select("id, name").in("org_id", privatIds);
-    if (e) fail("contexts", e);
-    for (const c of ctxs ?? []) contextName.set(c.id as string, c.name as string);
-  }
-  const titleOf = (m: MeetingLite) => clean(m.title) || (m.context_id ? (contextName.get(m.context_id) ?? null) : null);
+  const contexts = await ctx.reader.contexts(spaces.filter((s) => s.kind === "privat").map((s) => s.id));
+  const contextName = new Map(contexts.map((c) => [c.id, c.name]));
+  const titleOf = (m: McpMeeting) => clean(m.title) || (m.context_id ? (contextName.get(m.context_id) ?? null) : null);
 
-  let hits: { m: MeetingLite; snippet: string | null }[];
+  let hits: { m: McpMeeting; snippet: string | null }[];
   if (!q) {
     hits = meetings.map((m) => ({ m, snippet: null }));
   } else {
@@ -179,38 +135,21 @@ export async function searchMeetings(
       const t = titleOf(m);
       if (t && t.toLowerCase().includes(lower)) found.set(m.id, t);
     }
-    const ids = meetings.map((m) => m.id);
     const roles = new Map(meetings.map((m) => [m.id, (m.agenda_roles ?? {}) as Record<string, ItemRole>]));
-    for (let i = 0; i < ids.length; i += 100) {
-      const part = ids.slice(i, i + 100);
-      const { data: rows, error: e } = await ctx.db.from("note_items").select("*").in("meeting_id", part).ilike("text", likePattern(q)).limit(1000);
-      if (e) fail("note_items", e);
-      for (const r of (rows ?? []) as HomeNoteRow[]) {
-        // The app's own rule: never a Må-runda row, an info cell or a line a human deleted.
-        if (found.has(r.meeting_id) || !visible(r, roles.get(r.meeting_id) ?? {})) continue;
-        found.set(r.meeting_id, r.text);
-      }
-      const privatPart = part.filter((id) => meetings.find((m) => m.id === id)?.context_id);
-      if (privatPart.length) {
-        const { data: sums, error: e2 } = await ctx.db.from("private_summaries").select("meeting_id, summary").in("meeting_id", privatPart).ilike("summary", likePattern(q));
-        if (e2) fail("private_summaries", e2);
-        for (const s of sums ?? []) if (!found.has(s.meeting_id as string)) found.set(s.meeting_id as string, s.summary as string);
-      }
+    for (const r of await ctx.reader.noteItems(meetings.map((m) => m.id), likePattern(q))) {
+      // The app's own rule: never a Må-runda row, an info cell or a line a human deleted.
+      if (found.has(r.meeting_id) || !visible(r, roles.get(r.meeting_id) ?? {})) continue;
+      found.set(r.meeting_id, r.text);
     }
+    const privat = meetings.filter((m) => m.context_id).map((m) => m.id);
+    for (const s of await ctx.reader.privateSummaries(privat, likePattern(q))) if (!found.has(s.meeting_id)) found.set(s.meeting_id, s.summary);
     hits = meetings.filter((m) => found.has(m.id)).map((m) => ({ m, snippet: snippet(found.get(m.id)!, q) }));
   }
   const { items, next_cursor } = page(hits, args.cursor, args.limit);
   return ok({
     meetings: items.map(({ m, snippet: s }) => {
       const space = spaceOf.get(m.org_id);
-      return {
-        meeting_id: m.id,
-        org: space?.name ?? null,
-        org_kind: space?.kind ?? null,
-        started_at: m.started_at,
-        title: titleOf(m),
-        ...(s ? { match: s } : {}),
-      };
+      return { meeting_id: m.id, org: space?.name ?? null, org_kind: space?.kind ?? null, started_at: m.started_at, title: titleOf(m), ...(s ? { match: s } : {}) };
     }),
     next_cursor,
     ...(meetings.length === SEARCH_WINDOW ? { note: `Only the ${SEARCH_WINDOW} newest meetings in range were searched; narrow with from/to.` } : {}),
@@ -222,44 +161,42 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
   const notFound = refuse("Meeting not found, or you can't see it.");
   if (!isUuid(id)) return notFound;
   ctx.ids.meeting_id = id;
-  const { data: meeting, error } = await ctx.db.from("meetings").select("id, org_id, status, is_test, agenda_roles").eq("id", id).maybeSingle();
-  if (error) fail("meeting", error);
-  if (!meeting) return notFound;
-  if (meeting.status !== "done" || meeting.is_test) return refuse("That meeting is not finished (or is a Testmöte); its notes are not final.");
-  const { data: org, error: e2 } = await ctx.db.from("orgs").select("id, name, kind").eq("id", meeting.org_id).maybeSingle();
-  if (e2) fail("org", e2);
+  const [m] = await ctx.reader.meetings({ ids: [id], done: false, limit: 1 });
+  if (!m) return notFound;
+  if (m.status !== "done" || m.is_test) return refuse("That meeting is not finished (or is a Testmöte); its notes are not final.");
+  const org = (await ctx.reader.orgs()).find((o) => o.id === m.org_id);
   if (!org) return notFound;
-  ctx.ids.org_id = org.id as string;
+  ctx.ids.org_id = org.id;
+  const doc = m.doc_id ? docUrl(m.doc_id) : null;
 
   if (org.kind === "privat") {
-    const p = await ctx.deps.loadMeetingPage(ctx.db, id);
-    if (!p) return notFound;
+    const [summary] = await ctx.reader.privateSummaries([id]);
+    const context = m.context_id ? (await ctx.reader.contexts([org.id])).find((c) => c.id === m.context_id) : undefined;
+    const tasks = m.context_id ? (await ctx.reader.contextTasks([m.context_id])).filter((t) => t.meeting_id === id) : [];
     return ok({
       meeting_id: id,
       org: org.name,
       org_kind: "privat",
-      title: p.context?.name ?? null,
-      started_at: p.meeting.started_at,
-      attendance: p.summary?.people ?? [],
-      summary: p.summary?.summary ?? null,
-      decisions: p.summary?.decisions ?? [],
-      tasks: p.tasks.map((t) => ({ task_id: `p:${t.id}`, text: t.text, owner: t.owner, done: t.done, can_complete: !t.done })),
-      doc_url: p.meeting.doc_id ? docUrl(p.meeting.doc_id) : null,
+      title: context?.name ?? null,
+      started_at: m.started_at,
+      attendance: summary?.people ?? [],
+      summary: summary?.summary ?? null,
+      decisions: summary?.decisions ?? [],
+      tasks: tasks.map((t) => ({ task_id: `p:${t.id}`, text: t.text, owner: t.owner, done: t.done, can_complete: !t.done })),
+      doc_url: doc,
     });
   }
 
-  const page = await ctx.deps.loadOrgMeeting(ctx.db, ctx.user.id, org.id as string, id);
-  if (!page) return notFound;
-  const { data: rows, error: e3 } = await ctx.db.from("note_items").select("*").eq("meeting_id", id).in("section", ["attendees", "note"]).order("position");
-  if (e3) fail("notes", e3);
-  const roles = (meeting.agenda_roles ?? {}) as Record<string, ItemRole>;
-  const notes = (rows ?? []) as HomeNoteRow[];
-  const attendance = notes.filter((r) => r.section === "attendees" && visible(r, roles)).map((r) => clean(r.text));
-  const other = summaryContent(notes.filter((r) => r.section === "note"), { agendaRoles: roles });
+  const [rows, people] = await Promise.all([ctx.reader.noteItems([id]), ctx.reader.people([org.id])]);
+  const sorted = [...rows].sort((a, b) => a.position - b.position);
+  const page = buildOrgMeeting({ userId: ctx.user.id, org: { id: org.id, name: org.name }, meeting: m, role: org.role, rows: sorted, people });
+  const roles = (m.agenda_roles ?? {}) as Record<string, ItemRole>;
+  const attendance = sorted.filter((r) => r.section === "attendees" && visible(r, roles)).map((r) => clean(r.text));
+  const other = summaryContent(sorted.filter((r) => r.section === "note"), { agendaRoles: roles });
   return ok({
     meeting_id: id,
-    org: page.org.name,
-    org_kind: org.kind === "foretag" ? "foretag" : "forening",
+    org: org.name,
+    org_kind: org.kind,
     title: page.meeting.title,
     started_at: page.meeting.startedAt,
     attendance,
@@ -280,13 +217,40 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
   });
 }
 
+/** Mina uppgifter, as loadHome builds it (/hem), from the reader's rows. */
+async function myTaskList(ctx: ToolCtx) {
+  const orgs = await ctx.reader.orgs();
+  const spaces: HomeSpace[] = orgs.map((o) => ({ id: o.id, name: o.name, kind: o.kind, isAdmin: o.role === "admin" }));
+  const noteSpaces = spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => s.id);
+  const foretag = spaces.filter((s) => s.kind === "foretag").map((s) => s.id);
+  const privat = spaces.find((s) => s.kind === "privat") ?? null;
+  const meetings: McpMeeting[] = [];
+  for (const org of noteSpaces) meetings.push(...(await ctx.reader.meetings({ org, done: true, limit: MEETINGS_PER_SPACE })));
+  const [rows, people, handoffs] = await Promise.all([
+    ctx.reader.noteItems(meetings.map((m) => m.id)),
+    ctx.reader.people(noteSpaces),
+    ctx.reader.handoffs(foretag),
+  ]);
+  let privatTasks: ReturnType<typeof myPrivatTasks> = [];
+  if (privat) {
+    const contexts = await ctx.reader.contexts([privat.id]);
+    const tasks = await ctx.reader.contextTasks(contexts.map((c) => c.id));
+    const starts = tasks.length ? await ctx.reader.meetings({ org: privat.id, done: false, limit: 1000 }) : [];
+    privatTasks = myPrivatTasks({ space: privat, tasks, contexts, meetings: starts });
+  }
+  return sortTasks([
+    ...myForeningTasks({ userId: ctx.user.id, spaces, meetings, rows: rows.filter((r) => r.section === "action" || r.section === "decision") as HomeNoteRow[], people }),
+    ...myHandoffTasks({ userId: ctx.user.id, spaces, handoffs, people }),
+    ...privatTasks,
+  ]);
+}
+
 export async function myTasks(
   ctx: ToolCtx,
   args: { status?: "open" | "done" | "all"; due_before?: string; cursor?: string; limit?: number },
 ): Promise<ToolResult> {
-  const home = await ctx.deps.loadHome(ctx.db, ctx.user.id);
   const status = args.status ?? "open";
-  const tasks = home.tasks.filter(
+  const tasks = (await myTaskList(ctx)).filter(
     (t) => (status === "all" || (status === "done") === t.done) && (!args.due_before || (t.dueDate !== null && t.dueDate < args.due_before)),
   );
   const { items, next_cursor } = page(tasks, args.cursor, args.limit);
@@ -321,16 +285,18 @@ export async function completeTask(ctx: ToolCtx, args: { task_id: string }): Pro
   const parsed = parseTaskId(args.task_id);
   if (!parsed) return refuse("Unknown task_id. Use a task_id from my_tasks or get_meeting.");
   ctx.ids.task_id = args.task_id;
-  if (parsed.kind === "handoff") {
-    // A reviewed Företag task: only its owner; no Doc is touched (they can't see it).
-    const done = await ctx.deps.setHandoffDone(ctx.db, parsed.id, true);
-    return done ? ok({ done: true, doc: "none" }) : refuse("You can't complete that task (not yours, or not found).");
+  if (parsed.kind !== "note") {
+    // A reviewed Företag task: only its owner (set_task_handoff_done); no Doc is touched.
+    if (parsed.kind === "handoff") {
+      return (await ctx.reader.setHandoffDone(parsed.id, true)) ? ok({ done: true, doc: "none" }) : refuse("You can't complete that task (not yours, or not found).");
+    }
+    return (await ctx.reader.setPrivatTaskDone(parsed.id, true)) ? ok({ done: true, doc: "none" }) : refuse("Task not found, or you can't see it.");
   }
-  if (parsed.kind === "note") ctx.ids.meeting_id = parsed.meetingId;
-  const result =
-    parsed.kind === "note"
-      ? await ctx.deps.completeNoteTask(ctx.db, ctx.user.id, parsed.meetingId, parsed.itemId)
-      : await ctx.deps.setPrivatTaskDone(ctx.db, parsed.id, true);
+  ctx.ids.meeting_id = parsed.meetingId;
+  // The meeting must be one the user sees (the reader); then the app's own path decides (owner or admin).
+  const [m] = await ctx.reader.meetings({ ids: [parsed.meetingId], done: false, limit: 1 });
+  if (!m) return refuse("Task not found, or you can't see it.");
+  const result = await ctx.deps.completeNoteTask(ctx.deps.actorClient(ctx.user), ctx.user.id, parsed.meetingId, parsed.itemId);
   if (!result.ok) {
     if (result.error === "forbidden") return refuse("Only the task's owner or an admin of the förening can complete it.");
     if (result.error === "not_open") return refuse("That meeting is not finished yet; tasks are completed after it ends.");
@@ -352,38 +318,44 @@ export async function prepareAgenda(ctx: ToolCtx, args: { org_id?: string; meeti
   if (!orgId && args.meeting_id) {
     if (!isUuid(args.meeting_id)) return refuse("Meeting not found, or you can't see it.");
     ctx.ids.meeting_id = args.meeting_id;
-    const { data, error } = await ctx.db.from("meetings").select("org_id").eq("id", args.meeting_id).maybeSingle();
-    if (error) fail("meeting", error);
-    if (!data) return refuse("Meeting not found, or you can't see it.");
-    orgId = data.org_id as string;
+    const [m] = await ctx.reader.meetings({ ids: [args.meeting_id], done: false, limit: 1 });
+    if (!m) return refuse("Meeting not found, or you can't see it.");
+    orgId = m.org_id;
   }
   if (!orgId || !isUuid(orgId)) return refuse("Give org_id (from list_orgs) or meeting_id.");
   ctx.ids.org_id = orgId;
-  const { data: org, error } = await ctx.db.from("orgs").select("id, kind").eq("id", orgId).maybeSingle();
-  if (error) fail("org", error);
+  const org = (await ctx.reader.orgs()).find((o) => o.id === orgId);
   if (!org) return refuse("Unknown org_id (or you are not a member).");
   // Förbered möte is förening only (lib/foretag/guard.ts; proxy.ts for Privat).
   if (org.kind !== "forening") return refuse("Agendas are prepared only in a förening (not a Företag or Privat).");
 
-  const [next] = await ctx.deps.upcomingPrepared(ctx.db, orgId, localDate(ctx.now));
-  if (!next) {
-    return refuse("No agenda is prepared for an upcoming meeting yet. Open Förbered möte in Simon Says to create one; then points can be added here.");
+  // A member of this förening (shown by the reader): Förbered möte's own path, with this user as actor.
+  const db = ctx.deps.actorClient(ctx.user);
+  const [next] = await ctx.deps.upcomingPrepared(db, orgId, localDate(ctx.now));
+  let when: { type: "veckomote" | "styrelsemote" | "arsmote"; date: string; time: string | null };
+  if (next) {
+    ctx.ids.prepared_id = next.id;
+    when = { type: next.kind, date: next.meeting_date, time: next.meeting_time ?? null };
+  } else {
+    // No agenda yet: the next meeting as Förbered möte proposes it (last meeting's weekday and time).
+    const [last] = await ctx.reader.meetings({ org: orgId, done: true, limit: 1 });
+    const proposed = proposedWhen(ctx.now, last?.started_at ?? null);
+    when = { type: "veckomote", date: proposed.date, time: proposed.time || null };
   }
-  ctx.ids.prepared_id = next.id;
-  const draft = await ctx.deps.loadDraft(ctx.db, orgId, next.kind, next.meeting_date, ctx.now);
+  const draft = await ctx.deps.loadDraft(db, orgId, when.type, when.date, ctx.now);
   if (!draft.ok) return refuse(draft.message);
   const items = draft.draft.items;
   if (items.some((i) => i.on && clean(i.label).toLowerCase() === point.toLowerCase())) {
-    return ok({ added: false, note: "That point is already on the agenda.", date: next.meeting_date, doc_url: docUrl(next.doc_id) });
+    return ok({ added: false, note: "That point is already on the agenda.", date: when.date, doc_url: draft.draft.existing?.docUrl ?? null });
   }
   const withPoint = addItem(items, point, `add:mcp${Date.now().toString(36)}`);
   const saved = await ctx.deps.savePrepared(
-    ctx.db,
+    db,
     { id: ctx.user.id, email: ctx.user.email },
     orgId,
-    { type: draft.draft.type, date: next.meeting_date, time: next.meeting_time ?? null, items: bodyItems(withPoint) },
+    { type: draft.draft.type, date: when.date, time: draft.draft.time ?? when.time, items: bodyItems(withPoint) },
     ctx.now,
   );
   if (!saved.ok) return refuse(saved.message);
-  return ok({ added: true, date: saved.date, agenda: saved.docName, doc_url: saved.docUrl });
+  return ok({ added: true, created: saved.created, date: saved.date, agenda: saved.docName, doc_url: saved.docUrl });
 }

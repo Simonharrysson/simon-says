@@ -28,14 +28,14 @@ claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mc
 | `get_meeting(meeting_id)` | Title, date, attendance, decisions, tasks (Vem / När / Klart när), summary, Doc link |
 | `my_tasks(status?, due_before?, cursor?, limit?)` | Mina uppgifter (open by default) |
 | `complete_task(task_id)` | Same as ticking on /hem: the owner or an admin, and the Doc gets "✓ klart" |
-| `prepare_agenda(org_id \| meeting_id, point)` | Adds a point to a förening's next **already prepared** agenda |
+| `prepare_agenda(org_id \| meeting_id, point)` | Adds a point to a förening's next agenda; creates it (Förbered möte's proposed date) when none is prepared |
 
 Claude cannot change or delete notes, and it cannot see more than you can. Every call is logged with tool, ids and time, never content.
 
 ## Operations
 
-- **Env:** set `SUPABASE_JWT_SECRET` (Supabase → Project Settings → JWT, the legacy HS256 secret). Without it every MCP endpoint answers 503. The secret is as sensitive as the service role key.
-- **Migration:** `0056_mcp.sql` (tables `mcp_*`, `revoke_mcp_grant`, `mcp_rate_take`, `mcp_spend_refresh`).
+- **No new env.** Tools read as the user through the `mcp_*` SQL functions (service role only, explicit user, the RLS predicates). The audit is kept 90 days (daily cron `mcp_cleanup`).
+- **Migration:** `0060_mcp.sql` (tables `mcp_*`, the `mcp_*` read functions, `revoke_mcp_grant`, `mcp_rate_take`, `mcp_spend_refresh`, `mcp_cleanup`).
 - **Endpoints:**
   - `/.well-known/oauth-protected-resource[/api/mcp]`
   - `/.well-known/oauth-authorization-server`

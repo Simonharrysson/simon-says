@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { MCP_URL, MemoryProvider, ORIGIN, resultOf } from "@/test/mcp-kit";
+import { fakeReader, MCP_URL, MemoryProvider, ORIGIN, resultOf } from "@/test/mcp-kit";
 import type { McpDeps } from "./handler";
 import { memoryStore } from "./store";
 
@@ -47,13 +47,11 @@ describe("the SDK client against the route handlers", () => {
     const m = memoryStore();
     mem.deps = {
       origin: ORIGIN,
-      supabaseUrl: "http://127.0.0.1:1",
-      anonKey: "anon",
-      jwtSecret: "secret",
       store: m.store,
+      reader: (userId) => fakeReader(userId, { setHandoffDone: async () => true }),
       loadUser: async (id) => (id === USER.id ? USER : null),
       allowed: () => true,
-      toolDeps: { setHandoffDone: vi.fn(async () => true) } as unknown as McpDeps["toolDeps"],
+      toolDeps: {} as McpDeps["toolDeps"],
     };
     const provider = new MemoryProvider();
     const first = new StreamableHTTPClientTransport(new URL(MCP_URL), { authProvider: provider, fetch: routeFetch });

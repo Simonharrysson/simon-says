@@ -38,9 +38,6 @@ const schema = z.object({
   // Företag (0050): comma list of e-mails allowed to create a company space, until a DPA exists;
   // falls back to ADMIN_EMAILS, then ALARM_EMAIL (lib/foretag/gate.ts).
   FORETAG_CREATOR_EMAILS: optional,
-  // The MCP server (/api/mcp): the project's JWT secret, to sign the short-lived JWT an MCP call
-  // runs under as the user (RLS). As powerful as the service role key. Absent: MCP is off (503).
-  SUPABASE_JWT_SECRET: optional,
   // Google Picker (A11): an API key restricted to the Picker API + our referrers, and the Cloud
   // project number (the Picker's appId, needed for drive.file grants). Both absent: the Picker is
   // off and the start screen offers only "Skapa nytt dokument".

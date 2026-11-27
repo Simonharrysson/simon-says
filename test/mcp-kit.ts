@@ -122,3 +122,21 @@ export function resultOf(r: unknown): { isError: boolean; data: unknown; text: s
   }
   return { isError: Boolean(res.isError), data, text };
 }
+
+/** A reader with fixed rows (unit tests): everything empty unless given. */
+export function fakeReader(userId: string, over: Partial<import("@/lib/mcp/reader").McpReader> = {}): import("@/lib/mcp/reader").McpReader {
+  return {
+    userId,
+    orgs: async () => [],
+    meetings: async () => [],
+    noteItems: async () => [],
+    people: async () => [],
+    contexts: async () => [],
+    privateSummaries: async () => [],
+    contextTasks: async () => [],
+    handoffs: async () => [],
+    setHandoffDone: async () => false,
+    setPrivatTaskDone: async () => false,
+    ...over,
+  };
+}
