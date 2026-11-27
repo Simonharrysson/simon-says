@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import type { Page } from "@playwright/test";
-import { ensureUser, expect, seedMeeting, test } from "../fixtures";
+import type { Browser, Page } from "@playwright/test";
+import { createServerClient } from "@supabase/ssr";
+import { APP_URL, e2eEnv } from "../env";
+import { adminDb, ensureUser, expect, seedMeeting, test } from "../fixtures";
 
 // Opt-in capture (E2E_CAPTURE=1), not a check: screenshots of the main surfaces at 390 and
 // 1440 px plus LCP / CLS and tab/nav switch timings, written to test-results/capture/ for the
@@ -27,10 +29,42 @@ const VITALS = () => {
   }).observe({ type: "layout-shift", buffered: true });
 };
 
+/**
+ * Signed in without the test route (off in a production build, lib/e2e/guard.ts): a magic link
+ * verified here, its session written into the browser the way @supabase/ssr stores it.
+ */
+async function signedInProd(browser: Browser, email: string, next: string) {
+  const env = e2eEnv();
+  const admin = adminDb();
+  await ensureUser(admin, email);
+  const link = await admin.auth.admin.generateLink({ type: "magiclink", email });
+  const jar: { name: string; value: string }[] = [];
+  const sb = createServerClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll: () => jar,
+      setAll: (set) => {
+        for (const c of set) {
+          const i = jar.findIndex((x) => x.name === c.name);
+          if (i >= 0) jar.splice(i, 1);
+          if (c.value) jar.push({ name: c.name, value: c.value });
+        }
+      },
+    },
+  });
+  const { error } = await sb.auth.verifyOtp({ type: "magiclink", token_hash: link.data.properties!.hashed_token });
+  if (error) throw new Error(`capture sign-in: ${error.message}`);
+  const context = await browser.newContext({ baseURL: APP_URL, locale: "sv-SE", timezoneId: "Europe/Stockholm", storageState: { cookies: [], origins: [] } });
+  const host = new URL(APP_URL).hostname;
+  await context.addCookies(jar.map((c) => ({ ...c, domain: host, path: "/", httpOnly: true, secure: false, sameSite: "Lax" as const })));
+  const page = await context.newPage();
+  await page.goto(next);
+  return { context, page };
+}
+
 const vitals = (page: Page) => page.evaluate(() => (window as unknown as { __vitals: { lcp: number; cls: number } }).__vitals);
 const resetCls = (page: Page) => page.evaluate(() => ((window as unknown as { __vitals: { cls: number } }).__vitals.cls = 0));
 
-test("capture: surfaces, vitals, switch timings", async ({ db, seedOrg, signedIn, newEmail }) => {
+test("capture: surfaces, vitals, switch timings", async ({ browser, db, seedOrg, signedIn, newEmail }) => {
   test.setTimeout(600_000);
   const email = newEmail("polish");
   const me = await ensureUser(db, email);
@@ -55,7 +89,7 @@ test("capture: surfaces, vitals, switch timings", async ({ db, seedOrg, signedIn
   const rec = (await db.from("meetings").insert({ org_id: space.id, started_by: me, status: "done", context_id: ctx.id, ended_at: new Date().toISOString() }).select("id").single()).data as { id: string };
   await db.from("context_tasks").insert({ context_id: ctx.id, meeting_id: rec.id, text: "Läsa kap 4" });
 
-  const { page, context } = await signedIn(email, "/hem");
+  const { page, context } = process.env.E2E_PROD ? await signedInProd(browser, email, "/hem") : await signedIn(email, "/hem");
   await context.addInitScript(VITALS);
   mkdirSync(OUT, { recursive: true });
   const label = process.env.E2E_CAPTURE ?? "run";
