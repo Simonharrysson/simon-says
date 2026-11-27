@@ -12,6 +12,10 @@
     "private_summary": {
       "label": "Sammanfattning av mina inspelningar",
       "description": "Sammanfattningen efter det du spelat in i Privat: beslut, uppgifter och vad som hänt sedan sist."
+    },
+    "meeting_brief": {
+      "label": "Inför möten",
+      "description": "Tio minuter före ett möte i din kalender: senaste mötet, de viktigaste besluten och öppna uppgifter. För kundmöten i Företag."
     }
   },
   "allOff": "Stäng av alla mejl",
@@ -28,5 +32,9 @@
   "invalidBannerTitle": "Vi känner inte igen länken",
   "invalidBannerText": "Den kan ha klippts av i mejlet. Öppna länken längst ner i mejlet igen, eller logga in och välj under Konto.",
   "errorBannerTitle": "Dina val gick inte att hämta just nu",
-  "errorBannerText": "Ladda om sidan om en stund. Valen du gjort tidigare gäller fortfarande."
+  "errorBannerText": "Ladda om sidan om en stund. Valen du gjort tidigare gäller fortfarande.",
+  "briefForeningar": {
+    "label": "Även inför föreningsmöten",
+    "description": "Samma korta mejl före möten i föreningarnas kalendrar. Av från början."
+  }
 }

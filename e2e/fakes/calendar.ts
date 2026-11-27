@@ -10,6 +10,7 @@ export interface FakeCalendarEvent {
   status?: string;
   allDay?: boolean;
   description?: string;
+  organizer?: { email: string };
   attendees?: { email?: string; displayName?: string; responseStatus?: string }[];
 }
 
@@ -78,6 +79,7 @@ export class CalendarFake {
       summary: e.summary,
       start: e.allDay ? { date: e.start.slice(0, 10) } : { dateTime: e.start },
       end: e.allDay ? { date: e.end.slice(0, 10) } : { dateTime: e.end },
+      ...(e.organizer ? { organizer: e.organizer } : {}),
       ...(e.attendees ? { attendees: e.attendees } : {}),
     };
   }

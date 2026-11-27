@@ -9,7 +9,8 @@ import { safeCalendarConnected } from "@/lib/calendar/load";
 import { disconnectCalendar, requestCalendarAccess } from "../calendar-actions";
 import { loadEmailPrefs } from "@/lib/email/prefs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { saveEmailPrefsAction, saveLocaleAction } from "./actions";
+import { loadMyBriefForeningar } from "@/lib/brief/prefs";
+import { saveBriefForeningarAction, saveEmailPrefsAction, saveLocaleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     data: { user },
   } = await db.auth.getUser();
   if (!user) redirect("/login");
-  const [emailPrefs, { fel, kalender }, calendarConnected] = await Promise.all([
+  const [emailPrefs, { fel, kalender }, calendarConnected, briefForeningar] = await Promise.all([
     loadEmailPrefs({ userId: user.id }),
     searchParams,
     safeCalendarConnected(user.id),
+    loadMyBriefForeningar(db, user.id),
   ]);
   return (
     <AccountView
@@ -34,6 +36,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       signOut={signOut}
       emailPrefs={emailPrefs}
       saveEmailPrefs={saveEmailPrefsAction}
+      briefForeningar={{ initial: briefForeningar, save: saveBriefForeningarAction }}
       saveLocale={saveLocaleAction}
       localeFailed={fel === "sprak"}
       calendar={

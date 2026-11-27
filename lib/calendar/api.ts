@@ -1,7 +1,7 @@
 import { parseEvent, type CalendarEvent, type CalendarInfo } from "./events";
 
 // A thin, read-only Google Calendar v3 client over fetch (no googleapis package for Calendar is
-// installed). Only titles, times and guests are asked for (`fields`): never descriptions, places or
+// installed). Only titles, times, the organiser and guests are asked for (`fields`): never descriptions, places or
 // conference links. Calendar ids contain "@" and "#": always encoded.
 
 export const CALENDAR_ROOT = "https://www.googleapis.com/";
@@ -25,7 +25,7 @@ export interface CalendarApi {
   getEvent(calendarId: string, eventId: string): Promise<CalendarEvent | null>;
 }
 
-const EVENT_FIELDS = "id,status,summary,start(dateTime),end(dateTime),attendees(email,displayName,responseStatus,resource)";
+const EVENT_FIELDS = "id,status,summary,start(dateTime),end(dateTime),organizer(email),attendees(email,displayName,responseStatus,resource)";
 
 export function calendarApi(opts: {
   accessToken: () => Promise<string>;

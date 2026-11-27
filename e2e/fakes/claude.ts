@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { GOALS_SYSTEM_PROMPT } from "@/lib/dashboard/goals";
 import { ROLES_SYSTEM_PROMPT } from "@/lib/agenda/roles";
+import { BRIEF_PICK_SYSTEM_PROMPT } from "@/lib/brief/pick";
 import { STADGAR_SYSTEM_PROMPT } from "@/lib/formats/stadgar";
 import { DIGEST_SYSTEM_PROMPT } from "@/lib/history/digest";
 import { EXTRACT_SYSTEM_PROMPT } from "@/lib/history/extract-prompt";
@@ -19,7 +20,7 @@ export { SCRIPTED };
 // test/meeting-sim.ts `scriptedClient` does, and answered with fixed, schema-valid JSON. An
 // unknown prompt is a 500 and lands in `problems`: a call nobody scripted never passes quietly.
 
-export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles";
+export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles" | "brief";
 
 const KINDS: [string, ClaudeKind][] = [
   [PRIVAT_SUMMARY_SYSTEM_PROMPT, "privat-summary"],
@@ -32,6 +33,7 @@ const KINDS: [string, ClaudeKind][] = [
   [EXTRACT_SYSTEM_PROMPT, "extract"],
   [DIGEST_SYSTEM_PROMPT, "digest"],
   [ROLES_SYSTEM_PROMPT, "roles"],
+  [BRIEF_PICK_SYSTEM_PROMPT, "brief"],
 ];
 
 export interface ClaudeCall {
@@ -149,6 +151,12 @@ function answer(kind: ClaudeKind, text: string): unknown {
         ],
         explanation: "Målet bygger på era inlästa protokoll.",
       };
+    }
+    case "brief": {
+      // Inför möten: picks the OLDEST three (the list is newest first), so a spec can tell a pick
+      // from the template's newest-first fallback.
+      const ids = [...text.matchAll(/^\[(d\d+)\] /gm)].map((m) => m[1]);
+      return { ids: ids.reverse().slice(0, 3) };
     }
     case "roles": {
       const keys = [...new Set(text.match(/ag-\d+/g) ?? [])];
