@@ -161,6 +161,10 @@
       "call-failed": {
         "title": "Det gick inte att dela fliken",
         "text": "Försök igen. Hjälper det inte: ladda om sidan."
+      },
+      "call-stopped": {
+        "title": "Delningen avbröts – välj fliken igen",
+        "text": "Fliken delas inte längre. Tryck Välj mötesfliken och välj fliken med mötet igen."
       }
     },
     "title": "Innan ni börjar",
@@ -326,6 +330,10 @@
       "device": {
         "title": "Telefoner kan inte dela en flik",
         "text": "Öppna Simon Says i Chrome eller Edge på datorn. Du kan också spela in med bara mikrofonen; då hörs de andra bara om samtalet går ut genom högtalaren."
+      },
+      "stopped": {
+        "title": "Delningen avbröts – välj fliken igen",
+        "text": "Fliken delas inte längre. Tryck Välj mötesfliken och välj fliken med mötet igen."
       }
     },
     "micOnly": "Spela in med bara mikrofonen",

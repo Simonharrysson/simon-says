@@ -11,7 +11,7 @@ import type { CaptureSource } from "@/lib/audio/call";
 import { cn } from "@/lib/utils";
 import { SourcePicker } from "./CallSetup";
 
-export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | "call-no-audio" | "call-not-tab" | "call-failed" | null;
+export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | "call-no-audio" | "call-not-tab" | "call-stopped" | "call-failed" | null;
 
 
 /** The banner for a start error; `text` replaces the default explanation (e.g. the server's own message). */

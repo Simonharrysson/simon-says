@@ -1,22 +1,38 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CALL_MIC_CONSTRAINTS, classifyDisplayStream, DISPLAY_OPTIONS, floatLevel, mixBlocks, tabAudioSupport } from "./call";
+import { CALL_MIC_CONSTRAINTS, classifyDisplayStream, DISPLAY_OPTIONS, floatLevel, LIMIT_KNEE, MIX_GAIN, mixBlocks, softLimit, tabAudioSupport } from "./call";
 import { CallCapture, type CallLevels } from "./call-capture";
 
 const f32 = (...v: number[]) => Float32Array.from(v);
 
 describe("mixBlocks", () => {
-  it("sums the mic and the call sample by sample", () => {
-    expect([...mixBlocks(f32(0.25, -0.5, 0), f32(0.25, 0.25, -0.5))]).toEqual([0.5, -0.25, -0.5]);
+  const near = (got: Float32Array, want: number[]) => want.forEach((w, i) => expect(got[i]).toBeCloseTo(w, 5));
+
+  it("sums the mic and the call sample by sample, each with headroom", () => {
+    expect(MIX_GAIN).toBeLessThan(1);
+    near(mixBlocks(f32(0.25, -0.5, 0), f32(0.25, 0.25, -0.5)), [0.5 * MIX_GAIN, -0.25 * MIX_GAIN, -0.5 * MIX_GAIN]);
   });
 
-  it("clamps to -1…1 instead of wrapping", () => {
-    expect([...mixBlocks(f32(0.75, -0.75), f32(0.5, -0.5))]).toEqual([1, -1]);
+  it("loud on both sides: soft-limited below ±1, never clipped flat or wrapped", () => {
+    const out = mixBlocks(f32(0.9, -0.9, 1, 0.8), f32(0.9, -0.9, 1, 0.9));
+    for (const v of out) expect(Math.abs(v)).toBeLessThan(1);
+    expect(out[0]).toBeGreaterThan(LIMIT_KNEE);
+    expect(out[1]).toBeCloseTo(-out[0], 6);
+    // Still monotonic: louder in, louder out.
+    expect(out[2]).toBeGreaterThan(out[0]);
+    expect(out[0]).toBeGreaterThan(out[3]);
+  });
+
+  it("softLimit: unchanged up to the knee, continuous at it", () => {
+    expect(softLimit(0.5)).toBe(0.5);
+    expect(softLimit(-LIMIT_KNEE)).toBe(-LIMIT_KNEE);
+    expect(softLimit(LIMIT_KNEE + 1e-6)).toBeCloseTo(LIMIT_KNEE, 5);
+    expect(softLimit(10)).toBeLessThanOrEqual(1);
   });
 
   it("a missing or shorter side counts as silence (no tab shared, tab closed)", () => {
-    expect([...mixBlocks(f32(0.5, 0.25), null)]).toEqual([0.5, 0.25]);
-    expect([...mixBlocks(null, f32(0.5))]).toEqual([0.5]);
-    expect([...mixBlocks(f32(0.5, 0.5), f32(0.25))]).toEqual([0.75, 0.5]);
+    near(mixBlocks(f32(0.5, 0.25), null), [0.5 * MIX_GAIN, 0.25 * MIX_GAIN]);
+    near(mixBlocks(null, f32(0.5)), [0.5 * MIX_GAIN]);
+    near(mixBlocks(f32(0.5, 0.5), f32(0.25)), [0.75 * MIX_GAIN, 0.5 * MIX_GAIN]);
     expect(mixBlocks(null, null).length).toBe(0);
   });
 });
@@ -122,8 +138,10 @@ function fakeWebAudio(display: { tracks: FakeTrack[] }) {
   const listeners = new Map<string, () => void>();
   const tabAudio = display.tracks.find((t) => t.kind === "audio") as (FakeTrack & { addEventListener?: unknown }) | undefined;
   if (tabAudio) tabAudio.addEventListener = (type: string, cb: () => void) => listeners.set(type, cb);
+  const streamListeners = new Map<string, (ev: { track: unknown }) => void>();
   const displayStream = {
     id: "display",
+    addEventListener: (type: string, cb: (ev: { track: unknown }) => void) => streamListeners.set(type, cb),
     getTracks: () => display.tracks,
     getAudioTracks: () => display.tracks.filter((t) => t.kind === "audio"),
   };
@@ -163,7 +181,18 @@ function fakeWebAudio(display: { tracks: FakeTrack[] }) {
   vi.stubGlobal("navigator", { mediaDevices: { getUserMedia, getDisplayMedia } });
   vi.stubGlobal("AudioWorkletNode", Worklet);
   vi.stubGlobal("MediaStream", FakeMediaStream);
-  return { worklets, sources, getUserMedia, getDisplayMedia, endTab: () => listeners.get("ended")?.() };
+  return {
+    worklets,
+    sources,
+    getUserMedia,
+    getDisplayMedia,
+    endTab: () => listeners.get("ended")?.(),
+    /** Chrome hands over a new audio track ("Dela den här fliken i stället", switch-track model). */
+    switchTab: (track: FakeTrack) => {
+      display.tracks.push(track);
+      streamListeners.get("addtrack")?.({ track });
+    },
+  };
 }
 
 describe("CallCapture (the mixer)", () => {
@@ -192,11 +221,11 @@ describe("CallCapture (the mixer)", () => {
 
     const chunks: Int16Array[] = [];
     await cap.start((pcm) => chunks.push(pcm));
-    // 100 ms at 48 kHz: the mic says 0.1, the call says 0.2 → 0.3 after mixing, 1600 samples.
+    // 100 ms at 48 kHz: the mic says 0.1, the call says 0.2 → 0.3 × MIX_GAIN after mixing, 1600 samples.
     worklet.port.onmessage!({ data: { mic: new Float32Array(4800).fill(0.1), call: new Float32Array(4800).fill(0.2) } });
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toHaveLength(1600);
-    expect(chunks[0][800] / 32767).toBeCloseTo(0.3, 3);
+    expect(chunks[0][800] / 32767).toBeCloseTo(0.3 * MIX_GAIN, 3);
     expect(levels.at(-1)!.mic).toBeCloseTo(0.5);
     expect(levels.at(-1)!.call).toBeCloseTo(1);
   });
@@ -221,6 +250,38 @@ describe("CallCapture (the mixer)", () => {
     expect(calls[0].connections).toEqual([]);
     expect(calls[1].connections).toEqual([{ to: worklet, out: 0, input: 1 }]);
     expect(fake.getUserMedia).toHaveBeenCalledTimes(1); // the mic stays open
+  });
+
+  it("a switched tab's new audio track is wired to input 1; the old one ending is no call lost", async () => {
+    const tab = [track("video", "browser"), track("audio")];
+    const fake = fakeWebAudio({ tracks: tab });
+    const cap = new CallCapture();
+    const ended = vi.fn();
+    cap.onCallEnded = ended;
+    await cap.share();
+    const next = Object.assign(track("audio"), { addEventListener: vi.fn() });
+    fake.switchTab(next);
+    const calls = fake.sources.filter((s) => s.stream.id === "tab-audio");
+    expect(calls).toHaveLength(2);
+    expect(calls[0].connections).toEqual([]);
+    expect(calls[1].connections).toEqual([{ to: fake.worklets[0], out: 0, input: 1 }]);
+    tab[1].readyState = "ended";
+    fake.endTab();
+    expect(ended).not.toHaveBeenCalled();
+    expect(cap.sharing).toBe(true);
+  });
+
+  it("sharing stopped during the mic prompt: 'stopped', nothing wired", async () => {
+    const tab = [track("video", "browser"), track("audio")];
+    const fake = fakeWebAudio({ tracks: tab });
+    fake.getUserMedia.mockImplementationOnce(async () => {
+      tab[1].readyState = "ended";
+      const mic = Object.assign(track("audio"), { addEventListener: vi.fn() });
+      return { id: "mic", getTracks: () => [mic], getAudioTracks: () => [mic] };
+    });
+    const cap = new CallCapture();
+    expect(await cap.share()).toEqual({ ok: false, reason: "stopped" });
+    expect(fake.sources.some((s) => s.stream.id === "tab-audio")).toBe(false);
   });
 
   it("no audio track: nothing is opened, the reason comes back", async () => {

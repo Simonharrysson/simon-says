@@ -49,18 +49,28 @@ export function classifyDisplayStream(stream: { getTracks(): TrackLike[] }): Dis
   return { ok: false, reason: surface && surface !== "browser" ? "not-tab" : "no-audio" };
 }
 
+/** Each source's share of the mix: headroom, so two loud voices at once rarely reach the limiter. */
+export const MIX_GAIN = 0.7;
+/** Above this the soft limiter bends the signal towards ±1 instead of clipping it flat. */
+export const LIMIT_KNEE = 0.9;
+
+/** Soft limiter: linear up to the knee, then a tanh curve that never quite reaches ±1. */
+export function softLimit(v: number): number {
+  const a = Math.abs(v);
+  if (a <= LIMIT_KNEE) return v;
+  const room = 1 - LIMIT_KNEE;
+  return Math.sign(v) * (LIMIT_KNEE + room * Math.tanh((a - LIMIT_KNEE) / room));
+}
+
 /**
- * The call's audio and the user's mic, one 100 ms block each at the same rate, summed into one
- * block (what the STT pipeline gets). Summed, not averaged: the other side shouldn't be half as
- * loud while you are quiet. Clamped to -1…1; a missing or shorter block counts as silence.
+ * The call's audio and the user's mic, one 100 ms block each at the same rate, mixed into one
+ * block (what the STT pipeline gets): each at MIX_GAIN, summed (not averaged: the other side
+ * shouldn't drop when you are quiet), then soft-limited. A missing or shorter block is silence.
  */
 export function mixBlocks(mic: Float32Array | null, call: Float32Array | null): Float32Array {
   const n = Math.max(mic?.length ?? 0, call?.length ?? 0);
   const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const v = (mic?.[i] ?? 0) + (call?.[i] ?? 0);
-    out[i] = v > 1 ? 1 : v < -1 ? -1 : v;
-  }
+  for (let i = 0; i < n; i++) out[i] = softLimit(MIX_GAIN * ((mic?.[i] ?? 0) + (call?.[i] ?? 0)));
   return out;
 }
 

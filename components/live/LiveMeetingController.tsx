@@ -207,6 +207,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** Live: the call tab stopped being shared (paused until it is shared again). */
   const [callLost, setCallLost] = useState(false);
   const [reshareNoAudio, setReshareNoAudio] = useState(false);
+  /** The user pressed Paus (and not Fortsätt since). */
+  const userPaused = useRef(false);
+  /** The stream is paused because the call tab went away (Dela fliken igen resumes it). */
+  const pausedForCall = useRef(false);
   /** Capture the call tab (not only the mic): a video call where the browser can share tab audio. */
   const tabCapture = source === "call" && callSupport === "ok" && !micOnly;
   const stream = useRef<LiveStream | null>(null);
@@ -450,6 +454,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         cap.onCallEnded = () => {
           setCallLost(true);
           setReshareNoAudio(false);
+          // Paused for the lost tab, unless the user had already paused: then it stays theirs.
+          pausedForCall.current = !userPaused.current;
           s.pause();
         };
       }
@@ -488,6 +494,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       lastAt = t;
       setCallLevels(l);
     };
+    // Sharing stopped before Start ("Sluta dela", the tab closed): Start waits for a tab again.
+    // runStream replaces this with the live meeting's pause once the meeting starts.
+    cap.onCallEnded = () => {
+      if (capture.current !== cap) return;
+      setCallShared(false);
+      setCallLevels(null);
+      setCallError("stopped");
+    };
     void cap.share().then((r) => {
       if (capture.current !== cap) return;
       setSharing(false);
@@ -503,6 +517,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     capture.current = null;
     setMicLevel(null);
     setCallShared(false);
+    setSharing(false);
     setCallLevels(null);
     setCallError(null);
     setStartError(null);
@@ -517,7 +532,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       if (r.ok) {
         setCallLost(false);
         setReshareNoAudio(false);
-        stream.current?.resume();
+        // Only undo our own pause: a pause the user chose stays until they press Fortsätt.
+        if (pausedForCall.current && !userPaused.current) stream.current?.resume();
+        pausedForCall.current = false;
       } else if (r.reason === "no-audio" || r.reason === "not-tab") {
         setReshareNoAudio(true);
       }
@@ -1098,8 +1115,16 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       busy={busy}
       autoStopped={autoStopped}
       onStart={onStart}
-      onPause={() => stream.current?.pause()}
-      onResume={() => stream.current?.resume()}
+      onPause={() => {
+        userPaused.current = true;
+        pausedForCall.current = false;
+        stream.current?.pause();
+      }}
+      onResume={() => {
+        userPaused.current = false;
+        pausedForCall.current = false;
+        stream.current?.resume();
+      }}
       onStop={onStop}
       answersLost={props.answersLost}
       tasks={tasks}

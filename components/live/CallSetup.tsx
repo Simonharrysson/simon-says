@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 /** Input level above this counts as "heard" (same bar as the consent mic check). */
 const HEARD = 0.08;
 
-export type CallShareError = "no-audio" | "not-tab" | "failed";
+export type CallShareError = "no-audio" | "not-tab" | "stopped" | "failed";
 
 /** "Var hålls mötet?": here in the room (the laptop's mic) or in a video call (the call tab + mic). */
 export function SourcePicker({ value, onChange, disabled }: { value: CaptureSource; onChange: (s: CaptureSource) => void; disabled?: boolean }) {

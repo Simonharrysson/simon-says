@@ -148,6 +148,19 @@ test("video call: tab audio + mic mixed into the transcription, share stopped �
   // Recording again: new blocks carry the new tab's tone.
   const before = await page.evaluate(() => (window as unknown as { __heard: { call: number } }).__heard.call);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __heard: { call: number } }).__heard.call), { timeout: 30_000 }).toBeGreaterThan(before + 5);
+
+  // A pause the user chose survives the tab going away and coming back.
+  await page.getByRole("button", { name: "Klar, alla har sagt sitt namn" }).click();
+  await page.getByRole("button", { name: "Paus", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Fortsätt", exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    const track = (window as unknown as { __display: MediaStream }).__display.getAudioTracks()[0];
+    track.stop();
+    track.dispatchEvent(new Event("ended"));
+  });
+  await page.getByRole("button", { name: "Dela fliken igen" }).click();
+  await expect(page.getByText("Mötesfliken delas inte längre")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Fortsätt", exact: true })).toBeVisible();
 });
 
 test("video call: no tab audio ticked → a clear instruction, and a retry that works", async ({ seedOrg, signedIn, newEmail }) => {
@@ -168,6 +181,18 @@ test("video call: no tab audio ticked → a clear instruction, and a retry that 
   await page.getByRole("button", { name: "Välj mötesfliken" }).click();
   await expect(page.getByText("Vi får inget ljud från fliken")).toHaveCount(0);
   await expect(page.getByText("Vi hör både dig och samtalet.")).toBeVisible();
+
+  // Sharing stopped before Start: Start waits for a tab again.
+  await page.getByRole("checkbox", { name: "Alla i samtalet vet att mötet transkriberas och kan be om paus" }).check();
+  await expect(page.getByRole("button", { name: "Starta mötet" })).toBeEnabled();
+  await page.evaluate(() => {
+    const track = (window as unknown as { __display: MediaStream }).__display.getAudioTracks()[0];
+    track.stop();
+    track.dispatchEvent(new Event("ended"));
+  });
+  await expect(page.getByText("Delningen avbröts – välj fliken igen")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Starta mötet" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Välj mötesfliken" })).toBeVisible();
 });
 
 test("video call in Privat: the user's own responsibility, no announcement", async ({ signedIn, newEmail }) => {

@@ -15,7 +15,10 @@ export interface CallLevels {
 }
 
 /** The share picker's outcome. "cancelled": closed without picking; "mic": the mic failed (error inside). */
-export type ShareResult = { ok: true } | { ok: false; reason: Exclude<DisplayCheck, { ok: true }>["reason"] | "cancelled" | "mic" | "failed"; error?: unknown };
+export type ShareResult =
+  | { ok: true }
+  /** "stopped": the tab was shared, then sharing stopped before it was wired up. */
+  | { ok: false; reason: Exclude<DisplayCheck, { ok: true }>["reason"] | "cancelled" | "stopped" | "mic" | "failed"; error?: unknown };
 
 type CaptureControllerLike = { setFocusBehavior?: (b: string) => void };
 
@@ -29,6 +32,7 @@ export class CallCapture implements AudioSource {
   private opening: Promise<void> | null = null;
   /** Tab tracks whose "ended" is already listened to (open() re-attaches after a recover). */
   private watched = new WeakSet<MediaStreamTrack>();
+  private watchedStreams = new WeakSet<MediaStream>();
   private onChunk: ((pcm: Int16Array) => void) | null = null;
   /** The meters on the start screen (set by the page; null stops reporting). */
   onLevels: ((levels: CallLevels) => void) | null = null;
@@ -70,10 +74,16 @@ export class CallCapture implements AudioSource {
         return { ok: false, reason: name === "NotAllowedError" || name === "AbortError" ? "cancelled" : "failed", error: e };
       }
       // Stay on this page after picking (the meters and Start are here), where Chrome allows it.
+      // Synchronously after the promise settles: later, Chrome ignores it.
       try {
         controller?.setFocusBehavior?.("no-focus-change");
       } catch {
         // Not supported, or too late: Chrome switches to the shared tab; the user comes back.
+      }
+      if (this.ctx !== ctx) {
+        // Stopped (or the source switched) while the picker was open.
+        stream.getTracks().forEach((t) => t.stop());
+        return { ok: false, reason: "cancelled" };
       }
       const check = classifyDisplayStream(stream);
       if (!check.ok) return { ok: false, reason: check.reason };
@@ -84,9 +94,13 @@ export class CallCapture implements AudioSource {
         return { ok: false, reason: "mic", error: e };
       }
       if (this.ctx !== ctx) {
-        // Stopped while the picker was open.
         stream.getTracks().forEach((t) => t.stop());
         return { ok: false, reason: "cancelled" };
+      }
+      // Sharing may have stopped during the mic prompt.
+      if (check.audio.readyState !== "live") {
+        stream.getTracks().forEach((t) => t.stop());
+        return { ok: false, reason: "stopped" };
       }
       this.attachCall(stream, check.audio);
       return { ok: true };
@@ -162,7 +176,20 @@ export class CallCapture implements AudioSource {
     // Only the end matters: a tab's audio "mutes" whenever the call is silent.
     if (!this.watched.has(audio)) {
       this.watched.add(audio);
-      audio.addEventListener("ended", () => this.display === stream && this.onCallEnded?.());
+      audio.addEventListener("ended", () => {
+        // A switch ("Dela den här fliken i stället") may have replaced this track with a live one.
+        if (this.display === stream && !this.sharing) this.onCallEnded?.();
+      });
+    }
+    // "Dela den här fliken i stället": Chrome normally keeps the same tracks and points them at
+    // the new tab (nothing to do). Where it hands over a new audio track instead, wire that one.
+    if (!this.watchedStreams.has(stream)) {
+      this.watchedStreams.add(stream);
+      stream.addEventListener?.("addtrack", (ev: MediaStreamTrackEvent) => {
+        const track = ev.track;
+        if (this.display !== stream || track.kind !== "audio" || track.readyState !== "live") return;
+        this.attachCall(stream, track);
+      });
     }
     if (!this.ctx || !this.node) return; // open() attaches it once the graph is up
     const source = this.ctx.createMediaStreamSource(new MediaStream([audio]));

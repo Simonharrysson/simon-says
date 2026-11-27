@@ -161,6 +161,10 @@
       "call-failed": {
         "title": "Couldn't share the tab",
         "text": "Try again. If that doesn't help, reload the page."
+      },
+      "call-stopped": {
+        "title": "Sharing stopped – choose the tab again",
+        "text": "The tab is no longer shared. Press Choose the meeting tab and pick the meeting's tab again."
       }
     },
     "title": "Before you begin",
@@ -326,6 +330,10 @@
       "device": {
         "title": "Phones can't share a tab",
         "text": "Open Simon Says in Chrome or Edge on a computer. You can also record with the mic only; the others are then only heard if the call plays through the speaker."
+      },
+      "stopped": {
+        "title": "Sharing stopped – choose the tab again",
+        "text": "The tab is no longer shared. Press Choose the meeting tab and pick the meeting's tab again."
       }
     },
     "micOnly": "Record with the mic only",
