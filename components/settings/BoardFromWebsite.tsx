@@ -10,7 +10,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { IconAlert, IconCheck, IconGlobe } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { websiteLabel } from "@/lib/orgs/profile";
-import { cn } from "@/lib/utils";
 import type { BoardSuggestion } from "@/lib/website/board";
 
 // "Hämta styrelsen från webbplatsen" (föreningar, Inställningar → Föreningen): asks the server to
@@ -184,7 +183,7 @@ function Found({
       </div>
       <ul className="flex flex-col" aria-label={t("listLabel")}>
         {rows.map((r) => (
-          <li key={r.key} className={cn("flex flex-col gap-1 border-t border-line py-3 first:border-t-0", r.exists && "opacity-70")}>
+          <li key={r.key} className="flex flex-col gap-1 border-t border-line py-3 first:border-t-0">
             <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)]">
               <Checkbox
                 id={`${id}-${r.key}-pick`}
