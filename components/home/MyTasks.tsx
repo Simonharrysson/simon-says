@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
@@ -89,12 +89,23 @@ export function MyTasks({
   const [showDone, setShowDone] = useState(initialShowDone);
   const { states, tick, undo } = useTicks(save, initialStates);
   const listRef = useRef<HTMLUListElement>(null);
+  // The row that last had the focus. A ticked checkbox is disabled while it saves, which drops the
+  // focus to <body>; the row still counts as holding it until the focus goes somewhere else.
+  const focusRow = useRef<string | null>(null);
+  const onListFocus = (e: FocusEvent<HTMLUListElement>) => {
+    focusRow.current = (e.target as Element).closest<HTMLElement>("[data-flip]")?.dataset.flip ?? null;
+  };
+  const onListBlur = (e: FocusEvent<HTMLUListElement>) => {
+    if (e.relatedTarget) focusRow.current = null;
+  };
   // A row about to close (or move to the done ones) that holds the focus hands it on first: to
   // the next row's checkbox, else the one before, else the list's heading.
   const settled = useSettled(states, (key) => {
     const list = listRef.current;
     const row = list?.querySelector<HTMLElement>(`:scope > [data-flip="${CSS.escape(key)}"]`);
-    if (!list || !row || !row.contains(document.activeElement)) return;
+    const active = document.activeElement;
+    const holds = row?.contains(active) || ((!active || active === document.body) && focusRow.current === key);
+    if (!list || !row || !holds) return;
     const rows = [...list.querySelectorAll<HTMLElement>(":scope > li:not([data-exiting])")].filter((r) => r !== row);
     const next = rows.find((r) => row.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING) ?? rows.at(-1);
     const box = next?.querySelector<HTMLElement>('[role="checkbox"]:not([disabled])');
@@ -223,7 +234,7 @@ export function MyTasks({
               )}
             </m.div>
           ) : (
-            <m.ul key="list" ref={listRef} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
+            <m.ul key="list" ref={listRef} onFocus={onListFocus} onBlur={onListBlur} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
               <AnimatePresence initial={false}>
                 {visible.map((task) => (
                   <TaskRow
