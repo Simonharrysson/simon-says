@@ -26,6 +26,7 @@ export function MeetingEnded({
   onEndWithoutUnsent,
   focusOnMount,
   privat,
+  answersLost,
 }: {
   docUrl: string | null;
   durationSeconds: number;
@@ -50,7 +51,10 @@ export function MeetingEnded({
   focusOnMount?: boolean;
   /** A Privat recording (0045): where its summary is shown, and the back link's words. */
   privat?: { summaryHref: string | null; backLabel: string } | null;
+  /** The Avsluta dialog's answers came after the meeting had already ended: say so, never drop them silently. */
+  answersLost?: boolean;
 }) {
+  const tt = useTranslations("tasks.end");
   const t = useTranslations("live.ended");
   const tp = useTranslations("privat.live");
   const locale = useLocale();
@@ -70,6 +74,11 @@ export function MeetingEnded({
       <h1 id="ended-title" className="text-2xl" ref={heading} tabIndex={-1}>
         {finalizing ? t("finalizing") : t("ended")}
       </h1>
+      {answersLost && (
+        <Banner tone="warning" title={tt("answersLostTitle")}>
+          {tt("answersLostText")}
+        </Banner>
+      )}
       {waiting && (
         <Banner tone="warning" title={t("waitingTitle", { count: pendingRuns ?? 0 })}>
           {t("waitingText")}

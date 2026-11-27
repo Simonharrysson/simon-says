@@ -8,6 +8,7 @@ import { emailPrefsUrl, listUnsubscribeHeaders } from "@/lib/email/token";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
+import { stockholmDay, taskMode } from "@/lib/notes/tasks";
 import { hasOwnNotes, summaryContent, type SummaryItem } from "./content";
 import { defaultLocale, type Locale } from "@/lib/i18n/config";
 import { translator } from "@/lib/i18n/translator";
@@ -126,22 +127,26 @@ export async function sendMeetingSummaries(
   let people: SummaryPerson[] = [];
   let items: SummaryItem[] = [];
   let unnamedVoices = 0;
+  let requireFields = false;
   let unmatchedNames = 0;
   if (m.is_test) {
     state = "test";
   } else {
-    const org = must("summary: org", await db.from("orgs").select("name, summary_mode").eq("id", m.org_id).maybeSingle()) as {
+    const org = must("summary: org", await db.from("orgs").select("*").eq("id", m.org_id).maybeSingle()) as {
       name: string;
       summary_mode: SummaryMode | null;
+      require_task_fields?: boolean;
+      kind?: string;
     } | null;
     if (!org) return null;
     orgName = org.name;
+    requireFields = taskMode(org) === "require";
     mode = org.summary_mode ?? "missed";
     items = must(
       "summary: items",
       await db
         .from("note_items")
-        .select("meeting_id, id, section, kind, text, owner, due, position, done, deleted_by_human, copy_of, anchor, owner_person_id, carried_from_meeting, carried_from_id")
+        .select("meeting_id, id, section, kind, text, owner, due, position, done, deleted_by_human, copy_of, anchor, owner_person_id, carried_from_meeting, carried_from_id, done_when, due_date, locked")
         .eq("meeting_id", m.id),
     ) as SummaryItem[];
     if (mode === "off") state = "off";
@@ -244,7 +249,13 @@ export async function sendMeetingSummaries(
       startedAt: m.started_at,
       recipientName: r.person.name,
       missed: r.missed,
-      content: summaryContent(items, { agendaRoles: m.agenda_roles, people, forPerson: r.person }),
+      content: summaryContent(items, {
+        agendaRoles: m.agenda_roles,
+        people,
+        forPerson: r.person,
+        today: stockholmDay(deps.now()),
+        requireFields,
+      }),
       buttonHref: access.href,
       accessNote: access.note,
       settingsHref: r.isAdmin ? `${origin}/orgs/${m.org_id}/installningar#sammanfattning` : null,

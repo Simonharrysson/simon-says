@@ -517,3 +517,23 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - Simon: "I don't think it's very easy for you to tell what's Må-runda and what's not … it has to be 10 out of 10, you have to just transcribe everything." The detector's precision (never hiding real discussion) was never measured, only leaks.
 - Now off by default for every format (standard, learned, stored). `FormatProfile.hideCheckin` (absent = off, stored only when true; no migration). At the start `meetingRoles` turns a checkin item into a procedural one when off, so the meeting has no checkin role and no `checkin_window`: no detector call, no masking, no hidden Doc text, notes may land under the item, and it stays out of the dashboard's recurring topics.
 - Opt-in: "Anpassa format" → "Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)". The masking code path is unchanged behind it. `notes-eval --hide-checkin` replays it; without the flag the Må-runda content bar is off.
+
+## 2026-11-26 · Concrete tasks: Vem, När, Klart när (0049)
+
+- Paid smoke (the one allowed, ≤ $1): `notes-eval --only concrete-tasks --budget 1` on the new fictional
+  fixture `fixtures/notes/concrete-tasks`, **$0.037** (ledger `.notes-replay/spend.json` of the
+  concrete-tasks worktree, total $0.037). done_when 3/3: said at once → "hyresavtalet är påskrivet"; said a
+  minute later → the same task changed (no duplicate); never said → empty (not invented). Recall 4/4,
+  must_not 0. The run shows FAIL only on churn (16.3 % > 15 %): the saved per-tick ops show the two
+  churning ticks are the "now" line changing topic (no task text was rewritten; the later Klart när
+  came as a field-only change). A 2-minute fixture with few items makes one "now" change weigh 12–20 %.
+  Not in the suite's paid list.
+- Avsluta answers are stored on `meetings.task_answers` with the end claim and applied by the final pass
+  after Claude's ops (so the final tidy-up can't overwrite the fields, and a cron retry still has them).
+  If the final pass removes or merges an answered task, that answer is dropped with it. A
+  human-edited (locked) task is never written; it counts as complete when its line no longer shows a
+  placeholder.
+- Overdue is derived, never stored in `due`: `note_items.due_date` is `due` resolved against the meeting's
+  start (`resolveDue`: dates, "3 dec", "3/12", weekdays, "imorgon"; anything else is no date, never
+  overdue). Carried tasks keep their source's, and the Doc marks them "(fredag, försenad)" against the
+  new meeting's day, so the line is stable across ticks.

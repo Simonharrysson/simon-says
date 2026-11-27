@@ -64,10 +64,19 @@ const tr = (i: SummaryEmailInput): Translator => translator(i.locale ?? defaultL
 /** "Exempelföreningens möte" in Swedish, "the Exempelföreningen meeting" in English. */
 const orgOf = (i: SummaryEmailInput) => ((i.locale ?? defaultLocale) === "sv" ? genitive(i.orgName) : i.orgName);
 
-function taskLine(t: SummaryTask, withOwner: boolean): string {
+/** The task's När, Klart när and what it lacks, as words (concrete tasks). */
+function taskParts(t: SummaryTask, tr: Translator): { due: string; doneWhen: string; missing: string } {
+  const due = t.due ? `(${t.due}${t.overdue ? `, ${tr("tasks.summary.overdue")}` : ""})` : "";
+  const doneWhen = t.doneWhen ? tr("tasks.summary.doneWhen", { text: t.doneWhen }) : "";
+  const names = { owner: tr("tasks.summary.fieldOwner"), due: tr("tasks.summary.fieldDue"), doneWhen: tr("tasks.summary.fieldDoneWhen") };
+  const missing = t.missing?.length ? tr("tasks.summary.missing", { fields: t.missing.map((f) => names[f]).join(", ") }) : "";
+  return { due, doneWhen, missing };
+}
+
+function taskLine(t: SummaryTask, withOwner: boolean, tr: Translator): string {
   const owner = withOwner && t.owner ? `${t.owner}: ` : "";
-  const due = t.due ? ` (${t.due})` : "";
-  return `${owner}${t.text}${due}`;
+  const p = taskParts(t, tr);
+  return `${owner}${t.text}${p.due ? ` ${p.due}` : ""}${p.doneWhen ? ` – ${p.doneWhen}` : ""}${p.missing ? ` – ${p.missing}` : ""}`;
 }
 
 function previewText(i: SummaryEmailInput): string {
@@ -111,9 +120,9 @@ export function renderSummaryText(i: SummaryEmailInput): string {
   if (c.decisions.length) out.push(upper(t("emails.summary.decisions")), ...c.decisions.map((d) => `- ${d}`), ...more(c.more.decisions), "");
   const mine = c.tasks.filter((x) => x.mine);
   const rest = c.tasks.filter((x) => !x.mine);
-  if (mine.length) out.push(upper(t("emails.summary.yourTasks")), ...mine.map((x) => `- ${taskLine(x, false)}`), "");
+  if (mine.length) out.push(upper(t("emails.summary.yourTasks")), ...mine.map((x) => `- ${taskLine(x, false, t)}`), "");
   if (rest.length || (c.more.tasks > 0 && !mine.length)) {
-    out.push(upper(t(mine.length ? "emails.summary.otherTasks" : "emails.summary.tasks")), ...rest.map((x) => `- ${taskLine(x, true)}`), ...more(c.more.tasks), "");
+    out.push(upper(t(mine.length ? "emails.summary.otherTasks" : "emails.summary.tasks")), ...rest.map((x) => `- ${taskLine(x, true, t)}`), ...more(c.more.tasks), "");
   } else if (c.more.tasks > 0) out.push(...more(c.more.tasks), "");
   if (c.other.length) out.push(upper(t("emails.summary.other")), ...c.other.map((o) => `- ${o}`), ...more(c.more.other), "");
   out.push(t("emails.summary.openText", { url: i.buttonHref }));
@@ -147,10 +156,13 @@ function sectionTitle(title: string): string {
   return `<p class="ink-3" style="margin:0 0 12px 0; font-family:${SANS}; font-size:13px; line-height:20px; font-weight:600; letter-spacing:0.02em; text-transform:uppercase; color:#666666;">${title}</p>`;
 }
 
-function taskHtml(t: SummaryTask, withOwner: boolean): string {
+function taskHtml(t: SummaryTask, withOwner: boolean, tr: Translator): string {
   const owner = withOwner && t.owner ? `<span style="font-weight:600;">${escapeHtml(t.owner)}:</span> ` : "";
-  const due = t.due ? ` <span class="ink-3" style="color:#666666;">(${escapeHtml(t.due)})</span>` : "";
-  return `${owner}${escapeHtml(t.text)}${due}`;
+  const p = taskParts(t, tr);
+  // Overdue is said in words ("fredag, försenad"), not by colour.
+  const due = p.due ? ` <span class="ink-3" style="color:#666666;">${escapeHtml(p.due)}</span>` : "";
+  const extra = [p.doneWhen, p.missing].filter(Boolean).map((x) => ` <span class="ink-3" style="color:#666666;">– ${escapeHtml(x)}</span>`).join("");
+  return `${owner}${escapeHtml(t.text)}${due}${extra}`;
 }
 
 export function renderSummaryHtml(i: SummaryEmailInput): string {
@@ -167,7 +179,7 @@ export function renderSummaryHtml(i: SummaryEmailInput): string {
       `<tr><td style="padding:0 0 28px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>` +
         `<td class="bg-sunk" style="background-color:#f2f2f2; border-radius:8px; padding:20px 20px 12px 20px;">` +
         sectionTitle(escapeHtml(t("emails.summary.yourTasks"))) +
-        list(t, mine.map((x) => taskHtml(x, false)), 0) +
+        list(t, mine.map((x) => taskHtml(x, false, t)), 0) +
         `</td></tr></table></td></tr>`,
     );
   }
@@ -178,7 +190,7 @@ export function renderSummaryHtml(i: SummaryEmailInput): string {
     blocks.push(
       `<tr><td style="padding:0 0 20px 0;">${sectionTitle(escapeHtml(t(mine.length ? "emails.summary.otherTasks" : "emails.summary.tasks")))}${list(
         t,
-        rest.map((x) => taskHtml(x, true)),
+        rest.map((x) => taskHtml(x, true, t)),
         c.more.tasks,
         "ink-2",
         "#4d4d4d",

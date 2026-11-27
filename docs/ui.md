@@ -359,6 +359,15 @@ Building blocks (usable on their own):
   Stämmer inline; unknown shows "Vem är detta?" (blue) + Välj, which opens the name chips and
   "Någon annan". Pickers are closed by default. Speakers are keyed by `(elSessionId, speakerLabel)`
   since labels restart on a new ElevenLabs session.
+- `TasksPanel {tasks}` — "Uppgifter" under the speaker list (concrete tasks, 0049): each task with Vem /
+  När / Klart när ("saknas" in grey italics when missing). A task that lacks something shows one calm
+  question ("Vem ansvarar och när ska det vara klart?" or "Hur vet ni att det är klart?") and "Fråga nu",
+  which makes the question big (blue wash) until "Klar". A badge counts what is left to ask; no dots.
+- `EndTasksDialog {open, tasks, onConfirm}` — Avsluta when the förening requires Vem, När and Klart när
+  and tasks lack something: each is completed inline (only its missing fields) or "Lämna som det är";
+  "Avsluta mötet" is enabled once all are handled, "Fortsätt mötet" is first and focused. A line a
+  person edited in the Doc can only be left as it is. Only the live page's Avsluta asks: the org page's
+  end, the resume screen's end and the automatic ends never do.
 - `ResumeMeeting {startedAt, orgName, onResume, onEnd?, resuming?}` — "Fortsätt mötet"; "Avsluta mötet" asks first.
 - `LiveDialog` — the shared confirm dialog, a shadcn Dialog opened through a `LiveDialogHandle` ref
   (`showModal()` / `close()`) (safe choice first and focused; `stayVariant="primary"`

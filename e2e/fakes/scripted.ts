@@ -5,6 +5,13 @@
 export const SCRIPTED = {
   decision: "Hackathonet blir den 14 februari",
   action: "Maila Kårallen om lokalen",
+  /** The scripted task is complete (Vem, När, Klart när): Avsluta asks nothing about it. */
+  actionOwner: "Anna Berg",
+  actionDue: "fredag",
+  actionDoneWhen: "Kårallen har svarat",
+  /** A förening whose name contains this also gets two tasks without När and Klart när (tasks.spec). */
+  tasksOrg: "Uppgiftsföreningen",
+  incomplete: ["Boka fika till nästa möte", "Skriva verksamhetsplanen"],
   now: "Budget för hackathonet",
   /** The meeting's title from the final pass (0048), shown in the förening's meeting list. */
   title: "Hackathon och lokal",

@@ -45,7 +45,7 @@ export interface HomeMeeting {
   title?: string | null;
 }
 
-/** A note row as read with `select("*")`: the concrete-tasks columns (0047) when present. */
+/** A note row as read with `select("*")`: the concrete-tasks columns (0049) when present. */
 export type HomeNoteRow = NoteItemRow & { due_date?: string | null; done_when?: string | null };
 
 export interface PrivatTaskRow {
@@ -73,9 +73,9 @@ export interface MyTask {
   text: string;
   /** The deadline as said ("fredag", "4 dec"), when there is one. */
   due: string | null;
-  /** The deadline as a day (YYYY-MM-DD), when it names one (0047). */
+  /** The deadline as a day (YYYY-MM-DD), when it names one (0049). */
   dueDate: string | null;
-  /** "Klart när" (0047). */
+  /** "Klart när" (0049). */
   doneWhen: string | null;
   /** Privat: the context's name ("TDDE15"). */
   contextName: string | null;

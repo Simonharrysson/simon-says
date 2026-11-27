@@ -344,7 +344,7 @@ export function applyOps(
       continue;
     }
     const moves = op.anchor !== undefined && op.anchor !== target.anchor;
-    const edits = op.text !== undefined || op.owner !== undefined || op.due !== undefined;
+    const edits = op.text !== undefined || op.owner !== undefined || op.due !== undefined || op.doneWhen !== undefined;
     // done only on tasks; a carried task only ever takes done: true (never re-opened by Claude).
     const badDone = op.done !== undefined && (target.section !== "action" || (target.carried && op.done !== true));
     if (moves || badDone || (target.carried && edits)) {
@@ -358,7 +358,7 @@ export function applyOps(
     }
     const before = JSON.stringify(target);
     if (op.text !== undefined) target.text = op.text;
-    for (const key of ["owner", "due"] as const) {
+    for (const key of ["owner", "due", "doneWhen"] as const) {
       const value = op[key];
       if (value === undefined) continue;
       if (value) target[key] = value;
@@ -412,14 +412,14 @@ export function churn(prev: NotesItem[], next: NotesItem[], locked: string[]): n
 
 /**
  * Stricter variant (reported next to `churn`): excludes the "now" item, counts removals and any
- * change of text, owner or due.
+ * change of text, owner, due or done_when.
  */
 export function churnStrict(prev: NotesItem[], next: NotesItem[], locked: string[]): number {
   const skip = new Set(locked);
   const eligible = prev.filter((i) => i.section !== "now" && !skip.has(i.id));
   if (eligible.length === 0) return 0;
   const after = new Map(next.map((i) => [i.id, i]));
-  const key = (i: NotesItem) => JSON.stringify([i.text, i.owner ?? "", i.due ?? ""]);
+  const key = (i: NotesItem) => JSON.stringify([i.text, i.owner ?? "", i.due ?? "", i.doneWhen ?? ""]);
   return (
     eligible.filter((i) => {
       const n = after.get(i.id);

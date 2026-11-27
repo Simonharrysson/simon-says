@@ -326,7 +326,7 @@ export function planCarried(
     const old = bySource.get(src(r));
     // A task a human deleted from the Doc is never written again; an edited line is theirs.
     if (old?.deleted_by_human || old?.locked) return [];
-    if (old) return [toNotesItem({ ...old, text: r.text, owner: r.owner, due: r.due, anchor: r.anchor })];
+    if (old) return [toNotesItem({ ...old, text: r.text, owner: r.owner, due: r.due, done_when: r.done_when, due_date: r.due_date, anchor: r.anchor })];
     const row = { ...r, id: `c${++n}`, meeting_id: meeting.id, range_name: null, last_rendered_text: null, position: 0 };
     fresh.push(row);
     return [toNotesItem(row)];
@@ -393,7 +393,7 @@ export function planReconcile(
       rows.push(
         span
           ? { ...w.row, range_name: w.range, last_rendered_text: w.text, locked: false, deleted_by_human: false }
-          : { ...w.row, range_name: w.range, last_rendered_text: w.text, locked: true, text: any.paraText, owner: null, due: null },
+          : { ...w.row, range_name: w.range, last_rendered_text: w.text, locked: true, text: any.paraText, owner: null, due: null, done_when: null, due_date: null },
       );
       continue;
     }

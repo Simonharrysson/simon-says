@@ -46,6 +46,8 @@ export async function resumeMeeting(meetingId: string, now = new Date()): Promis
       end_status: null,
       end_attempts: 0,
       end_lease_until: null,
+      // The Avsluta answers belonged to the end that was undone (0049): the next end asks again.
+      task_answers: null,
       last_heartbeat_at: now.toISOString(),
     })
     .eq("id", meetingId)

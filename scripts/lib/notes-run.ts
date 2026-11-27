@@ -191,7 +191,7 @@ export function tabText(items: NotesItem[], humanLines: { section: NotesSection;
 export function opLine(op: NotesOp): string {
   if (op.op === "remove") return `- remove ${op.id}`;
   if (op.op === "add") return `+ ${op.item.id} [${op.item.section}] ${formatItem(op.item)}`;
-  const parts = (["text", "owner", "due"] as const).filter((k) => op[k] !== undefined).map((k) => `${k}=${JSON.stringify(op[k])}`);
+  const parts = (["text", "owner", "due", "doneWhen"] as const).filter((k) => op[k] !== undefined).map((k) => `${k}=${JSON.stringify(op[k])}`);
   return `~ ${op.id} ${parts.join(" ")}`;
 }
 

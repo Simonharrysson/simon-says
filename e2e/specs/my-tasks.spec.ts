@@ -93,7 +93,7 @@ test("Mina uppgifter: my tasks from two föreningar and Privat; tick one → ✓
   await expect(page.getByText("Klar, och ”✓ klart” står nu i dokumentet.")).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => fake.docText(pm.docId), { message: "✓ klart in the Doc" }).toContain(`${line} ✓ klart`);
   const { data: rows } = await db.from("note_items").select("meeting_id, id, done").in("meeting_id", [pm.id, fm.id]);
-  // Both meetings have an "n1": the ticked one is Paddelklubben's.
+  // Both meetings have an "n1": the ticked one is Paddelklubben's (rows come back in no set order).
   expect(rows?.find((r) => r.meeting_id === pm.id && r.id === "n1")?.done).toBe(true);
   expect(rows?.filter((r) => r.done).length).toBe(1);
 

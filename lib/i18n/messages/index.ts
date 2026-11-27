@@ -67,6 +67,8 @@ import svAccount from "./sv/account.json";
 import svCommon from "./sv/common.json";
 import svMailPrefs from "./sv/mailPrefs.json";
 import svNotices from "./sv/notices.json";
+import enTasks from "./en/tasks.json";
+import svTasks from "./sv/tasks.json";
 
 export const sv = {
   calendar: svCalendar,
@@ -100,6 +102,7 @@ export const sv = {
   account: svAccount,
   mailPrefs: svMailPrefs,
   notices: svNotices,
+  tasks: svTasks,
 };
 
 export type Messages = typeof sv;
@@ -136,6 +139,7 @@ export const en: Messages = {
   account: enAccount,
   mailPrefs: enMailPrefs,
   notices: enNotices,
+  tasks: enTasks,
 };
 
 export const messages: Record<Locale, Messages> = { sv, en };
