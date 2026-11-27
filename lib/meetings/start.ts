@@ -36,6 +36,7 @@ import { calendarSnapshotForStart } from "@/lib/calendar/load";
 import { isUuid } from "@/lib/db/ids";
 import { privatTitle } from "@/lib/privat/format";
 import { isPrivat } from "@/lib/privat/space";
+import { planForetagStart, saveAttendees, type ForetagStart } from "@/lib/foretag/start";
 
 export type { StandardKind } from "@/lib/formats/standard";
 import type { StandardKind } from "@/lib/formats/standard";
@@ -70,6 +71,12 @@ export interface StartOptions {
    */
   contextId?: string | null;
   withDoc?: boolean;
+  /**
+   * A Företag only (0050): the group the meeting is for (null = Hela företaget) and "Privat möte"
+   * (only attendees and admins see it). Always a new Enkel Doc, shared with exactly the viewers.
+   */
+  groupId?: string | null;
+  private?: boolean;
 }
 
 export type StartResult =
@@ -189,6 +196,14 @@ export async function startMeeting(
   if (isPrivat(org) && !privat) return failed("bad_context", 400, "Välj vad inspelningen gäller och försök igen.");
   if (privat) opts = { formatKind: "enkel", isTest: opts.isTest, contextId: privat.id, withDoc: opts.withDoc === true };
   const docless = privat !== null && !opts.withDoc;
+  // Företag (0050): the group, Privat möte, attendees, customer and the Doc's share list.
+  let foretag: ForetagStart | null = null;
+  if (org.kind === "foretag") {
+    const planned = await planForetagStart({ orgId, user, groupId: opts.groupId, private: opts.private, readCalendar: eventKind === "started" });
+    if (!planned.ok) return failed("bad_group", 400, "Gruppen finns inte längre. Ladda om sidan och välj igen.");
+    foretag = planned.plan;
+    opts = { formatKind: "enkel", isTest: opts.isTest };
+  }
 
   // F14: the org's live meeting and the starter's limits are checked before any Doc is touched.
   const { data: active, error: activeError } = await supabase
@@ -251,10 +266,12 @@ export async function startMeeting(
     orgId,
     // Privat: the Doc and its folder are named after the context ("Simon Says – TDDE15").
     orgName: privat ? privat.name : org.name,
-    meetingFolderId: org.meeting_folder_id ?? null,
+    // Företag: the starter's own folder, never a shared one (it would bypass who may see the meeting).
+    meetingFolderId: foretag ? null : (org.meeting_folder_id ?? null),
     isTest,
     user,
-    eventTitle: calendarEvent?.title || null,
+    eventTitle: (foretag ? foretag.eventTitle : calendarEvent?.title) || null,
+    shareTo: foretag ? foretag.viewers : null,
   };
 
   const setup = docless
@@ -295,6 +312,7 @@ export async function startMeeting(
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
       ...(privat ? { context_id: privat.id } : {}),
+      ...(foretag ? { group_id: foretag.groupId, private: foretag.private, context_id: foretag.customerId } : {}),
   };
   // 0030: Simon Says only ever shares a Doc it created.
   const appCreated = !agendaMode || opts.agendaCreatedByApp === true || prepared !== null;
@@ -374,6 +392,7 @@ export async function startMeeting(
   }
 
   if (calendarEvent) await saveCalendarEvent(meetingId, calendarEvent);
+  if (foretag) await saveAttendees(meetingId, foretag.attendees);
 
   const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
@@ -536,12 +555,16 @@ interface SetupCtx {
   user: { id: string; email?: string | null };
   /** The matched calendar event's title (todo #14), for the Doc's name. */
   eventTitle?: string | null;
+  /** Företag (0050): share the new Doc only with these accounts (the meeting's viewers). Null: every member. */
+  shareTo?: Set<string> | null;
 }
 
 /** The org's other members with an email (the starter owns the Doc). */
 async function otherMembers(ctx: SetupCtx): Promise<OrgMember[]> {
   const me = (ctx.user.email ?? "").toLowerCase();
-  return (await orgMemberList(ctx.orgId)).filter((m) => m.userId !== ctx.user.id && m.email && m.email.toLowerCase() !== me);
+  return (await orgMemberList(ctx.orgId)).filter(
+    (m) => m.userId !== ctx.user.id && m.email && m.email.toLowerCase() !== me && (!ctx.shareTo || ctx.shareTo.has(m.userId)),
+  );
 }
 
 /** The user ids of `members` whose email is in `shared`. */

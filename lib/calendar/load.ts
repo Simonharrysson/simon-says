@@ -230,3 +230,25 @@ export async function calendarSnapshotForStart(input: {
     return null;
   }
 }
+
+/**
+ * A Företag start (0050): the event happening now in the STARTER's own primary calendar (a work
+ * calendar; never a förening's shared calendar). Only its title and its guests' addresses come
+ * back, for this start: the addresses find attending colleagues and the customer's domain and are
+ * never stored. Null when not connected, none is now, or on any failure.
+ */
+export async function foretagEventForStart(input: { userId: string; now?: Date; timeoutMs?: number }): Promise<{ title: string; emails: string[] } | null> {
+  const now = input.now ?? new Date();
+  try {
+    const api = await userCalendarApi(input.userId, input.timeoutMs ?? 3000);
+    const from = new Date(now.getTime() - 12 * 3600_000);
+    const to = new Date(now.getTime() + NOW_WINDOW_MS + 60_000);
+    const event = eventForNow(await api.listEvents("primary", from, to, 50), now, null);
+    if (!event) return null;
+    const emails = event.attendees.filter((a) => a.email && a.response !== "declined").map((a) => a.email!);
+    return { title: event.title, emails };
+  } catch (err) {
+    if (!(err instanceof CalendarAccessMissingError)) console.warn("calendar: företag start lookup failed", (err as Error)?.message);
+    return null;
+  }
+}

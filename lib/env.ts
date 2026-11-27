@@ -35,6 +35,9 @@ const schema = z.object({
   ALARM_EMAIL: z.email(),
   // Comma list of emails allowed to run Testmöte; falls back to ALARM_EMAIL (see lib/testmeeting/admin.ts).
   ADMIN_EMAILS: optional,
+  // Företag (0050): comma list of e-mails allowed to create a company space, until a DPA exists;
+  // falls back to ADMIN_EMAILS, then ALARM_EMAIL (lib/foretag/gate.ts).
+  FORETAG_CREATOR_EMAILS: optional,
   // Google Picker (A11): an API key restricted to the Picker API + our referrers, and the Cloud
   // project number (the Picker's appId, needed for drive.file grants). Both absent: the Picker is
   // off and the start screen offers only "Skapa nytt dokument".

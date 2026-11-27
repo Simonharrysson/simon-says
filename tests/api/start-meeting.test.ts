@@ -48,6 +48,9 @@ const m = vi.hoisted(() => ({
   queries: [] as Query[],
   /** prepared_agendas rows (0033), as the admin client sees them. */
   prepared: [] as Record<string, unknown>[],
+  /** Företag (0050): the start plan (lib/foretag/start.ts). */
+  planForetag: vi.fn(),
+  saveAttendees: vi.fn(),
 }));
 
 const has = (q: Query, op: string, col: string) => q.filters.some((f) => f[0] === op && f[1] === col);
@@ -161,6 +164,8 @@ vi.mock("@/lib/google/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/client")>()),
   getGoogleAuth: m.getGoogleAuth,
 }));
+
+vi.mock("@/lib/foretag/start", () => ({ planForetagStart: m.planForetag, saveAttendees: m.saveAttendees }));
 
 const { POST } = await import("@/app/api/meetings/route");
 const { AgendaShapeError } = await import("@/lib/agenda/anchor");
@@ -1110,5 +1115,74 @@ describe("POST /api/meetings: required items (stadgar, C2)", () => {
     expect(roles).toEqual(rolesFromSkeleton(profile));
     expect(Object.keys(roles)).toHaveLength(10);
     expect(roles["ag-7"]).toBe("other");
+  });
+});
+
+describe("POST /api/meetings in a Företag (0050)", () => {
+  const GROUP = "99999999-8888-4777-8666-555555555555";
+  const plan = (over: Record<string, unknown> = {}) => ({
+    ok: true,
+    plan: {
+      groupId: GROUP,
+      private: false,
+      attendees: [{ userId: "u1", source: "starter" }],
+      customerId: "cust1",
+      eventTitle: "Kundmöte Acme",
+      viewers: new Set(["u1", "u3"]),
+      members: [],
+      ...over,
+    },
+  });
+  beforeEach(() => {
+    m.getOrg.mockResolvedValue({ id: ORG, name: "Testbolag", kind: "foretag", share_transcript: true, meeting_folder_id: "shared-folder" });
+    m.memberEmails.mockResolvedValue([
+      { userId: "u1", email: "starter@x.se", role: "admin" },
+      { userId: "u2", email: "b@x.se", role: "member" },
+      { userId: "u3", email: "c@x.se", role: "member" },
+    ]);
+    m.planForetag.mockReset().mockResolvedValue(plan());
+    m.saveAttendees.mockReset().mockResolvedValue(undefined);
+  });
+
+  it("an Enkel Doc in the starter's own folder, shared only with the meeting's viewers", async () => {
+    const res = await call({ orgId: ORG, consent: true, groupId: GROUP, private: false, formatKind: "veckomote" });
+    expect(res.status).toBe(200);
+    expect(m.planForetag).toHaveBeenCalledWith(expect.objectContaining({ orgId: ORG, groupId: GROUP, private: false, readCalendar: true }));
+    expect(m.createFormatDoc).not.toHaveBeenCalled();
+    const input = m.createMeetingDoc.mock.calls[0][1];
+    expect(input.meetingFolderId).toBeNull();
+    expect(input.memberEmails).toEqual(["c@x.se"]);
+    expect(input.title).toMatch(/Kundmöte Acme/);
+    expect(insertedRow()).toMatchObject({ group_id: GROUP, private: false, context_id: "cust1" });
+    expect(m.saveAttendees).toHaveBeenCalledWith((await res.json()).meetingId, [{ userId: "u1", source: "starter" }]);
+  });
+
+  it("a Privat möte and Hela företaget are passed through", async () => {
+    m.planForetag.mockResolvedValue(plan({ groupId: null, private: true, viewers: new Set(["u1"]) }));
+    const res = await call({ orgId: ORG, consent: true, groupId: null, private: true });
+    expect(res.status).toBe(200);
+    expect(m.planForetag).toHaveBeenCalledWith(expect.objectContaining({ groupId: null, private: true }));
+    expect(m.createMeetingDoc.mock.calls[0][1].memberEmails).toEqual([]);
+    expect(insertedRow()).toMatchObject({ group_id: null, private: true });
+  });
+
+  it("a group not in the company: 400, nothing written", async () => {
+    m.planForetag.mockResolvedValue({ ok: false, error: "bad_group" });
+    const res = await call({ orgId: ORG, consent: true, groupId: GROUP });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("bad_group");
+    expectNoWrites();
+  });
+
+  it("a malformed group id or private flag: 400", async () => {
+    expect((await call({ orgId: ORG, consent: true, groupId: "nope" })).status).toBe(400);
+    expect((await call({ orgId: ORG, consent: true, private: "yes" })).status).toBe(400);
+  });
+
+  it("a förening never plans a Företag start", async () => {
+    m.getOrg.mockResolvedValue({ id: ORG, name: "Styrelsen", share_transcript: true });
+    expect((await call({ orgId: ORG, consent: true, groupId: GROUP })).status).toBe(200);
+    expect(m.planForetag).not.toHaveBeenCalled();
+    expect(insertedRow().group_id).toBeUndefined();
   });
 });
