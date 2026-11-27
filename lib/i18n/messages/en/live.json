@@ -109,7 +109,7 @@
     "signedOutText": "Sign in again (opens in a new tab) and then press Try again, so the rest is saved and the meeting ends. If you close the tab now, the meeting still ends within a quarter of an hour, but without those lines.",
     "endFailedTitle": "The meeting couldn't be ended",
     "endFailedText": "We couldn't reach the server. Check the network and try again. If you close the tab, the meeting still ends within a quarter of an hour.",
-    "finalizingText": "You talked for {duration}. The notes are getting a final pass; it takes about a minute.",
+    "finalizingText": "The meeting ended after {duration}. The notes get a final pass, then the meeting's page opens with its decisions and tasks.",
     "canClose": " You can close the tab, it will finish anyway.",
     "doneShared": "You talked for {duration}. The notes are done.{shared}",
     "done": "You talked for {duration}. The notes are done{shared}.",

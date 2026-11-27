@@ -7,6 +7,9 @@ import { logoUrl } from "@/lib/orgs/logo";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgNotice } from "@/lib/ui/messages";
+import { stockholmDay } from "@/lib/home/tasks";
+import { nextMeetingState } from "@/lib/meetings/next-meeting";
+import { loadSummaryStatus } from "@/lib/meetings/recap";
 import { archiveGroupAction, placeAction, renameForetagAction, saveGroupAction } from "../../foretag-actions";
 import { deleteOrgAction, leaveOrgAction, rotateInviteAction, setMemberRoleAction } from "../../actions";
 
@@ -31,6 +34,24 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
   const notice = orgNotice(fel, klart, locale);
   const isAdmin = role === "admin";
   const data = await loadForetagPage(db, org.id, userId, t("titleAnd"));
+  // The Möten tab's Nästa möte card: the viewer's own running or just-ended meeting (a company runs
+  // several at once), else Starta. From the meetings read above as the viewer (RLS).
+  const now = new Date();
+  const state = nextMeetingState({
+    meetings: data.meetings.map((m) => ({ ...m, isTest: Boolean(m.is_test || data.meetingInfo[m.id]?.isTest) })),
+    prepared: [],
+    now,
+    today: stockholmDay(now),
+    canPrepare: false,
+    onlyStartedBy: userId,
+  });
+  const about = state.kind === "ended" || state.kind === "live" ? data.meetings.find((m) => m.id === state.meetingId) : undefined;
+  const info = about ? data.meetingInfo[about.id] : undefined;
+  const hero = {
+    state,
+    meeting: about ? { id: about.id, title: info?.title ?? null, startedAt: about.started_at, endedAt: about.ended_at, decisions: info?.decisions ?? 0, tasks: info?.tasks ?? 0 } : null,
+    summary: state.kind === "ended" ? await loadSummaryStatus(db, state.meetingId) : null,
+  };
   return (
     <ForetagView
       org={{ id: org.id, name: org.name, logoUrl: logoUrl(org.id, org.logo_updated_at), website_url: org.website_url ?? null }}
@@ -41,6 +62,7 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
       inviteUrl={`${appOrigin()}/join/${org.invite_code}`}
       notice={notice}
       data={data}
+      hero={hero}
       detailsSettings={
         isAdmin ? (
           <CompanyDetailsForm

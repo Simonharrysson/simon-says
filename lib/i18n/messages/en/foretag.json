@@ -15,11 +15,7 @@
   },
   "start": {
     "title": "Start a meeting",
-    "text": "You choose who the meeting is for before you start. The Doc and the summary go only to people who may see the meeting.",
-    "button": "Start meeting",
-    "activeTitle": "A meeting is running",
-    "activeMine": "Your meeting is running.",
-    "toLive": "Go to the meeting"
+    "text": "You choose who the meeting is for before you start. The Doc and the summary go only to people who may see the meeting."
   },
   "meetings": {
     "title": "Meetings",

@@ -15,7 +15,7 @@ const [fika, plan] = SCRIPTED.incomplete;
 
 /** Start a meeting in a new förening that asks (the default) and wait for both incomplete tasks on the live page. */
 async function startWithIncompleteTasks(page: Page, orgName: string) {
-  await page.getByRole("link", { name: "Starta möte", exact: true }).click();
+  await page.getByRole("link", { name: "Starta utan förberedelse" }).click();
   // No agenda in the folder: a new Doc in the förening's format, chosen without a click.
   await expect(page.locator("p").filter({ hasText: /^Nytt dokument i / })).toBeVisible();
   // The tick, retried until it sticks: a click before hydration does nothing.

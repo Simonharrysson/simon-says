@@ -100,7 +100,7 @@ async function chooseCall(page: Page) {
 test("video call: tab audio + mic mixed into the transcription, share stopped → paused → shared again", async ({ seedOrg, signedIn, newEmail, db }) => {
   const { org, page } = await freshStarter(seedOrg, signedIn, newEmail);
   await page.goto(org.url);
-  await page.getByRole("link", { name: "Starta möte", exact: true }).click();
+  await page.getByRole("link", { name: "Starta utan förberedelse" }).click();
   await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Här i rummet" })).toBeChecked();
   await chooseCall(page);
@@ -166,7 +166,7 @@ test("video call: tab audio + mic mixed into the transcription, share stopped �
 test("video call: no tab audio ticked → a clear instruction, and a retry that works", async ({ seedOrg, signedIn, newEmail }) => {
   const { org, page } = await freshStarter(seedOrg, signedIn, newEmail);
   await page.goto(org.url);
-  await page.getByRole("link", { name: "Starta möte", exact: true }).click();
+  await page.getByRole("link", { name: "Starta utan förberedelse" }).click();
   await chooseCall(page);
   await page.evaluate(() => void ((window as unknown as { __tabAudio: boolean }).__tabAudio = false));
 

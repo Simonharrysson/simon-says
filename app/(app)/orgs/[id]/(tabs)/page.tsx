@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { FormatCard } from "@/components/views/FormatCard";
-import { StartMeetingForm } from "@/components/views/StartMeetingForm";
+import { NextMeetingHero, type NextMeetingHeroProps } from "@/components/views/NextMeetingHero";
+import { MeetingMoreMenu } from "@/components/views/MeetingMoreMenu";
+import { nextMeetingState, type HeroInput } from "@/lib/meetings/next-meeting";
+import { loadSummaryStatus } from "@/lib/meetings/recap";
+import { stockholmDay } from "@/lib/home/tasks";
 import { SummarySettingsForm } from "@/components/views/SummarySettingsForm";
 import { summaryOptions } from "@/lib/summaries/recipients";
 import { OrgDetailView, type OrgTab } from "@/components/views/OrgDetailView";
@@ -38,8 +42,8 @@ import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
 import { dismissAction } from "../kom-igang/actions";
-import { Suspense } from "react";
-import { OrgCalendarSlot, StartCalendarSlot } from "@/components/calendar/CalendarSlots";
+import { Suspense, type ReactNode } from "react";
+import { HeroCalendarSlot, OrgCalendarSlot } from "@/components/calendar/CalendarSlots";
 import { calendarResult } from "@/lib/calendar/events";
 import type { Notice } from "@/lib/ui/messages";
 import type { Locale } from "@/lib/i18n/config";
@@ -262,6 +266,45 @@ export default async function OrgPage({
     shared,
   );
 
+  // The Möten tab's Nästa möte card (the weekly loop), from the lists read above as the viewer.
+  let hero: ReactNode = null;
+  if (tab === "moten") {
+    const now = new Date();
+    const input: HeroInput = {
+      meetings: meetings.map((m) => ({ ...m, isTest: meetingInfo[m.id]?.isTest ?? false })),
+      prepared: prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) })),
+      now,
+      today: stockholmDay(now),
+      canPrepare: true,
+    };
+    const state = nextMeetingState(input);
+    const about = state.kind === "ended" ? meetings.find((m) => m.id === state.meetingId) : undefined;
+    const heroProps: Omit<NextMeetingHeroProps, "state" | "calendar"> = {
+      orgId: org.id,
+      meeting: about
+        ? {
+            id: about.id,
+            title: meetingInfo[about.id]?.title ?? null,
+            startedAt: about.started_at,
+            endedAt: about.ended_at,
+            decisions: meetingInfo[about.id]?.decisions ?? 0,
+            tasks: meetingInfo[about.id]?.tasks ?? 0,
+          }
+        : null,
+      summary: about ? await loadSummaryStatus(db, about.id) : null,
+      more: canRunTestMeeting(userResult.data.user?.email) && (state.kind !== "live" && state.kind !== "ending") ? <MeetingMoreMenu orgId={org.id} /> : null,
+    };
+    // Only "not prepared" and "prepared" can change with the calendar; the card holds its size meanwhile.
+    hero =
+      me && org.calendar_id && (state.kind === "prepared" || state.kind === "unprepared") ? (
+        <Suspense fallback={<NextMeetingHero {...heroProps} state={state} calendar={{ state: "loading" }} />}>
+          <HeroCalendarSlot org={org} userId={me} input={input} hero={heroProps} />
+        </Suspense>
+      ) : (
+        <NextMeetingHero {...heroProps} state={state} />
+      );
+  }
+
   return (
     <OrgDetailView
       org={org}
@@ -389,18 +432,7 @@ export default async function OrgPage({
         />
       }
       liveMeetingHref={(meetingId) => `/meetings/${meetingId}`}
-      startMeeting={<StartMeetingForm
-          orgId={org.id}
-          showTestMeeting={canRunTestMeeting(userResult.data.user?.email)}
-          prepared={prepared.map((p) => ({ date: p.meeting_date, time: p.meeting_time, kind: p.kind, docUrl: docUrl(p.doc_id) }))}
-          calendar={
-            me && tab === "moten" && org.calendar_id ? (
-              <Suspense fallback={null}>
-                <StartCalendarSlot orgId={org.id} userId={me} org={org} />
-              </Suspense>
-            ) : undefined
-          }
-        />}
+      startMeeting={hero}
       actions={{
         rotateInvite: rotateInviteAction,
         addPerson: addPersonAction,

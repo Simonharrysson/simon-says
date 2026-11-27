@@ -21,10 +21,10 @@ async function visit(page: Page, path: string, offenders: string[], ready: (page
   await test.info().attach(path, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
 
-test("no double borders: Hem, Föreningar, a förening's tabs and every settings section, Konto, the start screen @phone", async ({ page, seedOrg, db }, info) => {
+test("no double borders: Hem, Föreningar, a förening's tabs, a meeting's page, every settings section, Konto, the start screen @phone", async ({ page, seedOrg, db }, info) => {
   await sizeFor(page, info);
   const org = await seedOrg({ people: [{ name: "Emma Bertmar", email: "emma.bertmar@e2e.test" }, "Erik Lund"] });
-  await seedMeeting(db, org, { items: [{ section: "action", text: "Boka lokal till årsmötet", owner: "Erik Lund" }, { section: "decision", text: "Årsmötet hålls i mars" }] });
+  const meeting = await seedMeeting(db, org, { items: [{ section: "action", text: "Boka lokal till årsmötet", owner: "Erik Lund" }, { section: "decision", text: "Årsmötet hålls i mars" }] });
   const offenders: string[] = [];
 
   await visit(page, "/hem", offenders, (p) => p.getByRole("heading", { name: "Hem", level: 1 }));
@@ -33,6 +33,8 @@ test("no double borders: Hem, Föreningar, a förening's tabs and every settings
   const tab = (name: string) => (p: Page) => p.getByRole("navigation", { name: "Föreningens vyer" }).getByRole("link", { name, exact: true }).and(p.locator('[aria-current="page"]'));
   await visit(page, org.url, offenders, tab("Möten"));
   await visit(page, `${org.url}?flik=oversikt`, offenders, tab("Översikt"));
+  // A meeting's page: the recap, decisions and tasks.
+  await visit(page, `${org.url}/mote/${meeting.id}`, offenders, (p) => p.getByRole("heading", { name: "Uppgifter", exact: true }));
   const sections: Record<string, (p: Page) => Locator> = {
     foreningen: (p) => p.getByRole("heading", { name: "Namn, logga och om oss", exact: true }),
     styrelsen: (p) => p.getByRole("list", { name: "Styrelsen" }),

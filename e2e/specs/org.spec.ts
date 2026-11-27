@@ -2,7 +2,7 @@ import { OPERATORS } from "../env";
 import { expect, expectAccessible, fake, queuePick, seedMeeting, test } from "../fixtures";
 
 // The förening page: the Mötesformat "Ändra" menu, settings, deleting a meeting and the förening,
-// and the service admin's Testmöte menu. Format, settings and Radera live in the sections of the
+// and the service admin's Testmöte menu (the Nästa möte card's "Mer"). Format, settings and Radera live in the sections of the
 // admin's Inställningar tab (`?flik=installningar&del=…`).
 
 test("Möten: Ändra → Byt format, and Välj mötesmapp in the Picker @phone", async ({ page, seedOrg, db }) => {
@@ -102,11 +102,17 @@ test("Testmöte menu: Utan dagordning starts a replay, Avsluta mötet ends it fr
   const operator = OPERATORS[testInfo.retry % OPERATORS.length];
   const org = await seedOrg({ admin: operator });
   const { page } = await signedIn(operator, org.url);
-  await page.getByRole("button", { name: "Testmöte" }).click();
+  // Testmöte lives in the Nästa möte card's quiet "Mer" menu, out of the way of Förbered and Starta.
+  const card = page.getByRole("region", { name: "Ingen dagordning än" });
+  await card.getByRole("button", { name: "Mer" }).click();
   await expect(page.getByRole("menuitem", { name: /Med dagordning/ })).toBeVisible();
   await page.getByRole("menuitem", { name: /Utan dagordning/ }).click();
 
-  await expect(page.getByText("Ett möte pågår")).toBeVisible({ timeout: 30_000 });
+  // The card turns live: "Ett möte pågår", and no "Mer" while it runs.
+  const live = page.getByRole("region", { name: "Ett möte pågår" });
+  await expect(live).toBeVisible({ timeout: 30_000 });
+  await expect(live.getByText("Pågår", { exact: true })).toBeVisible();
+  await expect(live.getByRole("button", { name: "Mer" })).toHaveCount(0);
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings).toContainText("Pågår");
   const { data: m } = await db.from("meetings").select("id, doc_id, is_test").eq("org_id", org.id).single();
