@@ -1,4 +1,4 @@
-# Företag v1 — design (todo #11 part 2; NOT approved: the calls marked **[Simon to confirm]** are product decisions)
+# Företag v1 — design (todo #11 part 2; approved by Simon 2026-11-27 "go": every call marked **[decided 11-27]** was confirmed)
 
 Simon 2026-11-27 (binding): "do the smallest version"; companies need the organisation's hierarchy and visibility follows it ("the CEO can see everything, of course, but the cashier can't see what everyone makes"); the org is a tree (CEO → Head of Development, Head of Communication → their members); tasks are suggested, never forced; keep everything gentle; credits/payment parked; focus stays on transcription + information management. Builds on 2026-11-26-three-audiences-proposal.md, 2026-11-26-privat-design.md and 2026-11-26-concrete-tasks-design.md, plus the private Företag and grupper proposals.
 
@@ -10,7 +10,7 @@ Simon 2026-11-27 (binding): "do the smallest version"; companies need the organi
 5. **Tasks in suggest mode**: `taskMode()` already returns `suggest` for every non-förening kind. That means no `(vem?)` placeholders, no live prompt, and Avsluta never asks. Vem / När / Klart när are filled when said and left empty otherwise.
 
 ## Visibility rule (the core of v1)
-> **You see the meetings of your own group, plus every meeting of any group deeper in the tree than your own level. Company admins (CEO/ledning) see everything. A meeting for *Hela företaget* is seen by every member. You also always see your own tasks, wherever they were set, but not the meeting they came from unless the rule lets you. A meeting marked "Privat möte" is seen only by its attendees and admins.** The Privat möte part is **[Simon to confirm]**. The summary mail and the Google Doc go only to people who can see the meeting.
+> **You see the meetings of your own group, plus every meeting of any group deeper in the tree than your own level. Company admins (CEO/ledning) see everything. A meeting for *Hela företaget* is seen by every member. You also always see your own tasks, wherever they were set, but not the meeting they came from unless the rule lets you. A meeting marked "Privat möte" is seen only by its attendees and admins.** Privat möte is **[decided 11-27]**. The summary mail and the Google Doc go only to people who can see the meeting.
 
 "Level" is the node's depth: root = 0, its children = 1, and so on. A head sits at the parent node's level, so the heads of Utveckling and Kommunikation sit in Ledning. Siblings in a group see each other's meetings. Cousins do not.
 
@@ -19,9 +19,9 @@ Worked examples. Anna (VD, admin) is at the root (depth 0). Erik (head of Utveck
 - **Ledning's salary review** is seen by Erik, Sara and Anna. Kim the cashier does not see it, and neither does anyone at depth 2. That is Simon's "the cashier can't see what everyone makes".
 - **"Maja gör bilden"** is said in Utveckling's meeting. Maja sees the task in Mina uppgifter (her own task) with its Vem / När / Klart när. She does not see the meeting, its notes or its transcript.
 
-Extras, each **[Simon to confirm]**:
+Extras, each **[decided 11-27]**:
 - **(a)** The starter, and attendees found as stored facts (below), also see the meeting, even outside the rule.
-- **(b)** In a lopsided tree the literal rule lets a depth-2 member in one branch see depth-3 meetings in another branch. The safer variant limits "deeper" to the subtree of your node's parent. It gives the same answer in all three examples. v1 implements the literal rule unless Simon picks the variant.
+- **(b)** The literal rule: every group deeper than your level, in any branch (not limited to your parent's subtree).
 - **(c)** An account placed at no node sees only *Hela företaget* meetings, attended meetings and its own tasks (fail closed).
 - **(d)** A person sits at one node only.
 
@@ -36,7 +36,7 @@ meetings   + group_id → groups null        -- null = Hela företaget (every f�
 meeting_attendees  meeting_id, user_id, source ('starter'|'calendar'|'listed'); server-written
 contexts   + domain text null (unique per org); a Företag customer = a context with a domain
 ```
-- `orgs.kind` already allows `'foretag'` (0045). Clients have no grant on it, so a new security-definer `create_foretag(name)` makes one and goes through the 0041 org limits like any creation. Until the DPA exists it is called only by a server route with an allowlist (Harrysson & Company), **[Simon to confirm]**.
+- `orgs.kind` already allows `'foretag'` (0045). Clients have no grant on it, so a new security-definer `create_foretag(name)` makes one and goes through the 0041 org limits like any creation. Until the DPA exists it is called only by a server route gated by an allow-list (env `FORETAG_CREATOR_EMAILS`, like ADMIN_EMAILS), **[decided 11-27]**.
 - Admin writes go through security-definer `set_group()` and `set_person_group()`, like `set_person_role()` (0025). Groups are archived, never deleted, because old meetings point at them.
 - `meeting_attendees` is written by the server only, and it fails closed:
   - `calendar`: a calendar guest whose e-mail equals a member's sign-in address.
@@ -52,7 +52,7 @@ contexts   + domain text null (unique per org); a Företag customer = a context 
 3. `note_items_select` gets `or owner_person_id in (my linked people)` for own tasks. The loader in lib/home/load.ts adds a second query for my owned rows, because it fetches meetings first today. An owned task with no visible meeting shows without a meeting link.
 4. `groups`: members select, no client writes. `meeting_attendees`: select own rows. `contexts_insert` is unchanged (Privat only), because customers are created by the server.
 5. Paths outside RLS, each handled in app code and tested:
-   - **Doc sharing:** `createMeetingDoc` shares with the viewer list instead of all members. The Doc goes in the starter's own Simon Says folder, never a shared meeting folder **[Simon to confirm]**. Shares are set at start and are not revoked when someone later moves (known limit).
+   - **Doc sharing:** `createMeetingDoc` shares with the viewer list instead of all members. The Doc goes in the starter's own Simon Says folder, never a shared meeting folder **[decided 11-27]**. Shares are set at start and are not revoked when someone later moves (known limit).
    - **Summary recipients:** the existing list is intersected with the viewers.
    - **Carried tasks** ("Från förra veckan"): taken only from earlier meetings whose viewers include the new meeting's viewers, in practice the same group and not private.
    - **Org-keyed tables** (prepared_agendas, org_goals, history_*): v1 never writes them for a Företag (see Out of v1), and a test asserts that.
@@ -72,7 +72,7 @@ contexts   + domain text null (unique per org); a Företag customer = a context 
 - **Navigation:** the tabs are Möten · Kunder · Personer & grupper · Inställningar.
 - **Formats:** only Standard, with no stadgar or Årsmöte formats.
 - **Removed:** the "Kräv vem, när och klart när" setting (always suggest), the public profile and status page, Översikt / goals, Förbered möte and history import.
-- **Summary mail:** by default it goes to the meeting's own group plus its attendees, filtered to viewers. People higher up open it in the app instead **[Simon to confirm]**.
+- **Summary mail:** by default it goes to the meeting's own group plus its attendees, filtered to viewers. People higher up open it in the app instead **[decided 11-27]**.
 
 ## Out of v1
 - Credits and billing.
@@ -85,4 +85,4 @@ contexts   + domain text null (unique per org); a Företag customer = a context 
 - Drag-and-drop in the tree, and a person at more than one node.
 - Revoking Doc shares when someone moves.
 - Search over history.
-- **Gate:** no company other than Harrysson & Company before a DPA (personuppgiftsbiträdesavtal), its subprocessor list and a legal review of /integritet and the terms **[Simon to confirm]**.
+- **Gate:** no company other than Harrysson & Company before a DPA (personuppgiftsbiträdesavtal), its subprocessor list and a legal review of /integritet and the terms **[decided 11-27]**.
