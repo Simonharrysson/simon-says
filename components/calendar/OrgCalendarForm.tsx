@@ -5,7 +5,7 @@ import { Banner } from "@/components/ui/Banner";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/button";
-import { SaveState, useSavedValue } from "@/components/settings/SaveState";
+import { SaveState, useHydrated, useSavedValue } from "@/components/settings/SaveState";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ConnectCalendarButton } from "./CalendarConnect";
@@ -49,6 +49,7 @@ export function OrgCalendarForm({
     "calendar",
   );
   const status = setting.status;
+  const hydrated = useHydrated();
 
   const options = calendars ? [...calendars] : [];
   // The chosen calendar stays choosable even when it is not in this admin's list.
@@ -86,6 +87,7 @@ export function OrgCalendarForm({
               name="calendar_id"
               value={setting.value.id}
               onChange={(e) => setting.change({ id: e.target.value, filter: setting.confirmed().filter })}
+              disabled={!hydrated}
               className="w-full"
             >
               <option value="">{t("none")}</option>
