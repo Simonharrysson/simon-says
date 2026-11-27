@@ -129,7 +129,13 @@
     "notAccepted": "Har inte tackat ja",
     "declined": "Tackade nej, räknas inte som deltagare",
     "customer": "Kund: gästerna från {domain}",
-    "seesAttendees": "{count, plural, one {Plus # deltagare du kryssat i.} other {Plus # deltagare du kryssat i.}}"
+    "seesAttendees": "{count, plural, one {Plus # deltagare du kryssat i.} other {Plus # deltagare du kryssat i.}}",
+    "forening": {
+      "whole": "Hela föreningen",
+      "privateHint": "Bara du och föreningens admins ser mötet.",
+      "seesWhole": "Ser mötet: alla i föreningen som har en plats i en grupp.",
+      "seesPrivate": "Ser mötet: du och admins."
+    }
   },
   "orgs": {
     "yours": "Dina företag",
@@ -140,5 +146,22 @@
     "create": "Skapa företag",
     "creating": "Skapar…",
     "rootName": "Ledning"
+  },
+  "groups": {
+    "title": "Grupper",
+    "offIntro": "Vill ni dela upp föreningen, till exempel Styrelsen med Utveckling och Kommunikation under sig? Då ser var och en sin egen grupps möten och alla möten i grupperna under sin. Admins ser allt. En uppgift till någon som inte ser mötet väntar först på godkännande.",
+    "offNow": "Av just nu: alla medlemmar ser alla möten.",
+    "rootName": "Översta gruppen",
+    "rootDefault": "Styrelsen",
+    "turnOn": "Organisera i grupper",
+    "turnOnTitle": "Organisera {org} i grupper?",
+    "turnOnText": "Alla i listan som har ett konto hamnar i den översta gruppen och ser allt som förut. Inget ändras förrän du flyttar någon längre ner.",
+    "turnOnUnplaced": "{count, plural, one {# medlem har inget namn i listan och ser bara möten hen själv startar eller är med på, tills du placerar hen.} other {# medlemmar har inget namn i listan och ser bara möten de själva startar eller är med på, tills du placerar dem.}}",
+    "turningOn": "Slår på…",
+    "onNow": "På: var och en ser sin grupps möten och alla möten i grupperna under. Vid Starta väljer man vem mötet är för.",
+    "turnOff": "Sluta använda grupper",
+    "turnOffTitle": "Sluta använda grupper?",
+    "turnOffText": "Alla medlemmar ser då alla möten igen, även gruppernas och de privata. Grupperna och placeringarna sparas om ni slår på det igen.",
+    "turningOff": "Stänger av…"
   }
 }

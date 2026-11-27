@@ -50,6 +50,11 @@ import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
 import { orgTab, orgTabHref } from "@/lib/orgs/tabs";
 import { ForetagPage } from "./foretag-page";
 import { boardRows } from "@/lib/people/board";
+import { ForeningGroups } from "@/components/groups/ForeningGroups";
+import type { TreePerson } from "@/components/groups/GroupTree";
+import { listGroups } from "@/lib/db/foretag";
+import type { GroupRow } from "@/lib/foretag/tree";
+import { archiveGroupAction, placeAction, saveGroupAction, setGroupsAction } from "../../foretag-actions";
 import {
   addPersonAction,
   changeFormatAction,
@@ -154,6 +159,18 @@ function calendarNotice(raw: string | undefined, locale: Locale): Notice | null 
   return { tone: result === "ok" || result === "fran" ? "success" : "danger", text: messages[locale].calendar.result[result], code: `kalender-${result}` };
 }
 
+/** Grupper's data (0054): the groups and each person's place. A failed read leaves the section out. */
+async function loadGroupSettings(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<{ groups: GroupRow[]; people: TreePerson[] } | null> {
+  try {
+    const [groups, people] = await Promise.all([listGroups(db, orgId), db.from("people").select("id, name, member_user_id, group_id").eq("org_id", orgId).order("name")]);
+    if (people.error) throw new Error(people.error.message);
+    return { groups, people: (people.data ?? []) as TreePerson[] };
+  } catch (err) {
+    console.error(`org page: groups: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 export default async function OrgPage({
   params,
   searchParams,
@@ -203,6 +220,8 @@ export default async function OrgPage({
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   const invites = isAdmin && tab === "installningar" ? await safeInvites(id) : [];
+  // Grupper (0054): the tree and everyone's place, read as the admin (RLS).
+  const tree = isAdmin && tab === "installningar" ? await loadGroupSettings(db, id) : null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
   const docAccess = docAccessFor(
@@ -269,6 +288,18 @@ export default async function OrgPage({
               />
             )
           : undefined
+      }
+      groupSettings={
+        tree && me ? (
+          <ForeningGroups
+            org={org}
+            userId={me}
+            groups={tree.groups}
+            people={tree.people}
+            members={members ?? []}
+            actions={{ saveGroup: saveGroupAction, archiveGroup: archiveGroupAction, place: placeAction, setGroups: setGroupsAction }}
+          />
+        ) : undefined
       }
       profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
       calendarSettings={

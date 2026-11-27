@@ -9,7 +9,7 @@ import { canCreateForetag } from "@/lib/foretag/gate";
 import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-// Server actions for the Företag pages (0050). Everything but the creation runs as the signed-in
+// Server actions for the tree: the Företag pages (0050) and a förening's Grupper (0054). Everything but the creation runs as the signed-in
 // user: the database's admin functions decide (a refusal comes back as a notice code).
 
 const field = (form: FormData, name: string) => form.get(name)?.toString() ?? "";
@@ -20,7 +20,9 @@ function orgIdFrom(form: FormData): string {
   return id;
 }
 
-const back = (orgId: string, code?: string) => `/orgs/${orgId}?flik=personer${code ? `&fel=${code}` : ""}`;
+/** Where a refusal comes back: a Företag's Personer & grupper, or a förening's Inställningar (`from=forening`, 0054). */
+const back = (orgId: string, code?: string, form?: FormData) =>
+  `/orgs/${orgId}?flik=${form && field(form, "from") === "forening" ? "installningar" : "personer"}${code ? `&fel=${code}` : ""}`;
 
 /** The signed-in user's first name for their person row ("Simon"), else their address before @. */
 function personName(user: { email?: string | null; user_metadata?: Record<string, unknown> }): string {
@@ -52,7 +54,7 @@ export async function saveGroupAction(form: FormData): Promise<void> {
     name: field(form, "name"),
     parentId: isUuid(parent) ? parent : null,
   });
-  if (!ok) redirect(back(orgId, "grupp"));
+  if (!ok) redirect(back(orgId, "grupp", form));
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
@@ -62,7 +64,7 @@ export async function archiveGroupAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const groupId = field(form, "groupId");
   const db = await createSupabaseServerClient();
-  if (!isUuid(groupId) || !(await archiveGroup(db, groupId))) redirect(back(orgId, "grupp-arkiv"));
+  if (!isUuid(groupId) || !(await archiveGroup(db, groupId))) redirect(back(orgId, "grupp-arkiv", form));
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
@@ -81,7 +83,7 @@ export async function placeAction(form: FormData): Promise<void> {
     : isUuid(userId)
       ? await placeMember(db, orgId, userId, target, field(form, "name"))
       : false;
-  if (!ok) redirect(back(orgId, "placering"));
+  if (!ok) redirect(back(orgId, "placering", form));
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
@@ -108,5 +110,24 @@ export async function renameForetagAction(form: FormData): Promise<void> {
   if (name.length < 1 || name.length > 100) redirect(`/orgs/${orgId}?flik=installningar&fel=namn`);
   const { error } = await db.from("orgs").update({ name }).eq("id", orgId);
   if (error) redirect(`/orgs/${orgId}?flik=installningar&fel=namn`);
+  revalidatePath(`/orgs/${orgId}`);
+}
+
+/**
+ * A förening's "Organisera i grupper" / "Sluta använda grupper" (0054, admins; the database
+ * decides). On: the top group (`rootName`) and every linked person in it. Off: every member sees
+ * every meeting again.
+ */
+export async function setGroupsAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const on = field(form, "on") === "1";
+  const db = await createSupabaseServerClient();
+  const t = await getTranslations({ locale: await getLocale(), namespace: "foretag.groups" });
+  const rootName = field(form, "rootName").trim() || t("rootDefault");
+  const { data, error } = await db.rpc("set_org_groups", { p_org_id: orgId, p_on: on, p_root_name: rootName.slice(0, 40) });
+  if (error) console.error(`set_org_groups: ${error.message}`);
+  if (error || data !== true) redirect(`/orgs/${orgId}?flik=installningar&fel=grupper`);
+  // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }

@@ -16,7 +16,10 @@ import { localeForEmail, localesForUsers } from "@/lib/i18n/user-locale";
 import { renderSummaryEmail } from "./email";
 import { parseMeetingEvent } from "@/lib/calendar/events";
 import { sendPrivatSummary } from "@/lib/privat/send";
+import { viewerPeople } from "@/lib/foretag/audience";
 import { foretagScope, foretagSummaryPeople, holdCrossingTasks } from "@/lib/foretag/summary";
+import { hasTree } from "@/lib/foretag/tree";
+import { viewerIds } from "@/lib/db/foretag";
 import type { SummarizeFn } from "@/lib/privat/summary";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 
@@ -120,9 +123,11 @@ export async function sendMeetingSummaries(
   // A Privat recording (0045): its own summary (one Claude call) to the recorder only.
   const space = must("summary: space", await db.from("orgs").select("*").eq("id", m.org_id).maybeSingle()) as { kind?: string } | null;
   if (space?.kind === "privat") return sendPrivatSummary(m.id, { mailer: deps.mailer, now: deps.now, summarize: deps.summarize }, opts);
-  // Företag (0050): tasks for owners who can't see this meeting wait for approval, never mailed.
+  // The tree (Företag 0050, a förening with groups 0054): tasks for owners who can't see this
+  // meeting wait for approval, never mailed.
   const isForetag = space?.kind === "foretag";
-  if (isForetag && !m.is_test) await holdCrossingTasks(m.id);
+  const tree = hasTree(space);
+  if (tree && !m.is_test) await holdCrossingTasks(m.id);
 
   let state: SummaryState;
   let recipients: Recipient[] = [];
@@ -180,6 +185,10 @@ export async function sendMeetingSummaries(
         // The meeting's group + attendees, only accounts that can see it; neutral wording (no "missed").
         people = foretagSummaryPeople(people, await foretagScope(m.id, m.org_id));
         recipients = summaryRecipients({ mode: "all", people, members, attendance: { present: attendance.present, certain: false } });
+      } else if (tree) {
+        // A förening with groups (0054): its own mode, but only people whose account can see the meeting.
+        people = viewerPeople(people, await viewerIds(m.id));
+        recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
       } else {
         recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
       }

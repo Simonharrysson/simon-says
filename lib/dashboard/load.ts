@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { hasTree } from "@/lib/foretag/tree";
 import { loadImportedHistory } from "@/lib/history/store";
 import { buildOverview, type DashInput, type DashItem, type DashMeeting, type DashPerson, type Overview } from "./overview";
 
@@ -30,9 +31,17 @@ async function paged<T>(label: string, query: (from: number, to: number) => Prom
   }
 }
 
+/**
+ * Every counted meeting's decision and task rows: the basis of what is written for the whole org
+ * (Förbered möte's recurring topics, goal proposals, a history digest). With the tree (0050, 0054)
+ * only meetings for the whole org count: a group's or a Privat möte's rows never reach an org-wide
+ * output, whoever's client reads them.
+ */
 export async function loadOverviewInput(db: SupabaseClient, orgId: string): Promise<DashInput> {
+  const { data: org, error: orgError } = await db.from("orgs").select("*").eq("id", orgId).maybeSingle();
+  if (orgError) throw new Error(`overview: org: ${orgError.message}`);
   const [meetings, peopleRes] = await Promise.all([
-    loadCountedMeetings(db, orgId, "id, org_id, started_at, status, is_test, layout, agenda_roles, agenda_labels"),
+    loadCountedMeetings(db, orgId, "id, org_id, started_at, status, is_test, layout, agenda_roles, agenda_labels", hasTree(org)),
     db.from("people").select("id, name, role").eq("org_id", orgId),
   ]);
   if (peopleRes.error) throw new Error(`overview: people: ${peopleRes.error.message}`);
@@ -47,12 +56,9 @@ export async function loadOverviewInput(db: SupabaseClient, orgId: string): Prom
   return { meetings, items, people: (peopleRes.data ?? []) as DashPerson[] };
 }
 
-async function loadCountedMeetings(db: SupabaseClient, orgId: string, columns: string): Promise<DashMeeting[]> {
-  const { data, error } = await db
-    .from("meetings")
-    .select(columns)
-    .eq("org_id", orgId)
-    .eq("is_test", false)
+async function loadCountedMeetings(db: SupabaseClient, orgId: string, columns: string, wholeOrgOnly = false): Promise<DashMeeting[]> {
+  const base = db.from("meetings").select(columns).eq("org_id", orgId).eq("is_test", false);
+  const { data, error } = await (wholeOrgOnly ? base.is("group_id", null).eq("private", false) : base)
     .in("status", ["done", "abandoned"])
     .order("started_at", { ascending: false })
     .limit(MAX_MEETINGS);

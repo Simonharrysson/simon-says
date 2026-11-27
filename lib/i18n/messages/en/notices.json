@@ -144,6 +144,9 @@
     },
     "kundnamn": {
       "text": "The customer's name couldn't be saved. There may already be a customer with that name."
+    },
+    "grupper": {
+      "text": "The groups couldn't be turned on or off. Try again."
     }
   }
 }

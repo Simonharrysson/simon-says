@@ -102,6 +102,14 @@ export interface LiveMeetingControllerProps {
     /** The event happening now in the starter's calendar, offered to confirm (never attached by itself). */
     event?: ForetagEventOffer | null;
   };
+  /**
+   * A new meeting in a förening with groups (0054): "Möte för" and Privat möte above its usual
+   * agenda step (formats and agenda Docs stay). Absent: a förening without groups, exactly as before.
+   */
+  groups?: {
+    groups: { id: string; name: string; depth: number }[];
+    initialGroupId: string | null;
+  };
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -142,6 +150,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   }, []);
   const [privatChoice, setPrivatChoice] = useState<PrivatChoice | null>(null);
   const [foretagChoice, setForetagChoice] = useState<ForetagChoice | null>(null);
+  /** A förening with groups (0054): "Möte för" and Privat möte, sent with the agenda choice. */
+  const [groupChoice, setGroupChoice] = useState<ForetagChoice | null>(null);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
   /** The format override kept across that remount. */
@@ -440,6 +450,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     const choice = agendaRef.current;
     const privatStart = props.privat ? privatChoice : null;
     const foretagStart = props.foretag ? foretagChoice : null;
+    const groupStart = props.groups ? groupChoice : null;
     void (async () => {
       try {
         await opened;
@@ -472,6 +483,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             ...(!choice?.agendaDocId && choice?.goalIds?.length ? { goalIds: choice.goalIds } : {}),
             // The server reads the event again with the starter's own grant.
             ...(props.calendarEvent ? { calendarEventId: props.calendarEvent.id } : {}),
+            // A förening with groups: who the meeting is for.
+            ...(groupStart ? { groupId: groupStart.groupId, private: groupStart.private } : {}),
           }),
         });
         const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
@@ -887,22 +900,34 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             disabled={phase === "starting"}
           />
         ) : props.meeting === null ? (
-          <AgendaStep
-            key={agendaKey}
-            orgId={props.orgId}
-            formats={props.formats ?? NO_FORMATS}
-            pickerEnabled={props.pickerEnabled ?? false}
-            shareTranscript={props.shareTranscript}
-            startWithNewDoc={agendaKey > 0}
-            initialFormat={keptFormat}
-            disabled={phase === "starting"}
-            onChange={setAgenda}
-            goals={props.goals}
-            eventTitle={props.calendarEvent?.title ?? null}
-          />
+          <div className="flex flex-col gap-6">
+            {props.groups && (
+              <GroupPicker
+                space="forening"
+                groups={props.groups.groups}
+                initialGroupId={props.groups.initialGroupId}
+                event={null}
+                onChange={setGroupChoice}
+                disabled={phase === "starting"}
+              />
+            )}
+            <AgendaStep
+              key={agendaKey}
+              orgId={props.orgId}
+              formats={props.formats ?? NO_FORMATS}
+              pickerEnabled={props.pickerEnabled ?? false}
+              shareTranscript={props.shareTranscript}
+              startWithNewDoc={agendaKey > 0}
+              initialFormat={keptFormat}
+              disabled={phase === "starting"}
+              onChange={setAgenda}
+              goals={props.goals}
+              eventTitle={props.calendarEvent?.title ?? null}
+            />
+          </div>
         ) : undefined
       }
-      agendaConfirmed={props.meeting === null ? (props.foretag ? foretagChoice !== null : props.privat ? privatChoice !== null : agenda?.confirmed === true) : true}
+      agendaConfirmed={props.meeting === null ? (props.foretag ? foretagChoice !== null : props.privat ? privatChoice !== null : agenda?.confirmed === true && (!props.groups || groupChoice !== null)) : true}
       agendaDoc={agenda?.agendaDocId ? { transcriptInDoc: agenda.transcriptInDoc } : null}
       onNewDocInstead={
         startError === "start-failed" && startErrorCode?.startsWith("agenda_")

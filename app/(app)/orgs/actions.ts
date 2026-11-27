@@ -1,5 +1,6 @@
 "use server";
 
+import { hasTree } from "@/lib/foretag/tree";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -66,9 +67,10 @@ export async function joinOrgAction(form: FormData): Promise<void> {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
     const { data } = await db.auth.getUser();
     const user = data.user;
-    // Företag (0050): a new member is unplaced and sees no group's meetings, so no Docs either.
+    // The tree (Företag 0050, a förening with groups 0054): a new member is unplaced and sees no
+    // group's meetings, so no Docs either.
     const org = user?.email ? await getOrg(db, orgId) : null;
-    if (user?.email && org?.kind !== "foretag") {
+    if (user?.email && org && !hasTree(org)) {
       const member = { id: user.id, email: user.email };
       after(() =>
         shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),

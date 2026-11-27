@@ -5,6 +5,7 @@ import { revokeLegacyShare, revokePermission, shareWith } from "@/lib/docs/creat
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { holdCrossingTasks } from "./summary";
+import { hasTree } from "./tree";
 
 // After the tree, a role or the membership of a Företag changed (0050): whoever can no longer see a
 // meeting loses the Doc access Simon Says gave them, and tasks whose owner can no longer see their
@@ -27,9 +28,17 @@ export interface ReconcileResult {
 export async function reconcileForetag(orgId: string): Promise<ReconcileResult> {
   const db = supabaseAdmin();
   const result: ReconcileResult = { revoked: 0, failed: 0, checkedMeetings: 0 };
-  const { data: org, error: oe } = await db.from("orgs").select("kind").eq("id", orgId).maybeSingle();
+  const { data: org, error: oe } = await db.from("orgs").select("*").eq("id", orgId).maybeSingle();
   if (oe) throw new Error(`reconcile: org: ${oe.message}`);
-  if ((org as { kind?: string } | null)?.kind !== "foretag") return result;
+  if (!hasTree(org as { kind?: string; groups_enabled?: boolean } | null)) {
+    // A förening that turned its groups off (0054): every member sees every meeting again, so a
+    // task still waiting for approval is read in its meeting. Approved ones stay in Mina uppgifter.
+    if ((org as { kind?: string } | null)?.kind === "forening") {
+      const { error } = await db.from("task_handoffs").delete().eq("org_id", orgId).eq("status", "pending");
+      if (error) console.error(`reconcile ${orgId}: withdraw handoffs: ${error.message}`);
+    }
+    return result;
+  }
 
   const { data: meetings, error: me } = await db.from("meetings").select("id, doc_id, started_by, status, started_at").eq("org_id", orgId);
   if (me) throw new Error(`reconcile: meetings: ${me.message}`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { audiencePeople } from "./audience";
+import { audiencePeople, viewerPeople } from "./audience";
 
 const people = [
   { id: "anna", member_user_id: "u-anna", group_id: "vd" },
@@ -23,5 +23,17 @@ describe("audiencePeople", () => {
   });
   it("Hela företaget: every linked viewer", () => {
     expect(ids(audiencePeople({ groupId: null, people, attendeeIds: [], viewerIds: people.flatMap((p) => (p.member_user_id ? [p.member_user_id] : [])) }))).toEqual(["anna", "erik", "jonas", "lisa", "maja"]);
+  });
+});
+
+describe("viewerPeople (a förening with groups)", () => {
+  it("only people whose account can see the meeting; e-mail-only people never", () => {
+    const people = [
+      { id: "1", member_user_id: "u-dev", email: null },
+      { id: "2", member_user_id: "u-com", email: null },
+      { id: "3", member_user_id: null, email: "gast@example.se" },
+    ];
+    expect(viewerPeople(people, ["u-dev", "u-head"]).map((p) => p.id)).toEqual(["1"]);
+    expect(viewerPeople(people, [])).toEqual([]);
   });
 });

@@ -128,5 +128,6 @@
   "libAgendaBusy": "Someone else is updating the agenda right now. Try again in a little while.",
   "futureDate": "Enter a date that isn't in the future.",
   "protocolNotFound": "The minutes don't exist.",
-  "libBadGroup": "That group no longer exists. Reload the page and choose again."
+  "libBadGroup": "That group no longer exists. Reload the page and choose again.",
+  "libAgendaRestricted": "A meeting for a group or a private meeting gets a new document. Choose “Create new document”, or “Whole association”."
 }

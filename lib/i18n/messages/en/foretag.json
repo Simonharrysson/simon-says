@@ -129,7 +129,13 @@
     "notAccepted": "Hasn't accepted",
     "declined": "Declined, doesn't count as attending",
     "customer": "Customer: the guests from {domain}",
-    "seesAttendees": "{count, plural, one {Plus # attendee you ticked.} other {Plus # attendees you ticked.}}"
+    "seesAttendees": "{count, plural, one {Plus # attendee you ticked.} other {Plus # attendees you ticked.}}",
+    "forening": {
+      "whole": "Whole association",
+      "privateHint": "Only you and the association's admins see the meeting.",
+      "seesWhole": "Who sees it: everyone in the association with a place in a group.",
+      "seesPrivate": "Who sees it: you and admins."
+    }
   },
   "orgs": {
     "yours": "Your companies",
@@ -140,5 +146,22 @@
     "create": "Create company",
     "creating": "Creating…",
     "rootName": "Management"
+  },
+  "groups": {
+    "title": "Groups",
+    "offIntro": "Want to split the association up, for example the Board with Development and Communication under it? Then everyone sees their own group's meetings and every meeting in the groups below theirs. Admins see everything. A task for someone who can't see the meeting waits for approval first.",
+    "offNow": "Off right now: every member sees every meeting.",
+    "rootName": "Top group",
+    "rootDefault": "Board",
+    "turnOn": "Organise in groups",
+    "turnOnTitle": "Organise {org} in groups?",
+    "turnOnText": "Everyone in the list with an account goes into the top group and sees everything as before. Nothing changes until you move someone further down.",
+    "turnOnUnplaced": "{count, plural, one {# member has no name in the list and only sees meetings they start or attend until you place them.} other {# members have no name in the list and only see meetings they start or attend until you place them.}}",
+    "turningOn": "Turning on…",
+    "onNow": "On: everyone sees their group's meetings and every meeting in the groups below. At Start, you choose who the meeting is for.",
+    "turnOff": "Stop using groups",
+    "turnOffTitle": "Stop using groups?",
+    "turnOffText": "Every member then sees every meeting again, including the groups' and the private ones. The groups and places are kept if you turn it on again.",
+    "turningOff": "Turning off…"
   }
 }

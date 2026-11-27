@@ -78,6 +78,8 @@ export interface OrgDetailViewProps {
   profileSettings?: ReactNode;
   /** Admins: "Mötenas kalender" (`OrgCalendarForm`, 0046), in Inställningar. */
   calendarSettings?: ReactNode;
+  /** Inställningar → Styrelsen och medlemmar: Grupper (0054, admins), right after the board. */
+  groupSettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
    * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
@@ -365,7 +367,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
 /** Möten and Inställningar of OrgDetailView (split out so the tab shell can hold them). */
 function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: ReactNode; memberControls: Record<string, ReactNode> }) {
-  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, notice, startMeeting, formatCard, summarySettings, profileSettings, calendarSettings, boardList, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
+  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, notice, startMeeting, formatCard, summarySettings, profileSettings, calendarSettings, groupSettings, boardList, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => props.docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
@@ -460,6 +462,8 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
             <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
             {boardList ? boardList(memberControls) : <PeoplePanel orgId={org.id} people={people} members={members} isAdmin actions={actions} />}
           </Panel>
+
+          {groupSettings}
 
           {invitePanel}
 
