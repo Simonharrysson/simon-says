@@ -30,24 +30,26 @@ import { docUrl } from "@/lib/ui/meetings";
 import { localDate } from "@/lib/docs/create";
 import { upcomingPrepared } from "@/lib/prepare/store";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
-import { InviteByEmail } from "@/components/views/InviteByEmail";
 import { inviterNameFor, listInvites } from "@/lib/invites/send";
 import type { InviteRow } from "@/lib/invites/rules";
 import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
-import { dismissAction, saveProfileAction } from "../kom-igang/actions";
+import { dismissAction } from "../kom-igang/actions";
 import { Suspense } from "react";
 import { OrgCalendarSlot, StartCalendarSlot } from "@/components/calendar/CalendarSlots";
 import { calendarResult } from "@/lib/calendar/events";
 import type { Notice } from "@/lib/ui/messages";
 import type { Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
-import { OrgProfileForm } from "@/components/views/OrgProfileForm";
+import { OrgDetailsForm } from "@/components/settings/OrgDetails";
+import { ReopenKomIgang } from "@/components/settings/ReopenKomIgang";
+import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
+import { Skeleton } from "@/components/ui/skeleton";
 import { OrgBoard } from "@/components/views/OrgBoard";
 import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
 import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
-import { orgTab, orgTabHref } from "@/lib/orgs/tabs";
+import { orgTab, orgTabHref, sectionForCode } from "@/lib/orgs/tabs";
 import { ForetagPage } from "./foretag-page";
 import { boardRows } from "@/lib/people/board";
 import {
@@ -64,7 +66,6 @@ import {
   setPersonRoleAction,
   rotateInviteAction,
   updateOrgAction,
-  updateSummaryAction,
 } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -203,6 +204,8 @@ export default async function OrgPage({
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
   const invites = isAdmin && tab === "installningar" ? await safeInvites(id) : [];
+  const settings = isAdmin && tab === "installningar";
+  const board = boardRows(people, members ?? []);
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
   const docAccess = docAccessFor(
@@ -255,49 +258,62 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
+      settingsSection={settings ? (sectionForCode(notice?.code) ?? undefined) : undefined}
       boardList={
-        isAdmin && tab === "installningar"
-          ? (memberControls) => (
+        settings
+          ? (memberControls, linkActions) => (
               <OrgBoard
                 orgId={org.id}
                 orgName={org.name}
-                rows={boardRows(people, members ?? [])}
+                rows={board}
                 inviteUrl={inviteUrl}
                 myEmail={userResult.data.user?.email?.toLowerCase() ?? null}
                 invites={invites}
+                inviterName={inviterNameFor(people.find((p) => p.member_user_id === me)?.name, userResult.data.user?.user_metadata)}
                 memberControls={memberControls}
+                linkActions={linkActions}
               />
             )
           : undefined
       }
-      profileSettings={isAdmin ? <OrgProfileForm orgId={org.id} profile={org} save={saveProfileAction} /> : undefined}
+      detailsSettings={
+        settings ? (
+          <OrgDetailsForm
+            org={{
+              id: org.id,
+              name: org.name,
+              logoUpdatedAt: org.logo_updated_at ?? null,
+              profile: { about: org.about ?? null, website_url: org.website_url ?? null, facebook_url: org.facebook_url ?? null, instagram_url: org.instagram_url ?? null },
+            }}
+          />
+        ) : undefined
+      }
+      reopenKomIgang={
+        settings && onboarding && (onboarding.dismissedAt || onboarding.completedAt) ? (
+          <ReopenKomIgang orgId={org.id} reopen={onboarding.dismissedAt ? dismissAction.bind(null, org.id, false) : undefined} />
+        ) : undefined
+      }
+      folderSettings={
+        settings ? (
+          <MeetingFolderSetting orgId={org.id} folderName={org.meeting_folder_name ?? null} folderSet={Boolean(org.meeting_folder_id)} pickerEnabled={pickerEnabled(getEnv())} />
+        ) : undefined
+      }
+      voiceSettings={settings ? <VoicesSetting orgId={org.id} board={board} /> : undefined}
       calendarSettings={
-        isAdmin && tab === "installningar" && me ? (
-          // Google's answer streams in; the rest of the page never waits for it (todo #14).
-          <Suspense fallback={null}>
+        settings && me ? (
+          // Google's answer streams in; the rest of the page never waits for it (todo #14). The
+          // placeholder holds the form's place, so nothing below it moves.
+          <Suspense fallback={<Skeleton className="h-36 rounded-md" />}>
             <OrgCalendarSlot orgId={org.id} userId={me} org={org} />
           </Suspense>
         ) : undefined
       }
       summarySettings={
-        isAdmin ? (
+        settings ? (
           <SummarySettingsForm
             orgId={org.id}
             mode={org.summary_mode ?? "missed"}
             people={summaryOptions(people, members)}
-            action={updateSummaryAction}
-          />
-        ) : undefined
-      }
-      inviteByEmail={
-        isAdmin ? (
-          <InviteByEmail
-            orgId={org.id}
-            orgName={org.name}
-            inviterName={inviterNameFor(people.find((p) => p.member_user_id === me)?.name, userResult.data.user?.user_metadata)}
-            inviteUrl={inviteUrl}
-            invites={invites}
-            memberEmails={(members ?? []).map((m) => m.email.toLowerCase()).filter(Boolean)}
           />
         ) : undefined
       }
@@ -306,7 +322,6 @@ export default async function OrgPage({
           orgId={org.id}
           current={{ kind: format.profile.kind, name: formatName(format.profile.kind, locale), id: format.id, profile: format.profile }}
           isAdmin={role === "admin"}
-          meetingFolder={{ id: org.meeting_folder_id ?? null, name: org.meeting_folder_name ?? null }}
           formats={formats}
           changeFormat={changeFormatAction}
           pickerEnabled={pickerEnabled(getEnv())}

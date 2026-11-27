@@ -239,8 +239,9 @@ server links in a `nav` with `aria-current` (`OrgDetailView` `tabs` prop, `lib/o
 ARIA `role="tab"`: each tab is its own page view, shareable and reloadable, with no client panels
 or arrow-key handling to fake. `/orgs/<id>/installningar` redirects to the tab (a plain path for
 sign-in `next` and "Koppla kalender"'s return); a server action's `?fel=`/`?klart=` code that
-belongs to a setting (`isSettingsCode`) opens Inställningar; old `#installningar`-style links
-(summary e-mails) are forwarded client-side (`SettingsHashRedirect`).
+belongs to a setting (`isSettingsCode`) opens Inställningar, at the section it is about
+(`settingsSection`); old `#installningar`-style links (summary e-mails) are forwarded client-side to
+their section (`SettingsHashRedirect`, `HASH_SECTIONS`).
 
 - **Möten**: Starta möte (or the running meeting) and the meeting list. Members also get a side
   column: Personer (add/rename names), the invite link and "Lämna föreningen".
@@ -248,12 +249,33 @@ belongs to a setting (`isSettingsCode`) opens Inställningar; old `#installninga
   protokoll" with its import progress), full width, under a line on what the goals build on.
   Open tasks, decisions, recurring topics and attendance were removed as not helping the förening;
   the data helpers in `lib/dashboard` stay for the goals proposal and Förbered möte.
-- **Inställningar** (admins): "Styrelsen och medlemmar" (Kom igång's Styrelsen list, `BoardStep`
-  via `OrgBoard`: name, role, e-mail and account status in ONE list, each account row with the
-  admin handover controls: make/remove admin, step down, remove, leave; the last admin is told to
-  hand over first), "Bjud in" (e-mail invites and the link), Mötesformat, "Allmänt" (name, status
-  page, transcript, Om oss, the meetings' calendar, the summary e-mail, a link to Kom igång) and
-  "Radera föreningen".
+- **Inställningar** (admins, `components/settings/`): every setting of the förening lives in
+  exactly one of five sections, picked in a sub-nav (a sidebar from 1024 px, chips below;
+  `?flik=installningar&del=<foreningen|styrelsen|moten|efter-motet|radera>`, `SettingsSections`).
+  A click shows the section at once (all five are server-rendered and kept in `<Activity>`) and
+  pushes `?del=`; coming back to the tab keeps the last section.
+  - **Föreningen**: name, logo and Om oss with its links (`OrgDetailsForm`: one Spara for the
+    text; the logo saves on upload), and "Visa namnet på statussidan".
+  - **Styrelsen och medlemmar**: ONE list (`OrgBoard` → `BoardStep`): name, role, e-mail and
+    account status; a person with an e-mail and no invite yet gets "Skicka inbjudan" on their
+    row; each account row has the admin handover controls (make/remove admin, step down, remove,
+    leave; the last admin is told to hand over first). Under the list, folded: "Bjud in via mejl"
+    (several addresses, the mail's preview, every invite sent) and "Dela länk" (the link and
+    "Skapa ny länk").
+  - **Möten**: Mötesformat (`FormatCard`: switch, adjust, learn, the stadgar's årsmöte), the
+    meeting folder (`MeetingFolderSetting`), "Under mötet" (share the transcript, require
+    Vem/När/Klart när), Röster (`VoicesSetting`) and, last because Google's answer streams in,
+    the meetings' calendar.
+  - **Efter mötet**: the summary e-mail (`SummarySettingsForm`).
+  - **Radera**: delete the förening.
+
+  One save model: switches, choices and uploads save on change and say "Sparat" quietly, only
+  after the save is confirmed (`useSavedValue` / `SaveState`, a line that keeps its place): one
+  save at a time, the latest waiting change next, a failure rolls back and says why. Those saves
+  return results (`setOrgFlagAction` writes one column, `saveSummaryAction`,
+  `saveOrgCalendarResult`; app/(app)/orgs/settings-actions.ts). Only text has a Spara button (the
+  name and Om oss, the calendar's title filter). Back to the tab's entry without `del` shows the
+  default section. Once Kom igång is hidden or done, Föreningen offers "Visa Kom igång igen".
 
 **Meeting list.** Each row: the meeting's title as the main line (`lib/meetings/title.ts`: the
 calendar event's title, else the title the final notes pass gave (meetings.title, 0048), else the
@@ -263,7 +285,8 @@ any of them shows its date as the main line. Status badges only when not done. N
 shown, the rest under "Visa fler (n)"; finished Testmöten (labelled "Testmöte") fold under "Visa
 testmöten (n)" (native `details`), while a running or resumable one stays in the list.
 
-Gallery: `org-admin` (Möten: titles, Visa fler, testmöten), `org-settings` (Inställningar),
+Gallery: `org-admin` (Möten: titles, Visa fler, testmöten), `org-settings` and
+`org-settings-styrelsen|moten|efter|radera` (Inställningar's sections),
 `org-member` (a member's two tabs), `org-overview`, `org-overview-goals`, `org-overview-empty`,
 `org-overview-history`, `org-overview-history-only`.
 
@@ -636,34 +659,38 @@ progress rail (done = ink, skipped = grey, here = blue; never dots; each part ju
 slide in from the right going forward, from the left going back (`animate-step-in` / `-back`, off
 with reduced motion). Progress is saved on every Fortsätt / Hoppa över (`org_onboarding`) and kept
 in `?steg=n`; the förening page shows the admins a "Kom igång n/6" card (`KomIgangCard`, Fortsätt ·
-Dölj) until every step is done or skipped. Föreningar from before 0035 have no row and no card;
-Inställningar links to the guide.
+Dölj) until every step is done or skipped. Föreningar from before 0035 have no row and no card.
+
+Kom igång is a checklist, not a second editor: each step renders the very component Inställningar
+uses (`useOrgDetails` + `LogoStep`, `OrgBoard`, `MeetingFolderSetting`, `FormatCard`,
+`VoicesSetting`), a step already done says where its setting lives now ("Klart. Det här ändrar du
+när som helst under Inställningar → …"), and Klart's done rows link there ("Ändra"). Once an admin
+has hidden the card, `/kom-igang` redirects to Inställningar.
 
 1. **Namn och logga**: the name, and a logo cropped to a centred 256 px square in the browser
    (`squareLogo`), uploaded to `POST /api/orgs/<id>/logo` (bytes checked: PNG/JPEG/WebP, ≤ 1 MB),
    stored privately in storage `org-logos/<id>/logo`, served member-checked at
    `GET /api/orgs/<id>/logo?v=…`. `OrgLogo` shows it on the förening page and in the list only,
    never in the Docs; without one, the first letter on ink. Behind a quiet disclosure, "Om
-   föreningen och länkar (valfritt)": the same fields as Inställningar → Om oss (below), saved on
+   föreningen och länkar (valfritt)": the same fields as Inställningar → Föreningen, saved on
    Fortsätt only when changed.
 2. **Styrelsen**: ONE list (`boardRows`, `lib/people/board.ts`): people (name, role) plus members
    nobody has named yet ("Namn saknas" + Lägg till namn). An e-mail invites (`set_person_email`):
    the person is linked to the member account with that address now or when they join
-   (`org_members` trigger). Under the list, "Bjud in via mejl" (below) sends the invite e-mail; a
-   button fills in the people with an e-mail not invited yet. The link is also shown to copy. Status
+   (`org_members` trigger). "Skicka inbjudan" on the row sends the invite e-mail; under the list,
+   folded, "Bjud in via mejl" (below) and "Dela länk". The same `OrgBoard` as Inställningar. Status
    line: "Har konto" (green) · "e-post · Inbjudan: skickad <datum>" / "ingen inbjudan skickad än" ·
    "Bara namn". The Personer panel shows "Inbjuden · e-post".
 3. **Mötesmapp**: the existing folder Picker (`useMeetingFolderPicker`).
-4. **Så brukar ni ha möten**: Veckomöte (förvalt; Fortsätt makes it the default when the förening
-   has none), "Som våra gamla protokoll" (the existing `LearnFormatView`), or "Behåll …" when a
-   format is already chosen. **Stadgar** ("Ladda upp era stadgar så gör Simon Says årsmötets
-   dagordning", todo #15): one Claude call (`extractArsmoteItems`, oneShot spend gate) gives the
-   Årsmöte's agenda only; the list is editable and saved with `POST /api/orgs/<id>/onboarding/formats`
-   `{ arsmote }` as a non-default version the förening points at (`orgs.arsmote_format_id`,
-   `set_type_formats` with `p_styrelse` null). The same flow (`StadgarArsmote`) is Mötesformat's
-   "Lägg in årsmötet från stadgarna". No board items are added any more; stadgar items saved on a
-   Styrelseprotokoll before stay and still apply. Förbered möte uses the Årsmöte; no list → the
-   standard Årsmöte.
+4. **Så brukar ni ha möten**: Inställningar's format card (`FormatCard`): switch, adjust, learn
+   from old minutes, or the årsmöte from the stadgar. With nothing chosen yet it shows Veckomöte,
+   and Fortsätt makes that the default (`POST /api/orgs/<id>/onboarding/formats` `{ weekly }`,
+   which keeps a format already chosen, also one chosen in the card just now).
+   **Stadgar** (todo #15, `StadgarArsmote`): one Claude call (`extractArsmoteItems`, oneShot spend
+   gate) gives the Årsmöte's agenda only; the list is editable and saved as a non-default version
+   the förening points at (`orgs.arsmote_format_id`, `set_type_formats` with `p_styrelse` null).
+   Stadgar items saved on a Styrelseprotokoll before stay and still apply. Förbered möte uses the
+   Årsmöte; no list → the standard Årsmöte.
 5. **Era tidigare möten**: explains the import and links to `/orgs/<id>/protokoll` (the import on
    Översikt); nothing is reimplemented.
 6. **Röster (valfritt)**: says the plan honestly (the name round in the first meeting becomes the
@@ -676,8 +703,8 @@ Inställningar links to the guide.
 ## Om oss (todo #13, migration 0044)
 
 The förening's short text (plain text, ≤ 600 characters, line breaks kept) and links to its
-website, Facebook and Instagram. Admins edit them in Inställningar (`OrgProfileForm`, "Spara Om
-oss") and in Kom igång step 1; `saveProfileAction` parses with `lib/orgs/profile.ts` (https only;
+website, Facebook and Instagram. Admins edit them in Inställningar → Föreningen and in Kom igång step 1 (the
+same editor, `useOrgDetails` in components/settings/OrgDetails.tsx); `saveProfileAction` parses with `lib/orgs/profile.ts` (https only;
 Facebook/Instagram must be that host exactly; "@exempel" → `https://instagram.com/exempel`) and saves
 through the normal org update (column grant, `orgs_update`: admins). The columns' checks accept only
 that canonical form. Members see it in the page header under the badge (`OrgAbout`): the text, then

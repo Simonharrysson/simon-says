@@ -7,7 +7,6 @@ import { demoSummaryEmails } from "@/emails/summary/demo";
 // The summary e-mail's states for the /design gallery (0037): the setting and the e-mail itself (in
 // an iframe, as a mail client shows it; dark mode follows the system). Opting out is /mejl (0039).
 
-const noopAction = async () => {};
 const ORG_ID = "00000000-0000-4000-8000-0000000000aa";
 
 const options: SummaryPersonOption[] = [
@@ -20,7 +19,7 @@ const options: SummaryPersonOption[] = [
 
 /** The setting alone, as Inställningar shows it (also used in the gallery's "org-admin"). */
 export function SummarySettingsDemo({ mode = "missed" }: { mode?: "missed" | "selected" }) {
-  return <SummarySettingsForm orgId={ORG_ID} mode={mode} people={options} action={noopAction} />;
+  return <SummarySettingsForm orgId={ORG_ID} mode={mode} people={options} save={async () => ({ ok: true })} />;
 }
 
 function Settings({ mode }: { mode: "missed" | "selected" }) {
