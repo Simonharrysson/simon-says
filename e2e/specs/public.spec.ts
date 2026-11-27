@@ -63,6 +63,9 @@ test("robots.txt keeps crawlers out of the app and the sitemap lists the public 
   expect(robots).toContain("Disallow: /orgs");
   expect(robots).toContain("Disallow: /api/");
   expect(robots).not.toMatch(/Disallow: \/integritet/);
+  // Invite links stay crawlable so their noindex header is seen.
+  expect(robots).not.toMatch(/Disallow: \/join/);
+  expect((await request.get("/join/e2e-no-such-code", { maxRedirects: 0 })).headers()["x-robots-tag"]).toBe("noindex, nofollow");
   const sitemap = await (await request.get("/sitemap.xml")).text();
   for (const path of ["/", "/login", "/integritet", "/status"]) expect(sitemap).toContain(`<loc>${baseURL}${path}</loc>`);
   expect(sitemap).not.toContain("/orgs");

@@ -15,9 +15,14 @@ export const PRIVATE_PREFIXES = [
   "/privat",
   "/installningar",
   "/meetings",
-  "/join",
   "/mejl",
   "/inloggad",
   "/design",
   "/sprak",
 ] as const;
+
+/**
+ * Not indexed, but crawlable: shared invite links. Link previews and crawlers must be able to
+ * fetch them to see the `X-Robots-Tag: noindex` header (a robots.txt block would hide it).
+ */
+export const NOINDEX_ONLY_PREFIXES = ["/join"] as const;

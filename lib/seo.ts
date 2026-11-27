@@ -55,9 +55,7 @@ export function softwareApplicationJsonLd(description: string): string {
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
     inLanguage: ["sv", "en"],
-    offers: { "@type": "Offer", price: "0", priceCurrency: "SEK" },
     publisher: { "@type": "Organization", name: "Harrysson & Company AB" },
-    isAccessibleForFree: true,
   };
   // Inside <script>: escape "<" so no string can close the tag.
   return JSON.stringify(data).replace(/</g, "\\u003c");
