@@ -30,6 +30,8 @@ export interface LiveMeetingProps {
   orgName: string;
   /** Where "← Tillbaka" leads: the förening's page. */
   orgHref: string;
+  /** The meeting's page in the app, linked from the ended screen (förening meetings). */
+  meetingHref?: string | null;
   /** Doc title, e.g. "Styrelsemöte, 24 nov". */
   title: string;
   shareTranscript: boolean;
@@ -187,6 +189,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           docUrl={p.docUrl}
           durationSeconds={p.elapsedMs / 1000}
           orgHref={p.orgHref}
+          meetingHref={p.meetingHref}
           autoStopped={p.autoStopped}
           stopReason={p.limitReason}
           shareFailed={p.privat ? null : p.shareFailed}

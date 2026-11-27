@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Panel } from "@/components/ui/Panel";
 import { NoticeBanner } from "@/components/views/NoticeBanner";
-import { longDay, shortWhen } from "@/lib/privat/format";
+import { clockTime, longDay, shortDay } from "@/lib/privat/format";
 import { sinceLastOrder, type SinceLastItem } from "@/lib/privat/since-last";
 import type { Notice } from "@/lib/ui/messages";
 import { cn } from "@/lib/utils";
@@ -73,8 +73,8 @@ export function PrivatMeetingView({
     <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-6 px-gutter">
       <PageHeader
         back={{ href: `/privat/${context.id}`, label: context.name }}
-        title={shortWhen(startedAt, locale)}
-        meta={<p className="text-ink-2 first-letter:uppercase">{longDay(startedAt, locale)}</p>}
+        title={`${context.name} · ${shortDay(startedAt, locale)}`}
+        meta={<p className="text-ink-2 first-letter:uppercase">{t("when", { day: longDay(startedAt, locale), time: clockTime(startedAt, locale) })}</p>}
         actions={
           docUrl && (
             <ButtonLink href={docUrl} target="_blank" rel="noopener noreferrer" variant="secondary" icon={<IconExternal size={18} />}>

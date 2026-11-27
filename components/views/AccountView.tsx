@@ -4,17 +4,15 @@ import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
-import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { EmailPrefs } from "@/lib/email/categories";
 import { EmailPrefsForm, type SaveEmailPrefs } from "./EmailPrefsForm";
+import { LanguageSelect } from "./LanguageSelect";
 
 export function AccountView({
   email,
-  userId,
   signOut,
   emailPrefs,
   saveEmailPrefs,
@@ -23,7 +21,6 @@ export function AccountView({
   calendar,
 }: {
   email: string;
-  userId: string;
   signOut: FormAction;
   /** null: the choices could not be loaded (the panel says so instead of guessing). */
   emailPrefs: EmailPrefs | null;
@@ -48,33 +45,16 @@ export function AccountView({
             <dt>{t("googleAccount")}</dt>
             <dd>{email}</dd>
           </div>
-          <div>
-            <dt>{t("userId")}</dt>
-            <dd>
-              <code className="text-sm">{userId}</code>
-              <span className="text-xs text-ink-3">{t("userIdHint")}</span>
-            </dd>
-          </div>
         </dl>
       </Panel>
       <Panel title={t("languageTitle")} titleId="language-title">
         <form action={saveLocale} className="flex flex-col gap-4">
           <p className="text-ink-2 max-w-[68ch]">{t("languageIntro")}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="account-locale">{t("languageLabel")}</Label>
-              <NativeSelect id="account-locale" name="locale" defaultValue={locale} className="min-w-48">
-                <option value="sv" lang="sv">
-                  Svenska
-                </option>
-                <option value="en" lang="en">
-                  English
-                </option>
-              </NativeSelect>
-            </div>
-            <SubmitButton variant="secondary" pendingLabel={t("languageSaving")}>
-              {t("languageSave")}
-            </SubmitButton>
+          <div className="flex flex-col gap-2">
+            <span id="account-locale" className="text-sm font-medium">
+              {t("languageLabel")}
+            </span>
+            <LanguageSelect labelId="account-locale" current={locale} savingLabel={t("languageSaving")} />
           </div>
           {localeFailed && (
             <Banner tone="warning" live={false}>

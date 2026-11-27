@@ -320,6 +320,9 @@ export function OrgDetailView(props: OrgDetailViewProps) {
     );
   }
 
+  // Everyone in the list plus members nobody has named yet, the same count as Personer shows.
+  const peopleCount = people.length + (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId)).length;
+
   return (
     <div className="mx-auto w-full max-w-page px-gutter flex flex-col gap-6">
       <PageHeader
@@ -334,7 +337,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? t("youAreAdmin") : t("youAreMember")}</Badge>
-              <span className="text-sm text-ink-3">{t("counts", { people: people.length, meetings: meetings.length })}</span>
+              <span className="text-sm text-ink-3">{t("counts", { people: peopleCount, meetings: meetings.length })}</span>
             </div>
             <OrgAbout profile={org} />
           </div>
@@ -440,7 +443,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
       {settingsHere && (
         <div className="flex flex-col gap-6">
-          <Panel sunk title={t("boardTitle")} titleId="board-title" id="styrelsen" className="scroll-mt-6" actions={<span className="text-sm text-ink-3">{people.length + (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId)).length}</span>}>
+          <Panel sunk title={t("boardTitle")} titleId="board-title" id="styrelsen" className="scroll-mt-6" actions={<span className="text-sm text-ink-3">{peopleCount}</span>}>
             <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
             {boardList ? boardList(memberControls) : <PeoplePanel orgId={org.id} people={people} members={members} isAdmin actions={actions} />}
           </Panel>
@@ -569,10 +572,7 @@ function MeetingsPanel(props: MeetingsPanelProps) {
               </ul>
             </details>
           )}
-          <p className="text-sm text-ink-3 border-t border-line px-6 pt-3 pb-4">
-            {t("meetingsFoot")}
-            {viewerEmail && t("meetingsFootEmail", { email: viewerEmail })}
-          </p>
+          {viewerEmail && <p className="text-sm text-ink-3 border-t border-line px-6 pt-3 pb-4">{t("meetingsFootEmail", { email: viewerEmail })}</p>}
         </>
       )}
     </Panel>
@@ -607,12 +607,20 @@ function MeetingRow({
     <li id={`mote-${meeting.id}`} className="scroll-mt-6">
       <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
         <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
-          <span className="font-medium wrap-anywhere">{about?.title ?? date}</span>
+          {meeting.status === "done" ? (
+            <a
+              href={`/orgs/${orgId}/mote/${meeting.id}`}
+              className="self-start rounded-sm font-medium text-ink no-underline wrap-anywhere decoration-ink-3 underline-offset-[0.2em] hover:underline active:text-ink-2"
+            >
+              {about?.title ?? date}
+            </a>
+          ) : (
+            <span className="font-medium wrap-anywhere">{about?.title ?? date}</span>
+          )}
           <span className="mt-[0.15rem] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
             {about?.isTest && <Badge tone="neutral">{t("testMeeting")}</Badge>}
             {meeting.status !== "done" && <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>}
             <span>{[about?.title ? date : null, duration, counts].filter(Boolean).join(" · ")}</span>
-            {state === "active" && <span>{t("endBeforeDelete")}</span>}
           </span>
         </span>
         <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">

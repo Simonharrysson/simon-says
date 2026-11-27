@@ -11,7 +11,7 @@ import { ensureUser, expect, expectAccessible, fake, test } from "../fixtures";
 const P = SCRIPTED.privat;
 
 async function record(page: Page, db: SupabaseClient, pick: (page: Page) => Promise<void>, opts: { withDoc?: boolean } = {}): Promise<string> {
-  await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ny inspelning" })).toBeVisible();
   await expect(page.getByText("Anteckningarna sparas bara hos dig i Privat.")).toBeVisible();
   // The consent tick first, retried until it sticks: a click before hydration does nothing, and once
   // it holds the page is hydrated (a value typed before that would be reset).
@@ -21,7 +21,7 @@ async function record(page: Page, db: SupabaseClient, pick: (page: Page) => Prom
   }).toPass({ timeout: 30_000 });
   await pick(page);
   await expectAccessible(page);
-  await page.getByRole("button", { name: "Starta mötet" }).click();
+  await page.getByRole("button", { name: "Spela in" }).click();
   await expect(page.getByRole("heading", { name: "Namnrunda" })).toBeVisible({ timeout: 30_000 });
   await expect(page).toHaveURL(/\/meetings\/[0-9a-f-]{36}$/);
   const meetingId = page.url().split("/").at(-1)!;

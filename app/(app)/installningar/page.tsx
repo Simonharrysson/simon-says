@@ -31,7 +31,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   return (
     <AccountView
       email={user.email ?? ""}
-      userId={user.id}
       signOut={signOut}
       emailPrefs={emailPrefs}
       saveEmailPrefs={saveEmailPrefsAction}

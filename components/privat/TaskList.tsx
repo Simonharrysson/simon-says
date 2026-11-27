@@ -54,11 +54,14 @@ export function TaskList({
               <label htmlFor={`${id}-${t.id}`} className="grid min-h-11 cursor-pointer grid-cols-[auto_1fr] items-start gap-3 py-3">
                 <Checkbox id={`${id}-${t.id}`} className="mt-[2px]" checked={checked} onCheckedChange={(on) => void onChange(t.id, on === true)} />
                 <span className="flex min-w-0 flex-col gap-[0.1rem]">
-                  <span className={cn("wrap-anywhere", checked && "text-ink-3 line-through")}>
-                    {t.owner && <span className="font-medium">{t.owner}: </span>}
-                    {t.text}
-                  </span>
-                  {t.meta && <span className="text-xs text-ink-3">{t.meta}</span>}
+                  <span className={cn("wrap-anywhere", checked && "text-ink-3 line-through")}>{t.text}</span>
+                  {(t.owner || t.meta) && (
+                    <span className="flex flex-wrap gap-x-2 text-sm text-ink-2">
+                      {t.owner && <span className="font-medium text-ink">{t.owner}</span>}
+                      {t.owner && t.meta && <span aria-hidden="true">·</span>}
+                      {t.meta && <span>{t.meta}</span>}
+                    </span>
+                  )}
                 </span>
               </label>
             </li>

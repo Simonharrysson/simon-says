@@ -49,6 +49,7 @@
   },
   "meeting": {
     "googleDoc": "Google-dokumentet",
+    "when": "{day} kl. {time}",
     "pendingTitle": "Sammanfattningen kommer strax",
     "pendingText": "Den skrivs ungefär en minut efter att inspelningen avslutats och kommer också på mejlen. Ladda om sidan om en stund.",
     "noneTitle": "Inget att sammanfatta",
@@ -94,6 +95,10 @@
   },
   "live": {
     "consentFact": "Anteckningarna sparas bara hos dig i Privat. Efter inspelningen får du en sammanfattning på mejlen.",
+    "consentTitle": "Ny inspelning",
+    "start": "Spela in",
+    "settings": "Mikrofon och inställningar",
+    "silent": "Mikrofonen hör inget än. Säg något, eller testa den under Mikrofon och inställningar.",
     "contextFirst": "Välj vad inspelningen gäller först.",
     "endedFinalizing": "Inspelningen var {duration}. Anteckningarna får en sista genomgång. Sammanfattningen kommer på mejlen om ungefär en minut.",
     "endedDone": "Inspelningen var {duration}. Anteckningarna är färdiga. Sammanfattningen kommer på mejlen om ungefär en minut.",

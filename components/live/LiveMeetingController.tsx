@@ -826,6 +826,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       notice={notice}
       orgName={props.orgName}
       orgHref={props.orgHref}
+      meetingHref={meeting && !props.privat ? `/orgs/${props.orgId}/mote/${meeting.id}` : null}
       title={meeting?.title ?? ""}
       shareTranscript={props.shareTranscript}
       startedAt={startedAt}
