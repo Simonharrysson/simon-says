@@ -43,6 +43,12 @@
     },
     "foretag": {
       "text": "Ditt konto kan inte skapa företag än. Under testperioden är det bara för inbjudna. Mejla simon@harrysson.co."
+    },
+    "foretag-raderat": {
+      "text": "Företaget är raderat. Google-dokumenten ligger kvar i Drive."
+    },
+    "foretag-lamnat": {
+      "text": "Du har lämnat företaget. Dokument som redan delats med dig ligger kvar i din Drive."
     }
   },
   "org": {

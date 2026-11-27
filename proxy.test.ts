@@ -32,7 +32,7 @@ beforeAll(() => {
   });
 });
 
-const { proxy, privatGuardedOrgId } = await import("./proxy");
+const { proxy, privatGuardedOrgId, isSignedInArea } = await import("./proxy");
 
 describe("proxy", () => {
   it("refreshes an expired session and writes the new cookie httpOnly", async () => {
@@ -98,5 +98,15 @@ describe("the Privat guard's paths", () => {
     expect(privatGuardedOrgId("/orgs")).toBeNull();
     expect(privatGuardedOrgId("/privat")).toBeNull();
     expect(privatGuardedOrgId(`/api/meetings/${id}`)).toBeNull();
+  });
+});
+
+describe("the signed-in area", () => {
+  it("covers Föreningar, Företag and Konto, not the public pages", () => {
+    expect(isSignedInArea("/orgs")).toBe(true);
+    expect(isSignedInArea("/foretag")).toBe(true);
+    expect(isSignedInArea("/installningar")).toBe(true);
+    expect(isSignedInArea("/foretagare")).toBe(false);
+    expect(isSignedInArea("/login")).toBe(false);
   });
 });

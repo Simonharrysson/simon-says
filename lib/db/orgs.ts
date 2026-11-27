@@ -30,9 +30,9 @@ export async function listMyOrgs(db: Db): Promise<(OrgRow & { role: OrgMemberRow
     .eq("org_members.user_id", user.id)
     .order("created_at");
   if (error) fail("listMyOrgs", error);
-  // Föreningar only: the Privat space (0045) has its own page. Filtered here, not in the query, so
-  // this works on a database before 0045 too.
-  return (data ?? []).filter((org) => (org as OrgRow).kind !== "privat" && (org as OrgRow).kind !== "foretag").map(({ org_members, ...org }) => ({
+  // Föreningar only: the Privat space (0045) and companies (0050, /foretag) have their own pages.
+  // Filtered here, not in the query, so this works on a database before 0045 too (no kind = förening).
+  return (data ?? []).filter((org) => ((org as OrgRow).kind ?? "forening") === "forening").map(({ org_members, ...org }) => ({
     ...(org as OrgRow),
     role: (org_members as { role: OrgMemberRow["role"] }[])[0].role,
   }));

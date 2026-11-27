@@ -43,6 +43,12 @@
     },
     "foretag": {
       "text": "Your account can't create companies yet. During the trial it's invite only. E-mail simon@harrysson.co."
+    },
+    "foretag-raderat": {
+      "text": "The company has been deleted. The Google Docs stay in Drive."
+    },
+    "foretag-lamnat": {
+      "text": "You have left the company. Documents already shared with you stay in your Drive."
     }
   },
   "org": {
