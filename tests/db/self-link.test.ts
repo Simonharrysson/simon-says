@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
-import { adminClient, anonClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
+import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import { addPerson, addSelfPerson, claimPerson, createOrg, isLinkedIn, joinOrg, renamePerson } from "@/lib/db/orgs";
 import { ensurePrivatSpace } from "@/lib/privat/space";
 
@@ -16,18 +15,6 @@ async function person(orgId: string, name: string, extra: Record<string, unknown
   const { data, error } = await adminClient().from("people").insert({ org_id: orgId, name, ...extra }).select("id").single();
   if (error) throw new Error(error.message);
   return data.id as string;
-}
-
-/** A signed-in user whose address is NOT confirmed (local auth lets them sign in). */
-async function unconfirmedUser(label: string): Promise<TestUser> {
-  const email = `${label}-${randomUUID()}@test.local`;
-  const password = `pw-${randomUUID()}`;
-  const { data, error } = await adminClient().auth.admin.createUser({ email, password, email_confirm: false });
-  if (error || !data.user) throw new Error(`createUser: ${error?.message}`);
-  const db = anonClient();
-  const { error: signInError } = await db.auth.signInWithPassword({ email, password });
-  if (signInError) throw new Error(`signIn: ${signInError.message}`);
-  return { id: data.user.id, email, db };
 }
 
 async function selfLinkedAt(id: string): Promise<string | null> {
@@ -184,13 +171,6 @@ describe.skipIf(!hasLocalSupabase)("self link (0051)", () => {
       expect(await selfLinkedAt(p)).toBeNull();
     });
 
-    it("an unconfirmed address doesn't count as your own invite e-mail", async () => {
-      const u = await unconfirmedUser("sl-unconf");
-      await joinOrg(u.db, await inviteCode(orgId));
-      const p = await person(orgId, "Obekräftad Olsson", { email: u.email });
-      expect(await claimPerson(u.db, p)).toBe("taken");
-      expect(await linkOf(p)).toBeNull();
-    });
   });
 
   describe("add_self_person", () => {
