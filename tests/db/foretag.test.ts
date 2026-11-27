@@ -1,0 +1,182 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
+
+// 0050: Företag visibility follows the company tree, in the database. The tree (spec's worked
+// examples): Anna (VD, admin) at the root; Erik and Sara (heads) in Ledning; Jonas and Lisa in
+// Utveckling, Maja in Kommunikation, Kim (kassör) in Ekonomi, all under Ledning; Olle unplaced.
+
+type Name = "anna" | "erik" | "sara" | "jonas" | "lisa" | "maja" | "kim" | "olle";
+const NAMES: Name[] = ["anna", "erik", "sara", "jonas", "lisa", "maja", "kim", "olle"];
+
+const must = <T>(what: string, r: { data: T; error: { message: string } | null }): T => {
+  if (r.error) throw new Error(`${what}: ${r.error.message}`);
+  return r.data;
+};
+
+describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
+  const u = {} as Record<Name, TestUser>;
+  const g = {} as Record<"vd" | "led" | "dev" | "com" | "eko", string>;
+  const m = {} as Record<"dev" | "led" | "all" | "priv" | "kim", string>;
+  let orgId: string;
+  let forening: { id: string; meeting: string; member: TestUser };
+
+  async function meeting(startedBy: Name, groupId: string | null, opts: { private?: boolean; attendees?: Name[] } = {}) {
+    const admin = adminClient();
+    const row = must(
+      "meeting",
+      await admin
+        .from("meetings")
+        .insert({ org_id: orgId, started_by: u[startedBy].id, doc_id: "doc", notes_tab_id: "t.0", status: "done", group_id: groupId, private: opts.private ?? false })
+        .select("id")
+        .single(),
+    ) as { id: string };
+    for (const a of opts.attendees ?? []) must("attendee", await admin.from("meeting_attendees").insert({ meeting_id: row.id, user_id: u[a].id, source: "calendar" }));
+    return row.id;
+  }
+
+  beforeAll(async () => {
+    const admin = adminClient();
+    const users = await Promise.all(NAMES.map((n) => createTestUser(`ftg-${n}`)));
+    NAMES.forEach((n, i) => (u[n] = users[i]));
+    orgId = must("create", await admin.rpc("create_foretag", { p_user: u.anna.id, p_name: "Testbolag", p_root_name: "VD", p_person_name: "Anna" })) as string;
+    g.vd = (must("root", await admin.from("groups").select("id").eq("org_id", orgId).single()) as { id: string }).id;
+    const group = async (name: string, parent: string) =>
+      (must(name, await admin.from("groups").insert({ org_id: orgId, name, parent_group_id: parent }).select("id").single()) as { id: string }).id;
+    g.led = await group("Ledning", g.vd);
+    [g.dev, g.com, g.eko] = await Promise.all([group("Utveckling", g.led), group("Kommunikation", g.led), group("Ekonomi", g.led)]);
+    must("members", await admin.from("org_members").insert(NAMES.filter((n) => n !== "anna").map((n) => ({ org_id: orgId, user_id: u[n].id, role: "member" }))));
+    const place: [Name, string, string][] = [
+      ["erik", "Erik", g.led],
+      ["sara", "Sara", g.led],
+      ["jonas", "Jonas", g.dev],
+      ["lisa", "Lisa", g.dev],
+      ["maja", "Maja", g.com],
+      ["kim", "Kim", g.eko],
+    ];
+    must("people", await admin.from("people").insert(place.map(([n, name, group]) => ({ org_id: orgId, name, member_user_id: u[n].id, group_id: group }))));
+    const maja = (must("maja", await admin.from("people").select("id").eq("org_id", orgId).eq("name", "Maja").single()) as { id: string }).id;
+
+    m.dev = await meeting("jonas", g.dev);
+    m.led = await meeting("erik", g.led);
+    m.all = await meeting("anna", null);
+    m.priv = await meeting("anna", g.led, { private: true, attendees: ["erik"] });
+    m.kim = await meeting("kim", g.dev);
+    must(
+      "notes",
+      await admin.from("note_items").insert([
+        { meeting_id: m.dev, id: "t1", section: "action", text: "Maja gör bilden", owner_person_id: maja },
+        { meeting_id: m.dev, id: "t2", section: "decision", text: "Vi kör" },
+      ]),
+    );
+    must("session", await admin.from("el_sessions").insert({ id: `el-${m.dev}`, meeting_id: m.dev, max_seconds: 60 }));
+    must("speaker", await admin.from("speaker_map").insert({ meeting_id: m.dev, el_session_id: `el-${m.dev}`, speaker_label: "s0", display_name: "Talare 1" }));
+    must("event", await admin.from("meeting_events").insert({ meeting_id: m.dev, kind: "tick_ok" }));
+
+    // A förening: a stray group_id / private flag never narrows what its members see.
+    const member = await createTestUser("ftg-fmember");
+    const fOrg = (must("forening", await admin.from("orgs").insert({ name: "Föreningen", created_by: u.olle.id }).select("id").single()) as { id: string }).id;
+    must("fmember", await admin.from("org_members").insert({ org_id: fOrg, user_id: member.id, role: "member" }));
+    const stray = (must("stray", await admin.from("groups").insert({ org_id: fOrg, name: "Grupp" }).select("id").single()) as { id: string }).id;
+    const fm = (must(
+      "fmeeting",
+      await admin.from("meetings").insert({ org_id: fOrg, started_by: u.olle.id, doc_id: "doc", notes_tab_id: "t.0", status: "done", group_id: stray, private: true }).select("id").single(),
+    ) as { id: string }).id;
+    forening = { id: fOrg, meeting: fm, member };
+  });
+
+  const seen = async (n: Name) => {
+    const rows = must("seen", await u[n].db.from("meetings").select("id").eq("org_id", orgId)) as { id: string }[];
+    const back = new Map(Object.entries(m).map(([k, id]) => [id, k]));
+    return rows.map((r) => back.get(r.id)).sort();
+  };
+
+  it("follows the tree: own group, every deeper group, admins all, Hela företaget for everyone", async () => {
+    expect(await seen("anna")).toEqual(["all", "dev", "kim", "led", "priv"]);
+    expect(await seen("erik")).toEqual(["all", "dev", "kim", "led", "priv"]);
+    expect(await seen("sara")).toEqual(["all", "dev", "kim", "led"]);
+    expect(await seen("jonas")).toEqual(["all", "dev", "kim"]);
+    expect(await seen("lisa")).toEqual(["all", "dev", "kim"]);
+    // A cousin (Kommunikation) never sees Utveckling's meetings.
+    expect(await seen("maja")).toEqual(["all"]);
+    // The cashier: never Ledning's salary review; their own start always.
+    expect(await seen("kim")).toEqual(["all", "kim"]);
+    // Unplaced: fail closed.
+    expect(await seen("olle")).toEqual(["all"]);
+  });
+
+  it("a Privat möte: only attendees, the starter and admins (not a head who wasn't there)", async () => {
+    const { data } = await u.sara.db.from("meetings").select("id").eq("id", m.priv);
+    expect(data).toEqual([]);
+    const { data: erik } = await u.erik.db.from("meetings").select("id").eq("id", m.priv);
+    expect(erik).toEqual([{ id: m.priv }]);
+  });
+
+  it("everything under a meeting follows; own tasks are always visible", async () => {
+    const maja = await u.maja.db.from("note_items").select("id").eq("meeting_id", m.dev);
+    expect(maja.data).toEqual([{ id: "t1" }]);
+    for (const table of ["speaker_map", "meeting_events", "el_sessions"]) {
+      const { data } = await u.maja.db.from(table).select("meeting_id").eq("meeting_id", m.dev);
+      expect(data, table).toEqual([]);
+      const { data: jonas } = await u.jonas.db.from(table).select("meeting_id").eq("meeting_id", m.dev);
+      expect(jonas?.length, table).toBe(1);
+    }
+    const jonas = await u.jonas.db.from("note_items").select("id").eq("meeting_id", m.dev).order("id");
+    expect(jonas.data).toEqual([{ id: "t1" }, { id: "t2" }]);
+  });
+
+  it("members can't move themselves up the tree", async () => {
+    const relink = await u.jonas.db.from("people").update({ member_user_id: u.jonas.id }).eq("org_id", orgId).eq("name", "Erik").select("id");
+    expect(relink.data ?? []).toEqual([]);
+    const place = await u.jonas.db.from("people").update({ group_id: g.vd }).eq("org_id", orgId).eq("name", "Jonas");
+    expect(place.error?.message).toMatch(/permission denied/i);
+    const add = await u.jonas.db.from("people").insert({ org_id: orgId, name: "Ny" });
+    expect(add.error?.message).toMatch(/row-level security/i);
+    expect((await u.jonas.db.rpc("set_group", { p_org_id: orgId, p_id: null, p_name: "Hack", p_parent: null })).data).toBeNull();
+    const personId = (must("p", await adminClient().from("people").select("id").eq("org_id", orgId).eq("name", "Jonas").single()) as { id: string }).id;
+    expect((await u.jonas.db.rpc("set_person_group", { p_person_id: personId, p_group_id: g.vd })).data).toBe(false);
+    const attend = await u.maja.db.from("meeting_attendees").insert({ meeting_id: m.dev, user_id: u.maja.id, source: "listed" });
+    expect(attend.error).not.toBeNull();
+  });
+
+  it("the tree: no cycles, a move recomputes depth (and what people see)", async () => {
+    const admin = adminClient();
+    const cycle = await admin.from("groups").update({ parent_group_id: g.dev }).eq("id", g.led);
+    expect(cycle.error?.message).toMatch(/under itself/);
+    const team = (must("team", await admin.from("groups").insert({ org_id: orgId, name: "Team", parent_group_id: g.dev }).select("id, depth").single()) as { id: string; depth: number });
+    expect(team.depth).toBe(3);
+    expect((await u.anna.db.rpc("set_group", { p_org_id: orgId, p_id: g.dev, p_name: "Utveckling", p_parent: g.vd })).data).toBe(g.dev);
+    const depths = must("depths", await admin.from("groups").select("id, depth").in("id", [g.dev, team.id])) as { id: string; depth: number }[];
+    expect(Object.fromEntries(depths.map((d) => [d.id, d.depth]))).toEqual({ [g.dev]: 1, [team.id]: 2 });
+    // Utveckling now sits beside Ledning: Sara (depth 1, another group) no longer sees it.
+    expect(await seen("sara")).toEqual(["all", "led"]);
+    expect((await u.anna.db.rpc("set_group", { p_org_id: orgId, p_id: g.dev, p_name: "Utveckling", p_parent: g.led })).data).toBe(g.dev);
+    expect(await seen("sara")).toEqual(["all", "dev", "kim", "led"]);
+  });
+
+  it("the server's viewer lists match RLS", async () => {
+    const admin = adminClient();
+    const viewers = must("viewers", await admin.rpc("foretag_viewer_ids", { p_meeting_id: m.dev })) as string[];
+    const names = (ids: string[]) => NAMES.filter((n) => ids.includes(u[n].id)).sort();
+    expect(names(viewers)).toEqual(["anna", "erik", "jonas", "lisa", "sara"]);
+    const audience = must(
+      "audience",
+      await admin.rpc("foretag_audience_ids", { p_org: orgId, p_group: g.led, p_private: true, p_started_by: u.anna.id, p_attendees: [u.erik.id] }),
+    ) as string[];
+    expect(names(audience)).toEqual(["anna", "erik"]);
+    expect(await u.jonas.db.rpc("foretag_viewer_ids", { p_meeting_id: m.dev }).then((r) => r.error)).not.toBeNull();
+  });
+
+  it("customers: one per domain, created by the server, never deleted by a client", async () => {
+    const admin = adminClient();
+    const id = must("customer", await admin.rpc("customer_for_domain", { p_org_id: orgId, p_domain: "acme.se", p_name: "Acme" })) as string;
+    expect(must("again", await admin.rpc("customer_for_domain", { p_org_id: orgId, p_domain: "acme.se", p_name: "Acme" }))).toBe(id);
+    const del = await u.anna.db.from("contexts").delete().eq("id", id).select("id");
+    expect(del.data ?? []).toEqual([]);
+    expect(await u.jonas.db.rpc("customer_for_domain", { p_org_id: orgId, p_domain: "x.se", p_name: "X" }).then((r) => r.error)).not.toBeNull();
+  });
+
+  it("föreningar are unchanged: every member sees every meeting", async () => {
+    const { data } = await forening.member.db.from("meetings").select("id").eq("org_id", forening.id);
+    expect(data).toEqual([{ id: forening.meeting }]);
+  });
+});
