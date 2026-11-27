@@ -1,16 +1,20 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { isUuid } from "@/lib/db/ids";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Förening-only features (Förbered möte, formats, goals, protocol import, the meeting folder,
 // Kom igång) never run for a Företag (0050): several read meetings with the service role and
 // would step around the company's visibility rule. Their pages 404 and their APIs answer 404.
 
-/** Is this org a Företag? A read failure counts as yes (refuse: the safe side). */
+/**
+ * Is this org a Företag? Read as the caller (RLS): an org they can't see is not refused here (the
+ * route's own member check answers). A read failure counts as yes (refuse: the safe side).
+ */
 export async function isForetagOrg(orgId: string): Promise<boolean> {
   if (!isUuid(orgId)) return false;
-  const { data, error } = await supabaseAdmin().from("orgs").select("kind").eq("id", orgId).maybeSingle();
+  const db = await createSupabaseServerClient();
+  const { data, error } = await db.from("orgs").select("kind").eq("id", orgId).maybeSingle();
   if (error) {
     console.error(`foretag guard: ${error.message}`);
     return true;
