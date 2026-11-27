@@ -100,8 +100,8 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect(await seen("maja")).toEqual(["all"]);
     // The cashier: never Ledning's salary review; their own start always.
     expect(await seen("kim")).toEqual(["all", "kim"]);
-    // Unplaced: fail closed.
-    expect(await seen("olle")).toEqual(["all"]);
+    // Unplaced: fail closed, not even Hela företaget (only what they start or attend).
+    expect(await seen("olle")).toEqual([]);
   });
 
   it("a Privat möte: only attendees, the starter and admins (not a head who wasn't there)", async () => {
@@ -175,6 +175,37 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect(await u.jonas.db.rpc("customer_for_domain", { p_org_id: orgId, p_domain: "x.se", p_name: "X" }).then((r) => r.error)).not.toBeNull();
   });
 
+  it("customers: read by admins and by viewers of a meeting with them; renamed by admins only", async () => {
+    const admin = adminClient();
+    const id = must("customer", await admin.rpc("customer_for_domain", { p_org_id: orgId, p_domain: "kund.se", p_name: "Kund" })) as string;
+    const reads = async (n: Name) => ((await u[n].db.from("contexts").select("id").eq("id", id)).data ?? []).length === 1;
+    // No meeting with it yet: only the admin.
+    expect(await reads("anna")).toBe(true);
+    expect(await reads("jonas")).toBe(false);
+    // A meeting for Utveckling with the customer: Utveckling and the heads read it, the cousin never.
+    must("link", await admin.from("meetings").update({ context_id: id }).eq("id", m.dev));
+    expect(await reads("jonas")).toBe(true);
+    expect(await reads("erik")).toBe(true);
+    expect(await reads("maja")).toBe(false);
+    // A member who reads it still can't rename it; an admin can.
+    const member = await u.jonas.db.from("contexts").update({ name: "Hack" }).eq("id", id).select("id");
+    expect(member.data ?? []).toEqual([]);
+    const byAdmin = await u.anna.db.from("contexts").update({ name: "Kunden AB" }).eq("id", id).select("id");
+    expect(byAdmin.data).toEqual([{ id }]);
+    must("unlink", await admin.from("meetings").update({ context_id: null }).eq("id", m.dev));
+  });
+
+  it("a person's group is always one of the same company's", async () => {
+    const admin = adminClient();
+    const other = must("other", await admin.rpc("create_foretag", { p_user: u.olle.id, p_name: "Annat AB", p_root_name: "VD", p_person_name: "Olle" })) as string;
+    const otherRoot = (must("root", await admin.from("groups").select("id").eq("org_id", other).single()) as { id: string }).id;
+    const insert = await admin.from("people").insert({ org_id: orgId, name: "Fel grupp", group_id: otherRoot });
+    expect(insert.error?.message).toMatch(/not in this company/);
+    const move = await admin.from("people").update({ group_id: otherRoot }).eq("org_id", orgId).eq("name", "Jonas");
+    expect(move.error?.message).toMatch(/not in this company/);
+    must("drop", await admin.from("orgs").delete().eq("id", other));
+  });
+
   it("a task across the boundary waits for approval; the owner then sees only the reviewed task", async () => {
     const admin = adminClient();
     // A CEO meeting (root group) with a task for Kim at the bottom.
@@ -187,9 +218,14 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
         { meeting_id: ceo, id: "h2", section: "decision", text: "Hemligt beslut" },
       ]),
     );
-    expect(must("create", await admin.rpc("create_task_handoffs", { p_meeting_id: ceo }))).toBe(1);
-    expect(must("again", await admin.rpc("create_task_handoffs", { p_meeting_id: ceo }))).toBe(0);
-    expect(await u.jonas.db.rpc("create_task_handoffs", { p_meeting_id: ceo }).then((r) => r.error)).not.toBeNull();
+    // The server resolves owners; a decision or someone else's person row passed along is ignored.
+    const owners = [
+      { item_id: "h1", person_id: kim },
+      { item_id: "h2", person_id: kim },
+    ];
+    expect(must("create", await admin.rpc("create_task_handoffs", { p_meeting_id: ceo, p_owners: owners }))).toBe(1);
+    expect(must("again", await admin.rpc("create_task_handoffs", { p_meeting_id: ceo, p_owners: owners }))).toBe(0);
+    expect(await u.jonas.db.rpc("create_task_handoffs", { p_meeting_id: ceo, p_owners: owners }).then((r) => r.error)).not.toBeNull();
 
     // Pending: invisible to Kim, who can't approve it either.
     expect((await u.kim.db.from("task_handoffs").select("id").eq("meeting_id", ceo)).data).toEqual([]);

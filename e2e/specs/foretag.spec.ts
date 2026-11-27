@@ -156,10 +156,25 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
   await expect(ceo.getByText("Skicka offert till Acme")).toBeVisible();
   await expectAccessible(ceo);
   await snap(ceo, "kund");
-  // The cousin sees the customer but none of Utveckling's meetings with it.
+  // The cousin sees no meeting with the customer, so not the customer either (its name tells).
   await com.goto(`/orgs/${company.id}/kund/${acme}`);
-  await expect(com.getByText("Du ser inga möten med kunden.")).toBeVisible();
+  await expect(com.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
   await expect(com.getByText("Skicka offert till Acme")).toHaveCount(0);
+  // The developer (a member) reads it but can't rename it; renaming is the admins'.
+  await dev.goto(`/orgs/${company.id}/kund/${acme}`);
+  await expect(dev.getByRole("heading", { name: "Acme", level: 1 })).toBeVisible();
+  await expect(dev.getByLabel("Kundens namn")).toHaveCount(0);
+
+  // The CEO moves the head beside Utveckling (into Kommunikation): they no longer see the meeting,
+  // so the Doc access Simon Says gave them is taken away (reconciled after the move).
+  const headId = await ensureUser(db, people.head);
+  const headName = (must("head", await db.from("people").select("name").eq("org_id", company.id).eq("member_user_id", headId).single()) as { name: string }).name;
+  await ceo.goto(`${company.url}?flik=personer`);
+  await ceo.getByLabel(`Flytta ${headName} till`).selectOption(company.groups.com);
+  await expect.poll(async () => (await db.from("people").select("group_id").eq("org_id", company.id).eq("member_user_id", headId).single()).data?.group_id, { timeout: 15_000 }).toBe(company.groups.com);
+  await sees(head, false);
+  await expect.poll(async () => (await fake.doc(row.doc_id))?.permissions ?? [], { timeout: 30_000 }).not.toContain(people.head);
+  expect((await fake.doc(row.doc_id))?.permissions ?? []).toContain(ADMIN_EMAIL);
 });
 
 test("Företag: a task from a CEO meeting waits for approval, then reaches its owner as the task only @phone", async ({ db, signedIn, newEmail }) => {
@@ -194,7 +209,7 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
     ]),
   );
   // What the summary run does first for a Företag meeting.
-  expect(must("handoffs", await db.rpc("create_task_handoffs", { p_meeting_id: meeting }))).toBe(1);
+  expect(must("handoffs", await db.rpc("create_task_handoffs", { p_meeting_id: meeting, p_owners: [{ item_id: "h1", person_id: comPerson }] }))).toBe(1);
 
   // Pending: the owner sees nothing yet.
   const { page: com } = await signedIn(people.com, "/hem");
@@ -225,4 +240,72 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
   await snap(com, "mina-uppgifter-overlamnad");
   await com.goto(`/orgs/${company.id}/mote/${meeting}`);
   await expect(com.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
+});
+
+test("Företag: the calendar event attaches only when the starter confirms it, with the colleagues they tick @phone", async ({ db, signedIn, newEmail }) => {
+  test.setTimeout(180_000);
+  // A company of its own: the CEO, the starter and two colleagues, all in Ledning.
+  const [ceoEmail, starterEmail, lisaEmail, perEmail] = [newEmail("vd"), newEmail("starter"), newEmail("lisa"), newEmail("per")];
+  const [ceoId, starterId, lisaId, perId] = await Promise.all([ceoEmail, starterEmail, lisaEmail, perEmail].map((e) => ensureUser(db, e)));
+  const companyId = must("company", await db.rpc("create_foretag", { p_user: ceoId, p_name: `Kalenderbolag ${Date.now().toString(36)}`, p_root_name: "Ledning", p_person_name: "Vera Vd" })) as string;
+  const root = (must("root", await db.from("groups").select("id").eq("org_id", companyId).single()) as { id: string }).id;
+  must("members", await db.from("org_members").insert([starterId, lisaId, perId].map((user_id) => ({ org_id: companyId, user_id, role: "member" }))));
+  must(
+    "people",
+    await db.from("people").insert([
+      { org_id: companyId, name: "Sam Startare", member_user_id: starterId, group_id: root },
+      { org_id: companyId, name: "Lisa Lind", member_user_id: lisaId, group_id: root },
+      { org_id: companyId, name: "Per Persson", member_user_id: perId, group_id: root },
+    ]),
+  );
+
+  // Happening now in the starter's own calendar: Lisa has accepted, Per hasn't answered, a customer guest.
+  const event = {
+    id: `ev${crypto.randomUUID().slice(0, 8)}`,
+    summary: "Kundmöte Acme",
+    start: new Date(Date.now() - 5 * 60_000).toISOString(),
+    end: new Date(Date.now() + 55 * 60_000).toISOString(),
+    attendees: [
+      { email: starterEmail, displayName: "Sam", responseStatus: "accepted" },
+      { email: lisaEmail, displayName: "Lisa", responseStatus: "accepted" },
+      { email: perEmail, displayName: "Per", responseStatus: "needsAction" },
+      { email: "anna@acme.se", displayName: "Anna på Acme", responseStatus: "accepted" },
+    ],
+  };
+  await fake.calendar(starterEmail, { id: starterEmail, summary: "Jobb", primary: true }, [event]);
+  const { page } = await signedIn(starterEmail, "/hem");
+  // "Koppla kalender" (calendar.readonly), as the e2e login stands in for it.
+  await page.goto(`/api/e2e/login?email=${encodeURIComponent(starterEmail)}&next=${encodeURIComponent(`/orgs/${companyId}`)}&kalender=1`);
+
+  await page.goto(`/meetings/ny/${companyId}`);
+  await expect(page.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
+  // Offered, never attached by itself.
+  const link = page.getByRole("checkbox", { name: /Koppla till kalenderhändelsen ”Kundmöte Acme”/ });
+  await expect(link).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Lisa Lind/ })).toHaveCount(0);
+  await link.check();
+  // The colleagues on the invite: the accepted one pre-ticked, the other not; the customer from the outside domain.
+  await expect(page.getByRole("checkbox", { name: /Lisa Lind/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Per Persson/ })).not.toBeChecked();
+  await expect(page.getByText("Kund: gästerna från acme.se")).toBeVisible();
+  await expect(page.getByText(/Plus 1 deltagare du kryssat i/)).toBeVisible();
+  await expectAccessible(page);
+  await snap(page, "starta-mote-kalender");
+
+  const consent = page.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" });
+  await expect(async () => {
+    await consent.check({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Starta mötet" }).click();
+  await expect(page.getByRole("heading", { name: "Namnrunda" })).toBeVisible({ timeout: 30_000 });
+  const meetingId = page.url().split("/").at(-1)!;
+
+  // Only the starter and the ticked colleague attend; Per (on the invite, not ticked) doesn't.
+  const attendees = must("attendees", await db.from("meeting_attendees").select("user_id, source").eq("meeting_id", meetingId)) as { user_id: string; source: string }[];
+  expect(attendees.map((a) => `${a.user_id}:${a.source}`).sort()).toEqual([`${lisaId}:calendar`, `${starterId}:starter`].sort());
+  const row = must("meeting", await db.from("meetings").select("context_id").eq("id", meetingId).single()) as { context_id: string | null };
+  expect(row.context_id).not.toBeNull();
+  const customer = must("customer", await db.from("contexts").select("domain").eq("id", row.context_id!).single()) as { domain: string };
+  expect(customer.domain).toBe("acme.se");
+  must("end", await db.from("meetings").update({ status: "done" }).eq("id", meetingId));
 });

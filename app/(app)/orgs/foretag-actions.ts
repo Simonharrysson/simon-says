@@ -87,7 +87,7 @@ export async function placeAction(form: FormData): Promise<void> {
   revalidatePath(`/orgs/${orgId}`);
 }
 
-/** Rename a customer (contexts, 0045/0050; members may rename, the database checks membership). */
+/** Rename a customer (contexts, 0045/0050; Företag admins only, the database checks it). */
 export async function renameCustomerAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const customerId = field(form, "customerId");
