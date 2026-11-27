@@ -423,7 +423,7 @@ export async function startMeeting(
   const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
   // A prepared agenda was shared with the members when it was made (through the preparer's grant).
-  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])], setup.shareDetails ?? {});
+  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])], { ...preparedShareDetails(prepared?.share_grants), ...(setup.shareDetails ?? {}) });
 
   const log = (kind: MeetingEventKind, detail: Record<string, unknown>) =>
     logEvent(meetingId, kind, detail).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
@@ -608,6 +608,14 @@ const shareDetails = (members: OrgMember[], grants: Record<string, string> | und
       const id = grants?.[m.email.toLowerCase()];
       return id ? [[m.userId, { email: m.email, permissionId: id, preexisting: false }] as const] : [];
     }),
+  );
+
+/** A prepared agenda's shares (0053): made on a new Doc of ours, so never preexisting. */
+const preparedShareDetails = (grants: Record<string, { email: string; permission_id: string | null }> | null | undefined): Record<string, ShareDetail> =>
+  Object.fromEntries(
+    Object.entries(grants ?? {}).flatMap(([userId, g]) =>
+      g?.permission_id && g.email ? [[userId, { email: g.email, permissionId: g.permission_id, preexisting: false }] as const] : [],
+    ),
   );
 
 /** The new Doc's file name: date and time, "Mötesprotokoll", the förening; a Testmöte marked. */

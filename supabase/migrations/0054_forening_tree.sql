@@ -407,7 +407,7 @@ language sql volatile security definer set search_path = ''
 as $$
   insert into public.foretag_reconcile_queue (org_id)
   select o.id from public.orgs o where o.id = p_org and (o.kind = 'foretag' or o.groups_enabled)
-  on conflict (org_id) do nothing;
+  on conflict (org_id) do update set queued_at = now(), leased_until = null;
 $$;
 
 create or replace function public.users_email_queue_reconcile()
@@ -416,10 +416,14 @@ language plpgsql security definer set search_path = ''
 as $$
 begin
   if new.email is distinct from old.email then
-    insert into public.foretag_reconcile_queue (org_id)
-    select o.id from public.org_members m join public.orgs o on o.id = m.org_id and (o.kind = 'foretag' or o.groups_enabled)
-    where m.user_id = new.id
-    on conflict (org_id) do nothing;
+    begin
+      insert into public.foretag_reconcile_queue (org_id)
+      select o.id from public.org_members m join public.orgs o on o.id = m.org_id and (o.kind = 'foretag' or o.groups_enabled)
+      where m.user_id = new.id
+      on conflict (org_id) do update set queued_at = now(), leased_until = null;
+    exception when others then
+      raise warning 'users_email_queue_reconcile: % (%)', sqlerrm, sqlstate;
+    end;
   end if;
   return new;
 end;
@@ -430,13 +434,18 @@ returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 begin
-  if old.permission_id is not null and not exists (select 1 from auth.users u where u.id = old.user_id) then
-    insert into public.doc_share_revocations (doc_id, owner_user_id, permission_id)
-    select mt.doc_id, mt.started_by, old.permission_id
-    from public.meetings mt
-    join public.orgs o on o.id = mt.org_id and (o.kind = 'foretag' or o.groups_enabled)
-    where mt.id = old.meeting_id and mt.doc_id is not null and mt.started_by is not null and mt.started_by <> old.user_id;
-  end if;
+  -- Part of an account deletion: never in its way (any error is a warning).
+  begin
+    if old.permission_id is not null and not exists (select 1 from auth.users u where u.id = old.user_id) then
+      insert into public.doc_share_revocations (doc_id, owner_user_id, permission_id)
+      select mt.doc_id, mt.started_by, old.permission_id
+      from public.meetings mt
+      join public.orgs o on o.id = mt.org_id and (o.kind = 'foretag' or o.groups_enabled)
+      where mt.id = old.meeting_id and mt.doc_id is not null and mt.started_by is not null and mt.started_by <> old.user_id;
+    end if;
+  exception when others then
+    raise warning 'doc_share_queue_revocation: % (%)', sqlerrm, sqlstate;
+  end;
   return old;
 end;
 $$;
@@ -447,7 +456,8 @@ returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 begin
-  insert into public.foretag_reconcile_queue (org_id) values (new.id) on conflict (org_id) do nothing;
+  insert into public.foretag_reconcile_queue (org_id) values (new.id)
+  on conflict (org_id) do update set queued_at = now(), leased_until = null;
   return new;
 end;
 $$;

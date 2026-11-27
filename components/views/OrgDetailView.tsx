@@ -1,3 +1,5 @@
+import { CountUp } from "@/components/motion/CountUp";
+import { Presence, PresenceLi } from "@/components/motion/Presence";
 import { AppLink } from "@/components/ui/AppLink";
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
@@ -332,7 +334,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? t("youAreAdmin") : t("youAreMember")}</Badge>
-              <span className="text-sm text-ink-3">{t("counts", { people: peopleCount, meetings: meetings.length })}</span>
+              <CountUp className="text-sm text-ink-3" text={t("counts", { people: peopleCount, meetings: meetings.length })} />
             </div>
             <OrgAbout profile={org} />
           </div>
@@ -526,7 +528,7 @@ function MeetingsPanel(props: MeetingsPanelProps) {
   const { meetings, info, viewerEmail } = props;
   const t = useTranslations("org");
   const { shown, more, tests } = splitMeetings(meetings, info);
-  const rows = (list: OrgDetailMeeting[]) => list.map((m) => <MeetingRow key={m.id} meeting={m} {...props} />);
+  const rows = (list: OrgDetailMeeting[]) => <Presence>{list.map((m) => <MeetingRow key={m.id} meeting={m} {...props} />)}</Presence>;
   const fold = "group border-t border-line [&[open]>summary_svg]:rotate-180";
   const summary =
     "flex min-h-11 cursor-pointer list-none items-center gap-2 px-6 py-2 text-sm font-medium text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden";
@@ -596,7 +598,7 @@ function MeetingRow({
   const counts =
     about && (about.decisions > 0 || about.tasks > 0) ? t("itemCounts", { decisions: about.decisions, tasks: about.tasks }) : null;
   return (
-    <li id={`mote-${meeting.id}`} className="scroll-mt-6">
+    <PresenceLi id={`mote-${meeting.id}`} className="scroll-mt-6">
       <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
         <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
           {meeting.status === "done" ? (
@@ -614,7 +616,15 @@ function MeetingRow({
             {meeting.status !== "done" && <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>}
             {meeting.private && <Badge tone="neutral">{tg("private")}</Badge>}
             {meeting.forGroup && <span className="font-medium text-ink-2">{meeting.forGroup}</span>}
-            <span>{[about?.title ? date : null, duration, counts].filter(Boolean).join(" · ")}</span>
+            <span>
+              {[about?.title ? date : null, duration].filter(Boolean).join(" · ")}
+              {counts && (
+                <>
+                  {about?.title || duration ? " · " : ""}
+                  <CountUp text={counts} />
+                </>
+              )}
+            </span>
           </span>
         </span>
         <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
@@ -672,7 +682,7 @@ function MeetingRow({
           )}
         </span>
       </div>
-    </li>
+    </PresenceLi>
   );
 }
 
@@ -705,7 +715,7 @@ function PeoplePanel({
   const t = useTranslations("org");
   const unnamed = (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId));
   return (
-    <Panel flush title={t("peopleTitle")} titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length + unnamed.length}</span>}>
+    <Panel flush title={t("peopleTitle")} titleId="people-title" actions={<CountUp className="text-sm text-ink-3" text={String(people.length + unnamed.length)} />}>
       <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
         {t("peopleText")}
         {isAdmin && (
@@ -735,33 +745,35 @@ function PeoplePanel({
         </div>
       ) : (
         <ul aria-labelledby="people-title">
-          {people.map((person) => (
-            <PersonRow
-              key={person.id}
-              orgId={orgId}
-              person={person}
-              status={personStatus(person, members, t)}
-              renamePerson={actions.renamePerson}
-              setPersonRole={isAdmin ? actions.setPersonRole : undefined}
-              deletePerson={actions.deletePerson}
-            />
-          ))}
-          {unnamed.map((m) => (
-            <li key={m.userId}>
-              <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
-                <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
-                <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
-                  <span className="font-medium wrap-anywhere">{m.email}</span>
-                  <span className="text-sm text-ink-3">{t("unnamedMember")}</span>
-                </span>
-                {isAdmin && (
-                  <a className={buttonVariants({ size: "sm" })} href={settingsHref(orgId, "styrelsen")}>
-                    {t("linkToName")}
-                  </a>
-                )}
-              </div>
-            </li>
-          ))}
+          <Presence>
+            {people.map((person) => (
+              <PersonRow
+                key={person.id}
+                orgId={orgId}
+                person={person}
+                status={personStatus(person, members, t)}
+                renamePerson={actions.renamePerson}
+                setPersonRole={isAdmin ? actions.setPersonRole : undefined}
+                deletePerson={actions.deletePerson}
+              />
+            ))}
+            {unnamed.map((m) => (
+              <PresenceLi key={m.userId}>
+                <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
+                  <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+                    <span className="font-medium wrap-anywhere">{m.email}</span>
+                    <span className="text-sm text-ink-3">{t("unnamedMember")}</span>
+                  </span>
+                  {isAdmin && (
+                    <a className={buttonVariants({ size: "sm" })} href={settingsHref(orgId, "styrelsen")}>
+                      {t("linkToName")}
+                    </a>
+                  )}
+                </div>
+              </PresenceLi>
+            ))}
+          </Presence>
         </ul>
       )}
     </Panel>

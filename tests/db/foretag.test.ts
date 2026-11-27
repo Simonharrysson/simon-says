@@ -315,6 +315,24 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     must("cleanup", await admin.from("doc_share_revocations").delete().eq("doc_id", docId));
   });
 
+  it("the enqueueing triggers never fail the write they ride on: a forced queue error still lets the e-mail change and a move through (0053)", async () => {
+    const admin = adminClient();
+    // seed.sql (local and CI only) makes every queue write for this company's name fail.
+    const victim = await createTestUser("ftg-fel");
+    const failing = must("create", await admin.rpc("create_foretag", { p_user: victim.id, p_name: "Testfel: kön", p_root_name: "VD", p_person_name: "Fel" })) as string;
+    expect((await admin.from("foretag_reconcile_queue").insert({ org_id: failing })).error?.message).toMatch(/injected/);
+    const newEmail = `ny-${victim.email}`;
+    expect((await admin.auth.admin.updateUserById(victim.id, { email: newEmail })).error).toBeNull();
+    expect((await admin.auth.admin.getUserById(victim.id)).data.user?.email).toBe(newEmail);
+    const root = (must("root", await admin.from("groups").select("id").eq("org_id", failing).single()) as { id: string }).id;
+    const team = (must("team", await admin.from("groups").insert({ org_id: failing, name: "Team", parent_group_id: root }).select("id").single()) as { id: string }).id;
+    const moved = await admin.from("people").update({ group_id: team }).eq("org_id", failing).eq("member_user_id", victim.id).select("group_id");
+    expect(moved.error).toBeNull();
+    expect(moved.data).toEqual([{ group_id: team }]);
+    expect((await admin.from("foretag_reconcile_queue").select("org_id").eq("org_id", failing)).data).toEqual([]);
+    must("drop", await admin.from("orgs").delete().eq("id", failing));
+  });
+
   it("placing a member account and archiving a group: admins only; archiving unplaces its people", async () => {
     const admin = adminClient();
     const extra = await createTestUser("ftg-extra");

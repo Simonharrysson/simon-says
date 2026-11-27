@@ -1,19 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { AnimatePresence, useReducedMotion } from "motion/react";
+import * as m from "motion/react-m";
+import { CountUp } from "@/components/motion/CountUp";
+import { Lazy, motionReady } from "@/components/motion/Lazy";
+import { PresenceDiv, PresenceLi } from "@/components/motion/Presence";
+import { useFlip } from "@/components/motion/useFlip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { dueDayLabel, isOverdue, meetingDayLabel, nextDay, type MyTask } from "@/lib/home/tasks";
+import { SPRING_EXIT } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 // The task list of Mina uppgifter. Ticking a task shows it done at once, with "Ångra" for 5
 // seconds; only then is it saved (so undo never has to take "✓ klart" back out of a Doc). A tick
 // still waiting when the page closes is sent right away (keepalive). After saving, the row says
-// what happened in the Doc: written, or "Bocka av i dokumentet också" with a link.
+// what happened in the Doc: written, or "Bocka av i dokumentet också" with a link. A task that
+// is done and needs nothing more (written, or no Doc line) then closes out of the open list after
+// SETTLE_MS, so the message can be read first; with "Visa klara" on it moves to the done ones.
+// Rows that still ask for something (bocka av i dokumentet också, an error) stay.
 
 export const UNDO_MS = 5000;
+/** How long "Klar, och ✓ klart står nu i dokumentet." shows before the row closes. */
+export const SETTLE_MS = 2500;
 
 export type DocOutcome = "written" | "locked" | "none" | "failed";
 export type TickState =
@@ -76,7 +88,32 @@ export function MyTasks({
   const [filter, setFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(initialShowDone);
   const { states, tick, undo } = useTicks(save, initialStates);
+  const listRef = useRef<HTMLUListElement>(null);
+  // The row that last had the focus. A ticked checkbox is disabled while it saves, which drops the
+  // focus to <body>; the row still counts as holding it until the focus goes somewhere else.
+  const focusRow = useRef<string | null>(null);
+  const onListFocus = (e: FocusEvent<HTMLUListElement>) => {
+    focusRow.current = (e.target as Element).closest<HTMLElement>("[data-flip]")?.dataset.flip ?? null;
+  };
+  const onListBlur = (e: FocusEvent<HTMLUListElement>) => {
+    if (e.relatedTarget) focusRow.current = null;
+  };
+  // A row about to close (or move to the done ones) that holds the focus hands it on first: to
+  // the next row's checkbox, else the one before, else the list's heading.
+  const settled = useSettled(states, (key) => {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>(`:scope > [data-flip="${CSS.escape(key)}"]`);
+    const active = document.activeElement;
+    const holds = row?.contains(active) || ((!active || active === document.body) && focusRow.current === key);
+    if (!list || !row || !holds) return;
+    const rows = [...list.querySelectorAll<HTMLElement>(":scope > li:not([data-exiting])")].filter((r) => r !== row);
+    const next = rows.find((r) => row.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING) ?? rows.at(-1);
+    const box = next?.querySelector<HTMLElement>('[role="checkbox"]:not([disabled])');
+    (box ?? document.getElementById("my-tasks-title"))?.focus();
+  });
   const switchId = useId();
+  // The list and its empty state crossfade (instant under reduced motion).
+  const fade = useReducedMotion() ? { duration: 0 } : SPRING_EXIT;
 
   // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
   const doneHere = (task: MyTask) => {
@@ -84,6 +121,8 @@ export function MyTasks({
     return Boolean(st && st.kind !== "error");
   };
   const openTasks = tasks.filter((x) => !x.done);
+  const stillOpen = openTasks.filter((x) => !settled.has(x.key));
+  const settledHere = openTasks.filter((x) => settled.has(x.key));
   const spaces = useMemo(() => {
     const out = new Map<string, { id: string; name: string; count: number }>();
     for (const x of tasks) {
@@ -101,100 +140,122 @@ export function MyTasks({
     .filter((x) => x.done)
     .sort((a, b) => b.meetingAt.localeCompare(a.meetingAt))
     .slice(0, MAX_DONE_SHOWN);
-  const visible = [...openTasks, ...(showDone ? doneShown : [])].filter(inFilter);
+  const visible = [...stillOpen, ...(showDone ? [...settledHere, ...doneShown] : [])].filter(inFilter);
   const filterName = spaces.find((s) => s.id === filter)?.name ?? "";
-  const hasDone = tasks.some((x) => x.done);
+  const hasDone = settledHere.length > 0 || tasks.some((x) => x.done);
+
+  useFlip(listRef, visible.map((x) => x.key));
 
   const shownOpen = openTasks.filter(inFilter);
   const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
 
   return (
-    <div className="flex flex-col gap-4">
-      {(spaces.length > 1 || hasDone) && (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-          {spaces.length > 1 ? (
-            <>
-              {/* Phones: one labelled select (the phone's own picker); wider screens: every space as a toggle. */}
-              <label className="flex w-full flex-col gap-1 text-sm font-medium md:hidden">
-                {t("filterLabel")}
-                <NativeSelect value={filter} onChange={(e) => setFilter(e.target.value)}>
-                  {chips.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {t("chip", { name: s.name, count: s.count })}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </label>
-              <div role="group" aria-label={t("filterLabel")} className="flex flex-wrap gap-2 max-md:hidden">
-                {chips.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    aria-pressed={filter === s.id}
-                    onClick={() => setFilter(s.id)}
-                    className={cn(
-                      "inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium transition-colors duration-120",
-                      filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
-                    )}
-                  >
-                    {t("chip", { name: s.name, count: s.count })}
-                  </button>
-                ))}
+    <Lazy>
+      <div className="flex flex-col gap-4">
+        {/* The bar can appear later (the first task done here brings "Visa klara"): it opens in,
+            its gap included (-mb-4 / pb-4), so the list below moves down smoothly. */}
+        <AnimatePresence initial={false}>
+          {(spaces.length > 1 || hasDone) && (
+            <PresenceDiv key="bar" data-enter-item className="-mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-4">
+                {spaces.length > 1 ? (
+                  <>
+                    {/* Phones: one labelled select (the phone's own picker); wider screens: every space as a toggle. */}
+                    <label className="flex w-full flex-col gap-1 text-sm font-medium md:hidden">
+                      {t("filterLabel")}
+                      <NativeSelect value={filter} onChange={(e) => setFilter(e.target.value)}>
+                        {chips.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {t("chip", { name: s.name, count: s.count })}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </label>
+                    <div role="group" aria-label={t("filterLabel")} className="flex flex-wrap gap-2 max-md:hidden">
+                      {chips.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          aria-pressed={filter === s.id}
+                          onClick={() => setFilter(s.id)}
+                          className={cn(
+                            "press inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium",
+                            filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
+                          )}
+                        >
+                          {t("chip", { name: s.name, count: s.count })}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <span />
+                )}
+                {hasDone && (
+                  <label htmlFor={switchId} className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
+                    <Switch id={switchId} checked={showDone} onCheckedChange={setShowDone} />
+                    {t("showDone")}
+                  </label>
+                )}
               </div>
-            </>
-          ) : (
-            <span />
+            </PresenceDiv>
           )}
-          {hasDone && (
-            <label htmlFor={switchId} className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-              <Switch id={switchId} checked={showDone} onCheckedChange={setShowDone} />
-              {t("showDone")}
-            </label>
-          )}
-        </div>
-      )}
+        </AnimatePresence>
 
-      {shownOpen.length > 0 && (
-        <p className="text-sm text-ink-2" aria-live="polite">
-          {t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })}
-          {overdueCount > 0 && (
-            <>
-              {" · "}
-              <span className="font-medium text-red">{t("overdueCount", { count: overdueCount })}</span>
-            </>
-          )}
-        </p>
-      )}
-      {visible.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
-          {filter !== "all" ? (
-            <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
+        {shownOpen.length > 0 && (
+          <p data-enter-item className="text-sm text-ink-2" aria-live="polite">
+            <CountUp text={t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })} />
+            {overdueCount > 0 && (
+              <>
+                {" · "}
+                <span className="font-medium text-red">{t("overdueCount", { count: overdueCount })}</span>
+              </>
+            )}
+          </p>
+        )}
+        <AnimatePresence initial={false} mode="popLayout">
+          {visible.length === 0 ? (
+            <m.div
+              key="empty"
+              initial={motionReady() ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={fade}
+              data-enter-item
+              className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2"
+            >
+              {filter !== "all" ? (
+                <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
+              ) : (
+                <>
+                  <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
+                  <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
+                </>
+              )}
+            </m.div>
           ) : (
-            <>
-              <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
-              <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
-            </>
+            <m.ul key="list" ref={listRef} onFocus={onListFocus} onBlur={onListBlur} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
+              <AnimatePresence initial={false}>
+                {visible.map((task) => (
+                  <TaskRow
+                    key={task.key}
+                    task={task}
+                    state={states[task.key]}
+                    checked={task.done || doneHere(task)}
+                    today={today}
+                    locale={locale}
+                    docUrl={docs[task.meetingId] ?? null}
+                    meetingHref={meetingHrefs[task.meetingId] ?? null}
+                    onTick={() => tick(task)}
+                    onUndo={() => undo(task)}
+                  />
+                ))}
+              </AnimatePresence>
+            </m.ul>
           )}
-        </div>
-      ) : (
-        <ul aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
-          {visible.map((task) => (
-            <TaskRow
-              key={task.key}
-              task={task}
-              state={states[task.key]}
-              checked={task.done || doneHere(task)}
-              today={today}
-              locale={locale}
-              docUrl={docs[task.meetingId] ?? null}
-              meetingHref={meetingHrefs[task.meetingId] ?? null}
-              onTick={() => tick(task)}
-              onUndo={() => undo(task)}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
+        </AnimatePresence>
+      </div>
+    </Lazy>
   );
 }
 
@@ -246,6 +307,31 @@ export function useTicks(save: SaveTick, initialStates?: Record<string, TickStat
   };
 
   return { states, tick, undo };
+}
+
+/** Keys of tasks ticked here that are done and need nothing more, SETTLE_MS after they were saved. */
+function useSettled(states: Record<string, TickState>, beforeSettle: (key: string) => void): ReadonlySet<string> {
+  const [settled, setSettled] = useState<ReadonlySet<string>>(() => new Set());
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const before = useRef(beforeSettle);
+  before.current = beforeSettle;
+  useEffect(() => {
+    for (const [key, st] of Object.entries(states)) {
+      if (st.kind !== "saved" || (st.doc !== "written" && st.doc !== "none") || timers.current.has(key)) continue;
+      timers.current.set(
+        key,
+        setTimeout(() => {
+          before.current(key);
+          setSettled((s) => new Set(s).add(key));
+        }, SETTLE_MS),
+      );
+    }
+  }, [states]);
+  useEffect(() => {
+    const all = timers.current;
+    return () => all.forEach(clearTimeout);
+  }, []);
+  return settled;
 }
 
 /** "Senast fre 4 dec" / "Senast imorgon" / "Försenad, skulle vara klar …" / "När: till nästa möte" / "Ingen deadline". */
@@ -300,8 +386,8 @@ function TaskRow({
   const locked = task.done || (state !== undefined && state.kind !== "pending" && state.kind !== "error");
 
   return (
-    <li className="border-t border-line px-4 py-3 first:border-t-0 sm:px-6">
-      <div className="grid grid-cols-[auto_1fr] gap-x-3">
+    <PresenceLi data-flip={task.key} data-enter-item>
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 border-t border-line px-4 py-3 sm:px-6 [li:first-child>&]:border-t-0">
         {/* The checkbox's touch target is the whole 44px square around it. */}
         <label htmlFor={id} className="-m-3 flex size-11 cursor-pointer items-start justify-center p-3">
           <Checkbox
@@ -338,7 +424,7 @@ function TaskRow({
           <RowStatus state={state} docUrl={docUrl} onUndo={onUndo} />
         </div>
       </div>
-    </li>
+    </PresenceLi>
   );
 }
 

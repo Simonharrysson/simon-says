@@ -25,7 +25,10 @@ export function PageHeader({
             {back.label}
           </AppLink>
         )}
-        <h1 className={pageTitleClass}>{title}</h1>
+        {/* `page-title`: a link navigation morphs the old page's heading into this one (app/globals.css). */}
+        <h1 className={pageTitleClass} style={{ viewTransitionName: "page-title" }}>
+          {title}
+        </h1>
         {meta && <div className="mt-2">{meta}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-3">{actions}</div>}

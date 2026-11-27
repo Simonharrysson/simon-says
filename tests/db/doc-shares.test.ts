@@ -17,8 +17,7 @@ vi.mock("@/lib/google/client", async (importOriginal) => ({
 }));
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
-  // `list`: 0053 checks whether the address already had access (then the share is not ours to revoke).
-  driveApi: () => ({ permissions: { list: async () => ({ data: { permissions: [] } }), create: async (a: unknown) => (current.perm.push(a), { data: {} }) } }),
+  driveApi: () => ({ permissions: { create: async (a: unknown) => (current.perm.push(a), { data: { id: "perm-1" } }), list: async () => ({ data: { permissions: [] } }) } }),
 }));
 
 const { POST } = await import("@/app/api/meetings/[id]/doc-access/route");

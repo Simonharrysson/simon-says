@@ -5,14 +5,18 @@
 -- 2. meeting_doc_shares records the Drive permission Simon Says created (permission_id) and the
 --    address it went to (email). Revoking removes only that permission, never a share the starter
 --    added by hand: when the address already had access before we shared, `preexisting` is set and
---    nothing is ever removed for it. Rows from before 0053 have neither (permission_id null, not
---    preexisting): those were all made on a new Doc Simon Says created, so revoking falls back to
---    the address's non-owner permission as 0050 did (lib/foretag/reconcile.ts).
+--    nothing is ever removed for it. Rows from before 0053 have no id: their address is filled in
+--    below (the account's address now, the one the share went to unless it changed since), and
+--    revoking removes that address's non-owner permission on the Doc, which Simon Says created and
+--    shared with it (lib/foretag/reconcile.ts). Never the account's later address.
+--    A prepared agenda (0033) keeps the same per member (share_grants), carried to the meeting.
 -- 3. Who sees a meeting also changes outside the app's actions: a person relinked to another
 --    account (join, link by e-mail), an account's e-mail changed, an account deleted. Each queues
 --    the company for reconcile (foretag_reconcile_queue); a deleted account's Drive permissions are
 --    queued by id (doc_share_revocations), since its share rows go with it. The 5-minute cron
---    drains both.
+--    drains both; a queued company is leased while it runs and removed only after it succeeded.
+--    The trigger on auth.users only enqueues and can never fail the auth write (sign-up, e-mail
+--    change, deletion): any error becomes a warning.
 
 -- ---------------------------------------------------------------------------------------------
 -- 1. Handoffs: withdraw by delete
@@ -59,12 +63,25 @@ alter table public.meeting_doc_shares
   add column email text check (email is null or length(email) between 3 and 320),
   add column preexisting boolean not null default false;
 
+-- Rows from before 0053: the address the share went to, as far as we know it now.
+update public.meeting_doc_shares s set email = lower(u.email)
+from auth.users u
+where u.id = s.user_id and s.email is null and s.permission_id is null and u.email is not null
+  and length(u.email) between 3 and 320;
+
+-- A prepared agenda's shares (0033 shared_with), per member: { "<user id>": { "email", "permission_id" } }.
+alter table public.prepared_agendas
+  add column share_grants jsonb not null default '{}'::jsonb check (jsonb_typeof(share_grants) = 'object');
+
 -- ---------------------------------------------------------------------------------------------
 -- 3. Queues for changes made outside the app's actions (service role only)
 
 create table public.foretag_reconcile_queue (
   org_id uuid primary key references public.orgs (id) on delete cascade,
-  queued_at timestamptz not null default now()
+  -- Bumped by every new change, so a run that started before it doesn't remove it.
+  queued_at timestamptz not null default now(),
+  -- A run in progress holds it until then; past it, the next cron takes it again.
+  leased_until timestamptz
 );
 alter table public.foretag_reconcile_queue enable row level security;
 revoke all on table public.foretag_reconcile_queue from anon, authenticated, service_role;
@@ -89,28 +106,29 @@ language sql volatile security definer set search_path = ''
 as $$
   insert into public.foretag_reconcile_queue (org_id)
   select o.id from public.orgs o where o.id = p_org and o.kind = 'foretag'
-  on conflict (org_id) do nothing;
+  on conflict (org_id) do update set queued_at = now(), leased_until = null;
 $$;
 revoke all on function public.queue_foretag_reconcile(uuid) from public, anon, authenticated;
 
--- A person linked, unlinked, relinked, moved or deleted.
+-- A person linked, unlinked, relinked, moved or deleted (also when an account is deleted: its
+-- link is cleared). Enqueue only, never failing the write: any error is a warning.
 create function public.people_queue_reconcile()
 returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 begin
-  if tg_op = 'DELETE' then
-    if old.member_user_id is not null then perform public.queue_foretag_reconcile(old.org_id); end if;
-    return old;
-  end if;
-  if tg_op = 'INSERT' then
-    if new.member_user_id is not null then perform public.queue_foretag_reconcile(new.org_id); end if;
-    return new;
-  end if;
-  if new.member_user_id is distinct from old.member_user_id or new.group_id is distinct from old.group_id then
-    perform public.queue_foretag_reconcile(new.org_id);
-  end if;
-  return new;
+  begin
+    if tg_op = 'DELETE' then
+      if old.member_user_id is not null then perform public.queue_foretag_reconcile(old.org_id); end if;
+    elsif tg_op = 'INSERT' then
+      if new.member_user_id is not null then perform public.queue_foretag_reconcile(new.org_id); end if;
+    elsif new.member_user_id is distinct from old.member_user_id or new.group_id is distinct from old.group_id then
+      perform public.queue_foretag_reconcile(new.org_id);
+    end if;
+  exception when others then
+    raise warning 'people_queue_reconcile: % (%)', sqlerrm, sqlstate;
+  end;
+  return case when tg_op = 'DELETE' then old else new end;
 end;
 $$;
 revoke all on function public.people_queue_reconcile() from public, anon, authenticated;
@@ -119,17 +137,22 @@ create trigger people_queue_reconcile
   after insert or update of member_user_id, group_id or delete on public.people
   for each row execute function public.people_queue_reconcile();
 
--- An account's e-mail changed: every company it belongs to.
+-- An account's e-mail changed: every company it belongs to. Enqueue only, and never in the way of
+-- the auth write: any error is a warning (the next change or cron run catches up).
 create function public.users_email_queue_reconcile()
 returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 begin
   if new.email is distinct from old.email then
-    insert into public.foretag_reconcile_queue (org_id)
-    select o.id from public.org_members m join public.orgs o on o.id = m.org_id and o.kind = 'foretag'
-    where m.user_id = new.id
-    on conflict (org_id) do nothing;
+    begin
+      insert into public.foretag_reconcile_queue (org_id)
+      select o.id from public.org_members m join public.orgs o on o.id = m.org_id and o.kind = 'foretag'
+      where m.user_id = new.id
+      on conflict (org_id) do update set queued_at = now(), leased_until = null;
+    exception when others then
+      raise warning 'users_email_queue_reconcile: % (%)', sqlerrm, sqlstate;
+    end;
   end if;
   return new;
 end;
@@ -147,13 +170,18 @@ returns trigger
 language plpgsql security definer set search_path = ''
 as $$
 begin
-  if old.permission_id is not null and not exists (select 1 from auth.users u where u.id = old.user_id) then
-    insert into public.doc_share_revocations (doc_id, owner_user_id, permission_id)
-    select mt.doc_id, mt.started_by, old.permission_id
-    from public.meetings mt
-    join public.orgs o on o.id = mt.org_id and o.kind = 'foretag'
-    where mt.id = old.meeting_id and mt.doc_id is not null and mt.started_by is not null and mt.started_by <> old.user_id;
-  end if;
+  -- Part of an account deletion: never in its way (any error is a warning).
+  begin
+    if old.permission_id is not null and not exists (select 1 from auth.users u where u.id = old.user_id) then
+      insert into public.doc_share_revocations (doc_id, owner_user_id, permission_id)
+      select mt.doc_id, mt.started_by, old.permission_id
+      from public.meetings mt
+      join public.orgs o on o.id = mt.org_id and o.kind = 'foretag'
+      where mt.id = old.meeting_id and mt.doc_id is not null and mt.started_by is not null and mt.started_by <> old.user_id;
+    end if;
+  exception when others then
+    raise warning 'doc_share_queue_revocation: % (%)', sqlerrm, sqlstate;
+  end;
   return old;
 end;
 $$;

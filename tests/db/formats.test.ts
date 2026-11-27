@@ -131,7 +131,7 @@ describe.skipIf(!hasLocalSupabase)("meeting formats schema (0023, 0024)", () => 
     const kinds = [
       "tick_ok", "tick_failed", "tick_conflict", "doc_paused", "reconnect", "consent", "alarm", "started",
       "ended", "abandoned", "resumed", "test_started", "paused", "unpaused", "name_round", "final_without_claude",
-      "agenda_anchored", "format_learned", "followup_prefilled", "checkin",
+      "agenda_anchored", "format_learned", "followup_prefilled", "checkin", "summary", "end_tasks", "task_setting",
     ];
     for (const kind of kinds) {
       const { error } = await adminClient().from("meeting_events").insert({ meeting_id: meetingId, kind });

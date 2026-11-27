@@ -125,6 +125,28 @@ wipe). Elsewhere: listening ring on the mic, name plates dropping in.
 `prefers-reduced-motion` turns all of it off (one global rule at the end of `globals.css`, plus
 `motion-reduce:` on the mic ring); content is always visible without animation.
 
+**App motion** (components/motion, values in lib/motion.ts; springs also as CSS `linear()`
+tokens `--ease-spring` / `--ease-press`). Fast springs, never blocking a click:
+- *Sliders*: the top rail's pill and the förening tabs' underline slide to the clicked item at
+  once; a hover pill follows the mouse (mouse only). Server HTML keeps the plain `aria-current`
+  look until measured.
+- *Entrances*: on a client navigation, back/forward or a tab switch, the content that replaces
+  the skeleton (cards `data-slot="card"`, alerts, `data-enter-item`) rises 14 px, fades in and
+  comes into focus from a 4 px blur, 40 ms apart (WAAPI, `<Enter>` / `useEntrance`). A page load
+  (hydration) never animates its first paint. Counts ("2 beslut · 5 uppgifter", "3 öppna
+  uppgifter") count up once with them (`<CountUp>`, fixed-width digits; screen readers get the
+  final text). Progress bars fill from empty on a client mount (`<ProgressFill>`, clip-path).
+- *Lists*: rows open in and close out on height + opacity (`<Presence>` / `<PresenceLi>` under `<Lazy>`, motion
+  `domMin` loaded after hydration); reorders slide (`useFlip`). A task done on /hem closes out
+  2.5 s after "Klar" (rows that still ask for something stay); until motion's features have
+  loaded, new rows mount visible. The page heading crossfades into
+  the next page's (`page-title` view transition).
+- *Press*: `press` (controls, 98 %) and `press-row` (rows, 99 %), on `scale`. *Lift*: clickable
+  rows and cards rise 1 px onto `--shadow-lift` under a mouse (`lift`); static panels don't
+  (no false click affordance).
+- *Focus*: a task row that closes hands focus to the next row's checkbox (or the heading).
+Under reduced motion every one of these is instant (motion's transitions get duration 0).
+
 **Browser surfaces.** Themed selection, focus ring (2px blue, offset 2; inputs get a 2px blue
 ring outside a 1px gap), caret, scrollbars.
 
@@ -386,10 +408,16 @@ Building blocks (usable on their own):
   När / Klart när ("saknas" in grey italics when missing). A task that lacks something shows one calm
   question ("Vem ansvarar och när ska det vara klart?" or "Hur vet ni att det är klart?") and "Fråga nu",
   which makes the question big (blue wash) until "Klar". A badge counts what is left to ask; no dots.
-- `EndTasksDialog {open, tasks, onConfirm}` — Avsluta when the förening requires Vem, När and Klart när
-  and tasks lack something: each is completed inline (only its missing fields) or "Lämna som det är";
-  "Avsluta mötet" is enabled once all are handled, "Fortsätt mötet" is first and focused. A line a
-  person edited in the Doc can only be left as it is. Only the live page's Avsluta asks: the org page's
+- `EndTasksDialog {open, tasks, owners?, setAsking?, onConfirm}` — Avsluta when the förening asks for Vem,
+  När and Klart när and tasks lack something. A gentle offer, never a gate: each task can be completed
+  inline (only its missing fields; Enter saves, or names and focuses what is still empty; Vem and När
+  suggest via a datalist, never prefilled; typed answers survive Esc / Fortsätt mötet) or
+  "Lämna som det är"; "Avsluta ändå" ends at once (it says "Avsluta mötet" once all are handled), typed
+  but unsaved fields included; "Fortsätt mötet" is first and focused. No counters or pressure copy.
+  Admins (`setAsking`) get a small "Fråga inte igen i den här föreningen" link that turns the setting
+  off, replaced by "Vi frågar inte igen …" with **Ångra** (inside the modal; focus moves to Ångra, and
+  the message alone is a live region). A line a person edited in
+  the Doc can only be left as it is. Counts only are logged (meeting_events `end_tasks`, `task_setting`). Only the live page's Avsluta asks: the org page's
   end, the resume screen's end and the automatic ends never do.
 - `ResumeMeeting {startedAt, orgName, onResume, onEnd?, resuming?}` — "Fortsätt mötet"; "Avsluta mötet" asks first.
 - `LiveDialog` — the shared confirm dialog, a shadcn Dialog opened through a `LiveDialogHandle` ref
