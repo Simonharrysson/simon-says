@@ -15,6 +15,7 @@ export function MeetingEnded({
   durationSeconds,
   finalizing,
   orgHref,
+  meetingHref,
   autoStopped,
   stopReason,
   shareFailed,
@@ -31,6 +32,8 @@ export function MeetingEnded({
   durationSeconds: number;
   finalizing?: boolean;
   orgHref: string;
+  /** The meeting's page in the app (its decisions and tasks): the way on once the notes are done. */
+  meetingHref?: string | null;
   /** Ended by a limit rather than by a person. */
   autoStopped?: boolean;
   /** Which limit (heartbeat / token refusal reason), for the copy (C9). */
@@ -142,9 +145,15 @@ export function MeetingEnded({
             {tp("toSummary")}
           </ButtonLink>
         )}
-        <ButtonLink href={orgHref} variant="ghost" size="lg">
-          {privat ? privat.backLabel : t("backToOrg")}
-        </ButtonLink>
+        {!privat && meetingHref && !finalizing ? (
+          <ButtonLink href={meetingHref} variant={docUrl ? "secondary" : "primary"} size="lg">
+            {t("toMeeting")}
+          </ButtonLink>
+        ) : (
+          <ButtonLink href={orgHref} variant="ghost" size="lg">
+            {privat ? privat.backLabel : t("backToOrg")}
+          </ButtonLink>
+        )}
       </div>
     </section>
   );

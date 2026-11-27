@@ -871,6 +871,7 @@ const render: Record<string, () => ReactNode> = {
           />
         }
         formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
+        tabs={{ active: "moten", href: orgTabsHref }}
         actions={actions}
       />
     </AppChrome>
@@ -893,6 +894,7 @@ const render: Record<string, () => ReactNode> = {
           />
         }
         formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
+        tabs={{ active: "moten", href: orgTabsHref }}
         actions={actions}
       />
     </AppChrome>
@@ -1006,7 +1008,6 @@ const render: Record<string, () => ReactNode> = {
     <AppChrome>
       <AccountView
         email="anna.berg@example.com"
-        userId={ME}
         signOut={noopAction}
         emailPrefs={{ allOff: false, off: ["invite"] }}
         saveEmailPrefs={fakeSave}
@@ -1018,7 +1019,6 @@ const render: Record<string, () => ReactNode> = {
     <AppChrome>
       <AccountView
         email="anna.berg@example.com"
-        userId={ME}
         signOut={noopAction}
         emailPrefs={{ allOff: true, off: ["invite"] }}
         saveEmailPrefs={fakeSave}
@@ -1028,14 +1028,13 @@ const render: Record<string, () => ReactNode> = {
   ),
   "account-mail-error": () => (
     <AppChrome>
-      <AccountView email="anna.berg@example.com" userId={ME} signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} saveLocale={noopAction} />
+      <AccountView email="anna.berg@example.com" signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} saveLocale={noopAction} />
     </AppChrome>
   ),
   "account-mail-save-fails": () => (
     <AppChrome>
       <AccountView
         email="anna.berg@example.com"
-        userId={ME}
         signOut={noopAction}
         emailPrefs={{ allOff: false, off: [] }}
         saveEmailPrefs={async () => false}

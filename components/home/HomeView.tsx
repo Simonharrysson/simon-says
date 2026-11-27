@@ -1,5 +1,6 @@
 import { useLocale, useTranslations } from "next-intl";
 import { Banner } from "@/components/ui/Banner";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconArrowRight } from "@/components/ui/icons";
 import { ListRow } from "@/components/ui/ListRow";
@@ -16,6 +17,7 @@ export function HomeView({
   tasks,
   recent,
   unlinked,
+  email,
   docs,
   today,
   save,
@@ -25,6 +27,8 @@ export function HomeView({
   tasks: MyTask[];
   recent: RecentMeeting[];
   unlinked: { id: string; name: string }[];
+  /** The user's sign-in address: what an admin writes next to their name to link them. */
+  email?: string | null;
   docs: Record<string, string>;
   today: string;
   save?: SaveTick;
@@ -32,6 +36,7 @@ export function HomeView({
   initialShowDone?: boolean;
 }) {
   const t = useTranslations("home");
+  const common = useTranslations("common");
   const locale = useLocale() === "en" ? "en" : "sv";
   const meetingHrefs: Record<string, string> = {};
   for (const task of tasks) {
@@ -42,13 +47,30 @@ export function HomeView({
   return (
     <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-10 px-gutter">
       <div className="flex flex-col gap-4">
-        <PageHeader title={t("title")} meta={<p className="max-w-[34rem] text-ink-2">{t("intro")}</p>} />
+        <PageHeader title={t("title")} />
         {unlinked.length > 0 && (
-          <Banner tone="info" live={false} title={t("unlinkedTitle", { count: unlinked.length })}>
-            <p>{t("unlinkedText", { names })}</p>
+          <Banner
+            tone="info"
+            live={false}
+            title={t("unlinkedTitle", { count: unlinked.length })}
+            action={
+              email ? (
+                <CopyButton value={email} label={t("copyEmail")} copiedLabel={common("copied")} copiedText={t("emailCopied")} failedText={t("emailCopyManual")} />
+              ) : undefined
+            }
+          >
+            <p>{email ? t("unlinkedTextEmail", { names, email }) : t("unlinkedText", { names })}</p>
           </Banner>
         )}
-        <MyTasks tasks={tasks} today={today} docs={docs} meetingHrefs={meetingHrefs} save={save} initialStates={initialStates} initialShowDone={initialShowDone} />
+        <section aria-labelledby="my-tasks-title" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 id="my-tasks-title" className="text-lg tracking-[-0.02em]">
+              {t("tasksTitle")}
+            </h2>
+            <p className="max-w-[34rem] text-ink-2">{t("intro")}</p>
+          </div>
+          <MyTasks tasks={tasks} today={today} docs={docs} meetingHrefs={meetingHrefs} save={save} initialStates={initialStates} initialShowDone={initialShowDone} />
+        </section>
       </div>
 
       {recent.length === 0 ? (

@@ -66,7 +66,8 @@ test("Mina uppgifter: my tasks from two föreningar and Privat; tick one → ✓
   must("privat task", await db.from("context_tasks").insert({ context_id: ctx.id, meeting_id: rec.id, text: "Läsa kap 4" }));
 
   const { page } = await signedIn(email, "/hem");
-  await expect(page.getByRole("heading", { name: "Mina uppgifter", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hem", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mina uppgifter", level: 2 })).toBeVisible();
   const list = page.getByRole("list", { name: "Mina uppgifter" });
   await expect(list).toContainText("Boka lokal");
   await expect(list).toContainText("Skicka budget");

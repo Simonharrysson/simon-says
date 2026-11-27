@@ -49,6 +49,7 @@
   },
   "meeting": {
     "googleDoc": "Google Doc",
+    "when": "{day} at {time}",
     "pendingTitle": "The summary is on its way",
     "pendingText": "It's written about a minute after the recording ends and also arrives by e-mail. Reload the page in a moment.",
     "noneTitle": "Nothing to summarise",
@@ -94,6 +95,10 @@
   },
   "live": {
     "consentFact": "The notes are kept only for you in Personal. After the recording you get a summary by e-mail.",
+    "consentTitle": "New recording",
+    "start": "Record",
+    "settings": "Microphone and settings",
+    "silent": "The microphone hasn’t heard anything yet. Say something, or test it under Microphone and settings.",
     "contextFirst": "Choose what the recording is about first.",
     "endedFinalizing": "The recording lasted {duration}. The notes are getting a final pass. The summary arrives by e-mail in about a minute.",
     "endedDone": "The recording lasted {duration}. The notes are done. The summary arrives by e-mail in about a minute.",

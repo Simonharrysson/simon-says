@@ -114,7 +114,8 @@
     "doneShared": "Ni pratade i {duration}. Anteckningarna är färdiga.{shared}",
     "done": "Ni pratade i {duration}. Anteckningarna är färdiga{shared}.",
     "openDoc": "Öppna dokumentet",
-    "backToOrg": "Tillbaka till föreningen"
+    "backToOrg": "Tillbaka till föreningen",
+    "toMeeting": "Se beslut och uppgifter"
   },
   "speakers": {
     "title": "Talare",

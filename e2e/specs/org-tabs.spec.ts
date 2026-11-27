@@ -73,6 +73,8 @@ test("meeting list: titles, counts, five shown, Testmöten folded @phone", async
   const first = list.getByRole("listitem").nth(0);
   await expect(first).toContainText("Budget och prova-på-kväll");
   await expect(first).toContainText("1 beslut · 2 uppgifter");
+  // A finished meeting's title opens its page in the app.
+  await expect(first.getByRole("link", { name: "Budget och prova-på-kväll" })).toHaveAttribute("href", `/orgs/${org.id}/mote/${ids[0]}`);
   await expect(list.getByRole("listitem").nth(1)).toContainText("Styrelsemöte november");
   await expect(list.getByRole("listitem").nth(2)).toContainText("Ekonomi och spelkväll");
   // No Testmöte among them.

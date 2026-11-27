@@ -1,6 +1,6 @@
 {
   "connectTitle": "Calendar",
-  "connectIntro": "Connect your Google Calendar and Simon Says shows the association's upcoming meetings under Start meeting, and fills in the meeting's name and who is invited when you start. Simon Says only reads, and only the calendar the association has chosen.",
+  "connectIntro": "Connect your Google Calendar and Simon Says shows the association's upcoming meetings on the Meetings tab, under From the calendar, and fills in the meeting's name and who is invited when you start. Simon Says only reads, and only the calendar the association has chosen.",
   "connect": "Connect calendar",
   "connected": "Your Google Calendar is connected (read only).",
   "disconnect": "Disconnect",
@@ -15,7 +15,7 @@
     "fran": "The calendar is disconnected. Our copy of the access is deleted."
   },
   "orgTitle": "Meeting calendar",
-  "orgIntro": "Choose the calendar that holds the association's meetings, for example a shared calendar. Members who have connected their own calendar and can see this one see the upcoming meetings under Start meeting.",
+  "orgIntro": "Choose the calendar that holds the association's meetings, for example a shared calendar. Members who have connected their own calendar and can see this one see the upcoming meetings on the Meetings tab, under From the calendar.",
   "orgConnectFirst": "Connect your calendar first, then you can choose among your calendars.",
   "orgUnavailable": "We could not read your calendars right now. Try again in a little while.",
   "orgNoShared": "You have no shared calendars. Create a calendar for the association in Google Calendar and share it with the members, then choose it here. Your own main calendar can't be chosen.",

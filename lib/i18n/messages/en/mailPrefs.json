@@ -14,9 +14,9 @@
       "description": "The summary after something you recorded in Personal: decisions, tasks and what has happened since last time."
     }
   },
-  "allOff": "No e-mail at all",
-  "allOffOn": "Simon Says sends you no e-mail. The choices above are kept for when you turn this off.",
-  "allOffOff": "Turns off everything above at once.",
+  "allOff": "Turn off all e-mail",
+  "allOffOn": "You get no e-mail from Simon Says. The choices above are kept until you turn e-mail back on.",
+  "allOn": "Turn e-mail back on",
   "saved": "Saved",
   "saveFailed": "Couldn't save. Try again.",
   "title": "E-mail from Simon Says",

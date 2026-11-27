@@ -223,6 +223,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
       notice={null}
       logoUrl={DEMO_LOGO}
       komIgang={<KomIgangCard orgId={ORG_ID} state={{ done: ["namn", "styrelsen"], skipped: ["mapp"], completedAt: null, dismissedAt: null }} onDismiss={async () => null} />}
+      tabs={{ active: "moten", href: (tab) => (tab === "oversikt" ? "/design?vy=org-overview" : tab === "installningar" ? "/design?vy=org-settings" : "/design?vy=org-kom-igang") }}
       actions={orgActions}
     />
   ),

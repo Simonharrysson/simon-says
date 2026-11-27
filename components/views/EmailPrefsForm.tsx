@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { IconCheck } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -14,9 +15,9 @@ import {
 export type SaveEmailPrefs = (prefs: EmailPrefs) => Promise<boolean>;
 
 /**
- * One switch per kind of mail plus "Inga mejl alls". Each change saves at once (no Save button)
- * and says "Sparat"; a failed save puts the switch back and says so. "Inga mejl alls" greys the
- * categories out but keeps their values, so turning it off again restores them.
+ * One switch per kind of mail, and under them "Stäng av alla mejl". Each change saves at once (no
+ * Save button) and says "Sparat"; a failed save puts the switch back and says so. "Stäng av alla
+ * mejl" greys the categories out but keeps their values, so turning mail back on restores them.
  * Used by Konto (signed in) and /mejl (the signed link in a mail).
  */
 export function EmailPrefsForm({
@@ -68,7 +69,7 @@ export function EmailPrefsForm({
         {order.map((category) => {
           const id = `${idPrefix}-${category}`;
           return (
-            <li key={category} className="py-3 first:pt-0">
+            <li key={category} className="py-3 first:pt-0 last:pb-0">
               <SwitchRow
                 id={id}
                 title={t(`categories.${category}.label`)}
@@ -81,17 +82,13 @@ export function EmailPrefsForm({
             </li>
           );
         })}
-        <li className="py-3 last:pb-0">
-          <SwitchRow
-            id={`${idPrefix}-all-off`}
-            title={t("allOff")}
-            checked={prefs.allOff}
-            onChange={(allOff) => apply({ allOff, off: prefs.off })}
-          >
-            {prefs.allOff ? t("allOffOn") : t("allOffOff")}
-          </SwitchRow>
-        </li>
       </ul>
+      <div className="flex flex-col items-start gap-1 border-t border-line pt-3">
+        {prefs.allOff && <p className="text-sm text-ink-2">{t("allOffOn")}</p>}
+        <Button variant="ghost" size="sm" className="-mx-2" onClick={() => apply({ allOff: !prefs.allOff, off: prefs.off })}>
+          {prefs.allOff ? t("allOn") : t("allOff")}
+        </Button>
+      </div>
       <p className="min-h-6 text-sm" role="status" aria-live="polite">
         {status === "saved" && (
           <span className="inline-flex items-center gap-1 font-semibold text-green">

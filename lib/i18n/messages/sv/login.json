@@ -7,7 +7,7 @@
   "google": "Logga in med Google",
   "googleRetry": "Försök igen med Google",
   "onlyOwnDocs": "Vi får bara skapa och redigera <strong>de dokument Simon Says själv skapar</strong>. Resten av din Drive ser vi inte.",
-  "onlyStarter": "Bara den som startar mötet behöver ett konto. Övriga i rummet är bara namn i en lista.",
+  "onlyStarter": "Alla i rummet kan vara med utan konto. Med konto får du dina uppgifter och sammanfattningar.",
   "privacy": "Läs hur vi hanterar ljud, text och konton i <link>integritetsinformationen</link>.",
   "scopeCaption": "När Google frågar, kryssa i den här rutan:",
   "scopeRow": "Visa, redigera, skapa och radera <em>endast de specifika Google Drive-filer som du använder med den här appen</em>",
