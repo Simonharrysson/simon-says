@@ -58,7 +58,10 @@ test("Förening: turn the tree on, draw who reports to whom, a meeting for Hedda
   const reportTo = async (name: string, manager: string) => {
     const managerId = await personId(org.id, manager);
     await admin.getByLabel(`${name} rapporterar till`).selectOption(managerId);
-    await expect.poll(async () => (await db.from("people").select("group_id").eq("org_id", org.id).eq("name", name).single()).data?.group_id, { timeout: 15_000 }).toBe(await teamOf(manager));
+    // The manager's team is made by this very change: compare inside the poll.
+    await expect
+      .poll(async () => (await db.from("people").select("group_id").eq("org_id", org.id).eq("name", name).single()).data?.group_id === (await teamOf(manager)), { timeout: 15_000 })
+      .toBe(true);
   };
   const teamOf = async (manager: string) =>
     (await db.from("groups").select("id").eq("head_person_id", await personId(org.id, manager)).is("archived_at", null).maybeSingle()).data?.id ?? "none";
