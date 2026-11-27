@@ -95,5 +95,6 @@ export function isSignedInArea(pathname: string): boolean {
 
 export const config = {
   // Skip static assets (incl. public/pcm-worklet.js), the OAuth callback (it sets the session itself) and cron/health.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback|api/health|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js)$).*)"],
+  // The MCP server and its OAuth endpoints (Bearer tokens, no session cookies) skip it too.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|auth/callback|api/health|api/mcp|api/oauth/|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js)$).*)"],
 };
