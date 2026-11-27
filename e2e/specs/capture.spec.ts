@@ -143,9 +143,30 @@ test("capture: surfaces, vitals, switch timings", async ({ browser, db, seedOrg,
     await rail.getByRole("link", { name }).hover();
     await page.waitForTimeout(300);
     const t0 = Date.now();
-    await rail.getByRole("link", { name }).click();
+    // In the page: first feedback (a skeleton, or the page itself) and the heading, on the page's
+    // own clock. A full page load ends the evaluate, so it falls back to the test's clock.
+    const inPage = page
+      .evaluate(
+        ([name, heading]) =>
+          new Promise<{ feedbackMs: number; contentMs: number }>((resolve) => {
+            const link = [...document.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Huvudmeny"] a')].find((a) => a.textContent?.trim() === name)!;
+            const t = performance.now();
+            let feedback = -1;
+            const iv = setInterval(() => {
+              const now = Math.round(performance.now() - t);
+              if (feedback < 0 && document.querySelector('[aria-busy="true"]')) feedback = now;
+              if ([...document.querySelectorAll("h1")].some((h) => h.textContent?.trim() === heading)) {
+                clearInterval(iv);
+                resolve({ feedbackMs: feedback < 0 ? now : feedback, contentMs: now });
+              }
+            }, 4);
+            link.click();
+          }),
+        [name, heading],
+      )
+      .catch(() => null);
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
-    return { visibleMs: Date.now() - t0 };
+    return { visibleMs: Date.now() - t0, ...((await inPage) ?? { fullLoad: true }) };
   };
   report["nav:hem"] = await timeNav("Hem", "Mina uppgifter");
   report["nav:foreningar"] = await timeNav("Föreningar", "Föreningar");
