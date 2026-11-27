@@ -48,7 +48,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { OrgBoard } from "@/components/views/OrgBoard";
 import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
 import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
-import { orgTab, orgTabHref, settingsSection } from "@/lib/orgs/tabs";
+import { orgTab, orgTabHref, sectionForCode } from "@/lib/orgs/tabs";
 import { boardRows } from "@/lib/people/board";
 import {
   addPersonAction,
@@ -159,12 +159,12 @@ export default async function OrgPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; del?: string; import?: string; drive?: string; kalender?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string }>;
 }) {
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("org");
-  const { fel, klart, flik, del, import: openImport, drive, kalender } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive, kalender } = await searchParams;
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
@@ -251,7 +251,7 @@ export default async function OrgPage({
             />
           ) : undefined,
       }}
-      settingsSection={settings ? settingsSection({ del, noticeCode: notice?.code }) : undefined}
+      settingsSection={settings ? (sectionForCode(notice?.code) ?? undefined) : undefined}
       boardList={
         settings
           ? (memberControls, linkActions) => (

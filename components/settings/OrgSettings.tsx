@@ -21,7 +21,7 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
   return (
     <OrgFlagsProvider org={org} updateOrg={actions.updateOrg}>
       <SettingsSections
-        initial={props.settingsSection ?? "foreningen"}
+        notice={props.settingsSection ?? null}
         sections={{
           foreningen: (
             <>

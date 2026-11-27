@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Activity, createContext, useContext, useEffect, useState, type MouseEvent, type ReactNode } from "react";
-import { HASH_SECTIONS, isSettingsSection, SETTINGS_SECTIONS, type SettingsSectionId } from "@/lib/orgs/tabs";
+import { HASH_SECTIONS, isSettingsSection, SETTINGS_SECTIONS, settingsSection, type SettingsSectionId } from "@/lib/orgs/tabs";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,9 +13,10 @@ import { cn } from "@/lib/utils";
  * (`?flik=installningar&del=moten`, pushState: deep-linkable, reloadable, back works). A sidebar
  * from 1024 px, a row of chips below.
  *
- * Which section shows: `?del=` when the URL has one; otherwise the last one chosen here (the tab
- * link carries no `del`, so coming back to the tab keeps it), or `initial` from the server (a
- * form's message opens the section it is about; re-synced whenever the server's choice changes).
+ * Which section shows: `?del=` when the URL has one; otherwise the last one shown here (the tab
+ * link carries no `del`, so coming back to the tab keeps it). A form's message (`?fel=`/`?klart=`,
+ * the server redirects to the bare page) opens the section it is about: `notice`, followed
+ * whenever the server sends a new one.
  */
 
 const SectionNav = createContext<(id: SettingsSectionId) => void>(() => {});
@@ -23,16 +24,16 @@ const SectionNav = createContext<(id: SettingsSectionId) => void>(() => {});
 /** Show another section (e.g. Röster's "Lägg till styrelsen" → Styrelsen och medlemmar). */
 export const useSettingsSection = () => useContext(SectionNav);
 
-export function SettingsSections({ initial, sections }: { initial: SettingsSectionId; sections: Record<SettingsSectionId, ReactNode> }) {
+export function SettingsSections({ notice = null, sections }: { notice?: SettingsSectionId | null; sections: Record<SettingsSectionId, ReactNode> }) {
   const t = useTranslations("org.settings");
   const params = useSearchParams();
   const del = params.get("del");
-  const [kept, setKept] = useState(initial);
-  const [seenInitial, setSeenInitial] = useState(initial);
+  const [kept, setKept] = useState<SettingsSectionId>(() => settingsSection({ del, notice }));
+  const [seenNotice, setSeenNotice] = useState(notice);
   const [switched, setSwitched] = useState(false);
-  if (seenInitial !== initial) {
-    setSeenInitial(initial);
-    setKept(initial);
+  if (seenNotice !== notice) {
+    setSeenNotice(notice);
+    if (notice && !isSettingsSection(del)) setKept(notice);
   }
   if (isSettingsSection(del) && del !== kept) setKept(del);
   const active: SettingsSectionId = isSettingsSection(del) ? del : kept;

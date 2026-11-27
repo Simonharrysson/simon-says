@@ -52,9 +52,10 @@ export function sectionForCode(code: string | null | undefined): SettingsSection
   return null;
 }
 
-export function settingsSection(input: { del?: string | null; noticeCode?: string | null }): SettingsSectionId {
+/** The section to open: `?del=`, else the one a form's message is about (`notice`, or its code), else Föreningen. */
+export function settingsSection(input: { del?: string | null; notice?: SettingsSectionId | null; noticeCode?: string | null }): SettingsSectionId {
   if (isSettingsSection(input.del)) return input.del;
-  return sectionForCode(input.noticeCode) ?? "foreningen";
+  return input.notice ?? sectionForCode(input.noticeCode) ?? "foreningen";
 }
 
 /** The link to one section of Inställningar. */

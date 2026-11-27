@@ -60,8 +60,9 @@ test("a new user signs in, creates a förening and goes through Kom igång @phon
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(orgName);
   await expect(page.getByText("Du är admin")).toBeVisible();
-  // The board person is on the förening's board list (Inställningar).
+  // The board person is on the förening's board list (Inställningar → Styrelsen och medlemmar).
   await page.getByRole("navigation", { name: "Föreningens vyer" }).getByRole("link", { name: "Inställningar" }).click();
+  await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Styrelsen och medlemmar" }).click();
   await expect(page.getByRole("list", { name: "Styrelsen" })).toContainText("Anna Berg");
   await expectAccessible(page);
 });

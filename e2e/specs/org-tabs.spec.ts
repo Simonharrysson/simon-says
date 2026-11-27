@@ -26,9 +26,17 @@ test("tabs: a member sees Möten and Översikt, an admin also Inställningar @ph
   await tabs.getByRole("link", { name: "Inställningar" }).click();
   await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar$`));
   await expect(tabs.getByRole("link", { name: "Inställningar" })).toHaveAttribute("aria-current", "page");
-  for (const name of ["Styrelsen och medlemmar", "Bjud in", "Mötesformat", "Allmänt", "Radera föreningen"]) {
-    await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  }
+  // The sections' sub-nav; Föreningen opens first.
+  const sections = page.getByRole("navigation", { name: "Inställningarnas delar" });
+  await expect(sections.getByRole("link")).toHaveText(["Föreningen", "Styrelsen och medlemmar", "Möten", "Efter mötet", "Radera"]);
+  await expect(sections.getByRole("link", { name: "Föreningen" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("heading", { name: "Namn, logga och om oss", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mötesformat", exact: true })).toHaveCount(0);
+  await expectNoOverflow(page);
+
+  await sections.getByRole("link", { name: "Styrelsen och medlemmar" }).click();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar&del=styrelsen$`));
+  await expect(page.getByRole("heading", { name: "Styrelsen och medlemmar", exact: true })).toBeVisible();
   // One board list: the named person and the two accounts (nobody has named them yet).
   const board = page.getByRole("list", { name: "Styrelsen" });
   await expect(board.getByRole("listitem")).toHaveCount(3);
@@ -36,9 +44,10 @@ test("tabs: a member sees Möten and Översikt, an admin also Inställningar @ph
   await expectAccessible(page);
   await expectNoOverflow(page);
 
-  // An old link to the settings' place on the long page lands on the tab.
+  // An old link to the settings' place on the long page lands on the section that holds it now.
   await page.goto(`${org.url}#sammanfattning`);
-  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar#sammanfattning$`));
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar&del=efter-motet$`));
+  await expect(page.getByRole("group", { name: "Sammanfattning efter mötet" })).toBeVisible();
 
   // A member: two tabs; ?flik=installningar is the Möten tab for them.
   const other = await signedIn(member, org.url);
@@ -50,6 +59,44 @@ test("tabs: a member sees Möten and Översikt, an admin also Inställningar @ph
   await expect(theirTabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
   await expect(other.page.getByRole("heading", { name: "Radera föreningen" })).toHaveCount(0);
   await expectAccessible(other.page);
+});
+
+test("Inställningar's sections: a deep link opens one, the sub-nav switches at once, back and the tab keep it @phone", async ({ page, seedOrg }) => {
+  const org = await seedOrg({ people: ["Erik Lund"] });
+
+  // A deep link to a section.
+  await page.goto(`${org.url}?flik=installningar&del=moten`);
+  const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
+  const sections = page.getByRole("navigation", { name: "Inställningarnas delar" });
+  await expect(tabs.getByRole("link", { name: "Inställningar" })).toHaveAttribute("aria-current", "page");
+  await expect(sections.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "true");
+  for (const name of ["Mötesformat", "Mötesmapp", "Under mötet", "Röster"]) {
+    await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole("heading", { name: "Radera föreningen" })).toHaveCount(0);
+  await expectAccessible(page);
+
+  // A click shows another section and records it in the URL; back returns.
+  await sections.getByRole("link", { name: "Radera" }).click();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar&del=radera$`));
+  await expect(page.getByRole("heading", { name: "Radera föreningen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mötesformat" })).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL(/del=moten$/);
+  await expect(sections.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("heading", { name: "Mötesformat", exact: true })).toBeVisible();
+
+  // Reloadable.
+  await page.reload();
+  await expect(sections.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "true");
+
+  // Away to Möten and back by the tab: the section is kept.
+  await tabs.getByRole("link", { name: "Möten" }).click();
+  await expect(tabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
+  await tabs.getByRole("link", { name: "Inställningar" }).click();
+  await expect(tabs.getByRole("link", { name: "Inställningar" })).toHaveAttribute("aria-current", "page");
+  await expect(sections.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("heading", { name: "Mötesformat", exact: true })).toBeVisible();
 });
 
 test("meeting list: titles, counts, five shown, Testmöten folded @phone", async ({ page, seedOrg, db }) => {

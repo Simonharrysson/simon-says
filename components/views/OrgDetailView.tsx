@@ -56,7 +56,7 @@ export interface OrgDetailViewProps {
    * member's account controls by user id and the invite link's "Skapa ny länk".
    */
   boardList?: (memberControls: Record<string, ReactNode>, linkActions: ReactNode) => ReactNode;
-  /** Admins: the Inställningar section to open (`settingsSection`, lib/orgs/tabs.ts). */
+  /** Admins: the Inställningar section the page notice is about (`sectionForCode`, lib/orgs/tabs.ts); `?del=` wins. */
   settingsSection?: SettingsSectionId;
   /** The förening's logo (0035), shown next to its name; null: the first letter. */
   logoUrl?: string | null;
