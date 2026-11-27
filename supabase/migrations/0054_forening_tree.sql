@@ -12,8 +12,9 @@
 -- Only an admin turns it on or off (set_org_groups). Turning it on never narrows what a linked
 -- person sees: the first group is created and every linked, unplaced person is placed in it (the
 -- top, which sees everything). Members without a person row are unplaced from then on (the editor
--- says so first). Turning it off is an explicit admin choice that opens every meeting to every
--- member again (the UI asks to confirm); groups and placements are kept for a later turn-on.
+-- says so first). Turning it off is an explicit admin choice that opens every group's meetings to
+-- every member again (the UI asks to confirm), never a Privat möte (still starter + attendees +
+-- admins); groups and placements are kept for a later turn-on.
 --
 -- Depends on 0053 (Företag follow-up): its functions are redefined here with "Företag" widened to
 -- "has the tree" (org_has_tree), bodies otherwise unchanged.
@@ -50,7 +51,7 @@ returns boolean
 language sql stable security definer set search_path = ''
 as $$
   select coalesce((
-    select (o.kind <> 'foretag' and not o.groups_enabled)
+    select (o.kind <> 'foretag' and not o.groups_enabled and not coalesce(p_private, false))
       or public.foretag_rule(p_user, p_org, p_group, p_private, p_started_by, p_attended, m.role = 'admin')
     from public.org_members m
     join public.orgs o on o.id = m.org_id
@@ -59,7 +60,8 @@ as $$
 $$;
 
 -- One join for a meeting of an org without the tree (every förening by default, Privat); only an
--- org with the tree runs the rule.
+-- org with the tree, or a Privat möte, runs the rule. A Privat möte stays starter + attendees +
+-- admins even after a förening turns its groups off (coordinator, PR #45).
 create or replace function public.foretag_can_see(p_user uuid, p_meeting_id uuid)
 returns boolean
 language sql stable security definer set search_path = ''
@@ -71,7 +73,7 @@ as $$
     join public.orgs o on o.id = mt.org_id
     where mt.id = p_meeting_id
       and (
-        (o.kind <> 'foretag' and not o.groups_enabled)
+        (o.kind <> 'foretag' and not o.groups_enabled and not mt.private)
         or public.foretag_rule(
           p_user, mt.org_id, mt.group_id, mt.private, mt.started_by,
           exists (select 1 from public.meeting_attendees a where a.meeting_id = mt.id and a.user_id = p_user),

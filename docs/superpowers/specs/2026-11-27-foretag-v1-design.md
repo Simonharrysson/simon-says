@@ -115,7 +115,7 @@ AI-written task text from a restricted meeting can leak what the owner may not s
 Simon asked for this on 2026-11-27: the same tree, the same visibility rule, opt-in. The calls below are the implementer's and are open for review. A förening may opt in to the same tree, with the same visibility rule and the same task delivery across visibility. It is off by default. A förening without groups behaves exactly as before, and its visibility check keeps the one-join fast path.
 - **Turning it on and off:** an admin uses Inställningar → Styrelsen och medlemmar → Grupper.
   - *Organisera i grupper* creates the top group (default "Styrelsen") and places every linked person in it, so nobody linked sees less. Members without a name in the list are unplaced from then on, and the confirm says how many.
-  - *Sluta använda grupper* opens every meeting to every member again. Groups and places are kept for a later turn-on.
+  - *Sluta använda grupper* opens every group's meetings to every member again. A Privat möte stays starter + attendees + admins (coordinator). Groups and places are kept for a later turn-on.
 - **Shared with Företag:** `orgs.groups_enabled` widens "is a Företag" to "has the tree" (`org_has_tree`) in the predicate and in the group, place and handoff functions. The tree editor (`components/groups/GroupTree`) and `GroupPicker` are shared too.
 - **Förening-specific:**
   - Formats, agenda Docs and "kräv Vem/När/Klart när" stay. An agenda or prepared Doc can be used only for a meeting of the whole förening.

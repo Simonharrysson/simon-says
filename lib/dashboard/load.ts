@@ -58,7 +58,8 @@ export async function loadOverviewInput(db: SupabaseClient, orgId: string): Prom
 
 async function loadCountedMeetings(db: SupabaseClient, orgId: string, columns: string, wholeOrgOnly = false): Promise<DashMeeting[]> {
   const base = db.from("meetings").select(columns).eq("org_id", orgId).eq("is_test", false);
-  const { data, error } = await (wholeOrgOnly ? base.is("group_id", null).eq("private", false) : base)
+  // A Privat möte never counts toward an org-wide output, even after a förening's groups are off.
+  const { data, error } = await (wholeOrgOnly ? base.is("group_id", null).eq("private", false) : base.eq("private", false))
     .in("status", ["done", "abandoned"])
     .order("started_at", { ascending: false })
     .limit(MAX_MEETINGS);

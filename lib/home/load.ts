@@ -82,9 +82,9 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
     .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "sv") : KIND_ORDER[a.kind] - KIND_ORDER[b.kind]));
   // Föreningar and Företag share the note-row path (RLS narrows a Företag to what the user may see).
   const foreningIds = spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => s.id);
-  // Handoffs (0050, 0054) exist only where the tree is or was on: a Företag, a förening with groups.
-  // A förening that turned groups off keeps its approved ones; a plain förening reads none.
-  const foretagIds = spaces.filter((s) => s.tree).map((s) => s.id);
+  // Handoffs (0050, 0054): a Företag, a förening with groups, or one that had them (its Privat
+  // möten still hold tasks). RLS returns none for a förening that never had groups.
+  const foretagIds = spaces.filter((s) => s.kind !== "privat").map((s) => s.id);
   const privat = spaces.find((s) => s.kind === "privat") ?? null;
 
   // Finished meetings per space, newest first (a förening's `title` once 0048 is there: select *).

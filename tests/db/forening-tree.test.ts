@@ -89,11 +89,23 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       }
     });
 
-    it("a stray group or Privat flag on a row narrows nothing while groups are off", async () => {
+    it("a stray group on a row narrows nothing while groups are off", async () => {
       const g = (must("g", await adminClient().from("groups").insert({ org_id: orgId, name: "Grupp" }).select("id").single()) as { id: string }).id;
-      const stray = await meeting(orgId, u.anna, g, { private: true });
+      const stray = await meeting(orgId, u.anna, g);
       const { data } = await u.olle.db.from("meetings").select("id").eq("id", stray);
       expect(data).toEqual([{ id: stray }]);
+    });
+
+    it("groups off: a private meeting is still hidden from a plain member (starter and admins see it)", async () => {
+      const priv = await meeting(orgId, u.jonas, null, { private: true });
+      const sees = async (n: Name) => ((await u[n].db.from("meetings").select("id").eq("id", priv)).data ?? []).length === 1;
+      expect(await sees("olle")).toBe(false);
+      expect(await sees("maja")).toBe(false);
+      expect(await sees("jonas")).toBe(true);
+      expect(await sees("anna")).toBe(true);
+      const viewers = must("viewers", await adminClient().rpc("foretag_viewer_ids", { p_meeting_id: priv })) as string[];
+      expect(viewers.sort()).toEqual([u.anna.id, u.jonas.id].sort());
+      must("cleanup", await adminClient().from("meetings").delete().eq("id", priv));
     });
 
     it("a plain member still edits the list (add, rename, link, delete)", async () => {
@@ -255,7 +267,8 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       const dev = must("dev", await u.anna.db.rpc("set_group", { p_org_id: orgId, p_id: null, p_name: "Utveckling", p_parent: root })) as string;
       expect((await u.anna.db.rpc("set_person_group", { p_person_id: await personId(orgId, "Jonas"), p_group_id: dev })).data).toBe(true);
       const top = await meeting(orgId, u.anna, root);
-      const canSee = async (n: Name) => ((await u[n].db.from("meetings").select("id").eq("id", top)).data ?? []).length === 1;
+      const priv = await meeting(orgId, u.erik, root, { private: true });
+      const canSee = async (n: Name, id = top) => ((await u[n].db.from("meetings").select("id").eq("id", id)).data ?? []).length === 1;
       expect(await canSee("jonas")).toBe(false);
       expect(await canSee("olle")).toBe(false);
 
@@ -263,6 +276,11 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       expect((await u.anna.db.rpc("set_org_groups", { p_org_id: orgId, p_on: false, p_root_name: null })).data).toBe(true);
       expect(await canSee("jonas")).toBe(true);
       expect(await canSee("olle")).toBe(true);
+      // A Privat möte never opens: its starter and the admins only.
+      expect(await canSee("sara", priv)).toBe(false);
+      expect(await canSee("olle", priv)).toBe(false);
+      expect(await canSee("erik", priv)).toBe(true);
+      expect(await canSee("anna", priv)).toBe(true);
 
       expect((await u.anna.db.rpc("set_org_groups", { p_org_id: orgId, p_on: true, p_root_name: "Annat namn" })).data).toBe(true);
       expect(await canSee("jonas")).toBe(false);

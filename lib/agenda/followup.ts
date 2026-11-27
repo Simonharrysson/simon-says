@@ -21,9 +21,10 @@ export type CarryScope = { groupId: string | null } | null;
 /** `query` narrowed to `scope` (unchanged without one). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function inScope<Q>(query: Q, scope: CarryScope | undefined): Q {
-  if (!scope) return query;
+  // A Privat möte is never a source, with or without the tree (it outlives a förening's groups).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const q = (query as any).eq("private", false);
+  if (!scope) return q as Q;
   return (scope.groupId ? q.eq("group_id", scope.groupId) : q.is("group_id", null)) as Q;
 }
 

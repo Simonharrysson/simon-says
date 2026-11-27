@@ -31,11 +31,16 @@ export async function reconcileForetag(orgId: string): Promise<ReconcileResult> 
   const { data: org, error: oe } = await db.from("orgs").select("*").eq("id", orgId).maybeSingle();
   if (oe) throw new Error(`reconcile: org: ${oe.message}`);
   if (!hasTree(org as { kind?: string; groups_enabled?: boolean } | null)) {
-    // A förening that turned its groups off (0054): every member sees every meeting again, so a
-    // task still waiting for approval is read in its meeting. Approved ones stay in Mina uppgifter.
+    // A förening that turned its groups off (0054): a group's meetings are everyone's again, so a
+    // task waiting for approval there is withdrawn (create_task_handoffs withdraws exactly those whose
+    // owner can see the meeting now); one from a Privat möte keeps waiting. Approved ones stay.
     if ((org as { kind?: string } | null)?.kind === "forening") {
-      const { error } = await db.from("task_handoffs").delete().eq("org_id", orgId).eq("status", "pending");
-      if (error) console.error(`reconcile ${orgId}: withdraw handoffs: ${error.message}`);
+      const { data: held, error } = await db.from("task_handoffs").select("meeting_id").eq("org_id", orgId).eq("status", "pending");
+      if (error) console.error(`reconcile ${orgId}: pending handoffs: ${error.message}`);
+      for (const id of new Set(((held ?? []) as { meeting_id: string }[]).map((h) => h.meeting_id))) {
+        const { error: e2 } = await db.rpc("create_task_handoffs", { p_meeting_id: id, p_owners: [] });
+        if (e2) console.error(`reconcile ${orgId}: withdraw handoffs: ${e2.message}`);
+      }
     }
     return result;
   }

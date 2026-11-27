@@ -142,6 +142,8 @@ export async function shareOrgDocsWithNewMember(orgId: string, user: { id: strin
     .eq("org_id", orgId)
     .not("started_by", "is", null)
     .neq("started_by", user.id)
+    // A Privat möte (0050/0054) is never shared on join: starter, attendees and admins only.
+    .eq("private", false)
     .order("started_at", { ascending: false })
     .limit(JOIN_SHARE_LIMIT);
   if (error) {

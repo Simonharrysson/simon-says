@@ -161,7 +161,7 @@
     "onNow": "On: everyone sees their group's meetings and every meeting in the groups below. At Start, you choose who the meeting is for.",
     "turnOff": "Stop using groups",
     "turnOffTitle": "Stop using groups?",
-    "turnOffText": "Every member then sees every meeting again, including the groups' and the private ones. The groups and places are kept if you turn it on again.",
+    "turnOffText": "Every member then sees every group's meetings again. Private meetings stay private: only whoever started them and admins see them. The groups and places are kept if you turn it on again.",
     "turningOff": "Turning off…"
   }
 }

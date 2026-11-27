@@ -75,6 +75,8 @@ interface MeetingForSummary {
   started_by: string | null;
   agenda_roles: Record<string, ItemRole> | null;
   summary_state: SummaryState | null;
+  /** 0050: a Privat möte (starter + attendees + admins), in any org with or once with groups. */
+  private?: boolean | null;
 }
 
 /** Where "Öppna protokollet" goes for this recipient, and the line under it. */
@@ -114,7 +116,7 @@ export async function sendMeetingSummaries(
     "summary: meeting",
     await db
       .from("meetings")
-      .select("id, org_id, status, is_test, doc_id, doc_paused_at, started_at, started_by, agenda_roles, summary_state")
+      .select("id, org_id, status, is_test, doc_id, doc_paused_at, started_at, started_by, agenda_roles, summary_state, private")
       .eq("id", meetingId)
       .maybeSingle(),
   ) as MeetingForSummary | null;
@@ -185,8 +187,9 @@ export async function sendMeetingSummaries(
         // The meeting's group + attendees, only accounts that can see it; neutral wording (no "missed").
         people = foretagSummaryPeople(people, await foretagScope(m.id, m.org_id));
         recipients = summaryRecipients({ mode: "all", people, members, attendance: { present: attendance.present, certain: false } });
-      } else if (tree) {
-        // A förening with groups (0054): its own mode, but only people whose account can see the meeting.
+      } else if (tree || m.private) {
+        // A förening with groups (0054), or a Privat möte from before its groups were turned off:
+        // its own mode, but only people whose account can see the meeting.
         people = viewerPeople(people, await viewerIds(m.id));
         recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
       } else {

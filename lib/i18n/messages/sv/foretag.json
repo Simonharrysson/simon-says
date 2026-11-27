@@ -161,7 +161,7 @@
     "onNow": "På: var och en ser sin grupps möten och alla möten i grupperna under. Vid Starta väljer man vem mötet är för.",
     "turnOff": "Sluta använda grupper",
     "turnOffTitle": "Sluta använda grupper?",
-    "turnOffText": "Alla medlemmar ser då alla möten igen, även gruppernas och de privata. Grupperna och placeringarna sparas om ni slår på det igen.",
+    "turnOffText": "Alla medlemmar ser då alla gruppers möten igen. Privata möten förblir privata: bara den som startade och admins ser dem. Grupperna och placeringarna sparas om ni slår på det igen.",
     "turningOff": "Stänger av…"
   }
 }
