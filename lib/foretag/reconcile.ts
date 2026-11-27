@@ -82,7 +82,7 @@ export async function reconcileForetag(orgId: string): Promise<ReconcileResult> 
     }
     for (const { share, current, reshare } of work) {
       try {
-        await revokeShare(auth, m.doc_id, share, current);
+        await revokeShare(auth, m.doc_id, m.id, share);
         const { error } = await db.from("meeting_doc_shares").delete().eq("meeting_id", m.id).eq("user_id", share.user_id);
         if (error) throw new Error(error.message);
         result.revoked++;
@@ -115,18 +115,21 @@ interface ShareRow {
 
 /**
  * Takes away the access Simon Says gave: exactly its permission (0053). An address that had access
- * before we shared keeps it. A row from before 0053 (no id, made on a new Doc of ours) falls back
- * to 0050's rule: the address's non-owner permission.
+ * before we shared keeps it. A row from before 0053 (no id; a new Doc of ours, shared by us with
+ * that address) removes the non-owner permission of the address it went to, never another.
  */
-async function revokeShare(auth: Awaited<ReturnType<typeof getGoogleAuth>>, docId: string, share: ShareRow, current: string | null): Promise<void> {
+async function revokeShare(auth: Awaited<ReturnType<typeof getGoogleAuth>>, docId: string, meetingId: string, share: ShareRow): Promise<void> {
   if (share.preexisting) return;
   if (share.permission_id) return revokePermission(auth, docId, share.permission_id);
-  const email = share.email ?? current;
-  if (email) await revokeLegacyShare(auth, docId, email);
+  // Before 0053: the address the share went to (0053 filled it in), never the account's later one.
+  if (share.email) await revokeLegacyShare(auth, docId, share.email);
+  else console.warn(`reconcile ${meetingId}: an old share without its address; Drive left alone`);
 }
 
 /** How many queued companies and revocations one cron run takes. */
 const DRAIN_LIMIT = 20;
+/** How long a cron run holds a queued company (longer than the cron's 300 s run). */
+const LEASE_MS = 10 * 60_000;
 /** A revocation that keeps failing is given up after this many tries (logged). */
 const MAX_ATTEMPTS = 5;
 
@@ -138,17 +141,27 @@ const MAX_ATTEMPTS = 5;
 export async function drainForetagQueues(): Promise<{ orgs: number; revocations: number }> {
   const db = supabaseAdmin();
   const done = { orgs: 0, revocations: 0 };
-  const { data: queued, error: qe } = await db.from("foretag_reconcile_queue").select("org_id").order("queued_at").limit(DRAIN_LIMIT);
+  const free = `leased_until.is.null,leased_until.lt.${new Date().toISOString()}`;
+  const { data: queued, error: qe } = await db.from("foretag_reconcile_queue").select("org_id, queued_at").or(free).order("queued_at").limit(DRAIN_LIMIT);
   if (qe) console.error(`reconcile queue: ${qe.message}`);
-  for (const { org_id } of (queued ?? []) as { org_id: string }[]) {
-    // Taken off first: a change while it runs queues it again.
-    await db.from("foretag_reconcile_queue").delete().eq("org_id", org_id);
+  for (const { org_id, queued_at } of (queued ?? []) as { org_id: string; queued_at: string }[]) {
+    // Leased, not removed: a run that dies (a timeout) leaves it for the next cron once the lease
+    // ends. Removed only after it succeeded, and only if no change queued it again meanwhile.
+    const { data: claimed } = await db
+      .from("foretag_reconcile_queue")
+      .update({ leased_until: new Date(Date.now() + LEASE_MS).toISOString() })
+      .eq("org_id", org_id)
+      .eq("queued_at", queued_at)
+      .or(free)
+      .select("org_id");
+    if (!claimed?.length) continue;
     try {
       await reconcileForetag(org_id);
+      await db.from("foretag_reconcile_queue").delete().eq("org_id", org_id).eq("queued_at", queued_at);
       done.orgs++;
     } catch (err) {
+      // The lease runs out and the next cron tries again.
       console.error(`reconcile ${org_id}: ${(err as Error).message}`);
-      await db.from("foretag_reconcile_queue").upsert({ org_id }, { onConflict: "org_id", ignoreDuplicates: true });
     }
   }
 
