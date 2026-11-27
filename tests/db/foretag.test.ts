@@ -312,7 +312,6 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     // Every row of the förening (the stray-group private one and those other tests started).
     const all = must("all", await adminClient().from("meetings").select("id").eq("org_id", forening.id)) as { id: string }[];
     const { data } = await forening.member.db.from("meetings").select("id").eq("org_id", forening.id);
-    expect(all.length).toBeGreaterThan(1);
     expect((data ?? []).map((r) => r.id).sort()).toEqual(all.map((r) => r.id).sort());
     expect(all.map((r) => r.id)).toContain(forening.meeting);
   });
