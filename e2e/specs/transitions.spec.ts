@@ -117,6 +117,13 @@ test.describe("transitions", () => {
     await noReducedMotion(page);
     const rail = page.getByRole("navigation", { name: "Huvudmeny" });
     await expect(rail.locator("[data-slider]")).toHaveCount(1);
+    // Under sharded CI the first click can land before React has hydrated the rail; it then
+    // becomes a plain page load and no view transition is recorded. Wait for hydration first.
+    await page.waitForLoadState("networkidle");
+    await page.waitForFunction(() => {
+      const a = [...document.querySelectorAll('nav[aria-label="Huvudmeny"] a')].find((el) => el.textContent?.trim() === "Föreningar");
+      return Boolean(a && Object.keys(a).some((k) => k.startsWith("__reactProps")));
+    });
     const from = (await rail.getByRole("link", { name: "Hem", exact: true }).boundingBox())!.x;
     const to = (await rail.getByRole("link", { name: "Föreningar", exact: true }).boundingBox())!.x;
     const frames = sample(page, "indicator", "Huvudmeny", 1200);
