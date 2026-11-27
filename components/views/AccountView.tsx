@@ -19,6 +19,7 @@ export function AccountView({
   saveLocale,
   localeFailed,
   calendar,
+  ai,
 }: {
   email: string;
   signOut: FormAction;
@@ -31,10 +32,13 @@ export function AccountView({
   localeFailed?: boolean;
   /** "Kalender" (todo #14): connect or disconnect the Google Calendar (CalendarConnect). */
   calendar?: ReactNode;
+  /** "Kopplade AI-assistenter" (the MCP server, components/views/AiConnections.tsx). */
+  ai?: ReactNode;
 }) {
   const t = useTranslations("account");
   const common = useTranslations("common");
   const calT = useTranslations("calendar");
+  const connectT = useTranslations("connect");
   const locale = useLocale();
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">
@@ -78,6 +82,11 @@ export function AccountView({
       {calendar && (
         <Panel title={calT("connectTitle")} titleId="calendar-title" id="kalender">
           {calendar}
+        </Panel>
+      )}
+      {ai && (
+        <Panel title={connectT("panelTitle")} titleId="ai-title" id="ai">
+          {ai}
         </Panel>
       )}
       <Panel title={t("orgsTitle")} titleId="orgs-link-title">

@@ -9,7 +9,13 @@ import { safeCalendarConnected } from "@/lib/calendar/load";
 import { disconnectCalendar, requestCalendarAccess } from "../calendar-actions";
 import { loadEmailPrefs } from "@/lib/email/prefs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { saveEmailPrefsAction, saveLocaleAction } from "./actions";
+import { AiConnections } from "@/components/views/AiConnections";
+import { canCreateForetag } from "@/lib/foretag/gate";
+import { loadConnections } from "@/lib/mcp/account";
+import { mcpConfigured } from "@/lib/mcp/deps";
+import { resourceUri } from "@/lib/mcp/oauth";
+import { appOrigin } from "@/lib/origin";
+import { revokeConnectionAction, saveEmailPrefsAction, saveLocaleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +29,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     data: { user },
   } = await db.auth.getUser();
   if (!user) redirect("/login");
-  const [emailPrefs, { fel, kalender }, calendarConnected] = await Promise.all([
+  const [emailPrefs, { fel, kalender }, calendarConnected, ai] = await Promise.all([
     loadEmailPrefs({ userId: user.id }),
     searchParams,
     safeCalendarConnected(user.id),
+    loadConnections(db),
   ]);
+  // Kopplade AI-assistenter: for the allow-list (spec "Gate"), and for anyone who still has a connection.
+  const showAi = mcpConfigured() && (canCreateForetag(user.email) || ai.connections.length > 0);
   return (
     <AccountView
       email={user.email ?? ""}
@@ -36,6 +45,17 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       saveEmailPrefs={saveEmailPrefsAction}
       saveLocale={saveLocaleAction}
       localeFailed={fel === "sprak"}
+      ai={
+        showAi ? (
+          <AiConnections
+            connections={ai.connections}
+            audit={ai.audit}
+            revoke={revokeConnectionAction}
+            revokeFailed={fel === "aterkalla"}
+            mcpUrl={resourceUri(appOrigin())}
+          />
+        ) : undefined
+      }
       calendar={
         <CalendarConnect
           connected={calendarConnected}

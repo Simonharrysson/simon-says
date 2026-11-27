@@ -6,6 +6,8 @@ import { cleanOff, type EmailPrefs } from "@/lib/email/categories";
 import { saveMyEmailPrefs } from "@/lib/email/prefs";
 import { isLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from "@/lib/i18n/config";
 import { saveMyLocale } from "@/lib/i18n/user-locale";
+import { isUuid } from "@/lib/db/ids";
+import { revokeConnection } from "@/lib/mcp/account";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /** Konto → Mejl: saves the signed-in user's choices (their own row only). */
@@ -37,4 +39,16 @@ export async function saveLocaleAction(formData: FormData): Promise<void> {
   (await cookies()).set(LOCALE_COOKIE, locale, { path: "/", maxAge: LOCALE_COOKIE_MAX_AGE, sameSite: "lax" });
   const ok = await saveMyLocale(db, locale);
   redirect(ok ? "/installningar" : "/installningar?fel=sprak");
+}
+
+/** Konto → Kopplade AI-assistenter → Återkalla (the user's own grant only: revoke_mcp_grant). */
+export async function revokeConnectionAction(formData: FormData): Promise<void> {
+  const id = formData.get("grant");
+  const db = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) redirect("/login");
+  const ok = typeof id === "string" && isUuid(id) && (await revokeConnection(db, id));
+  redirect(ok ? "/installningar#ai" : "/installningar?fel=aterkalla#ai");
 }

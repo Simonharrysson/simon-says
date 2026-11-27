@@ -19,6 +19,8 @@ export const PRIVATE_PREFIXES = [
   "/inloggad",
   "/design",
   "/sprak",
+  "/koppla",
+  "/oauth",
 ] as const;
 
 /**
