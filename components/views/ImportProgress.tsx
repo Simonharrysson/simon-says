@@ -298,7 +298,7 @@ export function ImportProgress({
           aria-valuemax={p.total}
           aria-valuenow={p.finished}
         >
-          <div className="h-full rounded-full bg-ink-2 transition-[width] duration-300" style={{ width: `${pct}%` }} />
+          <div className="bar-grow h-full w-full rounded-full bg-ink-2" style={{ transform: `scaleX(${pct / 100})` }} />
         </div>
         {detail && <p className="text-sm text-ink-2 max-w-[68ch]">{detail}</p>}
       </div>

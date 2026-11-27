@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
+import { PresenceLi } from "@/components/motion/Presence";
+import { useFlip } from "@/components/motion/useFlip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
@@ -11,9 +15,14 @@ import { cn } from "@/lib/utils";
 // The task list of Mina uppgifter. Ticking a task shows it done at once, with "Ångra" for 5
 // seconds; only then is it saved (so undo never has to take "✓ klart" back out of a Doc). A tick
 // still waiting when the page closes is sent right away (keepalive). After saving, the row says
-// what happened in the Doc: written, or "Bocka av i dokumentet också" with a link.
+// what happened in the Doc: written, or "Bocka av i dokumentet också" with a link. A task that
+// is done and needs nothing more (written, or no Doc line) then closes out of the open list after
+// SETTLE_MS, so the message can be read first; with "Visa klara" on it moves to the done ones.
+// Rows that still ask for something (bocka av i dokumentet också, an error) stay.
 
 export const UNDO_MS = 5000;
+/** How long "Klar, och ✓ klart står nu i dokumentet." shows before the row closes. */
+export const SETTLE_MS = 2500;
 
 export type DocOutcome = "written" | "locked" | "none" | "failed";
 export type TickState =
@@ -76,7 +85,9 @@ export function MyTasks({
   const [filter, setFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(initialShowDone);
   const { states, tick, undo } = useTicks(save, initialStates);
+  const settled = useSettled(states);
   const switchId = useId();
+  const listRef = useFlip<HTMLUListElement>();
 
   // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
   const doneHere = (task: MyTask) => {
@@ -84,6 +95,8 @@ export function MyTasks({
     return Boolean(st && st.kind !== "error");
   };
   const openTasks = tasks.filter((x) => !x.done);
+  const stillOpen = openTasks.filter((x) => !settled.has(x.key));
+  const settledHere = openTasks.filter((x) => settled.has(x.key));
   const spaces = useMemo(() => {
     const out = new Map<string, { id: string; name: string; count: number }>();
     for (const x of tasks) {
@@ -101,9 +114,9 @@ export function MyTasks({
     .filter((x) => x.done)
     .sort((a, b) => b.meetingAt.localeCompare(a.meetingAt))
     .slice(0, MAX_DONE_SHOWN);
-  const visible = [...openTasks, ...(showDone ? doneShown : [])].filter(inFilter);
+  const visible = [...stillOpen, ...(showDone ? [...settledHere, ...doneShown] : [])].filter(inFilter);
   const filterName = spaces.find((s) => s.id === filter)?.name ?? "";
-  const hasDone = tasks.some((x) => x.done);
+  const hasDone = settledHere.length > 0 || tasks.some((x) => x.done);
 
   const shownOpen = openTasks.filter(inFilter);
   const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
@@ -111,7 +124,7 @@ export function MyTasks({
   return (
     <div className="flex flex-col gap-4">
       {(spaces.length > 1 || hasDone) && (
-        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div data-enter-item className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
           {spaces.length > 1 ? (
             <>
               {/* Phones: one labelled select (the phone's own picker); wider screens: every space as a toggle. */}
@@ -133,7 +146,7 @@ export function MyTasks({
                     aria-pressed={filter === s.id}
                     onClick={() => setFilter(s.id)}
                     className={cn(
-                      "inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium transition-colors duration-120",
+                      "press inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium",
                       filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
                     )}
                   >
@@ -155,7 +168,7 @@ export function MyTasks({
       )}
 
       {shownOpen.length > 0 && (
-        <p className="text-sm text-ink-2" aria-live="polite">
+        <p data-enter-item className="text-sm text-ink-2" aria-live="polite">
           {t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })}
           {overdueCount > 0 && (
             <>
@@ -165,35 +178,46 @@ export function MyTasks({
           )}
         </p>
       )}
-      {visible.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
-          {filter !== "all" ? (
-            <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
-          ) : (
-            <>
-              <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
-              <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
-            </>
-          )}
-        </div>
-      ) : (
-        <ul aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
-          {visible.map((task) => (
-            <TaskRow
-              key={task.key}
-              task={task}
-              state={states[task.key]}
-              checked={task.done || doneHere(task)}
-              today={today}
-              locale={locale}
-              docUrl={docs[task.meetingId] ?? null}
-              meetingHref={meetingHrefs[task.meetingId] ?? null}
-              onTick={() => tick(task)}
-              onUndo={() => undo(task)}
-            />
-          ))}
-        </ul>
-      )}
+      <AnimatePresence initial={false} mode="popLayout">
+        {visible.length === 0 ? (
+          <m.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            data-enter-item
+            className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2"
+          >
+            {filter !== "all" ? (
+              <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
+            ) : (
+              <>
+                <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
+                <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
+              </>
+            )}
+          </m.div>
+        ) : (
+          <m.ul key="list" ref={listRef} exit={{ opacity: 0 }} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
+            <AnimatePresence initial={false}>
+              {visible.map((task) => (
+                <TaskRow
+                  key={task.key}
+                  task={task}
+                  state={states[task.key]}
+                  checked={task.done || doneHere(task)}
+                  today={today}
+                  locale={locale}
+                  docUrl={docs[task.meetingId] ?? null}
+                  meetingHref={meetingHrefs[task.meetingId] ?? null}
+                  onTick={() => tick(task)}
+                  onUndo={() => undo(task)}
+                />
+              ))}
+            </AnimatePresence>
+          </m.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -248,6 +272,26 @@ export function useTicks(save: SaveTick, initialStates?: Record<string, TickStat
   return { states, tick, undo };
 }
 
+/** Keys of tasks ticked here that are done and need nothing more, SETTLE_MS after they were saved. */
+function useSettled(states: Record<string, TickState>): ReadonlySet<string> {
+  const [settled, setSettled] = useState<ReadonlySet<string>>(() => new Set());
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    for (const [key, st] of Object.entries(states)) {
+      if (st.kind !== "saved" || (st.doc !== "written" && st.doc !== "none") || timers.current.has(key)) continue;
+      timers.current.set(
+        key,
+        setTimeout(() => setSettled((s) => new Set(s).add(key)), SETTLE_MS),
+      );
+    }
+  }, [states]);
+  useEffect(() => {
+    const all = timers.current;
+    return () => all.forEach(clearTimeout);
+  }, []);
+  return settled;
+}
+
 /** "Senast fre 4 dec" / "Senast imorgon" / "Försenad, skulle vara klar …" / "När: till nästa möte" / "Ingen deadline". */
 export function whenLabel(
   t: ReturnType<typeof useTranslations<"home">>,
@@ -300,8 +344,8 @@ function TaskRow({
   const locked = task.done || (state !== undefined && state.kind !== "pending" && state.kind !== "error");
 
   return (
-    <li className="border-t border-line px-4 py-3 first:border-t-0 sm:px-6">
-      <div className="grid grid-cols-[auto_1fr] gap-x-3">
+    <PresenceLi data-flip={task.key} data-enter-item>
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 border-t border-line px-4 py-3 sm:px-6 [li:first-child>&]:border-t-0">
         {/* The checkbox's touch target is the whole 44px square around it. */}
         <label htmlFor={id} className="-m-3 flex size-11 cursor-pointer items-start justify-center p-3">
           <Checkbox
@@ -338,7 +382,7 @@ function TaskRow({
           <RowStatus state={state} docUrl={docUrl} onUndo={onUndo} />
         </div>
       </div>
-    </li>
+    </PresenceLi>
   );
 }
 

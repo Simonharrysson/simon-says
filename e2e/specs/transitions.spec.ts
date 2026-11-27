@@ -1,31 +1,64 @@
-import { expect, test } from "../fixtures";
+import type { Page } from "@playwright/test";
+import { ensureUser, expect, test } from "../fixtures";
 
-// Motion on navigation (docs/ui.md): a tab switch fades the förening panel in (CSS `tab-in`,
-// components/views/OrgTabsShell.tsx); a link between pages runs a view transition typed "nav"
-// (app/(app)/layout.tsx). The suite runs with reduced motion, so these specs turn it off and
-// check that the animation is actually started, not only that the content swaps.
+// Motion (docs/ui.md "Motion", components/motion): a tab switch slides the underline and the new
+// panel's cards rise in (WAAPI, id "enter"); a link between pages runs a view transition typed
+// "nav" (app/(app)/layout.tsx); a task done on /hem closes out of the list. The suite runs with
+// reduced motion, so these specs turn it off and check that the motion really runs, by sampling
+// it frame by frame, not only that the content swaps.
 
-type Anim = { name: string; inSettings: boolean; boxed: boolean; duration: string };
-type Recorded = { anims: Anim[]; vts: string[][] };
+type Recorded = { enters: number; vts: string[][] };
+
+const must = <T,>(what: string, r: { data: T; error: { message: string } | null }): T => {
+  if (r.error) throw new Error(`${what}: ${r.error.message}`);
+  return r.data;
+};
+
+/**
+ * Samples every frame, in the page, for up to `ms`: the förening tabs' underline ([left, width])
+ * or a Mina uppgifter row ([height, opacity]; stops once the row is gone).
+ */
+async function sample(page: Page, kind: "indicator" | "row", arg: string, ms: number): Promise<number[][]> {
+  return page.evaluate(
+    ({ kind, arg, ms }) =>
+      new Promise<number[][]>((resolve) => {
+        const out: number[][] = [];
+        const start = performance.now();
+        const read = (): number[] | null => {
+          if (kind === "indicator") {
+            const el = document.querySelector(`nav[aria-label="${arg}"] [data-slider-mark="active"]`);
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return [r.left, r.width];
+          }
+          const row = [...document.querySelectorAll('ul[aria-label="Mina uppgifter"] > li')].find((li) => li.textContent?.includes(arg));
+          if (!row) return null;
+          return [row.getBoundingClientRect().height, Number(getComputedStyle(row).opacity)];
+        };
+        const step = () => {
+          const v = read();
+          if (v) out.push(v);
+          if (performance.now() - start > ms || (kind === "row" && !v && out.length > 0)) resolve(out);
+          else requestAnimationFrame(step);
+        };
+        step();
+      }),
+    { kind, arg, ms },
+  );
+}
 
 test.describe("transitions", () => {
   test.use({ contextOptions: { reducedMotion: "no-preference" } });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      const rec: Recorded = { anims: [], vts: [] };
+      const rec: Recorded = { enters: 0, vts: [] };
       (window as unknown as { __motion: Recorded }).__motion = rec;
-      document.addEventListener("animationstart", (e) => {
-        const el = e.target as Element;
-        const style = getComputedStyle(el);
-        rec.anims.push({
-          name: e.animationName,
-          inSettings: Boolean(el.closest?.("[data-tab-in]")?.textContent?.includes("Namn, logga och om oss")),
-          // A real box (display: contents or an empty element would fade nothing visible).
-          boxed: style.display !== "contents" && el.getBoundingClientRect().height > 0,
-          duration: style.animationDuration,
-        });
-      });
+      const animate = Element.prototype.animate;
+      Element.prototype.animate = function (this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
+        if (typeof options === "object" && options?.id === "enter") rec.enters++;
+        return animate.call(this, keyframes, options);
+      };
       const start = document.startViewTransition?.bind(document);
       if (start) {
         document.startViewTransition = ((arg: Parameters<typeof start>[0]) => {
@@ -36,29 +69,38 @@ test.describe("transitions", () => {
     });
   });
 
-  const motion = (page: import("@playwright/test").Page) => page.evaluate(() => (window as unknown as { __motion: Recorded }).__motion);
-  const fade = (a: Anim) => a.name === "tab-in" && a.boxed && a.duration === "0.18s";
-  const noReducedMotion = async (page: import("@playwright/test").Page) =>
-    expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(false);
+  const motion = (page: Page) => page.evaluate(() => (window as unknown as { __motion: Recorded }).__motion);
+  const noReducedMotion = async (page: Page) => expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(false);
 
-  test("a tab switch fades the panel in; a page load doesn't", async ({ page, seedOrg }) => {
+  test("a tab switch slides the underline and the panel rises in; a page load doesn't", async ({ page, seedOrg }) => {
     const org = await seedOrg();
     await page.goto(org.url);
     await noReducedMotion(page);
     const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
     await expect(tabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator("[data-tab-in]")).toHaveCount(0);
-    expect((await motion(page)).anims.filter((a) => a.name === "tab-in")).toHaveLength(0);
+    // Measured and in charge of the look; the page load itself animated nothing.
+    await expect(tabs).toHaveAttribute("data-slider", "true");
+    expect((await motion(page)).enters).toBe(0);
 
+    const from = (await tabs.getByRole("link", { name: "Möten" }).boundingBox())!.x;
+    const to = (await tabs.getByRole("link", { name: "Inställningar" }).boundingBox())!.x;
+    const frames = sample(page, "indicator", "Föreningens vyer", 1200);
     await tabs.getByRole("link", { name: "Inställningar" }).click();
-    await expect(page.getByRole("heading", { name: "Namn, logga och om oss", exact: true })).toBeVisible();
-    await expect.poll(async () => (await motion(page)).anims.some((a) => fade(a) && a.inSettings)).toBe(true);
+    const xs = (await frames).map(([x]) => x);
+    const seen = xs.map(Math.round).join(",");
+    // It starts under Möten, ends under Inställningar, and passes through the tab between.
+    expect(Math.abs(xs[0] - from), seen).toBeLessThan(2);
+    expect(Math.abs(xs.at(-1)! - to), seen).toBeLessThan(2);
+    expect(xs.some((x) => x > from + 4 && x < to - 4), seen).toBe(true);
 
-    // Back to a kept tab: it fades in again (no new server content needed).
-    const before = (await motion(page)).anims.filter(fade).length;
+    await expect(page.getByRole("heading", { name: "Namn, logga och om oss", exact: true })).toBeVisible();
+    await expect.poll(async () => (await motion(page)).enters).toBeGreaterThan(0);
+
+    // Back to a kept tab: its cards rise in again (no new server content needed).
+    const before = (await motion(page)).enters;
     await tabs.getByRole("link", { name: "Möten" }).click();
     await expect(tabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
-    await expect.poll(async () => (await motion(page)).anims.filter(fade).length).toBeGreaterThan(before);
+    await expect.poll(async () => (await motion(page)).enters).toBeGreaterThan(before);
   });
 
   test("a link between pages runs a view transition", async ({ page }) => {
@@ -68,6 +110,7 @@ test.describe("transitions", () => {
     await rail.getByRole("link", { name: "Föreningar", exact: true }).click();
     await expect(page).toHaveURL(/\/orgs$/);
     await expect.poll(async () => (await motion(page)).vts.some((types) => types.includes("nav"))).toBe(true);
+    await expect(rail.getByRole("link", { name: "Föreningar", exact: true })).toHaveAttribute("aria-current", "page");
     // Let Föreningar finish arriving (streamed content, the running view transition) first: a
     // click during it can be committed together with that work rather than as its own transition.
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -79,14 +122,52 @@ test.describe("transitions", () => {
   });
 });
 
-test("reduced motion: the tab fade is effectively off", async ({ page, seedOrg }) => {
+test("Mina uppgifter: a done task closes out of the list and the rows below follow", async ({ db, signedIn, newEmail }) => {
+  test.setTimeout(120_000);
+  // Privat tasks: no Doc line to tick, so once saved they need nothing more and close out.
+  const email = newEmail("motion");
+  const me = await ensureUser(db, email);
+  const space = must("privat", await db.from("orgs").insert({ name: "Privat", kind: "privat", created_by: me, share_transcript: false, summary_mode: "off" }).select("id").single()) as { id: string };
+  const ctx = must("context", await db.from("contexts").insert({ org_id: space.id, name: "TDDE15" }).select("id").single()) as { id: string };
+  const rec = must(
+    "meeting",
+    await db.from("meetings").insert({ org_id: space.id, started_by: me, status: "done", context_id: ctx.id, ended_at: new Date().toISOString() }).select("id").single(),
+  ) as { id: string };
+  must("tasks", await db.from("context_tasks").insert(["Läsa kap 4", "Skriva labbrapporten", "Boka handledning"].map((text) => ({ context_id: ctx.id, meeting_id: rec.id, text }))));
+
+  // signedIn's own context has no reduced motion: the animations run.
+  const { page } = await signedIn(email, "/hem");
+  const list = page.getByRole("list", { name: "Mina uppgifter" });
+  await expect(list.getByRole("listitem")).toHaveCount(3);
+  const full = (await list.getByRole("listitem").filter({ hasText: "Läsa kap 4" }).boundingBox())!.height;
+
+  const frames = sample(page, "row", "Läsa kap 4", 20_000);
+  await page.getByRole("checkbox", { name: "Läsa kap 4" }).check();
+  await expect(page.getByText("Markerad som klar.")).toBeVisible();
+  // Saved after the 5 s undo, "Klar" for a moment, then it closes: height and opacity run down
+  // through values in between (an animation, not a removal), and the row is gone.
+  const rows = await frames;
+  const closing = rows.filter(([h]) => h > 2 && h < full - 2);
+  expect(closing.length, `heights: ${rows.map(([h]) => Math.round(h)).join(",")}`).toBeGreaterThan(1);
+  expect(closing.some(([, o]) => o > 0.05 && o < 0.95)).toBe(true);
+  await expect(list.getByRole("listitem")).toHaveCount(2);
+  await expect(list).not.toContainText("Läsa kap 4");
+  await expect(page.getByText("2 öppna uppgifter")).toBeVisible();
+
+  // "Visa klara" has it, among the done ones.
+  await page.getByRole("switch", { name: "Visa klara" }).click();
+  await expect(list).toContainText("Läsa kap 4");
+});
+
+test("reduced motion: a tab switch changes at once", async ({ page, seedOrg }) => {
   const org = await seedOrg();
   await page.goto(org.url);
   const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
+  await expect(tabs).toHaveAttribute("data-slider", "true");
   await tabs.getByRole("link", { name: "Översikt" }).click();
-  const panel = page.locator("[data-tab-in] > [data-panel] > *:visible").first();
-  await expect(panel).toBeVisible();
-  const { name, duration } = await panel.evaluate((el) => ({ name: getComputedStyle(el).animationName, duration: parseFloat(getComputedStyle(el).animationDuration) }));
-  expect(name).toBe("tab-in");
-  expect(duration).toBeLessThan(0.01);
+  await expect(tabs.getByRole("link", { name: "Översikt" })).toHaveAttribute("aria-current", "page");
+  // No entrance ran, and the underline moves without a transition.
+  expect(await page.evaluate(() => document.getAnimations().filter((a) => a.id === "enter").length)).toBe(0);
+  const durations = await tabs.locator('[data-slider-mark="active"]').evaluate((el) => getComputedStyle(el).transitionDuration);
+  expect(durations.split(",").every((d) => parseFloat(d) < 0.01), durations).toBe(true);
 });

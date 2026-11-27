@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { MotionProvider } from "@/components/motion/MotionProvider";
 import { appOrigin } from "@/lib/origin";
 import { SITE_NAME } from "@/lib/seo";
 import "./globals.css";
@@ -48,7 +49,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <a className="absolute -top-16 left-4 z-50 rounded-md bg-ink px-4 py-2 text-on-ink no-underline focus:top-3" href="#innehall">
             {t("skipToContent")}
           </a>
-          {children}
+          <MotionProvider>{children}</MotionProvider>
         </NextIntlClientProvider>
       </body>
     </html>

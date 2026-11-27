@@ -39,7 +39,7 @@ export function ListRow({
         <AppLink
           className={cn(
             rowClass,
-            "group/row text-inherit no-underline transition-colors duration-120 hover:bg-sunk hover:no-underline focus-visible:rounded-none focus-visible:outline-offset-[-2px]",
+            "group/row press-row text-inherit no-underline hover:bg-sunk hover:no-underline focus-visible:rounded-none focus-visible:outline-offset-[-2px]",
           )}
           href={href}
         >
