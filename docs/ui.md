@@ -125,6 +125,28 @@ wipe). Elsewhere: listening ring on the mic, name plates dropping in.
 `prefers-reduced-motion` turns all of it off (one global rule at the end of `globals.css`, plus
 `motion-reduce:` on the mic ring); content is always visible without animation.
 
+**App motion** (components/motion, values in lib/motion.ts; springs also as CSS `linear()`
+tokens `--ease-spring` / `--ease-press`). Fast springs, never blocking a click:
+- *Sliders*: the top rail's pill and the förening tabs' underline slide to the clicked item at
+  once; a hover pill follows the mouse (mouse only). Server HTML keeps the plain `aria-current`
+  look until measured.
+- *Entrances*: on a client navigation, back/forward or a tab switch, the content that replaces
+  the skeleton (cards `data-slot="card"`, alerts, `data-enter-item`) rises 14 px, fades in and
+  comes into focus from a 4 px blur, 40 ms apart (WAAPI, `<Enter>` / `useEntrance`). A page load
+  (hydration) never animates its first paint. Counts ("2 beslut · 5 uppgifter", "3 öppna
+  uppgifter") count up once with them (`<CountUp>`, fixed-width digits; screen readers get the
+  final text). Progress bars fill from empty on a client mount (`<ProgressFill>`, clip-path).
+- *Lists*: rows open in and close out on height + opacity (`<Presence>` / `<PresenceLi>` under `<Lazy>`, motion
+  `domMin` loaded after hydration); reorders slide (`useFlip`). A task done on /hem closes out
+  2.5 s after "Klar" (rows that still ask for something stay); until motion's features have
+  loaded, new rows mount visible. The page heading crossfades into
+  the next page's (`page-title` view transition).
+- *Press*: `press` (controls, 98 %) and `press-row` (rows, 99 %), on `scale`. *Lift*: clickable
+  rows and cards rise 1 px onto `--shadow-lift` under a mouse (`lift`); static panels don't
+  (no false click affordance).
+- *Focus*: a task row that closes hands focus to the next row's checkbox (or the heading).
+Under reduced motion every one of these is instant (motion's transitions get duration 0).
+
 **Browser surfaces.** Themed selection, focus ring (2px blue, offset 2; inputs get a 2px blue
 ring outside a 1px gap), caret, scrollbars.
 

@@ -4,7 +4,7 @@ import { Wordmark } from "./Wordmark";
 
 /** A top-rail link (Föreningar, Konto, Logga in); `aria-current="page"` marks where you are. */
 export const navLinkClass =
-  "inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-ink-2 no-underline transition-colors duration-120 hover:bg-sunk hover:text-ink hover:no-underline aria-[current=page]:bg-sunk aria-[current=page]:text-ink";
+  "inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-ink-2 no-underline press hover:bg-sunk hover:text-ink hover:no-underline aria-[current=page]:bg-sunk aria-[current=page]:text-ink";
 
 /**
  * Sticky top rail. `nav` holds page links; the wordmark leads home (or `homeHref`). `wideNav`:
