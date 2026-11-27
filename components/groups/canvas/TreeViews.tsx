@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useTranslations } from "next-intl";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { canvasArchive, canvasCreate, canvasPlace, canvasRename, canvasSavePositions, canvasSetHead, canvasSetParent } from "@/app/(app)/orgs/canvas-actions";
+import { canvasAddPerson, canvasEditPerson, canvasSavePositions, canvasSetManager } from "@/app/(app)/orgs/canvas-actions";
 import { cn } from "@/lib/utils";
 import type { CanvasApi, CanvasData } from "./types";
 
@@ -12,16 +12,13 @@ import type { CanvasApi, CanvasData } from "./types";
 // may switch to the list (remembered per browser). Before hydration the list is hidden on desktop
 // by CSS, so nothing jumps.
 
-const GroupCanvas = dynamic(() => import("./GroupCanvas"), { ssr: false, loading: () => <CanvasSkeleton /> });
+const PeopleCanvas = dynamic(() => import("./PeopleCanvas"), { ssr: false, loading: () => <CanvasSkeleton /> });
 
 const SERVER_API: CanvasApi = {
-  setParent: canvasSetParent,
-  rename: canvasRename,
-  create: canvasCreate,
-  archive: canvasArchive,
-  place: canvasPlace,
+  setManager: canvasSetManager,
+  addPerson: canvasAddPerson,
+  editPerson: canvasEditPerson,
   savePositions: canvasSavePositions,
-  setHead: canvasSetHead,
 };
 
 const WIDE = "(min-width: 768px)";
@@ -41,7 +38,7 @@ const KEY = "tree-view";
 type View = "canvas" | "list";
 
 export function TreeViews({ list, data, api }: { list: ReactNode; data: CanvasData; api?: CanvasApi }) {
-  const t = useTranslations("foretag.canvas");
+  const t = useTranslations("foretag.tree");
   const wide = useWide();
   const [view, setView] = useState<View>("canvas");
   useEffect(() => {
@@ -78,7 +75,7 @@ export function TreeViews({ list, data, api }: { list: ReactNode; data: CanvasDa
       {canvas && (
         // Wider than the page column: the canvas wants room. Centred on the column, gutters kept.
         <div className="relative left-1/2 w-[min(calc(100vw-3rem),90rem)] -translate-x-1/2 max-md:hidden">
-          {wide ? <GroupCanvas data={data} api={api ?? SERVER_API} /> : <CanvasSkeleton />}
+          {wide ? <PeopleCanvas data={data} api={api ?? SERVER_API} /> : <CanvasSkeleton />}
         </div>
       )}
       <div className={cn("flex flex-col gap-6", canvas && "md:hidden")}>{list}</div>
@@ -87,7 +84,7 @@ export function TreeViews({ list, data, api }: { list: ReactNode; data: CanvasDa
 }
 
 function CanvasSkeleton() {
-  const t = useTranslations("foretag.canvas");
+  const t = useTranslations("foretag.tree");
   return (
     <div className="flex h-[min(72vh,52rem)] min-h-[32rem] items-center justify-center rounded-lg border border-line bg-board text-sm text-ink-3" role="status">
       {t("loading")}

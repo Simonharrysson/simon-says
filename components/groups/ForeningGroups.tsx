@@ -1,12 +1,12 @@
 import { useTranslations } from "next-intl";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
-import { Field } from "@/components/ui/Field";
 import { IconUsers } from "@/components/ui/icons";
 import { Panel } from "@/components/ui/Panel";
 import type { OrgMember } from "@/lib/db/members";
 import type { GroupRow } from "@/lib/foretag/tree";
-import { type GroupTreeActions, type TreePerson } from "./GroupTree";
-import { GroupTreeViews } from "./GroupTreeViews";
+import type { PersonRow } from "@/lib/groups/people";
+import type { PeopleTreeActions } from "./PeopleTree";
+import { PeopleTreeViews } from "./PeopleTreeViews";
 
 // Inställningar → Styrelsen och medlemmar → Grupper (0054, admins): a förening may organise its
 // people in the Företag's tree, opt-in. Off (the default): one panel saying so, with "Organisera i
@@ -17,16 +17,15 @@ export interface ForeningGroupsProps {
   org: { id: string; name: string; groups_enabled?: boolean };
   userId: string;
   groups: GroupRow[];
-  people: TreePerson[];
+  people: PersonRow[];
   members: OrgMember[];
-  actions: GroupTreeActions & { setGroups: FormAction };
+  actions: PeopleTreeActions & { setGroups: FormAction };
 }
 
 const HIDDEN = { from: "forening" };
 
 export function ForeningGroups({ org, userId, groups, people, members, actions }: ForeningGroupsProps) {
   const t = useTranslations("foretag.groups");
-  const tp = useTranslations("foretag.people");
   const on = org.groups_enabled === true;
 
   if (!on) {
@@ -57,9 +56,7 @@ export function ForeningGroups({ org, userId, groups, people, members, actions }
             confirmLabel={t("turnOn")}
             confirmVariant="primary"
             pendingLabel={t("turningOn")}
-          >
-            <Field id="groups-root" name="rootName" label={t("rootName")} defaultValue={t("rootDefault")} required maxLength={40} />
-          </ConfirmAction>
+          />
         </div>
       </Panel>
     );
@@ -70,10 +67,10 @@ export function ForeningGroups({ org, userId, groups, people, members, actions }
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">{t("title")}</h2>
         <p className="max-w-[68ch] text-sm text-ink-2">
-          {t("onNow")} {tp("intro")}
+          {t("onNow")}
         </p>
       </div>
-      <GroupTreeViews orgId={org.id} isAdmin userId={userId} groups={groups} people={people} members={members} actions={actions} hidden={HIDDEN} keepLastGroup />
+      <PeopleTreeViews orgId={org.id} isAdmin userId={userId} groups={groups} people={people} members={members} actions={actions} hidden={HIDDEN} />
       <div className="flex justify-end">
         <ConfirmAction
           action={actions.setGroups}

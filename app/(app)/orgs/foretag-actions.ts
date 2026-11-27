@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { isUuid } from "@/lib/db/ids";
-import { archiveGroup, createForetag, placeMember, placePerson, saveGroup, setGroupHead } from "@/lib/db/foretag";
+import { addPerson, archiveGroup, createForetag, placeMember, placePerson, saveGroup, setManager } from "@/lib/db/foretag";
 import { canCreateForetag } from "@/lib/foretag/gate";
 import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -57,11 +57,6 @@ export async function saveGroupAction(form: FormData): Promise<void> {
     parentId: isUuid(parent) ? parent : null,
   });
   if (!ok) redirect(back(orgId, "grupp", form));
-  // 0055: the head (chef), when the form has the field (the list's "Ändra"). Display only.
-  if (isUuid(groupId) && form.has("headId")) {
-    const head = field(form, "headId");
-    if (!(await setGroupHead(db, groupId, isUuid(head) ? head : null))) redirect(back(orgId, "grupp", form));
-  }
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
@@ -92,6 +87,44 @@ export async function placeAction(form: FormData): Promise<void> {
       : false;
   if (!ok) redirect(back(orgId, "placering", form));
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
+  reconcileAfter(orgId);
+  revalidatePath(`/orgs/${orgId}`);
+}
+
+/** The list's "Rapporterar till" value: a person id, "top" or "none" (0062). */
+function managerTo(value: string): { manager: string } | "top" | "none" | null {
+  if (value === "top" || value === "none") return value;
+  return isUuid(value) ? { manager: value } : null;
+}
+
+/**
+ * The people tree's list (0062; the phone view and "Lista"): "Rapporterar till" for a person row
+ * (`personId`) or a member account without one (`userId` + `name`, its row made unplaced first).
+ */
+export async function setManagerAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const to = managerTo(field(form, "to"));
+  const personId = field(form, "personId");
+  const userId = field(form, "userId");
+  const db = await createSupabaseServerClient();
+  let id: string | null = isUuid(personId) ? personId : null;
+  if (!id && isUuid(userId)) {
+    const { data } = await db.rpc("place_member", { p_org_id: orgId, p_user_id: userId, p_group_id: null, p_name: field(form, "name") });
+    id = (data as string | null) ?? null;
+  }
+  if (!to || !id || (typeof to === "object" && to.manager === id) || !(await setManager(db, id, to))) redirect(back(orgId, "rapporterar", form));
+  reconcileAfter(orgId);
+  revalidatePath(`/orgs/${orgId}`);
+}
+
+/** "Lägg till person" (0062): name, e-mail and role optional, "Rapporterar till". */
+export async function addTreePersonAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const to = managerTo(field(form, "to"));
+  const db = await createSupabaseServerClient();
+  const added = await addPerson(db, orgId, { name: field(form, "name").trim(), role: field(form, "role").trim(), email: field(form, "email").trim() });
+  if (!added.ok) redirect(back(orgId, added.reason === "duplicate" ? "person-finns" : "person", form));
+  if (to && to !== "none" && !(await setManager(db, added.id, to))) redirect(back(orgId, "rapporterar", form));
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }

@@ -1,37 +1,38 @@
-import { GroupTree } from "@/components/groups/GroupTree";
+import { PeopleTree } from "@/components/groups/PeopleTree";
 import { TreeViews } from "@/components/groups/canvas/TreeViews";
 import type { CanvasApi } from "@/components/groups/canvas/types";
 import type { OrgMember } from "@/lib/db/members";
 import type { GroupRow } from "@/lib/foretag/tree";
-import { canvasPeople } from "@/lib/groups/people";
+import { peopleTree } from "@/lib/groups/people";
 
-// The tree canvas (0055) for the /design gallery: the spec's company (VD → Ledning → Utveckling,
-// Kommunikation, Ekonomi), every write answered in memory after a short wait. Fictional data.
+// The people tree (0062) for the /design gallery: Anna at the top, Erik and Sara reporting to her,
+// their reports below, Kim on the side; every write answered in memory after a short wait.
+// Fictional data.
 
 export const treeCanvasViews = [
-  { id: "foretag-canvas", title: "Företag · Personer & grupper, kartan (admin)" },
-  { id: "foretag-canvas-member", title: "Företag · Personer & grupper, kartan (medlem, läsläge)" },
+  { id: "foretag-canvas", title: "Företag · Personer, kartan (admin)" },
+  { id: "foretag-canvas-member", title: "Företag · Personer, kartan (medlem, läsläge)" },
 ] as const;
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const G = { vd: id(1), led: id(2), dev: id(3), com: id(4), eko: id(5) };
+const P = { anna: id(101), erik: id(102), sara: id(103), jonas: id(104), lisa: id(105), omar: id(106), maja: id(107), kim: id(108), olle: id(109) };
+const G = { top: id(1), anna: id(2), erik: id(3), sara: id(4) };
 const GROUPS: GroupRow[] = [
-  { id: G.vd, name: "VD", parent_group_id: null, depth: 0, position: 0 },
-  { id: G.led, name: "Ledning", parent_group_id: G.vd, depth: 1, position: 0 },
-  { id: G.dev, name: "Utveckling", parent_group_id: G.led, depth: 2, position: 0, head_person_id: id(102) },
-  { id: G.com, name: "Kommunikation", parent_group_id: G.led, depth: 2, position: 1, head_person_id: id(103) },
-  { id: G.eko, name: "Ekonomi", parent_group_id: null, depth: 0, position: 1 },
+  { id: G.top, name: "top", parent_group_id: null, depth: 0, position: 0 },
+  { id: G.anna, name: "team", parent_group_id: G.top, depth: 1, position: 0, head_person_id: P.anna },
+  { id: G.erik, name: "team", parent_group_id: G.anna, depth: 2, position: 0, head_person_id: P.erik },
+  { id: G.sara, name: "team", parent_group_id: G.anna, depth: 2, position: 0, head_person_id: P.sara },
 ];
 const PEOPLE = [
-  { id: id(101), name: "Anna Berg", member_user_id: id(201), group_id: G.vd },
-  { id: id(102), name: "Erik Lund", member_user_id: id(202), group_id: G.led },
-  { id: id(103), name: "Sara Nyström", member_user_id: id(203), group_id: G.led },
-  { id: id(104), name: "Jonas Ek", member_user_id: id(204), group_id: G.dev },
-  { id: id(105), name: "Lisa Holm", member_user_id: null, group_id: G.dev },
-  { id: id(106), name: "Omar Said", member_user_id: null, group_id: G.dev },
-  { id: id(107), name: "Maja Lind", member_user_id: id(207), group_id: G.com },
-  { id: id(108), name: "Kim Ström", member_user_id: null, group_id: G.eko },
-  { id: id(109), name: "Olle Ny", member_user_id: null, group_id: null },
+  { id: P.anna, name: "Anna Berg", role: "VD", member_user_id: id(201), group_id: G.top },
+  { id: P.erik, name: "Erik Lund", role: "Utvecklingschef", member_user_id: id(202), group_id: G.anna },
+  { id: P.sara, name: "Sara Nyström", role: "Kommunikationschef", member_user_id: id(203), group_id: G.anna },
+  { id: P.jonas, name: "Jonas Ek", role: null, member_user_id: id(204), group_id: G.erik },
+  { id: P.lisa, name: "Lisa Holm", role: null, member_user_id: null, group_id: G.erik },
+  { id: P.omar, name: "Omar Said", role: "Designer", member_user_id: null, group_id: G.erik },
+  { id: P.maja, name: "Maja Lind", role: null, member_user_id: id(207), group_id: G.sara },
+  { id: P.kim, name: "Kim Ström", role: "Kassör", member_user_id: null, group_id: G.anna },
+  { id: P.olle, name: "Olle Ny", role: null, member_user_id: null, group_id: null },
 ];
 const MEMBERS: OrgMember[] = [
   { userId: id(201), email: "anna.berg@example.com", role: "admin" },
@@ -45,23 +46,24 @@ const MEMBERS: OrgMember[] = [
 const wait = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 250));
 let next = 300;
 const API: CanvasApi = {
-  setParent: () => wait({ ok: true }),
-  rename: () => wait({ ok: true }),
-  create: () => wait({ ok: true, id: id(next++) }),
-  archive: () => wait({ ok: true }),
-  place: () => wait({ ok: true }),
+  setManager: () => wait({ ok: true }),
+  addPerson: () => wait({ ok: true, id: id(next++) }),
+  editPerson: () => wait({ ok: true }),
   savePositions: () => wait({ ok: true }),
-  setHead: () => wait({ ok: true }),
 };
 const noop = async () => {};
 
 function Demo({ admin }: { admin: boolean }) {
   const userId = admin ? id(201) : id(204);
-  const props = { orgId: id(900), isAdmin: admin, userId, groups: GROUPS, people: PEOPLE, members: MEMBERS, actions: { saveGroup: noop, archiveGroup: noop, place: noop } };
+  const people = peopleTree(PEOPLE, GROUPS, MEMBERS, userId);
   return (
     <div className="mx-auto flex w-full max-w-[56rem] flex-col gap-6 px-gutter">
-      <h1 className="text-2xl font-semibold">Personer & grupper</h1>
-      <TreeViews list={<GroupTree {...props} />} data={{ orgId: props.orgId, isAdmin: admin, groups: GROUPS, people: canvasPeople(PEOPLE, MEMBERS, userId), keepLastGroup: false }} api={API} />
+      <h1 className="text-2xl font-semibold">Personer</h1>
+      <TreeViews
+        list={<PeopleTree orgId={id(900)} isAdmin={admin} people={people} actions={{ setManager: noop, addPerson: noop }} />}
+        data={{ orgId: id(900), isAdmin: admin, people }}
+        api={API}
+      />
     </div>
   );
 }

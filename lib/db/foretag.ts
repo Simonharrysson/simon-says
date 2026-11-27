@@ -15,7 +15,7 @@ function fail(what: string, error: { message: string }): never {
 export async function listGroups(db: Db, orgId: string): Promise<GroupRow[]> {
   const { data, error } = await db
     .from("groups")
-    .select("id, name, parent_group_id, depth, position, archived_at, canvas_x, canvas_y, head_person_id")
+    .select("id, name, parent_group_id, depth, position, archived_at, head_person_id")
     .eq("org_id", orgId)
     .order("depth")
     .order("position");
@@ -34,21 +34,39 @@ export async function saveGroup(db: Db, orgId: string, input: { id?: string | nu
   return data !== null;
 }
 
-/** 0055: save card positions on the canvas (admins; the database decides). False when refused. */
-export async function saveGroupCanvas(db: Db, orgId: string, positions: { id: string; x: number; y: number }[]): Promise<boolean> {
-  const { data, error } = await db.rpc("set_group_canvas", { p_org_id: orgId, p_positions: positions });
+/** 0062: "Rapporterar till". `manager`: a person id; "top": no manager; "none": out of the tree. False when refused (not admin, a cycle, has reports). */
+export async function setManager(db: Db, personId: string, to: { manager: string } | "top" | "none"): Promise<boolean> {
+  const { data, error } = await db.rpc("set_manager", {
+    p_person_id: personId,
+    p_mode: typeof to === "string" ? to : "manager",
+    p_manager_id: typeof to === "string" ? null : to.manager,
+  });
+  if (error) {
+    // The tree trigger's refusals: a cycle, too deep.
+    if (error.code === "22023") return false;
+    fail("set_manager", error);
+  }
+  return data === true;
+}
+
+/** 0062: save card positions on the canvas (admins; the database decides). False when refused. */
+export async function savePeopleCanvas(db: Db, orgId: string, positions: { id: string; x: number; y: number }[]): Promise<boolean> {
+  const { data, error } = await db.rpc("set_people_canvas", { p_org_id: orgId, p_positions: positions });
   if (error) {
     if (error.code === "22023") return false;
-    fail("set_group_canvas", error);
+    fail("set_people_canvas", error);
   }
   return typeof data === "number";
 }
 
-/** 0055: a group's head (chef), or none. Display only. */
-export async function setGroupHead(db: Db, groupId: string, personId: string | null): Promise<boolean> {
-  const { data, error } = await db.rpc("set_group_head", { p_group_id: groupId, p_person_id: personId });
-  if (error) fail("set_group_head", error);
-  return data === true;
+export type AddPersonResult = { ok: true; id: string } | { ok: false; reason: "forbidden" | "invalid" | "duplicate" | "taken" };
+
+/** 0062 "Lägg till person": a person row (add_board_person, 0035: name, role, e-mail and its invite link). */
+export async function addPerson(db: Db, orgId: string, input: { name: string; role: string; email: string }): Promise<AddPersonResult> {
+  const { data, error } = await db.rpc("add_board_person", { p_org_id: orgId, p_name: input.name, p_role: input.role, p_email: input.email, p_member_user_id: null });
+  if (error) fail("add_board_person", error);
+  const r = data as { result: string; id?: string };
+  return r.result === "ok" && r.id ? { ok: true, id: r.id } : { ok: false, reason: (r.result as "forbidden") ?? "invalid" };
 }
 
 export async function archiveGroup(db: Db, groupId: string): Promise<boolean> {

@@ -153,6 +153,15 @@
     },
     "grupper": {
       "text": "Grupperna kunde inte slås på eller av. Försök igen."
+    },
+    "rapporterar": {
+      "text": "Det gick inte att ändra vem personen rapporterar till. En person kan inte rapportera till någon under sig själv, och den som har personer under sig kan inte tas ur trädet."
+    },
+    "person": {
+      "text": "Personen kunde inte läggas till. Kontrollera namnet och e-postadressen."
+    },
+    "person-finns": {
+      "text": "Det finns redan en person med det namnet."
     }
   }
 }

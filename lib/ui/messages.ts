@@ -68,6 +68,10 @@ const orgTones: Record<string, Notice["tone"]> = {
   grupp: "danger",
   "grupp-arkiv": "danger",
   placering: "danger",
+  // The people tree (0062)
+  rapporterar: "danger",
+  person: "danger",
+  "person-finns": "danger",
   kundnamn: "danger",
   // A förening's groups (0054)
   grupper: "danger",

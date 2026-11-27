@@ -158,3 +158,14 @@
 .tree-canvas .react-flow__node-add {
   pointer-events: all !important; /* over React Flow's inline style */
 }
+
+/* The "+" under a card (add a report): shown when the card is hovered, selected or focused. */
+.tree-canvas .add-report {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.tree-canvas .react-flow__node:hover .add-report,
+.tree-canvas .react-flow__node.selected .add-report,
+.tree-canvas .react-flow__node:focus-within .add-report {
+  opacity: 1;
+}

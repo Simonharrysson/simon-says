@@ -2,21 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { isUuid } from "@/lib/db/ids";
-import { archiveGroup, placeMember, placePerson, saveGroup, saveGroupCanvas, setGroupHead } from "@/lib/db/foretag";
+import { addPerson, savePeopleCanvas, setManager } from "@/lib/db/foretag";
 import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-// The tree canvas (0055) calls these directly and rolls back on `{ ok: false }`, where the form
-// actions in foretag-actions.ts redirect with a notice. Same database functions, same checks: every
-// write runs as the signed-in user and the admin functions decide. Who-sees-what changes (an arrow,
-// a person moved, a group archived) reconcile Doc access and held tasks, as the list editor does.
-// Positions and heads are visual only: no reconcile, and positions don't revalidate the page (a
-// refresh mid-drag would fight the card under the pointer).
+// The people tree (0062), called directly by the canvas, which rolls back on `{ ok: false }` (the
+// list's form actions in foretag-actions.ts redirect with a notice instead). Every write runs as the
+// signed-in user; the database's admin functions decide. A reporting line changes who sees what:
+// Doc access and held tasks are reconciled, as for every tree change. Positions are visual only:
+// no reconcile and no revalidation (a refresh mid-drag would fight the card under the pointer).
 
-export type CanvasResult = { ok: true } | { ok: false };
-export type CreateResult = { ok: true; id: string } | { ok: false };
+export type CanvasResult = { ok: true } | { ok: false; reason?: string };
+export type ManagerTo = { manager: string } | "top" | "none";
+export type Who = { personId: string } | { userId: string; name: string };
 
 const NO: CanvasResult = { ok: false };
+const validTo = (to: ManagerTo) => to === "top" || to === "none" || (typeof to === "object" && isUuid(to.manager));
 
 function changed(orgId: string, reconcile = true): CanvasResult {
   if (reconcile) reconcileAfter(orgId);
@@ -24,64 +25,76 @@ function changed(orgId: string, reconcile = true): CanvasResult {
   return { ok: true };
 }
 
-/** An arrow from `parentId` down to `groupId` (null: the arrow removed, the group at the top). */
-export async function canvasSetParent(orgId: string, groupId: string, name: string, parentId: string | null): Promise<CanvasResult> {
-  if (!isUuid(orgId) || !isUuid(groupId) || (parentId !== null && !isUuid(parentId)) || parentId === groupId) return NO;
+type Db = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+/** The person row for `who`: a member account without one gets it (place_member, unplaced). */
+async function personFor(db: Db, orgId: string, who: Who): Promise<string | null> {
+  if ("personId" in who) return isUuid(who.personId) ? who.personId : null;
+  if (!isUuid(who.userId)) return null;
+  const { data, error } = await db.rpc("place_member", { p_org_id: orgId, p_user_id: who.userId, p_group_id: null, p_name: who.name });
+  if (error) return null;
+  return (data as string | null) ?? null;
+}
+
+/** "Rapporterar till": an arrow drawn, removed (top) or a person taken out of the tree (none). */
+export async function canvasSetManager(orgId: string, who: Who, to: ManagerTo): Promise<CanvasResult> {
+  if (!isUuid(orgId) || !validTo(to)) return NO;
   const db = await createSupabaseServerClient();
-  if (!(await saveGroup(db, orgId, { id: groupId, name, parentId }))) return NO;
+  const personId = await personFor(db, orgId, who);
+  if (!personId || (typeof to === "object" && to.manager === personId)) return NO;
+  if (!(await setManager(db, personId, to))) return NO;
   return changed(orgId);
 }
 
-export async function canvasRename(orgId: string, groupId: string, name: string, parentId: string | null): Promise<CanvasResult> {
-  if (!isUuid(orgId) || !isUuid(groupId) || (parentId !== null && !isUuid(parentId))) return NO;
+/** "Lägg till person": name (+ e-mail, role), reporting to someone, at the top, or outside the tree. */
+export async function canvasAddPerson(
+  orgId: string,
+  input: { name: string; role: string; email: string },
+  to: ManagerTo,
+  at: { x: number; y: number } | null,
+): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
+  if (!isUuid(orgId) || !validTo(to)) return { ok: false, reason: "invalid" };
   const db = await createSupabaseServerClient();
-  if (!(await saveGroup(db, orgId, { id: groupId, name, parentId }))) return NO;
-  return changed(orgId, false);
-}
-
-/** "+ Ny grupp": a top-level group (or under `parentId`), its card where it was asked for. */
-export async function canvasCreate(orgId: string, name: string, parentId: string | null, at: { x: number; y: number } | null): Promise<CreateResult> {
-  if (!isUuid(orgId) || (parentId !== null && !isUuid(parentId))) return { ok: false };
-  const db = await createSupabaseServerClient();
-  const { data, error } = await db.rpc("set_group", { p_org_id: orgId, p_id: null, p_name: name.trim(), p_parent: parentId });
-  if (error && error.code !== "22023" && error.code !== "23505") throw new Error(`set_group: ${error.message}`);
-  const id = typeof data === "string" ? data : null;
-  if (!id) return { ok: false };
-  if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) await saveGroupCanvas(db, orgId, [{ id, x: at.x, y: at.y }]);
+  const added = await addPerson(db, orgId, { name: input.name.trim(), role: input.role.trim(), email: input.email.trim() });
+  if (!added.ok) return { ok: false, reason: added.reason };
+  if (to !== "none" && !(await setManager(db, added.id, to))) {
+    changed(orgId);
+    return { ok: false, reason: "manager" };
+  }
+  if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) await savePeopleCanvas(db, orgId, [{ id: added.id, x: at.x, y: at.y }]);
   changed(orgId);
-  return { ok: true, id };
+  return { ok: true, id: added.id };
 }
 
-export async function canvasArchive(orgId: string, groupId: string): Promise<CanvasResult> {
-  if (!isUuid(orgId) || !isUuid(groupId)) return NO;
+/** Name, role and e-mail of a person (admins; RLS and the 0025/0035 admin functions decide). */
+export async function canvasEditPerson(orgId: string, personId: string, input: { name: string; role: string; email: string }): Promise<CanvasResult> {
+  if (!isUuid(orgId) || !isUuid(personId)) return NO;
+  const name = input.name.trim();
+  if (name.length < 1 || name.length > 100) return NO;
   const db = await createSupabaseServerClient();
-  if (!(await archiveGroup(db, groupId))) return NO;
+  const { data: before } = await db.from("people").select("name, role, email").eq("id", personId).eq("org_id", orgId).maybeSingle();
+  if (!before) return NO;
+  if (before.name !== name) {
+    const { data, error } = await db.from("people").update({ name }).eq("id", personId).eq("org_id", orgId).select("id");
+    if (error || !data?.length) return { ok: false, reason: error?.code === "23505" ? "duplicate" : "invalid" };
+  }
+  if ((before.role ?? "") !== input.role.trim()) {
+    const { data } = await db.rpc("set_person_role", { p_person_id: personId, p_role: input.role.trim() });
+    if (data !== true) return { ok: false, reason: "invalid" };
+  }
+  if ((before.email ?? "") !== input.email.trim().toLowerCase()) {
+    const { data } = await db.rpc("set_person_email", { p_person_id: personId, p_email: input.email.trim() });
+    if (data !== "ok") return { ok: false, reason: (data as string) ?? "invalid" };
+  }
+  // A new e-mail may link (or unlink) an account: who sees what can change.
   return changed(orgId);
 }
 
-/** A person (or a member account without a person row: `userId` + `name`) dropped on a card; `groupId` null: no place. */
-export async function canvasPlace(orgId: string, who: { personId: string } | { userId: string; name: string }, groupId: string | null): Promise<CanvasResult> {
-  if (!isUuid(orgId) || (groupId !== null && !isUuid(groupId))) return NO;
-  const db = await createSupabaseServerClient();
-  const ok =
-    "personId" in who
-      ? isUuid(who.personId) && (await placePerson(db, who.personId, groupId))
-      : isUuid(who.userId) && (await placeMember(db, orgId, who.userId, groupId, who.name));
-  if (!ok) return NO;
-  return changed(orgId);
-}
-
+/** The place of a card on the canvas (visual only). */
 export async function canvasSavePositions(orgId: string, positions: { id: string; x: number; y: number }[]): Promise<CanvasResult> {
-  if (!isUuid(orgId) || !Array.isArray(positions) || positions.length > 500) return NO;
+  if (!isUuid(orgId) || !Array.isArray(positions) || positions.length > 1000) return NO;
   const clean = positions.filter((p) => isUuid(p.id) && Number.isFinite(p.x) && Number.isFinite(p.y));
   if (!clean.length) return { ok: true };
   const db = await createSupabaseServerClient();
-  return (await saveGroupCanvas(db, orgId, clean)) ? { ok: true } : NO;
-}
-
-export async function canvasSetHead(orgId: string, groupId: string, personId: string | null): Promise<CanvasResult> {
-  if (!isUuid(orgId) || !isUuid(groupId) || (personId !== null && !isUuid(personId))) return NO;
-  const db = await createSupabaseServerClient();
-  if (!(await setGroupHead(db, groupId, personId))) return NO;
-  return changed(orgId, false);
+  return (await savePeopleCanvas(db, orgId, clean)) ? { ok: true } : NO;
 }

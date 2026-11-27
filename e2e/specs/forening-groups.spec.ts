@@ -2,9 +2,9 @@ import type { Page } from "@playwright/test";
 import { ADMIN_EMAIL } from "../env";
 import { ensureUser, expect, expectAccessible, fake, test, treeAsList } from "../fixtures";
 
-// A förening with groups (0054): the admin turns groups on in Inställningar, builds Styrelsen →
-// Utveckling, Kommunikation with the same tree editor as a Företag and places people. A developer
-// starts a meeting "för Utveckling": the head above sees it, the Kommunikation member (a cousin)
+// A förening with the tree (0054, people first since 0062): the admin turns it on in Inställningar
+// and draws who reports to whom with the same editor as a Företag: Dev reports to Hedda, Kim to
+// Kalle (both at the top). Dev starts a meeting "för Heddas team": Hedda sees it, Kim (a cousin)
 // never does, and the Doc is shared only with those who see it. A förening that never turns groups
 // on is untouched (no "Möte för" at Starta; covered here at the start and by every other spec).
 
@@ -17,7 +17,7 @@ async function snap(page: Page, name: string) {
   await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
 
-test("Förening: turn groups on, build the tree, a meeting for Utveckling is seen by the head, never the cousin", async ({ db, seedOrg, signedIn, newEmail }) => {
+test("Förening: turn the tree on, draw who reports to whom, a meeting for Heddas team is seen by Hedda, never the cousin", async ({ db, seedOrg, signedIn, newEmail }) => {
   test.setTimeout(240_000);
   const people = { dev: newEmail("utvecklare"), head: newEmail("ordf-utv"), com: newEmail("kommunikator") };
   const org = await seedOrg({ members: Object.values(people), people: ["Dev Devsson", "Hedda Head", "Kim Komm"] });
@@ -33,52 +33,48 @@ test("Förening: turn groups on, build the tree, a meeting for Utveckling is see
   await expect(dev.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
   await expect(dev.getByLabel("Möte för")).toHaveCount(0);
 
-  // The admin turns groups on in Inställningar.
+  const personId = async (orgId: string, name: string) => (must(name, await db.from("people").select("id").eq("org_id", orgId).eq("name", name).single()) as { id: string }).id;
+
+  // The admin turns the tree on in Inställningar.
   const { page: admin } = await signedIn(ADMIN_EMAIL, `${org.url}?flik=installningar&del=styrelsen`);
-  // This spec drives the list editor's forms (the canvas: group-canvas.spec.ts).
+  // This spec drives the list's forms (the canvas: people-canvas.spec.ts).
   await treeAsList(admin);
-  const groups = admin.getByRole("region", { name: "Grupper" });
-  await expect(groups.getByText("Av just nu: alla medlemmar ser alla möten.")).toBeVisible();
-  await groups.getByRole("button", { name: "Organisera i grupper" }).click();
-  const dialog = admin.getByRole("dialog", { name: `Organisera ${org.name} i grupper?` });
-  // The admin account has no name in the list: told before anything changes.
+  const section = admin.getByRole("region", { name: "Vem rapporterar till vem" });
+  await expect(section.getByText("Av just nu: alla medlemmar ser alla möten.")).toBeVisible();
+  await section.getByRole("button", { name: "Organisera i ett träd" }).click();
+  const dialog = admin.getByRole("dialog", { name: `Organisera ${org.name} i ett träd?` });
+  // The admin account has no name in the list: told before anything changes. No team names asked for.
   await expect(dialog.getByText("1 medlem är inte kopplad av en admin", { exact: false })).toBeVisible();
-  await expect(dialog.getByLabel("Översta gruppen")).toHaveValue("Styrelsen");
-  await dialog.getByRole("button", { name: "Organisera i grupper" }).click();
-  await expect(admin.getByRole("heading", { name: "Styrelsen", level: 3, exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Organisera i ett träd" }).click();
+  await expect(admin.getByLabel("Hedda Head rapporterar till")).toBeVisible({ timeout: 15_000 });
   expect((must("org", await db.from("orgs").select("groups_enabled").eq("id", org.id).single()) as { groups_enabled: boolean }).groups_enabled).toBe(true);
 
-  const groupId = async (group: string) => (must(group, await db.from("groups").select("id").eq("org_id", org.id).eq("name", group).single()) as { id: string }).id;
-  const addGroup = async (group: string) => {
-    const form = admin.getByRole("region", { name: "Ny grupp" });
-    await form.locator("#group-name").fill(group);
-    await form.getByLabel("Under").selectOption(await groupId("Styrelsen"));
-    await form.getByRole("button", { name: "Lägg till" }).click();
-    await expect(admin.getByRole("heading", { name: group, level: 3, exact: true })).toBeVisible({ timeout: 15_000 });
+  // People, not groups: Kalle (no account) at the top beside Hedda; Dev reports to Hedda, Kim to Kalle.
+  const add = admin.getByRole("region", { name: "Lägg till person" });
+  await add.getByLabel("Namn", { exact: true }).fill("Kalle Chef");
+  await add.getByRole("button", { name: "Lägg till" }).click();
+  await expect(admin.getByLabel("Kalle Chef rapporterar till")).toBeVisible({ timeout: 15_000 });
+  const reportTo = async (name: string, manager: string) => {
+    const managerId = await personId(org.id, manager);
+    await admin.getByLabel(`${name} rapporterar till`).selectOption(managerId);
+    await expect.poll(async () => (await db.from("people").select("group_id").eq("org_id", org.id).eq("name", name).single()).data?.group_id, { timeout: 15_000 }).toBe(await teamOf(manager));
   };
-  await addGroup("Utveckling");
-  await addGroup("Kommunikation");
-  const move = async (name: string, group: string) => {
-    const id = await groupId(group);
-    await admin.getByLabel(`Flytta ${name} till`).selectOption(id);
-    await expect
-      .poll(async () => (must("p", await db.from("people").select("group_id").eq("org_id", org.id).eq("name", name).single()) as { group_id: string }).group_id, { timeout: 15_000 })
-      .toBe(id);
-  };
-  await move("Dev Devsson", "Utveckling");
-  await move("Kim Komm", "Kommunikation");
+  const teamOf = async (manager: string) =>
+    (await db.from("groups").select("id").eq("head_person_id", await personId(org.id, manager)).is("archived_at", null).maybeSingle()).data?.id ?? "none";
+  await reportTo("Dev Devsson", "Hedda Head");
+  await reportTo("Kim Komm", "Kalle Chef");
   await admin.reload();
-  // The people listed in the group (the "Chef" select under Ändra lists everyone: not that).
-  await expect(admin.locator('[data-group="Utveckling"] > ul').getByText("Dev Devsson")).toBeVisible();
-  await expect(admin.locator('[data-group="Styrelsen"] > ul').getByText("Hedda Head")).toBeVisible();
-  await expect(admin.locator('[data-group="Utveckling"]').getByText("Ses av: Styrelsen")).toBeVisible();
+  // Indented under their manager; never a group name anywhere.
+  await expect(admin.getByLabel("Dev Devsson rapporterar till")).toHaveValue(await personId(org.id, "Hedda Head"));
+  await expect(admin.locator('[data-groups="on"]').getByText("Styrelsen", { exact: true })).toHaveCount(0);
   await expectAccessible(admin);
-  await snap(admin, "forening-grupper");
+  await snap(admin, "forening-trad");
 
   // The developer starts a meeting: "Möte för" is their own group; the format choice stays.
   await dev.goto(`/meetings/ny/${org.id}`);
-  await expect(dev.getByLabel("Möte för")).toHaveValue(await groupId("Utveckling"));
-  await expect(dev.getByText("Ser mötet: Utveckling, grupperna ovanför och admins.")).toBeVisible();
+  await expect(dev.getByLabel("Möte för")).toHaveValue(await teamOf("Hedda Head"));
+  await expect(dev.getByText("Ser mötet: Heddas team, cheferna ovanför och admins.")).toBeVisible();
   await expect(dev.getByRole("option", { name: "Hela föreningen" })).toHaveCount(1);
   await expect(dev.locator("p").filter({ hasText: /^Nytt dokument i / })).toBeVisible();
   const consent = dev.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" });
@@ -93,7 +89,7 @@ test("Förening: turn groups on, build the tree, a meeting for Utveckling is see
   const meetingId = dev.url().split("/").at(-1)!;
 
   const row = must("meeting", await db.from("meetings").select("group_id, private, doc_id").eq("id", meetingId).single()) as { group_id: string; private: boolean; doc_id: string };
-  expect(row).toMatchObject({ group_id: await groupId("Utveckling"), private: false });
+  expect(row).toMatchObject({ group_id: await teamOf("Hedda Head"), private: false });
   // The Doc went only to those who see the meeting: the head and the admin, never the cousin.
   const shared = (await fake.doc(row.doc_id))?.permissions ?? [];
   expect(shared).toEqual(expect.arrayContaining([people.head, ADMIN_EMAIL]));

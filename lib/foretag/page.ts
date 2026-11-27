@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { listCustomers, listGroups, type CustomerRow } from "@/lib/db/foretag";
+import { listCustomers, type CustomerRow } from "@/lib/db/foretag";
+import { listTeams } from "@/lib/foretag/teams";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
 import type { GroupRow } from "./tree";
@@ -24,8 +25,12 @@ export interface ForetagMeeting {
 export interface ForetagPerson {
   id: string;
   name: string;
+  role?: string | null;
+  email?: string | null;
   member_user_id: string | null;
   group_id: string | null;
+  canvas_x?: number | null;
+  canvas_y?: number | null;
 }
 
 export interface ForetagPageData {
@@ -43,8 +48,8 @@ export interface ForetagPageData {
 
 export async function loadForetagPage(db: SupabaseClient, orgId: string, userId: string, titleAnd: string): Promise<ForetagPageData> {
   const [groups, peopleRes, meetingsRes, customers, members, meetingInfo] = await Promise.all([
-    listGroups(db, orgId),
-    db.from("people").select("id, name, member_user_id, group_id").eq("org_id", orgId).order("name"),
+    listTeams(db, orgId),
+    db.from("people").select("id, name, role, email, member_user_id, group_id, canvas_x, canvas_y").eq("org_id", orgId).order("name"),
     db
       .from("meetings")
       .select("id, status, started_at, ended_at, started_by, group_id, private, context_id, is_test")

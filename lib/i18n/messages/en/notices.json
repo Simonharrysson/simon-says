@@ -153,6 +153,15 @@
     },
     "grupper": {
       "text": "The groups couldn't be turned on or off. Try again."
+    },
+    "rapporterar": {
+      "text": "Couldn't change who the person reports to. Nobody can report to someone below them, and someone with people under them can't leave the tree."
+    },
+    "person": {
+      "text": "Couldn't add the person. Check the name and the e-mail address."
+    },
+    "person-finns": {
+      "text": "There's already a person with that name."
     }
   }
 }

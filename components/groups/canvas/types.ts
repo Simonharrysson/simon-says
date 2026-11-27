@@ -1,37 +1,26 @@
-import type { GroupRow } from "@/lib/foretag/tree";
+import type { TreePersonView } from "@/lib/groups/people";
 
-// What the canvas gets from the page (serializable) and what it calls back (the server actions in
-// app/(app)/orgs/canvas-actions.ts, or in-memory ones on /design).
-
-export interface CanvasPerson {
-  /** `p:<person id>` for a person row, `u:<user id>` for a member account without one. */
-  key: string;
-  personId: string | null;
-  userId: string | null;
-  name: string;
-  email: string | null;
-  groupId: string | null;
-  admin: boolean;
-  you: boolean;
-}
+// What the people canvas gets from the page (serializable) and what it calls back (the server
+// actions in app/(app)/orgs/canvas-actions.ts, or in-memory ones on /design).
 
 export interface CanvasData {
   orgId: string;
   isAdmin: boolean;
-  groups: GroupRow[];
-  people: CanvasPerson[];
-  /** A förening keeps at least one group while groups are on (0054). */
-  keepLastGroup: boolean;
+  people: TreePersonView[];
 }
 
-export type Ok = { ok: true } | { ok: false };
+export type Ok = { ok: true } | { ok: false; reason?: string };
+export type ManagerTo = { manager: string } | "top" | "none";
+export type Who = { personId: string } | { userId: string; name: string };
+export interface PersonInput {
+  name: string;
+  role: string;
+  email: string;
+}
 
 export interface CanvasApi {
-  setParent(orgId: string, groupId: string, name: string, parentId: string | null): Promise<Ok>;
-  rename(orgId: string, groupId: string, name: string, parentId: string | null): Promise<Ok>;
-  create(orgId: string, name: string, parentId: string | null, at: { x: number; y: number } | null): Promise<{ ok: true; id: string } | { ok: false }>;
-  archive(orgId: string, groupId: string): Promise<Ok>;
-  place(orgId: string, who: { personId: string } | { userId: string; name: string }, groupId: string | null): Promise<Ok>;
+  setManager(orgId: string, who: Who, to: ManagerTo): Promise<Ok>;
+  addPerson(orgId: string, input: PersonInput, to: ManagerTo, at: { x: number; y: number } | null): Promise<{ ok: true; id: string } | { ok: false; reason: string }>;
+  editPerson(orgId: string, personId: string, input: PersonInput): Promise<Ok>;
   savePositions(orgId: string, positions: { id: string; x: number; y: number }[]): Promise<Ok>;
-  setHead(orgId: string, groupId: string, personId: string | null): Promise<Ok>;
 }

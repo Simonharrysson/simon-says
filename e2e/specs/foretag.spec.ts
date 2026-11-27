@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ownerOf } from "../../lib/groups/teams";
 import { ADMIN_EMAIL } from "../env";
 import { ensureUser, expect, expectAccessible, fake, test, treeAsList } from "../fixtures";
 
@@ -34,6 +35,8 @@ interface Company {
   id: string;
   url: string;
   groups: Record<"root" | "heads" | "dev" | "com", string>;
+  /** The head's name (their person row), and Kim Chef's person id. */
+  names: { head: string; kim: string };
 }
 
 /** The CEO creates the company and its tree through the UI; the three colleagues join (as an invite would) and are placed in the UI. */
@@ -71,37 +74,43 @@ async function buildCompany(page: Page, db: SupabaseClient, people: { dev: strin
   await expect(nav.getByRole("link", { name: "Föreningar", exact: true })).toHaveAttribute("aria-current", "page");
   await page.goto(`/orgs/${id}?flik=personer`);
 
-  const groupId = async (group: string) =>
-    (must(group, await db.from("groups").select("id").eq("org_id", id).eq("name", group).single()) as { id: string }).id;
-  const addGroup = async (group: string, under: string) => {
-    const form = page.getByRole("region", { name: "Ny grupp" });
-    await form.locator("#group-name").fill(group);
-    await form.getByLabel("Under").selectOption(await groupId(under));
-    await form.getByRole("button", { name: "Lägg till" }).click();
-    await expect(page.getByRole("heading", { name: group, level: 3 })).toBeVisible({ timeout: 15_000 });
-  };
-  await addGroup("Avdelningschefer", "Ledning");
-  await addGroup("Utveckling", "Avdelningschefer");
-  await addGroup("Kommunikation", "Avdelningschefer");
-  await expectAccessible(page);
-  await snap(page, "personer-och-grupper");
-
-  // The colleagues join (the invite link's join_org), then show up under "Utan plats".
+  // People, not groups (0062): the colleagues join (the invite link's join_org) and show up under
+  // "Utan plats"; the CEO draws who reports to whom. The head reports to the CEO and the developer
+  // to the head; Kim Chef (no account) reports to the CEO and the communicator to Kim: two teams on
+  // the same level, cousins.
   const ids = await Promise.all([ensureUser(db, people.dev), ensureUser(db, people.head), ensureUser(db, people.com)]);
   must("join", await db.from("org_members").insert(ids.map((user_id) => ({ org_id: id, user_id, role: "member" }))));
   await page.reload();
-  const place = async (email: string, group: string) => {
-    await page.getByLabel(`Placera ${email}`).selectOption(await groupId(group));
-    // Placed: the account now has a person row in the group, listed by name there.
-    await expect(page.getByLabel(`Placera ${email}`)).toHaveCount(0, { timeout: 15_000 });
+  const personByUser = async (userId: string) => (must("person", await db.from("people").select("id, name").eq("org_id", id).eq("member_user_id", userId).single()) as { id: string; name: string });
+  const ceo = await personByUser(await ensureUser(db, ADMIN_EMAIL));
+  const teamOf = async (managerId: string) => (await db.from("groups").select("id").eq("head_person_id", managerId).is("archived_at", null).maybeSingle()).data?.id ?? null;
+  const reportTo = async (label: string, managerId: string) => {
+    await page.getByLabel(`${label} rapporterar till`).selectOption(managerId);
+    await expect.poll(() => teamOf(managerId), { timeout: 15_000 }).not.toBeNull();
   };
-  await place(people.dev, "Utveckling");
-  await place(people.head, "Avdelningschefer");
-  await place(people.com, "Kommunikation");
+  // An account without a person row is listed by its address; reporting gives it a row (named by the address).
+  await reportTo(people.head, ceo.id);
+  const head = await personByUser(ids[1]);
+  await reportTo(people.dev, head.id);
+  const add = page.getByRole("region", { name: "Lägg till person" });
+  await add.getByLabel("Namn", { exact: true }).fill("Kim Chef");
+  await add.getByLabel("Roll (valfri)").fill("Kommunikationschef");
+  await add.getByLabel("Rapporterar till").selectOption(ceo.id);
+  await add.getByRole("button", { name: "Lägg till" }).click();
+  await expect(page.getByLabel("Kim Chef rapporterar till")).toHaveValue(ceo.id, { timeout: 15_000 });
+  const kim = (must("kim", await db.from("people").select("id, name").eq("org_id", id).eq("name", "Kim Chef").single()) as { id: string; name: string });
+  await reportTo(people.com, kim.id);
+  await expect(page.getByText("Ny grupp")).toHaveCount(0);
+  await expectAccessible(page);
   await snap(page, "personer-placerade");
 
-  const g = groupId;
-  return { id, url: `/orgs/${id}`, groups: { root: await g("Ledning"), heads: await g("Avdelningschefer"), dev: await g("Utveckling"), com: await g("Kommunikation") } };
+  const root = (must("root", await db.from("people").select("group_id").eq("id", ceo.id).single()) as { group_id: string }).group_id;
+  return {
+    id,
+    url: `/orgs/${id}`,
+    groups: { root, heads: (await teamOf(ceo.id))!, dev: (await teamOf(head.id))!, com: (await teamOf(kim.id))! },
+    names: { head: head.name, kim: kim.id },
+  };
 }
 
 test("Företag: create, build the tree, start a meeting for Utveckling, visibility per level, customer page @phone", async ({ db, signedIn, newEmail }) => {
@@ -112,11 +121,12 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
 
   // The developer starts a meeting; "Möte för" is their own group.
   const { page: dev } = await signedIn(people.dev, company.url);
-  await expect(dev.getByText("Du ser möten för Utveckling, alla grupper under den och hela företaget.")).toBeVisible();
+  const headsTeam = `${ownerOf(company.names.head, "sv")} team`;
+  await expect(dev.getByText(`Du ser möten för ${headsTeam}, alla team under det och hela företaget.`)).toBeVisible();
   await dev.getByRole("link", { name: "Starta möte", exact: true }).click();
   await expect(dev.getByRole("heading", { name: "Innan ni börjar" })).toBeVisible();
   await expect(dev.getByLabel("Möte för")).toHaveValue(company.groups.dev);
-  await expect(dev.getByText("Ser mötet: Utveckling, grupperna ovanför och admins.")).toBeVisible();
+  await expect(dev.getByText(`Ser mötet: ${headsTeam}, cheferna ovanför och admins.`)).toBeVisible();
   const consent = dev.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" });
   await expect(async () => {
     await consent.check({ timeout: 2000 });
@@ -200,13 +210,16 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
   await expect(dev.getByRole("heading", { name: "Acme", level: 1 })).toBeVisible();
   await expect(dev.getByLabel("Kundens namn")).toHaveCount(0);
 
-  // The CEO moves the head beside Utveckling (into Kommunikation): they no longer see the meeting,
-  // so the Doc access Simon Says gave them is taken away (reconciled after the move).
+  // The CEO moves the developer to Kim and takes the head out of the tree: the head no longer sees
+  // the meeting, so the Doc access Simon Says gave them is taken away (reconciled after the move).
   const headId = await ensureUser(db, people.head);
-  const headName = (must("head", await db.from("people").select("name").eq("org_id", company.id).eq("member_user_id", headId).single()) as { name: string }).name;
+  const devId2 = await ensureUser(db, people.dev);
   await ceo.goto(`${company.url}?flik=personer`);
-  await ceo.getByLabel(`Flytta ${headName} till`).selectOption(company.groups.com);
-  await expect.poll(async () => (await db.from("people").select("group_id").eq("org_id", company.id).eq("member_user_id", headId).single()).data?.group_id, { timeout: 15_000 }).toBe(company.groups.com);
+  const devName = (must("dev", await db.from("people").select("name").eq("org_id", company.id).eq("member_user_id", devId2).single()) as { name: string }).name;
+  await ceo.getByLabel(`${devName} rapporterar till`).selectOption(company.names.kim);
+  await expect.poll(async () => (await db.from("people").select("group_id").eq("org_id", company.id).eq("member_user_id", devId2).single()).data?.group_id, { timeout: 15_000 }).toBe(company.groups.com);
+  await ceo.getByLabel(`${company.names.head} rapporterar till`).selectOption("none");
+  await expect.poll(async () => (await db.from("people").select("group_id").eq("org_id", company.id).eq("member_user_id", headId).single()).data?.group_id, { timeout: 15_000 }).toBeNull();
   await sees(head, false);
   await expect.poll(async () => (await fake.doc(row.doc_id))?.permissions ?? [], { timeout: 30_000 }).not.toContain(people.head);
   expect((await fake.doc(row.doc_id))?.permissions ?? []).toContain(ADMIN_EMAIL);
