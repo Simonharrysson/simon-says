@@ -7,7 +7,7 @@
   "google": "Sign in with Google",
   "googleRetry": "Try again with Google",
   "onlyOwnDocs": "We may only create and edit <strong>the documents Simon Says creates itself</strong>. We don't see the rest of your Drive.",
-  "roomNoAccount": "Everyone in the room can take part without an account. With an account you get your tasks and summaries.",
+  "onlyStarter": "Everyone in the room can take part without an account. With one, you get your tasks and summaries.",
   "privacy": "Read how we handle audio, text and accounts in the <link>privacy information</link>.",
   "scopeCaption": "When Google asks, tick this box:",
   "scopeRow": "See, edit, create and delete <em>only the specific Google Drive files that you use with this app</em>",

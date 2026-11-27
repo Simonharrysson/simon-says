@@ -114,7 +114,8 @@
     "doneShared": "You talked for {duration}. The notes are done.{shared}",
     "done": "You talked for {duration}. The notes are done{shared}.",
     "openDoc": "Open the document",
-    "backToOrg": "Back to the association"
+    "backToOrg": "Back to the association",
+    "toMeeting": "See decisions and tasks"
   },
   "speakers": {
     "title": "Speakers",

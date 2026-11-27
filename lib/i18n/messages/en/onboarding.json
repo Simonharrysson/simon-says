@@ -62,7 +62,7 @@
     "text": "Logo, the board, meeting folder, how you usually meet, your old minutes and voices. Everything is optional and takes a few minutes.",
     "start": "Start",
     "continue": "Continue",
-    "hide": "Hide"
+    "hide": "Continue later"
   },
   "shell": {
     "later": "Continue later",

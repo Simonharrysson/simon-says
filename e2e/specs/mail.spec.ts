@@ -77,10 +77,11 @@ test("Konto: e-mail preferences are saved for the account", async ({ seedOrg, si
   await page.reload();
   await expect(page.getByRole("switch", { name: /^Sammanfattning efter möten/ })).not.toBeChecked();
 
-  // "Inga mejl alls" turns everything off and locks the rows above.
-  await page.getByRole("switch", { name: /^Inga mejl alls/ }).click();
+  // "Stäng av alla mejl" turns everything off and locks the rows above.
+  await page.getByRole("button", { name: "Stäng av alla mejl" }).click();
   await expect(page.getByText("Sparat")).toBeVisible();
   await expect(page.getByRole("switch", { name: /^Inbjudningar/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Slå på mejlen igen" })).toBeVisible();
   const { data: user } = await db.auth.admin.listUsers({ perPage: 1000 });
   const id = user.users.find((u) => u.email === email)!.id;
   const { data } = await db.from("email_preferences").select("all_off, off_categories").eq("user_id", id).single();

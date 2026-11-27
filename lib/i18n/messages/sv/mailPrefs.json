@@ -14,9 +14,9 @@
       "description": "Sammanfattningen efter det du spelat in i Privat: beslut, uppgifter och vad som hänt sedan sist."
     }
   },
-  "allOff": "Inga mejl alls",
-  "allOffOn": "Simon Says skickar inga mejl till dig. Valen ovanför finns kvar när du stänger av det här.",
-  "allOffOff": "Stänger av allt ovanför på en gång.",
+  "allOff": "Stäng av alla mejl",
+  "allOffOn": "Du får inga mejl från Simon Says. Valen ovanför finns kvar tills du slår på mejlen igen.",
+  "allOn": "Slå på mejlen igen",
   "saved": "Sparat",
   "saveFailed": "Det gick inte att spara. Försök igen.",
   "title": "Mejl från Simon Says",

@@ -128,7 +128,7 @@ export function ConsentStep({
       <div className="flex flex-col gap-1">
         <p className="text-ink-2">{orgName}</p>
         <h1 id={`${id}-title`} className="text-2xl">
-          {t("title")}
+          {privat ? tp("consentTitle") : t("title")}
         </h1>
         {privat && eventTitle && <p className="text-sm text-ink-2">{tCal("fromCalendar", { title: eventTitle })}</p>}
       </div>
@@ -152,7 +152,7 @@ export function ConsentStep({
       {silent && !error && (
         <p className="flex items-center gap-2 text-sm text-ink-2" role="status">
           <IconMicOff size={16} aria-hidden="true" />
-          {t("silent")}
+          {privat ? tp("silent") : t("silent")}
         </p>
       )}
 
@@ -177,7 +177,7 @@ export function ConsentStep({
         onClick={onStart}
         aria-describedby={!confirmed || !agendaConfirmed ? `${id}-why` : undefined}
       >
-        {starting ? t("starting") : t("start")}
+        {starting ? t("starting") : privat ? tp("start") : t("start")}
       </Button>
       {(!confirmed || !agendaConfirmed) && (
         <p id={`${id}-why`} className="-mt-3 text-center text-xs text-ink-3">
@@ -193,7 +193,7 @@ export function ConsentStep({
       <details className="group/settings border-t border-line pt-3" open={settingsOpen}>
         <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md text-sm font-semibold text-ink-2 select-none hover:text-ink [&::-webkit-details-marker]:hidden">
           <IconChevronDown size={16} className="-rotate-90 transition-transform duration-120 group-open/settings:rotate-0" aria-hidden="true" />
-          {t("settings")}
+          {privat ? tp("settings") : t("settings")}
         </summary>
         <div className="mt-2 flex flex-col gap-4 pl-6">
           {(onMicCheck || testing) && (
