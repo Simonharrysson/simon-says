@@ -90,6 +90,7 @@ export default async function PrivacyPage() {
             <li>{t("stored.history")}</li>
             <li>{t("stored.drive")}</li>
             <li>{t("stored.calendar")}</li>
+            <li>{t("stored.foretag")}</li>
           </ul>
           <p>{t.rich("stored.kept", { strong })}</p>
           <h3>{t("stored.notTitle")}</h3>

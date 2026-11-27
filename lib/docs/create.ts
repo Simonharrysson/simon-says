@@ -177,6 +177,19 @@ export async function shareWith(auth: OAuth2Client, docId: string, emailAddress:
   });
 }
 
+/**
+ * Takes one address's access away (Företag, 0050: they can no longer see the meeting). Idempotent:
+ * no permission for the address is a success. Throws on a Drive failure.
+ */
+export async function unshareWith(auth: OAuth2Client, docId: string, emailAddress: string): Promise<boolean> {
+  const drive = driveApi(auth);
+  const list = await drive.permissions.list({ fileId: docId, supportsAllDrives: true, fields: "permissions(id,emailAddress,role)" });
+  const target = emailAddress.trim().toLowerCase();
+  const hits = (list.data.permissions ?? []).filter((p) => (p.emailAddress ?? "").toLowerCase() === target && p.role !== "owner");
+  for (const p of hits) await drive.permissions.delete({ fileId: docId, permissionId: p.id!, supportsAllDrives: true });
+  return hits.length > 0;
+}
+
 /** Writer access for each member, no notification email; the addresses that worked and that failed. */
 async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[]): Promise<{ shared: string[]; shareFailed: string[] }> {
   // One failing address (e.g. not a Google account) must not stop the meeting.

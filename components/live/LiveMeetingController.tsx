@@ -11,6 +11,7 @@ import { runEndFlow } from "@/lib/live/end-flow";
 import { SIGNED_IN_CHANNEL, SIGNED_IN_PATH } from "@/lib/live/signed-in";
 import { stopParam } from "@/lib/ui/limit-copy";
 import { ContextPicker, type CreateContext, type PrivatChoice } from "@/components/privat/ContextPicker";
+import { GroupPicker, type ForetagChoice, type ForetagEventOffer } from "@/components/foretag/GroupPicker";
 import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption, type GoalOption } from "./AgendaStep";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
@@ -94,6 +95,13 @@ export interface LiveMeetingControllerProps {
     summaryHref: string | null;
     backLabel: string;
   };
+  /** A new Företag meeting (0050): the groups for "Möte för" (tree order) and the starter's own (preselected). */
+  foretag?: {
+    groups: { id: string; name: string; depth: number }[];
+    initialGroupId: string | null;
+    /** The event happening now in the starter's calendar, offered to confirm (never attached by itself). */
+    event?: ForetagEventOffer | null;
+  };
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -133,6 +141,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setAgendaState(choice);
   }, []);
   const [privatChoice, setPrivatChoice] = useState<PrivatChoice | null>(null);
+  const [foretagChoice, setForetagChoice] = useState<ForetagChoice | null>(null);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
   /** The format override kept across that remount. */
@@ -430,6 +439,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setStartErrorCode(null);
     const choice = agendaRef.current;
     const privatStart = props.privat ? privatChoice : null;
+    const foretagStart = props.foretag ? foretagChoice : null;
     void (async () => {
       try {
         await opened;
@@ -451,7 +461,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         const res = await fetch("/api/meetings", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : {
+          body: JSON.stringify(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : foretagStart ? { orgId: props.orgId, consent: true, groupId: foretagStart.groupId, private: foretagStart.private, ...(foretagStart.calendarEventId ? { calendarEventId: foretagStart.calendarEventId, attendeeIds: foretagStart.attendeeIds } : {}) } : {
             orgId: props.orgId,
             consent: true,
             agendaDocId: choice?.agendaDocId ?? null,
@@ -866,7 +876,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           : null
       }
       agenda={
-        props.meeting === null && props.privat ? (
+        props.meeting === null && props.foretag ? (
+          <GroupPicker groups={props.foretag.groups} initialGroupId={props.foretag.initialGroupId} event={props.foretag.event ?? null} onChange={setForetagChoice} disabled={phase === "starting"} />
+        ) : props.meeting === null && props.privat ? (
           <ContextPicker
             contexts={props.privat.contexts ?? []}
             initialId={props.privat.initialContextId ?? null}
@@ -890,7 +902,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           />
         ) : undefined
       }
-      agendaConfirmed={props.meeting === null ? (props.privat ? privatChoice !== null : agenda?.confirmed === true) : true}
+      agendaConfirmed={props.meeting === null ? (props.foretag ? foretagChoice !== null : props.privat ? privatChoice !== null : agenda?.confirmed === true) : true}
       agendaDoc={agenda?.agendaDocId ? { transcriptInDoc: agenda.transcriptInDoc } : null}
       onNewDocInstead={
         startError === "start-failed" && startErrorCode?.startsWith("agenda_")

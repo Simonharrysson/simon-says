@@ -1,3 +1,4 @@
+import { refuseForetag } from "@/lib/foretag/guard";
 import { NextResponse, type NextRequest } from "next/server";
 import { apiT, localizeMessage, requestLocale } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
@@ -25,6 +26,9 @@ const fail = (error: string, status: number, message: string) =>
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const db = await createSupabaseServerClient();
   const {
     data: { user },

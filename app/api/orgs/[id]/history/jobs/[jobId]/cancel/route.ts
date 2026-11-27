@@ -1,3 +1,4 @@
+import { refuseForetag } from "@/lib/foretag/guard";
 import { NextResponse, type NextRequest } from "next/server";
 import { apiT } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
@@ -16,6 +17,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string; jobId: string }> }) {
   const t = apiT(request);
   const { id, jobId } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const guard = await requireAdmin(id, t);
   if (!guard.ok) return guard.reply;
   if (!isUuid(jobId)) return fail("not_found", 404, t("api.jobNotFound"));

@@ -40,6 +40,9 @@
     },
     "lamnat": {
       "text": "Du har lämnat föreningen. Dokument som redan delats med dig ligger kvar i din Drive."
+    },
+    "foretag": {
+      "text": "Ditt konto kan inte skapa företag än. Under testperioden är det bara för inbjudna. Mejla simon@harrysson.co."
     }
   },
   "org": {
@@ -129,6 +132,18 @@
     },
     "kalender": {
       "text": "Kalendern kunde inte sparas. Välj en av dina egna kalendrar och försök igen. Bara en admin kan ändra den."
+    },
+    "grupp": {
+      "text": "Gruppen kunde inte sparas. Namnet kan vara upptaget, eller så hamnade gruppen under sig själv."
+    },
+    "grupp-arkiv": {
+      "text": "Gruppen kunde inte arkiveras. Flytta först grupperna under den och vänta tills ett pågående möte i gruppen är slut."
+    },
+    "placering": {
+      "text": "Personen kunde inte placeras. Ladda om sidan och försök igen."
+    },
+    "kundnamn": {
+      "text": "Kundens namn kunde inte sparas. Det kan redan finnas en kund med det namnet."
     }
   }
 }
