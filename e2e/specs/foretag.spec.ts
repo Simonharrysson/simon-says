@@ -19,6 +19,17 @@ async function snap(page: Page, name: string) {
   await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
 
+/** The top rail (five items with Företag) stays on the screen, also at 390 px. Mobile emulation
+ * widens the layout viewport to fit an overflow, so measure the last link against the screen. */
+async function navFits(page: Page) {
+  const width = page.viewportSize()!.width;
+  const right = await page
+    .getByRole("navigation", { name: "Huvudmeny" })
+    .getByRole("link")
+    .evaluateAll((links) => Math.max(...links.filter((l) => l.getClientRects().length > 0).map((l) => l.getBoundingClientRect().right)));
+  expect(right, "top rail's right edge in px").toBeLessThanOrEqual(width);
+}
+
 interface Company {
   id: string;
   url: string;
@@ -28,13 +39,35 @@ interface Company {
 /** The CEO creates the company and its tree through the UI; the three colleagues join (as an invite would) and are placed in the UI. */
 async function buildCompany(page: Page, db: SupabaseClient, people: { dev: string; head: string; com: string }): Promise<Company> {
   const name = `Testbolag ${Date.now().toString(36)}`;
+  const nav = page.getByRole("navigation", { name: "Huvudmeny" });
+  // A company is not a förening: Föreningar offers no company, Företag (its own top-rail item) does.
   await page.goto("/orgs");
+  await expect(page.getByRole("region", { name: "Skapa ett företag" })).toHaveCount(0);
+  await nav.getByRole("link", { name: "Företag", exact: true }).click();
+  await expect(page).toHaveURL(/\/foretag$/);
+  await expect(page.getByRole("heading", { name: "Företag", level: 1 })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Företag", exact: true })).toHaveAttribute("aria-current", "page");
+  await expectAccessible(page);
+  await navFits(page);
   const create = page.getByRole("region", { name: "Skapa ett företag" });
   await create.getByLabel("Företagets namn").fill(name);
   await create.getByRole("button", { name: "Skapa företag" }).click();
   await expect(page).toHaveURL(/\/orgs\/[0-9a-f-]{36}\?flik=personer$/, { timeout: 30_000 });
   const id = new URL(page.url()).pathname.split("/")[2];
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+  // The company's pages keep /orgs/<id> but sit under Företag: the rail marks it, the back link leads there.
+  await expect(nav.getByRole("link", { name: "Företag", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link", { name: "Föreningar", exact: true })).not.toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("main").getByRole("link", { name: "Företag", exact: true })).toHaveAttribute("href", "/foretag");
+  // Listed under Dina företag, never under Föreningar.
+  await page.goto("/foretag");
+  await expect(page.getByRole("region", { name: "Dina företag" }).getByRole("link", { name })).toBeVisible();
+  await page.goto("/orgs");
+  await expect(page.getByRole("link", { name })).toHaveCount(0);
+  await expect(page.getByText("Dina företag")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Skapa ett företag" })).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Föreningar", exact: true })).toHaveAttribute("aria-current", "page");
+  await page.goto(`/orgs/${id}?flik=personer`);
 
   const groupId = async (group: string) =>
     (must(group, await db.from("groups").select("id").eq("org_id", id).eq("name", group).single()) as { id: string }).id;
@@ -72,7 +105,7 @@ async function buildCompany(page: Page, db: SupabaseClient, people: { dev: strin
 test("Företag: create, build the tree, start a meeting for Utveckling, visibility per level, customer page @phone", async ({ db, signedIn, newEmail }) => {
   test.setTimeout(240_000);
   const people = { dev: newEmail("utvecklare"), head: newEmail("kommchef"), com: newEmail("kommunikator") };
-  const { page: ceo } = await signedIn(ADMIN_EMAIL, "/orgs");
+  const { page: ceo } = await signedIn(ADMIN_EMAIL, "/hem");
   const company = await buildCompany(ceo, db, people);
 
   // The developer starts a meeting; "Möte för" is their own group.

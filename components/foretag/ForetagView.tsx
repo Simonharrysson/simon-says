@@ -71,6 +71,7 @@ export function ForetagView(props: ForetagViewProps) {
             <span className="min-w-0">{org.name}</span>
           </span>
         }
+        back={{ href: "/foretag", label: t("list.back") }}
         meta={
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium tracking-wide text-ink-3 uppercase">{t("kicker")}</p>

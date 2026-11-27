@@ -174,3 +174,10 @@ export async function listMyForetag(db: Db): Promise<{ id: string; name: string;
     logo_updated_at: o.logo_updated_at ?? null,
   }));
 }
+
+/** The ids of the companies `userId` is a member of (RLS), for the top rail (app/(app)/layout.tsx). */
+export async function myForetagIds(db: Db, userId: string): Promise<string[]> {
+  const { data, error } = await db.from("orgs").select("id, org_members!inner(user_id)").eq("org_members.user_id", userId).eq("kind", "foretag");
+  if (error) fail("my company ids", error);
+  return (data ?? []).map((o) => o.id as string);
+}
