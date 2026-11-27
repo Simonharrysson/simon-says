@@ -1,6 +1,6 @@
 {
   "connectTitle": "Kalender",
-  "connectIntro": "Koppla din Google-kalender så visar Simon Says föreningens kommande möten under Starta möte, och fyller i mötets namn och vilka som är bjudna när du startar. Simon Says läser bara, och bara den kalender föreningen har valt.",
+  "connectIntro": "Koppla din Google-kalender så visar Simon Says föreningens kommande möten på fliken Möten, under Från kalendern, och fyller i mötets namn och vilka som är bjudna när du startar. Simon Says läser bara, och bara den kalender föreningen har valt.",
   "connect": "Koppla kalender",
   "connected": "Din Google-kalender är kopplad (bara läsning).",
   "disconnect": "Koppla från",
@@ -15,7 +15,7 @@
     "fran": "Kalendern är frånkopplad. Vår kopia av åtkomsten är raderad."
   },
   "orgTitle": "Mötenas kalender",
-  "orgIntro": "Välj kalendern där föreningens möten ligger, till exempel en delad kalender. Medlemmar som har kopplat sin egen kalender och kan se den här ser de kommande mötena under Starta möte.",
+  "orgIntro": "Välj kalendern där föreningens möten ligger, till exempel en delad kalender. Medlemmar som har kopplat sin egen kalender och kan se den här ser de kommande mötena på fliken Möten, under Från kalendern.",
   "orgConnectFirst": "Koppla din kalender först, så kan du välja bland dina kalendrar.",
   "orgUnavailable": "Vi kunde inte läsa dina kalendrar just nu. Försök igen om en liten stund.",
   "orgNoShared": "Du har inga delade kalendrar. Skapa en kalender för föreningen i Google Kalender och dela den med medlemmarna, så kan du välja den här. Din egen huvudkalender går inte att välja.",

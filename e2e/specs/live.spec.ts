@@ -78,7 +78,10 @@ test("Starta möte → namnrunda → live notes in the Doc → Avsluta → liste
   // The transcript tab got the fake's lines (held during the name round, written by the final pass).
   expect((await fake.doc(docId))?.tabs.find((t) => t.title === "Transkript")?.text).toMatch(/S1-speaker_\d 00:00:\d\d: \S/);
 
-  await page.getByRole("link", { name: "Tillbaka till föreningen" }).click();
+  // The ended screen leads on to the meeting's page (decisions and tasks), then back to the förening.
+  await page.getByRole("link", { name: "Se beslut och uppgifter" }).click();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}/mote/${meetingId}$`));
+  await page.goto(org.url);
   const meetings = page.getByRole("list", { name: "Möten" });
   await expect(meetings.getByRole("listitem")).toHaveCount(1);
   // The final pass named the meeting (0048): the title is the row's main line, with the counts.

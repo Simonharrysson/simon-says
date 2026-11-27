@@ -24,5 +24,5 @@ export default async function HomePage() {
   if (!user) redirect("/login?next=/hem");
   const data = await loadHome(db, user.id);
   if (data.brandNew) redirect("/orgs");
-  return <HomeView tasks={data.tasks} recent={data.recent} unlinked={data.unlinked} docs={data.docs} today={stockholmDay(new Date())} />;
+  return <HomeView tasks={data.tasks} recent={data.recent} unlinked={data.unlinked} email={user.email ?? null} docs={data.docs} today={stockholmDay(new Date())} />;
 }

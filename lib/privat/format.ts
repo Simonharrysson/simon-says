@@ -8,10 +8,20 @@ const tag = (locale: PrivatLocale) => (locale === "en" ? "en-GB" : "sv-SE");
 
 /** "26 nov 18.05" / "26 Nov 18:05". */
 export function shortWhen(iso: string | Date, locale: PrivatLocale = "sv"): string {
+  return `${shortDay(iso, locale)} ${clockTime(iso, locale)}`;
+}
+
+/** "26 nov" / "26 Nov". */
+export function shortDay(iso: string | Date, locale: PrivatLocale = "sv"): string {
   const at = typeof iso === "string" ? new Date(iso) : iso;
-  const day = new Intl.DateTimeFormat(tag(locale), { day: "numeric", month: "short", timeZone: TZ }).format(at).replace(/\./g, "");
+  return new Intl.DateTimeFormat(tag(locale), { day: "numeric", month: "short", timeZone: TZ }).format(at).replace(/\./g, "");
+}
+
+/** "18.05" / "18:05". */
+export function clockTime(iso: string | Date, locale: PrivatLocale = "sv"): string {
+  const at = typeof iso === "string" ? new Date(iso) : iso;
   const time = new Intl.DateTimeFormat(tag(locale), { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: TZ }).format(at);
-  return `${day} ${locale === "sv" ? time.replace(":", ".") : time}`;
+  return locale === "sv" ? time.replace(":", ".") : time;
 }
 
 /** "torsdag 26 november" / "Thursday 26 November". */
