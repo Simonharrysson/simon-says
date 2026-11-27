@@ -47,11 +47,11 @@ async function sample(page: Page, kind: "indicator" | "row", arg: string, ms: nu
   );
 }
 
-// TEMPORARY (recordings for the PR): video on. Removed before the PR leaves draft.
-test.use({ video: { mode: "on", size: { width: 1280, height: 800 } } });
+// Motion on for every test here (also in signedIn's own contexts, which take these options),
+// except the reduced-motion one at the end.
+test.use({ contextOptions: { reducedMotion: "no-preference" } });
 
 test.describe("transitions", () => {
-  test.use({ contextOptions: { reducedMotion: "no-preference" }, viewport: { width: 1280, height: 800 } });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -159,8 +159,8 @@ test("Mina uppgifter: a done task closes out of the list and the rows below foll
   ) as { id: string };
   must("tasks", await db.from("context_tasks").insert(["Läsa kap 4", "Skriva labbrapporten", "Boka handledning"].map((text) => ({ context_id: ctx.id, meeting_id: rec.id, text }))));
 
-  // signedIn's own context has no reduced motion: the animations run.
   const { page } = await signedIn(email, "/hem");
+  expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(false);
   const list = page.getByRole("list", { name: "Mina uppgifter" });
   await expect(list.getByRole("listitem")).toHaveCount(3);
   const full = (await list.getByRole("listitem").filter({ hasText: "Läsa kap 4" }).boundingBox())!.height;
@@ -183,15 +183,19 @@ test("Mina uppgifter: a done task closes out of the list and the rows below foll
   await expect(list).toContainText("Läsa kap 4");
 });
 
-test("reduced motion: a tab switch changes at once", async ({ page, seedOrg }) => {
-  const org = await seedOrg();
-  await page.goto(org.url);
-  const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
-  await expect(tabs).toHaveAttribute("data-slider", "true");
-  await tabs.getByRole("link", { name: "Översikt" }).click();
-  await expect(tabs.getByRole("link", { name: "Översikt" })).toHaveAttribute("aria-current", "page");
-  // No entrance ran, and the underline moves without a transition.
-  expect(await page.evaluate(() => document.getAnimations().filter((a) => a.id === "enter").length)).toBe(0);
-  const durations = await tabs.locator('[data-slider-mark="active"]').evaluate((el) => getComputedStyle(el).transitionDuration);
-  expect(durations.split(",").every((d) => parseFloat(d) < 0.01), durations).toBe(true);
+test.describe("reduced motion", () => {
+  test.use({ contextOptions: { reducedMotion: "reduce" } });
+
+  test("a tab switch changes at once", async ({ page, seedOrg }) => {
+    const org = await seedOrg();
+    await page.goto(org.url);
+    const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
+    await expect(tabs).toHaveAttribute("data-slider", "true");
+    await tabs.getByRole("link", { name: "Översikt" }).click();
+    await expect(tabs.getByRole("link", { name: "Översikt" })).toHaveAttribute("aria-current", "page");
+    // No entrance ran, and the underline moves without a transition.
+    expect(await page.evaluate(() => document.getAnimations().filter((a) => a.id === "enter").length)).toBe(0);
+    const durations = await tabs.locator('[data-slider-mark="active"]').evaluate((el) => getComputedStyle(el).transitionDuration);
+    expect(durations.split(",").every((d) => parseFloat(d) < 0.01), durations).toBe(true);
+  });
 });
