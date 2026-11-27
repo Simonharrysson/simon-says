@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { IconArrowLeft, IconPause } from "@/components/ui/icons";
 import { liveStatus, type LiveStatus } from "@/lib/ui/live-status";
 import { cn } from "@/lib/utils";
+import type { CaptureSource } from "@/lib/audio/call";
 import { ConsentStep, type StartError } from "./ConsentStep";
 import { DocLink } from "./DocLink";
 import { LiveBanners } from "./LiveBanners";
@@ -88,6 +89,15 @@ export interface LiveMeetingProps {
   onNewDocInstead?: () => void;
   /** Consent step: the calendar event it was started from (todo #14). */
   eventTitle?: string | null;
+  /** Consent step: "Var hålls mötet?" and the video-call steps; see ConsentStep. */
+  source?: CaptureSource;
+  onSourceChange?: (s: CaptureSource) => void;
+  foretag?: boolean;
+  callSetup?: ReactNode;
+  callReady?: boolean;
+  callHint?: string;
+  /** Resume: the meeting is a video call (the share picker opens again). */
+  resumeCall?: boolean;
   /** A control request is in flight. */
   busy?: boolean;
   autoStopped?: boolean;
@@ -157,6 +167,12 @@ export function LiveMeeting(p: LiveMeetingProps) {
           onNewDocInstead={p.onNewDocInstead}
           eventTitle={p.eventTitle}
           privat={Boolean(p.privat)}
+          source={p.source}
+          onSourceChange={p.onSourceChange}
+          foretag={p.foretag}
+          callSetup={p.callSetup}
+          callReady={p.callReady}
+          callHint={p.callHint}
         />
         <PrivacyNote />
       </div>
@@ -177,6 +193,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
           resuming={p.busy}
           error={p.startError}
           errorText={p.startErrorText}
+          callHint={p.resumeCall}
         />
       </div>
     );

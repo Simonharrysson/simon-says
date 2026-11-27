@@ -6,6 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { MicCapture } from "@/lib/audio/capture";
+import { tabAudioSupport, type CaptureSource, type TabAudioSupport } from "@/lib/audio/call";
+import { CallCapture, type CallLevels, type ShareResult } from "@/lib/audio/call-capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import { runEndFlow } from "@/lib/live/end-flow";
 import { SIGNED_IN_CHANNEL, SIGNED_IN_PATH } from "@/lib/live/signed-in";
@@ -13,6 +15,7 @@ import { stopParam } from "@/lib/ui/limit-copy";
 import { ContextPicker, type CreateContext, type PrivatChoice } from "@/components/privat/ContextPicker";
 import { GroupPicker, type ForetagChoice, type ForetagEventOffer } from "@/components/foretag/GroupPicker";
 import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption, type GoalOption } from "./AgendaStep";
+import { CallSetup, type CallShareError } from "./CallSetup";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
@@ -63,6 +66,8 @@ export interface LiveMeetingInfo {
   docPaused: boolean;
   /** Seconds the meeting lasted, for an ended meeting. */
   durationSeconds?: number;
+  /** Held in a video call (0058): resuming shares the call tab again. */
+  captureSource?: CaptureSource;
 }
 
 export interface LiveMeetingControllerProps {
@@ -141,6 +146,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [meeting, setMeeting] = useState<LiveMeetingInfo | null>(props.meeting);
   const t = useTranslations("live.controller");
   const tPicker = useTranslations("privat.picker");
+  const tCall = useTranslations("live.call");
   const locale = useLocale();
   const [phase, setPhase] = useState<LivePhase>(() => initialPhase(props.meeting));
   const [startError, setStartError] = useState<StartError>(null);
@@ -201,7 +207,27 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** The name round is on (a new meeting, until "Klar", "Hoppa över" or the server ran it). */
   const nameRoundOpen = useRef(false);
 
-  const capture = useRef<MicCapture | null>(null);
+  const capture = useRef<MicCapture | CallCapture | null>(null);
+  /** "Var hålls mötet?": the room (laptop mic) or a video call (the call tab + the mic). */
+  const [source, setSource] = useState<CaptureSource>(props.meeting?.captureSource ?? "room");
+  /** Read after mount: the server can't know the browser. */
+  const [callSupport, setCallSupport] = useState<TabAudioSupport>("ok");
+  useEffect(() => setCallSupport(tabAudioSupport(navigator)), []);
+  /** A video call in a browser without tab audio: the user chose to record the mic only. */
+  const [micOnly, setMicOnly] = useState(false);
+  const [callShared, setCallShared] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [callError, setCallError] = useState<CallShareError | null>(null);
+  const [callLevels, setCallLevels] = useState<CallLevels | null>(null);
+  /** Live: the call tab stopped being shared (paused until it is shared again). */
+  const [callLost, setCallLost] = useState(false);
+  const [reshareNoAudio, setReshareNoAudio] = useState(false);
+  /** The user pressed Paus (and not Fortsätt since). */
+  const userPaused = useRef(false);
+  /** The stream is paused because the call tab went away (Dela fliken igen resumes it). */
+  const pausedForCall = useRef(false);
+  /** Capture the call tab (not only the mic): a video call where the browser can share tab audio. */
+  const tabCapture = source === "call" && callSupport === "ok" && !micOnly;
   const stream = useRef<LiveStream | null>(null);
   const userStopped = useRef(false);
   /** An end is under way (Avsluta, or the stream stopped on its own): a second Avsluta does nothing. */
@@ -211,7 +237,15 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** When posted runs were acknowledged; pruned once a notes write is newer. */
   const postedAt = useRef<number[]>([]);
 
-  const mic = () => (capture.current ??= new MicCapture());
+  const mic = () => (capture.current ??= tabCapture ? new CallCapture() : new MicCapture());
+  /** The call capture, made from scratch if the room's mic capture is open. */
+  const callCapture = (): CallCapture => {
+    if (capture.current instanceof CallCapture) return capture.current;
+    capture.current?.stop();
+    const cap = new CallCapture();
+    capture.current = cap;
+    return cap;
+  };
   /** A Privat recording started on this page: its summary page once it ends. */
   const privatMeetingId = useRef<string | null>(null);
 
@@ -395,7 +429,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   );
 
   const runStream = useCallback(
-    async (m: LiveMeetingInfo, cap: MicCapture) => {
+    async (m: LiveMeetingInfo, cap: MicCapture | CallCapture) => {
       const s = new LiveStream({
         meetingId: m.id,
         audio: cap,
@@ -430,6 +464,16 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       s.on("pending", setPendingRuns);
       // The consent check's meter hands over to the stream's level (throttled for React).
       cap.stopCheck();
+      if (cap instanceof CallCapture) {
+        // The call tab was closed or "Sluta dela" pressed: pause (nothing half-heard is sent) and ask.
+        cap.onCallEnded = () => {
+          setCallLost(true);
+          setReshareNoAudio(false);
+          // Paused for the lost tab, unless the user had already paused: then it stays theirs.
+          pausedForCall.current = !userPaused.current;
+          s.pause();
+        };
+      }
       let lastLevelAt = 0;
       s.on("level", (level) => {
         const t = Date.now();
@@ -446,6 +490,70 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     const name = (e as { name?: string } | null)?.name;
     if (name === "NotAllowedError" || name === "SecurityError") return "mic-denied";
     return "mic-missing";
+  };
+
+  /** A share result's error for the start screen, or null when there is nothing to say. */
+  const shareError = (r: ShareResult): CallShareError | null =>
+    r.ok || r.reason === "cancelled" || r.reason === "mic" ? null : r.reason;
+
+  /** "Välj mötesfliken": the picker opens from this click; then the meters. */
+  const onShare = () => {
+    const cap = callCapture();
+    setSharing(true);
+    setCallError(null);
+    setStartError(null);
+    let lastAt = 0;
+    cap.onLevels = (l) => {
+      const t = Date.now();
+      if (t - lastAt < 150) return;
+      lastAt = t;
+      setCallLevels(l);
+    };
+    // Sharing stopped before Start ("Sluta dela", the tab closed): Start waits for a tab again.
+    // runStream replaces this with the live meeting's pause once the meeting starts.
+    cap.onCallEnded = () => {
+      if (capture.current !== cap) return;
+      setCallShared(false);
+      setCallLevels(null);
+      setCallError("stopped");
+    };
+    void cap.share().then((r) => {
+      if (capture.current !== cap) return;
+      setSharing(false);
+      setCallShared(cap.sharing);
+      setCallError(shareError(r));
+      if (!r.ok && r.reason === "mic") setStartError(micProblem(r.error));
+    });
+  };
+
+  /** "Var hålls mötet?" changed: let go of whatever was opened for the other choice. */
+  const onSourceChange = (s: CaptureSource) => {
+    capture.current?.stop();
+    capture.current = null;
+    setMicLevel(null);
+    setCallShared(false);
+    setSharing(false);
+    setCallLevels(null);
+    setCallError(null);
+    setStartError(null);
+    setSource(s);
+  };
+
+  /** Live: "Dela fliken igen" (from the click), then carry on where the pause left off. */
+  const onReshare = () => {
+    const cap = capture.current;
+    if (!(cap instanceof CallCapture)) return;
+    void cap.share().then((r) => {
+      if (r.ok) {
+        setCallLost(false);
+        setReshareNoAudio(false);
+        // Only undo our own pause: a pause the user chose stays until they press Fortsätt.
+        if (pausedForCall.current && !userPaused.current) stream.current?.resume();
+        pausedForCall.current = false;
+      } else if (r.reason === "no-audio" || r.reason === "not-tab") {
+        setReshareNoAudio(true);
+      }
+    });
   };
 
   /** Consent step: Starta mötet. The mic is asked for first, straight from the click. */
@@ -481,7 +589,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         const res = await fetch("/api/meetings", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : foretagStart ? { orgId: props.orgId, consent: true, groupId: foretagStart.groupId, private: foretagStart.private, ...(foretagStart.calendarEventId ? { calendarEventId: foretagStart.calendarEventId, attendeeIds: foretagStart.attendeeIds } : {}) } : {
+          body: JSON.stringify({
+            // Which consent was given: a video call (0058) is recorded as such.
+            ...(source === "call" ? { captureSource: "call" } : {}),
+            ...(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : foretagStart ? { orgId: props.orgId, consent: true, groupId: foretagStart.groupId, private: foretagStart.private, ...(foretagStart.calendarEventId ? { calendarEventId: foretagStart.calendarEventId, attendeeIds: foretagStart.attendeeIds } : {}) } : {
             orgId: props.orgId,
             consent: true,
             agendaDocId: choice?.agendaDocId ?? null,
@@ -494,6 +605,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             ...(props.calendarEvent ? { calendarEventId: props.calendarEvent.id } : {}),
             // A förening with groups: who the meeting is for.
             ...(groupStart ? { groupId: groupStart.groupId, private: groupStart.private } : {}),
+          }),
           }),
         });
         const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
@@ -526,6 +638,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         resumable: true,
         lastTickOkAt: null,
         docPaused: false,
+        captureSource: source,
       };
       setMeeting(m);
       if (privatStart) privatMeetingId.current = m.id;
@@ -543,14 +656,22 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** "Fortsätt mötet": back to live on the server, then the mic (from the click) and a new session. */
   const onResumeMeeting = () => {
     if (!meeting) return;
-    const cap = mic();
-    const opened = cap.open();
+    // A video call: the call tab is picked again from this click (it can't survive a reload).
+    const callCap = meeting.captureSource === "call" && callSupport === "ok" ? callCapture() : null;
+    const cap = callCap ?? mic();
+    const opened: Promise<ShareResult | void> = callCap ? callCap.share() : cap.open();
     setBusy(true);
     setStartError(null);
     setStartErrorText(null);
     void (async () => {
       try {
-        await opened;
+        const r = await opened;
+        if (r && !r.ok) {
+          setBusy(false);
+          if (r.reason === "mic") setStartError(micProblem(r.error));
+          else if (r.reason !== "cancelled") setStartError(`call-${r.reason}`);
+          return;
+        }
       } catch (e) {
         setStartError(micProblem(e));
         setBusy(false);
@@ -793,6 +914,13 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   // Silent failures the status line doesn't cover: say what happened and what to do.
   const notice: LiveNotice | null = !["live", "paused", "error", "name-round"].includes(phase)
     ? null
+    : callLost && phase !== "error"
+      ? {
+          tone: phase === "paused" ? "danger" : "warning",
+          title: tCall("lostTitle"),
+          text: reshareNoAudio ? tCall("lostNoAudio") : phase === "paused" ? tCall("lostPaused") : tCall("lostLive"),
+          action: { label: tCall("reshare"), onClick: onReshare },
+        }
     : refusal === "meeting_gone"
       ? {
           tone: "danger",
@@ -975,9 +1103,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       }
       micLevel={micLevel}
       eventTitle={props.calendarEvent?.title ?? null}
-      onMicCheck={() => {
+      onMicCheck={tabCapture ? undefined : () => {
         setStartError(null);
         const cap = mic();
+        if (!(cap instanceof MicCapture)) return;
         cap
           .check(setMicLevel)
           // Unticked while the mic was still opening: let go of it once it is open.
@@ -994,11 +1123,38 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         capture.current = null;
         setMicLevel(null);
       }}
+      source={props.meeting === null ? source : undefined}
+      onSourceChange={props.meeting === null ? onSourceChange : undefined}
+      foretag={Boolean(props.foretag)}
+      callReady={source !== "call" || (callSupport === "ok" ? callShared : micOnly)}
+      callHint={callSupport === "ok" ? undefined : tCall("micOnlyFirst")}
+      callSetup={
+        <CallSetup
+          support={callSupport}
+          micOnly={micOnly}
+          onMicOnly={() => setMicOnly(true)}
+          shared={callShared}
+          sharing={sharing}
+          error={callError}
+          levels={callLevels}
+          onShare={onShare}
+          disabled={phase === "starting"}
+        />
+      }
+      resumeCall={meeting?.captureSource === "call" && callSupport === "ok"}
       busy={busy}
       autoStopped={autoStopped}
       onStart={onStart}
-      onPause={() => stream.current?.pause()}
-      onResume={() => stream.current?.resume()}
+      onPause={() => {
+        userPaused.current = true;
+        pausedForCall.current = false;
+        stream.current?.pause();
+      }}
+      onResume={() => {
+        userPaused.current = false;
+        pausedForCall.current = false;
+        stream.current?.resume();
+      }}
       onStop={onStop}
       answersLost={props.answersLost}
       tasks={tasks}

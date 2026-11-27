@@ -1,7 +1,7 @@
 {
   "metaTitle": "Integritet",
   "metaDescription": "Hur Simon Says hanterar ljud, text och konton: inget ljud sparas, vad som sparas och hur länge, och dina rättigheter enligt GDPR.",
-  "updated": "26 november 2026",
+  "updated": "27 november 2026",
   "draft": "Utkast · uppdaterad {date} · juridisk granskning återstår",
   "title": "Integritet",
   "lead": "Simon Says lyssnar på era möten. Här står vad det betyder: vad som skickas vart, vad som sparas, och hur ni tar bort det.",
@@ -9,6 +9,7 @@
   "toc": {
     "kort": "Kort sagt",
     "rummet": "I rummet",
+    "videosamtal": "I ett videosamtal",
     "sparas": "Vad som sparas",
     "mejl": "Mejl",
     "vem": "Vilka som behandlar data",
@@ -100,5 +101,10 @@
   },
   "statusTitle": "Statussidan",
   "status": "Den offentliga statussidan visar antal möten som pågår, antal möten och minuter transkriberade den senaste veckan, och om tjänsten fungerar. En förening syns med namn bara om en admin kryssat i det i inställningarna.",
-  "contact": "Frågor, eller vill du veta vad vi har sparat om dig? Skriv till Harrysson & Company AB på <mail>simon@harrysson.co</mail>."
+  "contact": "Frågor, eller vill du veta vad vi har sparat om dig? Skriv till Harrysson & Company AB på <mail>simon@harrysson.co</mail>.",
+  "call": {
+    "what": "Ett möte i ett videosamtal (t.ex. Google Meet) spelas in från webbläsaren hos den som startar det: ljudet från fliken med samtalet och den personens mikrofon. Ingen bot ansluter till samtalet. Bilden från fliken används aldrig och sparas inte, och precis som i rummet sparas ingen ljudinspelning: ljudet blir text medan ni pratar.",
+    "processing": "Det som alla i samtalet säger transkriberas och behandlas på samma sätt som vid ett möte i rummet: samma tjänster, samma anteckningar och samma lagring och radering.",
+    "responsibility": "Den som spelar in ansvarar för att ha rätt att spela in samtalet. I en förening bekräftar den som startar att alla i samtalet vet att mötet transkriberas; i Företag och Privat bekräftar den som startar att hen själv deltar i samtalet. Bekräftelsen och att mötet hölls i ett videosamtal sparas med mötet."
+  }
 }
