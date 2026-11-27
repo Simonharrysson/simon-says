@@ -4,7 +4,9 @@
 -- (through the e-mail on a person).
 --
 -- * claim_person(): a member links THEMSELVES to a person nobody is linked to, in a förening they
---   are a member of, when no other person there is linked to them yet;
+--   are a member of, when no other person there is linked to them yet. A person an admin wrote
+--   another e-mail at is that address's (0035 links it when they join; 0039 treats a linked
+--   person's e-mail as the account's own), so it can't be claimed: 'taken', ask an admin;
 -- * add_self_person(): the same, for "Jag finns inte med": adds the person (name + optional role)
 --   already linked to the caller. A name already on the list is claimed if free, else 'taken';
 -- * people_guard_link: through the table, only an admin of the förening may set or change
@@ -50,11 +52,12 @@ declare
   v_user uuid := auth.uid();
   v_org uuid;
   v_member uuid;
+  v_email text;
 begin
   if v_user is null then
     return 'forbidden';
   end if;
-  select p.org_id into v_org from public.people p
+  select p.org_id, lower(btrim(p.email)) into v_org, v_email from public.people p
   join public.orgs o on o.id = p.org_id and o.kind <> 'privat'
   where p.id = p_person_id;
   if v_org is null or not public.is_org_member(v_org) then
@@ -67,6 +70,11 @@ begin
     return 'ok';
   end if;
   if v_member is not null then
+    return 'taken';
+  end if;
+  -- Someone else's invite address (any of the caller's would have been linked on joining).
+  if v_email is not null and v_email is distinct from
+    (select lower(btrim(u.email::text)) from auth.users u where u.id = v_user) then
     return 'taken';
   end if;
   if exists (select 1 from public.people q where q.org_id = v_org and q.member_user_id = v_user) then

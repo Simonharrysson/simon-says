@@ -7,6 +7,7 @@ export interface WhoamiPerson {
   name: string;
   role?: string | null;
   member_user_id: string | null;
+  email?: string | null;
 }
 
 /** Is the account linked to a person of this förening? */
@@ -14,10 +15,14 @@ export function isLinked(people: Pick<WhoamiPerson, "member_user_id">[], userId:
   return people.some((p) => p.member_user_id === userId);
 }
 
-/** The people a new member can pick: nobody is linked to them yet. Sorted by name (Swedish order). */
-export function claimable(people: WhoamiPerson[]): { id: string; name: string; role: string | null }[] {
+/**
+ * The people a new member can pick: nobody is linked to them, and no other e-mail is written at
+ * them (that person is the address's; claim_person says 'taken'). Sorted by name (Swedish order).
+ */
+export function claimable(people: WhoamiPerson[], myEmail: string | null | undefined): { id: string; name: string; role: string | null }[] {
+  const mine = myEmail?.trim().toLowerCase() ?? null;
   return people
-    .filter((p) => p.member_user_id === null)
+    .filter((p) => p.member_user_id === null && (!p.email?.trim() || p.email.trim().toLowerCase() === mine))
     .map((p) => ({ id: p.id, name: p.name, role: p.role ?? null }))
     .sort((a, b) => a.name.localeCompare(b.name, "sv"));
 }

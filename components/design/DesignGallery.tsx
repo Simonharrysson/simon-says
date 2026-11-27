@@ -25,6 +25,8 @@ import { AccountView } from "@/components/views/AccountView";
 import { MailPrefsView } from "@/components/views/MailPrefsView";
 import { AppNav } from "@/components/views/AppNav";
 import { JoinView } from "@/components/views/JoinView";
+import { WhoamiView } from "@/components/views/WhoamiView";
+import { WelcomeCard } from "@/components/views/WelcomeCard";
 import { LoginView } from "@/components/views/LoginView";
 import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
@@ -52,6 +54,12 @@ import { inviteRender } from "./invite-demo";
 import { privatRender } from "./privat-demo";
 import { homeRender } from "./home-demo";
 import { ContextPicker } from "@/components/privat/ContextPicker";
+
+const WHOAMI_PEOPLE = [
+  { id: "p1", name: "Erik Lund", role: "Ledamot" },
+  { id: "p2", name: "Johan Ek", role: null },
+  { id: "p3", name: "Sara Nyström", role: "Kassör" },
+];
 
 function StadgarLead() {
   return <p className="text-sm text-ink-2">{useTranslations("stadgar")("lead")}</p>;
@@ -1013,6 +1021,28 @@ const render: Record<string, () => ReactNode> = {
     <PublicChrome>
       <JoinView state="invalid" />
     </PublicChrome>
+  ),
+  "whoami-pick": () => (
+    <AppChrome>
+      <WhoamiView orgId="o1" orgName="Exempelföreningen" people={WHOAMI_PEOPLE} adding={false} error={null} suggestedName="Sara Nyström" claim={noopAction} addSelf={noopAction} />
+    </AppChrome>
+  ),
+  "whoami-add": () => (
+    <AppChrome>
+      <WhoamiView orgId="o1" orgName="Exempelföreningen" people={WHOAMI_PEOPLE} adding error="namn" suggestedName="" claim={noopAction} addSelf={noopAction} />
+    </AppChrome>
+  ),
+  "whoami-none": () => (
+    <AppChrome>
+      <WhoamiView orgId="o1" orgName="Exempelföreningen" people={[]} adding={false} error={null} suggestedName="Sara Nyström" claim={noopAction} addSelf={noopAction} />
+    </AppChrome>
+  ),
+  "org-welcome": () => (
+    <AppChrome>
+      <div className="mx-auto w-full max-w-[60rem] px-gutter pt-8">
+        <WelcomeCard orgId="o1" orgName="Exempelföreningen" name="Sara Nyström" nextMeeting="tis 8 dec 18:00" />
+      </div>
+    </AppChrome>
   ),
   account: () => (
     <AppChrome>

@@ -30,6 +30,8 @@ import { docUrl } from "@/lib/ui/meetings";
 import { localDate } from "@/lib/docs/create";
 import { upcomingPrepared } from "@/lib/prepare/store";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
+import { WelcomeCard } from "@/components/views/WelcomeCard";
+import { dueDayLabel } from "@/lib/home/tasks";
 import { InviteByEmail } from "@/components/views/InviteByEmail";
 import { inviterNameFor, listInvites } from "@/lib/invites/send";
 import type { InviteRow } from "@/lib/invites/rules";
@@ -158,12 +160,12 @@ export default async function OrgPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string; valkommen?: string }>;
 }) {
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("org");
-  const { fel, klart, flik, import: openImport, drive, kalender } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive, kalender, valkommen } = await searchParams;
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
@@ -195,6 +197,17 @@ export default async function OrgPage({
   const importJob = isAdmin && tab === "oversikt" ? await safeImportJob(id) : null;
   const importBack = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? drive : undefined;
   const me = userResult.data.user?.id ?? null;
+  // After "Gå med" + "Vem av dessa är du?" (0051): who they are here and the next prepared meeting.
+  const nextPrepared = prepared[0];
+  const welcome =
+    valkommen === "1" ? (
+      <WelcomeCard
+        orgId={org.id}
+        orgName={org.name}
+        name={people.find((p) => p.member_user_id === me)?.name ?? null}
+        nextMeeting={nextPrepared ? `${dueDayLabel(nextPrepared.meeting_date, locale === "en" ? "en" : "sv")}${nextPrepared.meeting_time ? ` ${nextPrepared.meeting_time.slice(0, 5)}` : ""}` : null}
+      />
+    ) : null;
   const invites = isAdmin && tab === "installningar" ? await safeInvites(id) : [];
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
@@ -217,6 +230,7 @@ export default async function OrgPage({
       logoUrl={logoUrl(org.id, org.logo_updated_at)}
       komIgang={
         <>
+          {welcome}
           {role === "admin" && showCard(onboarding) && tab !== "installningar" && (
             <KomIgangCard orgId={org.id} state={onboarding} onDismiss={dismissAction.bind(null, org.id, true)} />
           )}
