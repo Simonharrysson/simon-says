@@ -14,6 +14,11 @@ const must = <T>(what: string, r: { data: T; error: { message: string } | null }
   return r.data;
 };
 
+/** A full-page screenshot in the report (checked by eye: layout at desktop and 390 px). */
+async function snap(page: Page, name: string) {
+  await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+}
+
 interface Company {
   id: string;
   url: string;
@@ -44,6 +49,7 @@ async function buildCompany(page: Page, db: SupabaseClient, people: { dev: strin
   await addGroup("Utveckling", "Avdelningschefer");
   await addGroup("Kommunikation", "Avdelningschefer");
   await expectAccessible(page);
+  await snap(page, "personer-och-grupper");
 
   // The colleagues join (the invite link's join_org), then show up under "Utan plats".
   const ids = await Promise.all([ensureUser(db, people.dev), ensureUser(db, people.head), ensureUser(db, people.com)]);
@@ -57,12 +63,13 @@ async function buildCompany(page: Page, db: SupabaseClient, people: { dev: strin
   await place(people.dev, "Utveckling");
   await place(people.head, "Avdelningschefer");
   await place(people.com, "Kommunikation");
+  await snap(page, "personer-placerade");
 
   const g = groupId;
   return { id, url: `/orgs/${id}`, groups: { root: await g("Ledning"), heads: await g("Avdelningschefer"), dev: await g("Utveckling"), com: await g("Kommunikation") } };
 }
 
-test("Företag: create, build the tree, start a meeting for Utveckling, visibility per level, customer page", async ({ db, signedIn, newEmail }) => {
+test("Företag: create, build the tree, start a meeting for Utveckling, visibility per level, customer page @phone", async ({ db, signedIn, newEmail }) => {
   test.setTimeout(240_000);
   const people = { dev: newEmail("utvecklare"), head: newEmail("kommchef"), com: newEmail("kommunikator") };
   const { page: ceo } = await signedIn(ADMIN_EMAIL, "/orgs");
@@ -80,6 +87,7 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
     await consent.check({ timeout: 2000 });
   }).toPass({ timeout: 30_000 });
   await expectAccessible(dev);
+  await snap(dev, "starta-mote-for");
   await dev.getByRole("button", { name: "Starta mötet" }).click();
   await expect(dev.getByRole("heading", { name: "Namnrunda" })).toBeVisible({ timeout: 30_000 });
   const meetingId = dev.url().split("/").at(-1)!;
@@ -111,6 +119,7 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
   const { page: head } = await signedIn(people.head, company.url);
   await sees(head, true);
   await sees(ceo, true);
+  await snap(ceo, "moten-vd");
   const { page: com } = await signedIn(people.com, company.url);
   await sees(com, false);
   await com.goto(`/orgs/${company.id}/mote/${meetingId}`);
@@ -146,6 +155,7 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
   await expect(ceo.getByText("Hittad från acme.se")).toBeVisible();
   await expect(ceo.getByText("Skicka offert till Acme")).toBeVisible();
   await expectAccessible(ceo);
+  await snap(ceo, "kund");
   // The cousin sees the customer but none of Utveckling's meetings with it.
   await com.goto(`/orgs/${company.id}/kund/${acme}`);
   await expect(com.getByText("Du ser inga möten med kunden.")).toBeVisible();
@@ -197,6 +207,7 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
   await expect(approvals).toBeVisible();
   await expect(approvals.getByText("Till Kim Kommunikatör")).toBeVisible();
   await expectAccessible(ceo);
+  await snap(ceo, "vantar-pa-godkannande");
   const text = approvals.getByLabel("Uppgiften som Kim Kommunikatör får se");
   await text.fill("Ta fram siffror för Kommunikation till fredag");
   await approvals.getByRole("button", { name: "Godkänn och skicka" }).click();
@@ -211,6 +222,7 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
   await expect(task.locator("a")).toHaveCount(0);
   await expect(com.getByText(/nedskärningen|Hemligt ledningsbeslut|Ledningsmöte/)).toHaveCount(0);
   await expectAccessible(com);
+  await snap(com, "mina-uppgifter-overlamnad");
   await com.goto(`/orgs/${company.id}/mote/${meeting}`);
   await expect(com.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
 });
