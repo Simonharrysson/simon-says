@@ -1,0 +1,52 @@
+{
+  "source": "Fictional board meeting written for concrete tasks (done_when, 0049): one task says its Klart när at once, one says it later (a change), one never says it (must stay empty, never invented). Invented förening and people.",
+  "orgName": "Björkvikens Brädspelsklubb",
+  "speakerNames": {
+    "S1-speaker_0": "Hanna Lind",
+    "S1-speaker_1": "Ville Strand",
+    "S1-speaker_2": "Noor Ali"
+  },
+  "languages": ["sv"],
+  "traps": [
+    "Ville's task says its Klart när in the same sentence (hyresavtalet påskrivet).",
+    "Noor's Klart när and deadline come a minute later: the existing task must be changed, not duplicated.",
+    "Hanna's task never gets a Klart när: done_when must stay empty (never derived from the task)."
+  ],
+  "decisions": [
+    { "key": "D1", "text": "Budget 1 500 kr for the new games", "match": [["1500", "1 500", "femtonhundra"]] }
+  ],
+  "action_items": [
+    {
+      "key": "A1",
+      "owner": "Ville Strand",
+      "text": "Boka Folkets hus",
+      "due": "fredag 5 december",
+      "match": [["folkets hus"], ["bok*"]],
+      "done_when": [["hyresavtal*", "avtal*", "kontrakt*"], ["påskriv*", "skriv*", "signer*"]]
+    },
+    {
+      "key": "A2",
+      "owner": "Noor Ali",
+      "text": "Mejla ut inbjudan till medlemmarna",
+      "due": "måndag",
+      "match": [["inbjudan*"]],
+      "done_when": [["hemsida*", "nyhetsbrev*"]]
+    },
+    {
+      "key": "A3",
+      "owner": "Hanna Lind",
+      "text": "Köpa tre nya sällskapsspel",
+      "match": [["*spel*"], ["köp*"]],
+      "done_when": null
+    }
+  ],
+  "must_not": [
+    {
+      "key": "M1",
+      "text": "A second invitation task (the later Klart när is a change of the first)",
+      "sections": ["action"],
+      "match": [["hemsida*", "nyhetsbrev*"]],
+      "unless": [["inbjudan*"]]
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { isCopy, isDecision, isTask } from "@/lib/meetings/summary";
+import { PLACEHOLDER, TASK_FIELDS, isOverdue, missingFields, stripPlaceholders, type TaskField } from "@/lib/notes/tasks";
 import { resolveOwner } from "@/lib/people/roles";
 
 // What a summary e-mail says, built from the meeting's stored note rows (no Claude call). Pure.
@@ -17,12 +18,23 @@ export const MAX_OTHER = 3;
 export const MAX_LINE = 280;
 
 export type SummaryItem = Pick<NoteItemRow, "id" | "section" | "text" | "owner" | "due" | "position"> &
-  Partial<Pick<NoteItemRow, "kind" | "done" | "deleted_by_human" | "copy_of" | "anchor" | "owner_person_id" | "meeting_id" | "carried_from_meeting" | "carried_from_id">>;
+  Partial<
+    Pick<
+      NoteItemRow,
+      "kind" | "done" | "deleted_by_human" | "copy_of" | "anchor" | "owner_person_id" | "meeting_id" | "carried_from_meeting" | "carried_from_id" | "done_when" | "due_date" | "locked"
+    >
+  >;
 
 export interface SummaryTask {
   text: string;
   owner: string | null;
   due: string | null;
+  /** "Klart när" (0049); null = not said. */
+  doneWhen?: string | null;
+  /** Its deadline day is before the day the e-mail is made. */
+  overdue?: boolean;
+  /** What it still lacks, when the förening requires Vem, När and Klart när (else empty). */
+  missing?: TaskField[];
   /** The recipient's own task. */
   mine: boolean;
 }
@@ -69,6 +81,10 @@ export function summaryContent(
     agendaRoles?: Record<string, ItemRole> | null;
     people?: { id: string; name: string; role?: string | null }[];
     forPerson?: { id: string } | null;
+    /** The day (YYYY-MM-DD) the e-mail is made: tasks due before it are overdue. */
+    today?: string;
+    /** The förening requires Vem, När and Klart när: list what each task lacks. */
+    requireFields?: boolean;
   } = {},
 ): SummaryContent {
   const roles = opts.agendaRoles ?? {};
@@ -82,7 +98,16 @@ export function summaryContent(
     me !== null && (r.owner_person_id === me || (r.owner ? resolveOwner(r.owner, people)?.id === me : false));
   const allTasks = rows
     .filter((r) => isTask(asChain(r)) && !r.done && !doneCopies.has(r.id))
-    .map((r) => ({ text: clean(r.text), owner: r.owner?.trim() || null, due: r.due?.trim() || null, mine: mine(r) }));
+    .map((r) => ({
+      // A person's line may still carry our placeholders: never in the e-mail ("saknar …" says it).
+      text: clean(r.locked ? stripPlaceholders(r.text) : r.text),
+      owner: r.owner?.trim() || null,
+      due: r.due?.trim() || null,
+      doneWhen: r.done_when?.trim() || null,
+      overdue: opts.today ? isOverdue(r.due_date, opts.today) : false,
+      missing: opts.requireFields ? lacks(r) : [],
+      mine: mine(r),
+    }));
   const tasks = [...allTasks.filter((t) => t.mine), ...allTasks.filter((t) => !t.mine)];
   const other = rows
     .filter((r) => (r.kind === "note" || (r.kind == null && r.section === "note")) && !isCopy(r) && !(r.anchor && OTHER_SKIP.has(roles[r.anchor])))
@@ -97,6 +122,14 @@ export function summaryContent(
       other: Math.max(0, other.length - MAX_OTHER),
     },
   };
+}
+
+/** What a task lacks; a human-edited line lacks what it still shows as a placeholder. */
+function lacks(r: SummaryItem): TaskField[] {
+  // Från förra veckan: nothing here can complete them (they are last meeting's), so never nag.
+  if (r.carried_from_id != null) return [];
+  if (r.locked) return TASK_FIELDS.filter((f) => r.text.includes(PLACEHOLDER[f]));
+  return missingFields({ owner: r.owner ?? undefined, due: r.due ?? undefined, doneWhen: r.done_when ?? undefined });
 }
 
 /** Nothing worth mailing: no decision, no open task, no other note. */

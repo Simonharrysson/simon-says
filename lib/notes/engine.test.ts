@@ -506,10 +506,10 @@ function agendaInput(over: Partial<UpdateNotesInput> = {}): UpdateNotesInput {
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 describe("v1 prompt and schema stay byte-identical", () => {
-  // Re-pinned for meeting titles (0048): the schema gained a top-level optional "title".
+  // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when).
   it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
-    expect(sha(SYSTEM_PROMPT)).toBe("e1655d97ddcffb60fd9ec54f19e932d76c83202bc0a682189284484dfb0d3799");
-    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("f4e339293342bc93c3df829d5934798d32c369c2879824fb23f774709bcf6e4f");
+    expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
+    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("5f3da687b5c8b3dd2872b65f15bd98f410b2f8539a652017aca532d18647149a");
   });
 
   it("a v1 input still uses them", () => {
@@ -595,7 +595,7 @@ describe("agenda mode: §-numbered board minutes (C2)", () => {
   const formatBlock = (tail: string) => tail.slice(tail.indexOf("<format>"), tail.indexOf("</format>"));
 
   it("the system prompt is untouched: the board-minutes rule lives in the tail only", () => {
-    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("1ee93e4bd3bc71944046fdfcb7ec944da64257f051d874882614ea4ec0e12d51");
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("39d11167bf8692d0b5e597c1830f03ae522c7d38f71dedfd6b61d68536b4baab");
     expect(AGENDA_SYSTEM_PROMPT).not.toContain("§-numbered");
   });
 

@@ -668,6 +668,8 @@ describe.skipIf(!hasLocalSupabase)("feature: formats (runTick on the local stack
     const r = await createOrg(starter.db, "Suiteklubben");
     if (!r.ok) throw new Error("org");
     orgId = r.id;
+    // Lines pinned without the concrete-tasks placeholders (tests/suite/tasks.test.ts covers those).
+    await adminClient().from("orgs").update({ require_task_fields: false }).eq("id", orgId);
     profileId = await ensureStandardRow(orgId, "veckomote");
     const { error } = await adminClient()
       .from("people")

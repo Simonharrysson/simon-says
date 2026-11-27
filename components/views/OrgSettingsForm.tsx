@@ -13,12 +13,14 @@ export function OrgSettingsForm({
   updateOrg,
   nameError,
 }: {
-  org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean };
+  org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean; require_task_fields?: boolean };
   updateOrg: FormAction;
   nameError?: string;
 }) {
   const t = useTranslations("org");
   const common = useTranslations("common");
+  const tasks = useTranslations("tasks.settings");
+  const requireTasks = org.require_task_fields !== false;
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     if (!saved) return;
@@ -45,6 +47,9 @@ export function OrgSettingsForm({
       </Check>
       <Check key={`status-${org.show_on_status}`} id="settings-status" name="show_on_status" defaultChecked={org.show_on_status} onCheckedChange={() => setSaved(false)} title={t("showOnStatus")}>
         {t("showOnStatusText")}
+      </Check>
+      <Check key={`tasks-${requireTasks}`} id="settings-tasks" name="require_task_fields" defaultChecked={requireTasks} onCheckedChange={() => setSaved(false)} title={tasks("label")}>
+        {tasks("hint")}
       </Check>
       <div className="flex flex-wrap items-center gap-3">
         <SubmitButton variant="primary" pendingLabel={common("saving")}>

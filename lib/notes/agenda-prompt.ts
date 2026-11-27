@@ -36,12 +36,12 @@ Where items go (the "anchor"):
 
 Kinds:
 - "decision": only what the meeting actually agreed (explicitly or clearly unopposed). One decision per item, written as one full sentence. Do not start it with the decision prefix (e.g. "Beslut:"): the prefix is added when rendered.
-- "task": a concrete follow-up someone committed to or accepted. "owner" is the person's full name as in <people> (or the speaker-name map), "due" is when, in the words used in the meeting (e.g. "fredag", "till nästa möte"). "text" is a full, tidy sentence of what to do, without the owner's name. Leave owner/due out if nobody said.
+- "task": a concrete follow-up someone committed to or accepted. "owner" is the person's full name as in <people> (or the speaker-name map), "due" is when, in the words used in the meeting (e.g. "fredag", "till nästa möte"). "done_when" is what counts as done: the concrete, checkable result someone said (e.g. "kontraktet är påskrivet", "inbjudan har gått ut till alla medlemmar"). "text" is a full, tidy sentence of what to do, without the owner's name, the due or the done_when. Leave owner, due or done_when out if nobody said it: never guess them and never derive done_when from the task itself. When one of them is said later, change the task to add it.
 - "note": a short full sentence of something said that matters for the minutes (information, a status, a point of view the meeting took note of). No small talk, no greetings, no jokes, nothing about who said what unless it matters.
 
 Operations (the only output):
-- {"op":"add","id":"<new id>","kind":...,"anchor":...,"text":...,"owner"?:...,"due"?:...}
-- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done"?:...}  (only the fields that change; "" clears owner or due; an item never moves to another anchor)
+- {"op":"add","id":"<new id>","kind":...,"anchor":...,"text":...,"owner"?:...,"due"?:...,"done_when"?:...}
+- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done_when"?:...,"done"?:...}  (only the fields that change; "" clears owner, due or done_when; an item never moves to another anchor)
 - {"op":"remove","id":"<existing id>"}
 Return {"ops":[]} when nothing needs to change. That is the normal answer for many ticks.
 
@@ -80,6 +80,7 @@ function agendaItemLine(item: NotesItem): string {
     text: item.text,
     ...(item.owner ? { owner: item.owner } : {}),
     ...(item.due ? { due: item.due } : {}),
+    ...(item.doneWhen ? { done_when: item.doneWhen } : {}),
     ...(item.done ? { done: true } : {}),
     ...(item.carried ? { carried: true } : {}),
   });

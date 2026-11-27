@@ -166,3 +166,27 @@ describe("agenda mode", () => {
     expect(checkExpected(checkinAnchor).join("\n")).toMatch(/D0: anchor ag-1 is a checkin item/);
   });
 });
+
+describe("concrete tasks: done_when", () => {
+  const expected: Expected = {
+    action_items: [
+      { key: "A1", owner: "Ville Strand", text: "Boka Folkets hus", match: [["folkets hus"]], done_when: [["*avtal*"], ["påskriv*"]] },
+      { key: "A3", owner: "Hanna Lind", text: "Köpa spel", match: [["*spel*"]], done_when: null },
+    ],
+  };
+  const a1: NotesItem = { id: "n1", section: "action", text: "Boka Folkets hus", owner: "Ville Strand", doneWhen: "hyresavtalet är påskrivet" };
+  const a3: NotesItem = { id: "n2", section: "action", text: "Köpa tre spel", owner: "Hanna Lind" };
+
+  it("said and matching, not said and empty → passes", () => {
+    const s = score([a1, a3], expected);
+    expect(s.doneWhen).toEqual({ ok: 2, total: 2 });
+    expect(scorePasses(s)).toBe(true);
+  });
+
+  it("an invented done_when, or a missing one, fails", () => {
+    const s = score([{ ...a1, doneWhen: undefined }, { ...a3, doneWhen: "spelen är köpta" }], expected);
+    expect(s.doneWhen).toEqual({ ok: 0, total: 2 });
+    expect(scorePasses(s)).toBe(false);
+    expect(s.recall.filter((l) => l.startsWith("WRONG"))).toHaveLength(2);
+  });
+});

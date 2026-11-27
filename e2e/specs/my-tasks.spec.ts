@@ -93,9 +93,9 @@ test("Mina uppgifter: my tasks from two föreningar and Privat; tick one → ✓
   await expect(page.getByText("Markerad som klar.")).toBeVisible();
   await expect(page.getByText("Klar, och ”✓ klart” står nu i dokumentet.")).toBeVisible({ timeout: 20_000 });
   await expect.poll(() => fake.docText(pm.docId), { message: "✓ klart in the Doc" }).toContain(`${line} ✓ klart`);
-  // Both meetings have an "n1" row: match on the meeting too.
-  const { data: rows } = await db.from("note_items").select("id, meeting_id, done").in("meeting_id", [pm.id, fm.id]);
-  expect(rows?.find((r) => r.id === "n1" && r.meeting_id === pm.id)?.done).toBe(true);
+  const { data: rows } = await db.from("note_items").select("meeting_id, id, done").in("meeting_id", [pm.id, fm.id]);
+  // Both meetings have an "n1": the ticked one is Paddelklubben's (rows come back in no set order).
+  expect(rows?.find((r) => r.meeting_id === pm.id && r.id === "n1")?.done).toBe(true);
   expect(rows?.filter((r) => r.done).length).toBe(1);
 
   // Reloaded: the task is gone from the open list; "Visa klara" shows it.

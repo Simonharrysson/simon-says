@@ -16,6 +16,7 @@ import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
+import type { TaskAnswer, TaskMode, TaskView } from "@/lib/notes/tasks";
 
 /** Notes count as stale when runs posted this long ago have not reached the Doc yet. */
 const STALE_AFTER_MS = 3 * 60_000;
@@ -24,6 +25,10 @@ const ENDING_POLL_MS = 5000;
 /** How often the speaker list is re-read: often during the name round, calmly after. */
 const SPEAKERS_POLL_NAME_ROUND_MS = 4000;
 const SPEAKERS_POLL_MS = 15_000;
+/** How often "Uppgifter" is re-read while the meeting runs (a tick is ~45 s). */
+const TASKS_POLL_MS = 20_000;
+/** Avsluta waits at most this long for the tasks before asking the usual question (never blocks). */
+const TASKS_ASK_TIMEOUT_MS = 5000;
 /** POST /end must answer within this long, or the page offers a retry (C6). */
 const END_TIMEOUT_MS = 15_000;
 
@@ -64,6 +69,8 @@ export interface LiveMeetingControllerProps {
   autoStopped?: boolean;
   /** Which limit (from `?stoppat=`), for the copy. */
   stopReason?: string | null;
+  /** `?svar=ej-sparade`: the Avsluta answers came after the meeting had already ended. */
+  answersLost?: boolean;
   /** Members the Doc could not be shared with at start (from the `started` event); null: unknown. */
   shareFailed?: number | null;
   /** The new Doc missed the förening's meeting folder (the starter's Google account hasn't opened it). */
@@ -172,6 +179,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const capture = useRef<MicCapture | null>(null);
   const stream = useRef<LiveStream | null>(null);
   const userStopped = useRef(false);
+  /** An end is under way (Avsluta, or the stream stopped on its own): a second Avsluta does nothing. */
+  const endStarted = useRef(false);
   /** Set once the user chose to leave, so the beforeunload prompt doesn't ask a second time. */
   const leaving = useRef(false);
   /** When posted runs were acknowledged; pruned once a notes write is newer. */
@@ -258,19 +267,33 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
    * keeps the page here with a retry instead of navigating away from unsent work.
    */
   const endOnServer = useCallback(
-    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false) => {
+    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false, answers: TaskAnswer[] = []) => {
+      endStarted.current = true;
       setPhase("ending");
       setStoppedAt((t) => t ?? Date.now());
       setEndFailed(false);
       setSignedOutUnsent(null);
+      /** The meeting had already ended elsewhere and its final pass had started: the answers were not saved. */
+      let answersLost = false;
       const outcome = await runEndFlow({
         stream: stream.current,
         drainRoundMs: STOP_FLUSH_MAX_MS,
         onPending: setPendingRuns,
         endWithoutUnsent,
         // /end claims `ending` and answers at once; the final pass runs on the server (R1).
-        postEnd: async () =>
-          (await fetch(`/api/meetings/${id}/end`, { method: "POST", signal: AbortSignal.timeout(END_TIMEOUT_MS) })).status,
+        postEnd: async () => {
+          const res = await fetch(`/api/meetings/${id}/end`, {
+            method: "POST",
+            signal: AbortSignal.timeout(END_TIMEOUT_MS),
+            // The Avsluta dialog's Vem / När / Klart när: the final pass writes them to the Doc.
+            ...(answers.length ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) } : {}),
+          });
+          if (res.ok && answers.length) {
+            const body = (await res.json().catch(() => null)) as { answers?: string } | null;
+            answersLost = body?.answers === "not_saved";
+          }
+          return res.status;
+        },
       });
       if (outcome.kind === "end_failed") {
         setEndFailed(true);
@@ -283,7 +306,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         return;
       }
       leaving.current = true;
-      window.location.replace(`/meetings/${id}${auto ? `?stoppat=${stopParam(reason)}` : ""}`);
+      const query = [auto ? `stoppat=${stopParam(reason)}` : null, answersLost ? "svar=ej-sparade" : null].filter(Boolean).join("&");
+      window.location.replace(`/meetings/${id}${query ? `?${query}` : ""}`);
     },
     [],
   );
@@ -571,6 +595,37 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return () => clearInterval(t);
   }, [polling, pollMs, speakersUrl, loadSpeakers]);
 
+  // "Uppgifter" (concrete tasks) follows the server like the speaker list, more calmly.
+  const [tasks, setTasks] = useState<TaskView[] | undefined>(undefined);
+  const tasksUrl = meeting ? `/api/meetings/${meeting.id}/tasks` : null;
+  const fetchTasks = useCallback(
+    async (timeoutMs?: number): Promise<{ mode: TaskMode; tasks: TaskView[] } | null> => {
+      if (!tasksUrl) return null;
+      try {
+        const res = await fetch(tasksUrl, { cache: "no-store", ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
+        if (!res.ok) return null;
+        const v = (await res.json()) as { mode: TaskMode; tasks: TaskView[] };
+        setTasks(v.tasks);
+        return v;
+      } catch {
+        return null; // next poll
+      }
+    },
+    [tasksUrl],
+  );
+  const tasksPolling = phase === "live" || phase === "paused";
+  useEffect(() => {
+    if (!tasksPolling || !tasksUrl) return;
+    void fetchTasks();
+    const t = setInterval(() => void fetchTasks(), TASKS_POLL_MS);
+    return () => clearInterval(t);
+  }, [tasksPolling, tasksUrl, fetchTasks]);
+  /** Avsluta: the incomplete tasks to ask about, fresh; none when the förening doesn't require them or the read fails. */
+  const askTasks = useCallback(async (): Promise<TaskView[]> => {
+    const v = await fetchTasks(TASKS_ASK_TIMEOUT_MS);
+    return v?.mode === "require" ? v.tasks.filter((x) => x.missing.length > 0) : [];
+  }, [fetchTasks]);
+
   /** "Klar": read the names now (the server only fills voices nobody has named). */
   const onNameRoundDone = () => {
     if (!speakersUrl) return closeNameRound();
@@ -619,16 +674,20 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     .filter((s) => !currentSession || s.elSessionId === currentSession)
     .map((s) => ({ key: `${s.elSessionId}::${s.speakerLabel}`, label: s.label, name: s.displayName, needsConfirm: s.needsConfirm }));
 
-  const onStop = () => {
+  /** The Avsluta dialog's answers, kept for "Försök igen" after a failed POST /end. */
+  const endAnswers = useRef<TaskAnswer[]>([]);
+  const onStop = (answers?: TaskAnswer[]) => {
     const s = stream.current;
-    if (!meeting) return;
+    if (!meeting || endStarted.current) return;
+    endStarted.current = true;
+    endAnswers.current = answers ?? [];
     userStopped.current = true;
     setPhase("ending");
     setBusy(true);
     void (async () => {
       await s?.stop();
       capture.current?.stop();
-      await endOnServer(meeting.id, false);
+      await endOnServer(meeting.id, false, undefined, false, answers);
     })();
   };
 
@@ -636,14 +695,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const onRetryEnd = () => {
     if (!meeting) return;
     setBusy(true);
-    void endOnServer(meeting.id, autoStopped, limitReason);
+    void endOnServer(meeting.id, autoStopped, limitReason, false, endAnswers.current);
   };
 
   /** Signed out: end with what the server has; the unsent lines are given up (R3). */
   const onEndWithoutUnsent = () => {
     if (!meeting) return;
     setBusy(true);
-    void endOnServer(meeting.id, autoStopped, limitReason, true);
+    void endOnServer(meeting.id, autoStopped, limitReason, true, endAnswers.current);
   };
 
   const onEndUnfinished = () => {
@@ -872,6 +931,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       onPause={() => stream.current?.pause()}
       onResume={() => stream.current?.resume()}
       onStop={onStop}
+      answersLost={props.answersLost}
+      tasks={tasks}
+      askTasks={askTasks}
       onReLogin={reLogin}
       onAssignSpeaker={onAssignSpeaker}
       onNameRoundDone={onNameRoundDone}

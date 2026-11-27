@@ -163,7 +163,8 @@ describe("feature: formats (Förbered möte: Från förra veckan through a prepa
       },
     });
     expect(m2.meeting.agenda_roles?.["ag-3"]).toBe("followup");
-    expect(linesOf(m2.doc).filter((l) => l.includes("Boka Kårallen"))).toEqual(["– Kassör: Boka Kårallen (fredag)."]);
+    // "fredag" was said at meeting 1: a week later it has passed (concrete tasks, 0049).
+    expect(linesOf(m2.doc).filter((l) => l.includes("Boka Kårallen"))).toEqual(["– Kassör: Boka Kårallen (fredag, försenad)."]);
     await m2.tick(block([{ at: 1000, speaker: 0, text: "Kårallen är bokad. Festen blir fredag den tolfte." }]));
     await m2.tick(null, { final: true });
 
@@ -220,6 +221,8 @@ describe.skipIf(!hasLocalSupabase)("feature: formats (Förbered möte on the loc
     const r = await createOrg(starter.db, "Förberedda klubben");
     if (!r.ok) throw new Error("org");
     orgId = r.id;
+    // Lines pinned without the concrete-tasks placeholders (tests/suite/tasks.test.ts covers those).
+    await adminClient().from("orgs").update({ require_task_fields: false }).eq("id", orgId);
     profileId = await ensureStandardRow(orgId, "veckomote");
     const { data, error } = await adminClient()
       .from("people")

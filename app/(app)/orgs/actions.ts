@@ -83,6 +83,7 @@ export async function updateOrgAction(form: FormData): Promise<void> {
     name,
     share_transcript: form.get("share_transcript") === "on",
     show_on_status: form.get("show_on_status") === "on",
+    require_task_fields: form.get("require_task_fields") === "on",
   });
   revalidatePath(`/orgs/${orgId}`);
 }
