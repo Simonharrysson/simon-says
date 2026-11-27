@@ -16,6 +16,7 @@ import { localeForEmail, localesForUsers } from "@/lib/i18n/user-locale";
 import { renderSummaryEmail } from "./email";
 import { parseMeetingEvent } from "@/lib/calendar/events";
 import { sendPrivatSummary } from "@/lib/privat/send";
+import { foretagScope, foretagSummaryPeople, holdCrossingTasks } from "@/lib/foretag/summary";
 import type { SummarizeFn } from "@/lib/privat/summary";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
 
@@ -119,6 +120,9 @@ export async function sendMeetingSummaries(
   // A Privat recording (0045): its own summary (one Claude call) to the recorder only.
   const space = must("summary: space", await db.from("orgs").select("*").eq("id", m.org_id).maybeSingle()) as { kind?: string } | null;
   if (space?.kind === "privat") return sendPrivatSummary(m.id, { mailer: deps.mailer, now: deps.now, summarize: deps.summarize }, opts);
+  // Företag (0050): tasks for owners who can't see this meeting wait for approval, never mailed.
+  const isForetag = space?.kind === "foretag";
+  if (isForetag && !m.is_test) await holdCrossingTasks(m.id);
 
   let state: SummaryState;
   let recipients: Recipient[] = [];
@@ -172,7 +176,13 @@ export async function sendMeetingSummaries(
       });
       unnamedVoices = attendance.unnamedVoices;
       unmatchedNames = attendance.unmatchedNames;
-      recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
+      if (isForetag) {
+        // The meeting's group + attendees, only accounts that can see it; neutral wording (no "missed").
+        people = foretagSummaryPeople(people, await foretagScope(m.id, m.org_id));
+        recipients = summaryRecipients({ mode: "all", people, members, attendance: { present: attendance.present, certain: false } });
+      } else {
+        recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
+      }
       state = recipients.length ? "sending" : mode === "missed" && !attendance.certain ? "uncertain" : "none";
     }
   }

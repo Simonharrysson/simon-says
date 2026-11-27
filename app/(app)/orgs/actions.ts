@@ -12,6 +12,7 @@ import {
   deleteMeeting,
   deleteOrg,
   deletePerson,
+  getOrg,
   joinOrg,
   leaveOrg,
   listPeople,
@@ -64,7 +65,9 @@ export async function joinOrgAction(form: FormData): Promise<void> {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
     const { data } = await db.auth.getUser();
     const user = data.user;
-    if (user?.email) {
+    // Företag (0050): a new member is unplaced and sees no group's meetings, so no Docs either.
+    const org = user?.email ? await getOrg(db, orgId) : null;
+    if (user?.email && org?.kind !== "foretag") {
       const member = { id: user.id, email: user.email };
       after(() =>
         shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),

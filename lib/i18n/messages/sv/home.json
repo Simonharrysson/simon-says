@@ -67,5 +67,24 @@
     "adminTickHint": "Som admin kan du bocka av alla uppgifter här."
   },
   "openCount": "{count, plural, one {# öppen uppgift} other {# öppna uppgifter}}",
-  "overdueCount": "{count, plural, one {# försenad} other {# försenade}}"
+  "overdueCount": "{count, plural, one {# försenad} other {# försenade}}",
+  "fromPerson": "Från {name}",
+  "fromColleague": "Från en kollega",
+  "approvals": {
+    "title": "Väntar på godkännande",
+    "intro": "De här uppgifterna sades i möten som mottagaren inte ser. Läs igenom texten och skriv om den vid behov, för mottagaren ser bara uppgiften, inte mötet.",
+    "to": "Till {name}",
+    "toUnknown": "Till en kollega",
+    "dueText": "När: {due}",
+    "meeting": "Mötet",
+    "textLabel": "Uppgiften som {name} får se",
+    "approve": "Godkänn och skicka",
+    "approving": "Skickar…",
+    "drop": "Skicka inte",
+    "dropping": "Tar bort…",
+    "approved": "Skickad till {name}.",
+    "dropped": "Uppgiften skickas inte.",
+    "failed": "Det gick inte att spara. Försök igen.",
+    "empty": "Skriv uppgiften innan du skickar den."
+  }
 }
