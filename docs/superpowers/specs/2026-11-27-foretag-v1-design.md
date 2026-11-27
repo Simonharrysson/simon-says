@@ -17,12 +17,12 @@ Simon 2026-11-27 (binding): "do the smallest version"; companies need the organi
 Worked examples. Anna (VD, admin) is at the root (depth 0). Erik (head of Utveckling) and Sara (head of Kommunikation) are in Ledning (depth 1). Jonas and Lisa are in Utveckling, Maja is in Kommunikation and Kim (kassör) is in Ekonomi, all at depth 2 under Ledning.
 - **Utveckling's sprint meeting** is seen by Jonas and Lisa (own group), Erik and Sara (depth 1 < 2) and Anna. Maja does not see it (same depth, other group), and neither does Kim.
 - **Ledning's salary review** is seen by Erik, Sara and Anna. Kim the cashier does not see it, and neither does anyone at depth 2. That is Simon's "the cashier can't see what everyone makes".
-- **"Maja gör bilden"** is said in Utveckling's meeting. Maja sees the task in Mina uppgifter (her own task) with its Vem / När / Klart när. She does not see the meeting, its notes or its transcript.
+- **"Maja gör bilden"** is said in Utveckling's meeting. Maja can't see that meeting, so the task waits as *Väntar på godkännande* for Jonas, who started the meeting. Jonas approves it, and can reword it first. Only then does Maja see it in Mina uppgifter, as the task text, "Från Jonas" and its due date. She never sees the meeting, its title, notes, decisions or Doc.
 
 Extras, each **[decided 11-27]**:
 - **(a)** The starter, and attendees found as stored facts (below), also see the meeting, even outside the rule.
 - **(b)** The literal rule: every group deeper than your level, in any branch (not limited to your parent's subtree).
-- **(c)** An account placed at no node sees only *Hela företaget* meetings, attended meetings and its own tasks (fail closed).
+- **(c)** An account placed at no node sees only *Hela företaget* meetings, the meetings it started or attended, and approved tasks (fail closed).
 - **(d)** A person sits at one node only.
 
 ## Data model (migration 0050_foretag.sql, additive only)
@@ -49,7 +49,7 @@ contexts   + domain text null (unique per org); a Företag customer = a context 
    - the meeting is not private and (`group_id is null`, or it is my node, or `depth > my depth`).
    "My depth" is the depth of the node of the `people` row linked to `auth.uid()` in that org.
 2. `meetings_select` uses `can_see_meeting(id)`. `is_meeting_member()` is redefined as `can_see_meeting()`, so every table under a meeting follows with no policy edits: note_items, speaker_map, meeting_events, el_sessions, private_summaries, segments (server-only).
-3. `note_items_select` gets `or owner_person_id in (my linked people)` for own tasks. The loader in lib/home/load.ts adds a second query for my owned rows, because it fetches meetings first today. An owned task with no visible meeting shows without a meeting link.
+3. `note_items_select` is unchanged: only viewers of a meeting read its rows, the owner included. Tasks crossing the boundary go through `task_handoffs` (below).
 4. `groups`: members select, no client writes. `meeting_attendees`: select own rows. `contexts_insert` is unchanged (Privat only), because customers are created by the server.
 5. Paths outside RLS, each handled in app code and tested:
    - **Doc sharing:** `createMeetingDoc` shares with the viewer list instead of all members. The Doc goes in the starter's own Simon Says folder, never a shared meeting folder **[decided 11-27]**. Shares are set at start and are not revoked when someone later moves (known limit).
@@ -58,6 +58,29 @@ contexts   + domain text null (unique per org); a Företag customer = a context 
    - **Org-keyed tables** (prepared_agendas, org_goals, history_*): v1 never writes them for a Företag (see Out of v1), and a test asserts that.
 
 **Tests.** A new tests/db/foretag-visibility.test.ts builds the Anna…Kim tree and checks the full role matrix: admin, head, group member, cousin, unplaced account, attendee outside the group, and a Privat möte. Each case is checked against meetings and every table behind `is_meeting_member`, plus own-task rows. The group functions get tests for moves and cycles. Unit tests cover recipients ∩ viewers, the Doc share list, carried-task filtering and domain → customer. The existing tests/db/rls.test.ts and privat tests run unchanged as the förening/Privat regression. The new code is written test first.
+
+## Task delivery across visibility (Simon 2026-11-27, safe default)
+AI-written task text from a restricted meeting can leak what the owner may not see, for example a task from a CEO meeting given to someone at the bottom. So no AI text crosses the visibility boundary unreviewed.
+
+**Delivery:**
+- A task reaches its owner directly only when the owner can see the meeting. They then read it in `note_items`, as today.
+- Otherwise, when the meeting ends, the server writes a `task_handoffs` row with status `pending`. It holds a copy of the text, the due date, the giver's name and who must approve.
+- The approvers are the meeting's starter and the company admins. They see *Väntar på godkännande* in Mina uppgifter and approve it, optionally rewriting the wording, or drop it.
+
+**What the receiver sees after approval:**
+- Only the reviewed text, "Från <name>" and the due date.
+- Never the meeting's title, link, notes, decisions or Doc.
+- Mina uppgifter and every mail respect this.
+
+**Enforced in the database:**
+- `task_handoffs_select` lets the approvers see every status. The owner sees a row only when its status is `approved`.
+- Approving goes through `approve_task_handoff(id, text)`, ticking done through `set_task_handoff_done(id, done)`. Clients get no table writes.
+
+**Later hand-overs:** any later hand-over of a task to someone outside the meeting's audience goes through the same row and the same approval. Only the task travels, with a file attached later.
+
+**Tests:**
+- DB: a task from a CEO meeting for a bottom member stays invisible until approved. After approval the member reads the reviewed text but not the meeting, its title or notes.
+- e2e: the same flow, end to end.
 
 ## Customers (Kunder)
 - At start, and again at the end against the matched calendar event, the external domains are the attendee domains that are none of the company's own. The company's own domains are the members' sign-in domains.
