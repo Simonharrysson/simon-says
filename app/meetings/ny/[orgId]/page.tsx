@@ -73,12 +73,9 @@ export default async function NewMeetingPage({
   const org = await getOrg(db, orgId);
   if (!org || (await myRole(db, orgId)) === null) notFound();
 
-  const { data: active, error } = await db
-    .from("meetings")
-    .select("id, started_by")
-    .eq("org_id", orgId)
-    .in("status", ["live", "ending"])
-    .limit(1);
+  // A Företag runs several meetings at once (0050): only the user's own running meeting sends them there.
+  const busy = db.from("meetings").select("id, started_by").eq("org_id", orgId).in("status", ["live", "ending"]);
+  const { data: active, error } = await (org.kind === "foretag" ? busy.eq("started_by", user.id) : busy).limit(1);
   if (error) throw new Error(`new meeting page: ${error.message}`);
   const running = active?.[0];
   if (running) redirect(running.started_by === user.id ? `/meetings/${running.id}` : `/orgs/${orgId}`);

@@ -19,7 +19,6 @@
     "button": "Start meeting",
     "activeTitle": "A meeting is running",
     "activeMine": "Your meeting is running.",
-    "activeOther": "A meeting is already running in the company. A new one can start when it's over.",
     "toLive": "Go to the meeting"
   },
   "meetings": {

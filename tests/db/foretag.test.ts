@@ -233,6 +233,33 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect((await u.anna.db.rpc("set_person_group", { p_person_id: personId, p_group_id: leaf })).data).toBe(false);
   });
 
+  it("several meetings at once in a company (one per starter); a förening stays at one", async () => {
+    const admin = adminClient();
+    const live = async (org: string, by: string, group: string | null) =>
+      (must("live", await admin.from("meetings").insert({ org_id: org, started_by: by, doc_id: `doc-${crypto.randomUUID()}`, notes_tab_id: "t.0", status: "live", group_id: group }).select("id").single()) as { id: string }).id;
+    const guard = async (id: string) => must("guard", await admin.rpc("guard_meeting_start_v2", { p_meeting_id: id, p_max_per_hour: 50 }));
+    const dev = await live(orgId, u.lisa.id, g.dev);
+    expect(await guard(dev)).toBe("ok");
+    const com = await live(orgId, u.maja.id, g.com);
+    expect(await guard(com)).toBe("ok");
+    // Each is seen per the rule while both run.
+    expect((await u.lisa.db.from("meetings").select("id").in("id", [dev, com])).data).toEqual([{ id: dev }]);
+    expect((await u.maja.db.from("meetings").select("id").in("id", [dev, com])).data).toEqual([{ id: com }]);
+    expect(((await u.sara.db.from("meetings").select("id").in("id", [dev, com])).data ?? []).length).toBe(2);
+    // Still one per starter.
+    const again = await live(orgId, u.lisa.id, g.dev);
+    expect(await guard(again)).toBe("starter_busy");
+    must("end", await admin.from("meetings").update({ status: "done" }).in("id", [dev, com]));
+
+    // A förening: the second running meeting is refused (0027 unchanged).
+    const first = await live(forening.id, u.olle.id, null);
+    expect(await guard(first)).toBe("ok");
+    must("fm", await admin.from("org_members").insert({ org_id: forening.id, user_id: u.kim.id, role: "member" }));
+    const second = await live(forening.id, u.kim.id, null);
+    expect(await guard(second)).toBe("org_busy");
+    must("end", await admin.from("meetings").update({ status: "done" }).eq("id", first));
+  });
+
   it("deleting a company cascades through its tree, meetings and held tasks", async () => {
     const admin = adminClient();
     const id = must("create", await admin.rpc("create_foretag", { p_user: u.olle.id, p_name: "Raderas AB", p_root_name: "VD", p_person_name: "Olle" })) as string;

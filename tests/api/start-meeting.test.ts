@@ -1174,6 +1174,12 @@ describe("POST /api/meetings in a Företag (0050)", () => {
     expectNoWrites();
   });
 
+  it("another meeting running in the company doesn't block a start (several at once)", async () => {
+    m.active = [{ id: "other-live" }];
+    const res = await call({ orgId: ORG, consent: true, groupId: GROUP });
+    expect(res.status).toBe(200);
+  });
+
   it("a malformed group id or private flag: 400", async () => {
     expect((await call({ orgId: ORG, consent: true, groupId: "nope" })).status).toBe(400);
     expect((await call({ orgId: ORG, consent: true, private: "yes" })).status).toBe(400);

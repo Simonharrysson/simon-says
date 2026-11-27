@@ -82,11 +82,10 @@ export function ForetagView(props: ForetagViewProps) {
 
 const groupName = (groups: GroupRow[], id: string | null) => (id ? (groups.find((g) => g.id === id)?.name ?? null) : null);
 
-function MeetingsTab({ org, isAdmin, userId, data }: ForetagViewProps) {
+function MeetingsTab({ org, isAdmin, data }: ForetagViewProps) {
   const t = useTranslations("foretag");
   const locale = useLocale() as Locale;
   const mine = groupName(data.groups, data.myGroupId);
-  const live = data.meetings.find((m) => m.status === "live" || m.status === "ending");
   const done = data.meetings.filter((m) => !m.is_test);
   const customers = new Map(data.customers.map((c) => [c.id, c.name]));
   return (
@@ -95,9 +94,9 @@ function MeetingsTab({ org, isAdmin, userId, data }: ForetagViewProps) {
         <IconUsers size={16} className="mt-[0.15rem] flex-none text-ink-3" />
         <span>{isAdmin ? t("visibility.admin") : mine ? t("visibility.placed", { group: mine }) : t("visibility.unplaced")}</span>
       </p>
-      {data.companyBusy ? (
-        <Banner tone="info" live={false} title={t("start.activeTitle")} action={live ? <ButtonLink href={`/meetings/${live.id}`} size="sm" variant="secondary">{t("start.toLive")}</ButtonLink> : undefined}>
-          <p>{live && live.started_by === userId ? t("start.activeMine") : t("start.activeOther")}</p>
+      {data.myLiveId ? (
+        <Banner tone="info" live={false} title={t("start.activeTitle")} action={<ButtonLink href={`/meetings/${data.myLiveId}`} size="sm" variant="secondary">{t("start.toLive")}</ButtonLink>}>
+          <p>{t("start.activeMine")}</p>
         </Banner>
       ) : (
         <Panel title={t("start.title")} titleId="start-title">

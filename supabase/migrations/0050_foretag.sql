@@ -19,6 +19,7 @@
 -- * can_see_meeting(): what meetings_select and is_meeting_member() now ask. For every org that
 --   is not a Företag it is exactly is_org_member(org) as before, so föreningar and Privat keep
 --   today's answers on every table under a meeting;
+-- * guard_meeting_start_v2 (0027): a Företag may run several meetings at once (no 'org_busy');
 -- * people writes in a Företag are admin-only (a member could otherwise link a placed person row
 --   to their own account and inherit its place in the tree).
 
@@ -612,5 +613,69 @@ end;
 $$;
 revoke all on function public.set_task_handoff_done(uuid, boolean) from public, anon;
 grant execute on function public.set_task_handoff_done(uuid, boolean) to authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- Several meetings at once in a Företag (Simon 2026-11-27: "Definitely multiple meetings per
+-- company"): the start guard (0027) refuses 'org_busy' only outside a Företag. Same signature and
+-- answers; the per-starter and per-Doc checks are unchanged for everyone.
+
+create or replace function public.guard_meeting_start_v2(p_meeting_id uuid, p_max_per_hour int)
+returns text
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_user uuid;
+  v_org uuid;
+  v_doc text;
+  v_foretag boolean;
+begin
+  select mt.started_by, mt.org_id, mt.doc_id into v_user, v_org, v_doc from public.meetings mt where mt.id = p_meeting_id;
+  v_foretag := exists (select 1 from public.orgs o where o.id = v_org and o.kind = 'foretag');
+  if v_user is null then
+    return 'not_found';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('meeting_start:' || v_user::text));
+  perform pg_advisory_xact_lock(hashtext('meeting_start_org:' || v_org::text));
+  if v_doc is not null then
+    perform pg_advisory_xact_lock(hashtext('meeting_start_doc:' || v_doc));
+  end if;
+
+  if exists (
+    select 1 from public.meetings mt
+    where mt.started_by = v_user and mt.status = 'live' and mt.id <> p_meeting_id
+  ) then
+    delete from public.meetings where id = p_meeting_id;
+    return 'starter_busy';
+  end if;
+
+  -- One live meeting per förening; a Företag runs several at once (one per starter still holds).
+  if not v_foretag and exists (
+    select 1 from public.meetings mt
+    where mt.org_id = v_org and mt.status in ('live', 'ending') and mt.id <> p_meeting_id
+  ) then
+    delete from public.meetings where id = p_meeting_id;
+    return 'org_busy';
+  end if;
+
+  if v_doc is not null and exists (
+    select 1 from public.meetings mt
+    where mt.doc_id = v_doc and mt.status in ('live', 'ending') and mt.id <> p_meeting_id
+  ) then
+    delete from public.meetings where id = p_meeting_id;
+    return 'doc_busy';
+  end if;
+
+  if (
+    select count(*) from public.meetings mt
+    where mt.started_by = v_user and mt.id <> p_meeting_id and mt.started_at > now() - interval '1 hour'
+  ) >= p_max_per_hour then
+    delete from public.meetings where id = p_meeting_id;
+    return 'start_rate';
+  end if;
+
+  return 'ok';
+end;
+$$;
+
 
 -- Invite links lead into a Företag like into a förening (join_org, 0045): unchanged.

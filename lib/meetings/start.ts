@@ -206,7 +206,10 @@ export async function startMeeting(
   }
 
   // F14: the org's live meeting and the starter's limits are checked before any Doc is touched.
-  const { data: active, error: activeError } = await supabase
+  // A Företag runs several meetings at once (0050): only the starter's own limit applies there.
+  const { data: active, error: activeError } = foretag
+    ? { data: [], error: null }
+    : await supabase
     .from("meetings")
     .select("id")
     .eq("org_id", orgId)

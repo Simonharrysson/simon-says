@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { listCustomers, listGroups, type CustomerRow } from "@/lib/db/foretag";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
-import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { GroupRow } from "./tree";
 
 // The Företag page's data (0050). Meetings, groups, people and customers are read with the
@@ -38,8 +37,8 @@ export interface ForetagPageData {
   customers: CustomerRow[];
   /** The viewer's node (null: unplaced). */
   myGroupId: string | null;
-  /** Any meeting running in the company, even one this user can't see (the start is one at a time). */
-  companyBusy: boolean;
+  /** This user's own running meeting (a starter runs one at a time; the company runs several). */
+  myLiveId: string | null;
 }
 
 export async function loadForetagPage(db: SupabaseClient, orgId: string, userId: string, titleAnd: string): Promise<ForetagPageData> {
@@ -61,20 +60,8 @@ export async function loadForetagPage(db: SupabaseClient, orgId: string, userId:
   const people = (peopleRes.data ?? []) as ForetagPerson[];
   const meetings = (meetingsRes.data ?? []) as ForetagMeeting[];
   const myGroupId = people.find((p) => p.member_user_id === userId && p.group_id)?.group_id ?? null;
-  // The one-live-meeting guard (0027) is per company: say so instead of a failed start.
-  const companyBusy = meetings.some((m) => m.status === "live" || m.status === "ending") || (await liveElsewhere(orgId));
-  return { groups, people, members, meetings, meetingInfo, customers, myGroupId, companyBusy };
-}
-
-/** A live meeting the user can't see (counts only; nothing about it is shown). */
-async function liveElsewhere(orgId: string): Promise<boolean> {
-  const { count, error } = await supabaseAdmin()
-    .from("meetings")
-    .select("id", { count: "exact", head: true })
-    .eq("org_id", orgId)
-    .in("status", ["live", "ending"]);
-  if (error) return false;
-  return (count ?? 0) > 0;
+  const myLiveId = meetings.find((m) => m.started_by === userId && (m.status === "live" || m.status === "ending"))?.id ?? null;
+  return { groups, people, members, meetings, meetingInfo, customers, myGroupId, myLiveId };
 }
 
 /** The customer page: the customer (RLS: members), the meetings with it the user can see, and their open tasks. */

@@ -19,7 +19,6 @@
     "button": "Starta möte",
     "activeTitle": "Ett möte pågår",
     "activeMine": "Ditt möte pågår.",
-    "activeOther": "Ett möte pågår redan i företaget. Ett nytt kan starta när det är slut.",
     "toLive": "Till mötet"
   },
   "meetings": {
