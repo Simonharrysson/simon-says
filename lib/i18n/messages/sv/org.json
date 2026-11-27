@@ -143,6 +143,8 @@
     "save": "Spara",
     "saving": "Sparar…",
     "saved": "Sparat",
-    "saveFailed": "Det gick inte att spara. Försök igen."
+    "saveFailed": "Det gick inte att spara. Försök igen.",
+    "reopen": "Visa Kom igång igen",
+    "reopenHint": "Stegen för att komma igång, som en checklista."
   }
 }

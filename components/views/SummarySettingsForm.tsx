@@ -1,11 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
-import type { FormAction } from "@/components/ui/ConfirmAction";
 import { Checkbox } from "@/components/ui/checkbox";
 import { hintClass } from "@/components/ui/Field";
-import { SaveState, useSaveState } from "@/components/settings/SaveState";
+import { SaveState, useSavedValue } from "@/components/settings/SaveState";
+import { saveSummaryAction, type SettingResult } from "@/app/(app)/orgs/settings-actions";
 import type { SummaryMode } from "@/lib/db/types";
 import { cn } from "@/lib/utils";
 
@@ -29,39 +28,24 @@ export function SummarySettingsForm({
   orgId,
   mode: savedMode,
   people,
-  action,
+  save: saveSetting = saveSummaryAction,
 }: {
   orgId: string;
   mode: SummaryMode;
   people: SummaryPersonOption[];
-  action: FormAction;
+  /** The save (`saveSummaryAction`); the /design gallery passes its own. */
+  save?: (orgId: string, mode: SummaryMode, personIds: string[]) => Promise<SettingResult>;
 }) {
   const t = useTranslations("summary");
-  const [mode, setMode] = useState<SummaryMode>(savedMode);
-  const savedPeople = people.filter((p) => p.selected).map((p) => p.id);
-  const [chosen, setChosen] = useState<string[]>(savedPeople);
-  const serverKey = `${savedMode}|${savedPeople.join(",")}`;
-  const [seen, setSeen] = useState(serverKey);
-  // The server's values changed (a save landed): take them.
-  if (seen !== serverKey) {
-    setSeen(serverKey);
-    setMode(savedMode);
-    setChosen(savedPeople);
-  }
-  const { status, run } = useSaveState();
+  const server = { mode: savedMode, people: people.filter((p) => p.selected).map((p) => p.id) };
+  const setting = useSavedValue(server, async (v) => {
+    const r = await saveSetting(orgId, v.mode, v.people);
+    return r.ok ? null : r.message;
+  });
+  const { mode, people: chosen } = setting.value;
+  const status = setting.status;
   const withEmail = people.filter((p) => p.hasEmail).length;
-
-  const save = (nextMode: SummaryMode, nextPeople: string[]) => {
-    setMode(nextMode);
-    setChosen(nextPeople);
-    void run(async () => {
-      const form = new FormData();
-      form.set("orgId", orgId);
-      form.set("summary_mode", nextMode);
-      for (const id of nextPeople) form.append("summary_person", id);
-      await action(form);
-    });
-  };
+  const save = (nextMode: SummaryMode, nextPeople: string[]) => setting.change({ mode: nextMode, people: nextPeople });
 
   return (
     <div className="flex max-w-[40rem] flex-col gap-5">

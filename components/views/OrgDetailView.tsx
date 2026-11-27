@@ -79,6 +79,8 @@ export interface OrgDetailViewProps {
   summarySettings?: ReactNode;
   /** Admins: name, logo and "Om oss" (`OrgDetailsForm`), Inställningar → Föreningen. */
   detailsSettings?: ReactNode;
+  /** Admins, Kom igång hidden or done: "Visa Kom igång igen" (`ReopenKomIgang`), under Föreningen. */
+  reopenKomIgang?: ReactNode;
   /** Admins: the meeting folder (`MeetingFolderSetting`), Inställningar → Möten. */
   folderSettings?: ReactNode;
   /** Admins: voices (`VoicesSetting`), Inställningar → Möten. */
@@ -349,6 +351,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           active={tab}
           label={t("tabsLabel")}
           loadingLabel={tc("loading")}
+          settingsNav={isAdmin}
           tabs={TABS.filter((x) => isAdmin || !x.adminOnly).map((x) => ({ id: x.id, label: t(x.label), href: tabs.href(x.id) }))}
           between={
             <>

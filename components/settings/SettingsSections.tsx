@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
  * from 1024 px, a row of chips below.
  *
  * Which section shows: `?del=` when the URL has one; otherwise the last one shown here (the tab
- * link carries no `del`, so coming back to the tab keeps it). A form's message (`?fel=`/`?klart=`,
+ * link carries no `del`, so coming back to the tab keeps it), except that Back to an entry
+ * without `del` shows the default section again. A form's message (`?fel=`/`?klart=`,
  * the server redirects to the bare page) opens the section it is about: `notice`, followed
  * whenever the server sends a new one.
  */
@@ -53,6 +54,17 @@ export function SettingsSections({ notice = null, sections }: { notice?: Setting
     setKept(id);
     window.history[how === "push" ? "pushState" : "replaceState"](null, "", hrefFor(id));
   };
+
+  // Back (or forward) to an entry without `?del=`, e.g. the tab as first opened: its own section,
+  // the default (or the one its message is about), not the one shown last.
+  useEffect(() => {
+    const onPop = () => {
+      const d = new URLSearchParams(window.location.search).get("del");
+      if (!isSettingsSection(d)) setKept(notice ?? "foreningen");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [notice]);
 
   // An old link to the one long page (`#sammanfattning` in a summary e-mail) opens its section.
   useEffect(() => {

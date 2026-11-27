@@ -37,6 +37,12 @@ test("tabs: a member sees Möten and Översikt, an admin also Inställningar @ph
   await sections.getByRole("link", { name: "Styrelsen och medlemmar" }).click();
   await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar&del=styrelsen$`));
   await expect(page.getByRole("heading", { name: "Styrelsen och medlemmar", exact: true })).toBeVisible();
+  // Back to the tab as first opened (no `del`): Föreningen again, then forward to the board.
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=installningar$`));
+  await expect(sections.getByRole("link", { name: "Föreningen" })).toHaveAttribute("aria-current", "true");
+  await page.goForward();
+  await expect(sections.getByRole("link", { name: "Styrelsen och medlemmar" })).toHaveAttribute("aria-current", "true");
   // One board list: the named person and the two accounts (nobody has named them yet).
   const board = page.getByRole("list", { name: "Styrelsen" });
   await expect(board.getByRole("listitem")).toHaveCount(3);

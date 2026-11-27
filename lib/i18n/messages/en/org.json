@@ -143,6 +143,8 @@
     "save": "Save",
     "saving": "Saving…",
     "saved": "Saved",
-    "saveFailed": "Couldn't save. Try again."
+    "saveFailed": "Couldn't save. Try again.",
+    "reopen": "Show Get started again",
+    "reopenHint": "The steps to get started, as a checklist."
   }
 }

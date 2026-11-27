@@ -65,4 +65,10 @@ test("a new user signs in, creates a förening and goes through Kom igång @phon
   await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Styrelsen och medlemmar" }).click();
   await expect(page.getByRole("list", { name: "Styrelsen" })).toContainText("Anna Berg");
   await expectAccessible(page);
+
+  // Kom igång is done, so its card is gone; Föreningen offers it again as a checklist.
+  await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Föreningen" }).click();
+  await page.getByRole("button", { name: "Visa Kom igång igen" }).click();
+  await expect(page).toHaveURL(/\/kom-igang/);
+  await expect(page.getByRole("heading", { name: "Nu är ni redo" })).toBeVisible();
 });

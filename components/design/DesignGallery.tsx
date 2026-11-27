@@ -565,7 +565,7 @@ function SettingsDemo({ section }: { section: SettingsSectionId }) {
                 connected
                 calendars={[{ id: "kal-1", name: "Styrelsen" }, { id: "kal-2", name: "Föreningens möten" }]}
                 current={{ id: "kal-1", name: "Styrelsen", filter: null }}
-                save={noopAction}
+                save={async () => ({ ok: true })}
                 connect={noopAction}
               />
             }

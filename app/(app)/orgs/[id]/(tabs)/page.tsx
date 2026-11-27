@@ -43,6 +43,7 @@ import type { Notice } from "@/lib/ui/messages";
 import type { Locale } from "@/lib/i18n/config";
 import { messages } from "@/lib/i18n/messages";
 import { OrgDetailsForm } from "@/components/settings/OrgDetails";
+import { ReopenKomIgang } from "@/components/settings/ReopenKomIgang";
 import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrgBoard } from "@/components/views/OrgBoard";
@@ -65,7 +66,6 @@ import {
   setPersonRoleAction,
   rotateInviteAction,
   updateOrgAction,
-  updateSummaryAction,
 } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -288,6 +288,11 @@ export default async function OrgPage({
           />
         ) : undefined
       }
+      reopenKomIgang={
+        settings && onboarding && (onboarding.dismissedAt || onboarding.completedAt) ? (
+          <ReopenKomIgang orgId={org.id} reopen={onboarding.dismissedAt ? dismissAction.bind(null, org.id, false) : undefined} />
+        ) : undefined
+      }
       folderSettings={
         settings ? (
           <MeetingFolderSetting orgId={org.id} folderName={org.meeting_folder_name ?? null} folderSet={Boolean(org.meeting_folder_id)} pickerEnabled={pickerEnabled(getEnv())} />
@@ -309,7 +314,6 @@ export default async function OrgPage({
             orgId={org.id}
             mode={org.summary_mode ?? "missed"}
             people={summaryOptions(people, members)}
-            action={updateSummaryAction}
           />
         ) : undefined
       }

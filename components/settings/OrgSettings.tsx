@@ -14,13 +14,13 @@ import { SettingsSections } from "./SettingsSections";
  * MeetingFolderSetting, FormatCard, VoicesSetting) and links here once a step is done.
  */
 export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record<string, ReactNode>; rotateInvite: ReactNode }) {
-  const { org, actions, boardList, memberControls, rotateInvite, detailsSettings, formatCard, folderSettings, calendarSettings, voiceSettings, summarySettings } = props;
+  const { org, actions, boardList, memberControls, rotateInvite, detailsSettings, reopenKomIgang, formatCard, folderSettings, calendarSettings, voiceSettings, summarySettings } = props;
   const t = useTranslations("org");
   const tasks = useTranslations("tasks.settings");
   const s = useTranslations("org.settings");
 
   return (
-    <OrgFlagsProvider org={org} updateOrg={actions.updateOrg}>
+    <OrgFlagsProvider org={org}>
       <SaveStatesProvider>
       <SettingsSections
         notice={props.settingsSection ?? null}
@@ -37,6 +37,7 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
                   {t("showOnStatusText")}
                 </OrgFlag>
               </Panel>
+              {reopenKomIgang}
             </>
           ),
           styrelsen: (

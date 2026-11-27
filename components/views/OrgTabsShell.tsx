@@ -36,6 +36,7 @@ export function OrgTabsShell({
   label,
   loadingLabel,
   between,
+  settingsNav = false,
   children,
 }: {
   /** The tab the server rendered (the source of truth; the optimistic tab falls back to it). */
@@ -45,6 +46,8 @@ export function OrgTabsShell({
   loadingLabel: string;
   /** Between the tab bar and the panel: the page notice and the Kom igång card. */
   between?: ReactNode;
+  /** Inställningar has the förening's section sub-nav (its skeleton shows it). Företag: no. */
+  settingsNav?: boolean;
   /** The active tab's panel, rendered by the server. */
   children: ReactNode;
 }) {
@@ -116,7 +119,7 @@ export function OrgTabsShell({
           <Activity key={tab.id} mode={tab.id === shown ? "visible" : "hidden"}>
             <div className="contents" data-tab-in={switched || undefined}>
               {panel === undefined ? (
-                <TabSkeleton tab={tab.id} label={loadingLabel} />
+                <TabSkeleton tab={tab.id} label={loadingLabel} settingsNav={settingsNav} />
               ) : (
                 <div
                   data-panel
@@ -137,7 +140,7 @@ export function OrgTabsShell({
 }
 
 /** A first visit's placeholder, shaped like the tab's panels so nothing jumps when it arrives. */
-function TabSkeleton({ tab, label }: { tab: OrgTabId; label: string }) {
+function TabSkeleton({ tab, label, settingsNav }: { tab: OrgTabId; label: string; settingsNav: boolean }) {
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
       <span className="sr-only" role="status">
@@ -151,6 +154,12 @@ function TabSkeleton({ tab, label }: { tab: OrgTabId; label: string }) {
             <Skeleton className="h-28 rounded-lg" />
           </div>
           <Skeleton className="h-56 rounded-lg" />
+        </>
+      ) : tab === "installningar" && !settingsNav ? (
+        <>
+          <Skeleton className="h-72 rounded-lg" />
+          <Skeleton className="h-48 rounded-lg" />
+          <Skeleton className="h-40 rounded-lg" />
         </>
       ) : tab === "installningar" ? (
         // The sub-nav (chips, a sidebar from 1024 px) beside the first section's panels.
