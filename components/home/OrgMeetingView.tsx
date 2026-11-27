@@ -1,4 +1,6 @@
 import { useLocale, useTranslations } from "next-intl";
+import { CountUp } from "@/components/motion/CountUp";
+import { Enter } from "@/components/motion/Enter";
 import { ButtonLink } from "@/components/ui/button";
 import { IconExternal } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -43,7 +45,9 @@ export function OrgMeetingView({
             <p>
               <span className="font-medium text-ink">{org.name}</span> · {longDay(meeting.startedAt, locale)}
             </p>
-            <p>{summary}</p>
+            <p>
+              <CountUp text={summary} />
+            </p>
           </div>
         }
         actions={
@@ -55,34 +59,36 @@ export function OrgMeetingView({
         }
       />
 
-      <Panel flush title={t("meeting.decisionsTitle")} titleId="decisions-title">
-        <div className={panelPadClass}>
-          {decisions.length ? (
-            <ul aria-labelledby="decisions-title" className="list-dash flex flex-col gap-2">
-              {decisions.map((d, i) => (
-                <li key={i} className="wrap-anywhere">
-                  {d}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-ink-3">{t("meeting.noDecisions")}</p>
-          )}
-        </div>
-      </Panel>
-
-      <Panel flush title={t("meeting.tasksTitle")} titleId="tasks-title">
-        {anyTick && <p className="-mt-2 px-6 pb-2 text-sm text-ink-2">{page.isAdmin ? t("meeting.adminTickHint") : t("meeting.canTickHint")}</p>}
-        {tasks.length ? (
-          <div className="pb-2">
-            <MeetingTasks tasks={tasks} today={today} docUrl={page.docUrl} save={save} initialStates={initialStates} />
+      <Enter>
+        <Panel flush title={t("meeting.decisionsTitle")} titleId="decisions-title">
+          <div className={panelPadClass}>
+            {decisions.length ? (
+              <ul aria-labelledby="decisions-title" className="list-dash flex flex-col gap-2">
+                {decisions.map((d, i) => (
+                  <li key={i} className="wrap-anywhere">
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-3">{t("meeting.noDecisions")}</p>
+            )}
           </div>
-        ) : (
-          <p className={`${panelPadClass} text-sm text-ink-3`}>{t("meeting.noTasks")}</p>
-        )}
-      </Panel>
+        </Panel>
 
-      {page.docUrl && <p className="text-sm text-ink-3">{t("meeting.docHint")}</p>}
+        <Panel flush title={t("meeting.tasksTitle")} titleId="tasks-title">
+          {anyTick && <p className="-mt-2 px-6 pb-2 text-sm text-ink-2">{page.isAdmin ? t("meeting.adminTickHint") : t("meeting.canTickHint")}</p>}
+          {tasks.length ? (
+            <div className="pb-2">
+              <MeetingTasks tasks={tasks} today={today} docUrl={page.docUrl} save={save} initialStates={initialStates} />
+            </div>
+          ) : (
+            <p className={`${panelPadClass} text-sm text-ink-3`}>{t("meeting.noTasks")}</p>
+          )}
+        </Panel>
+
+        {page.docUrl && <p data-enter-item className="text-sm text-ink-3">{t("meeting.docHint")}</p>}
+      </Enter>
     </div>
   );
 }

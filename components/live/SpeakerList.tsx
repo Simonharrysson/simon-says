@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import { useState } from "react";
+import { Presence, PresenceLi } from "@/components/motion/Presence";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,64 +46,69 @@ export function SpeakerList({
         <p className="px-6 pb-6 text-sm text-ink-3">{t("empty")}</p>
       ) : (
         <ul>
-          {speakers.map((speaker) => {
-            const key = speakerKeyString(speaker);
-            const open = editing === key;
-            const toggle = () => setEditing(open ? null : key);
-            return (
-              <li key={key} className="border-t border-line px-6 py-3">
-                <div className="flex min-h-11 items-center gap-2">
-                  <span className="flex min-w-0 flex-auto flex-col">
-                    <span className="font-mono text-xs whitespace-nowrap text-ink-3">{speaker.label}</span>
-                    <span className={cn("truncate font-semibold", (!speaker.displayName || speaker.needsConfirm) && "text-blue")}>
-                      {speaker.displayName ? (
-                        <>
-                          {speaker.displayName}
-                          {speaker.needsConfirm && "?"}
-                        </>
-                      ) : (
-                        t("who")
-                      )}
-                    </span>
-                  </span>
-                  <span className="flex flex-none gap-1">
-                    {speaker.displayName && speaker.needsConfirm && (
-                      <Button
-                        icon={<IconCheck size={16} />}
-                        onClick={() =>
-                          onAssign(speaker, {
-                            personId: people.find((p) => p.name === speaker.displayName)?.id ?? null,
-                            displayName: speaker.displayName!,
-                          })
-                        }
-                      >
-                        {t("correct")}
-                      </Button>
+          {/* A voice heard for the first time opens in. */}
+          <Presence>
+            {speakers.map((speaker) => {
+              const key = speakerKeyString(speaker);
+              const open = editing === key;
+              const toggle = () => setEditing(open ? null : key);
+              return (
+                <PresenceLi key={key}>
+                  <div className="border-t border-line px-6 py-3">
+                    <div className="flex min-h-11 items-center gap-2">
+                      <span className="flex min-w-0 flex-auto flex-col">
+                        <span className="font-mono text-xs whitespace-nowrap text-ink-3">{speaker.label}</span>
+                        <span className={cn("truncate font-semibold", (!speaker.displayName || speaker.needsConfirm) && "text-blue")}>
+                          {speaker.displayName ? (
+                            <>
+                              {speaker.displayName}
+                              {speaker.needsConfirm && "?"}
+                            </>
+                          ) : (
+                            t("who")
+                          )}
+                        </span>
+                      </span>
+                      <span className="flex flex-none gap-1">
+                        {speaker.displayName && speaker.needsConfirm && (
+                          <Button
+                            icon={<IconCheck size={16} />}
+                            onClick={() =>
+                              onAssign(speaker, {
+                                personId: people.find((p) => p.name === speaker.displayName)?.id ?? null,
+                                displayName: speaker.displayName!,
+                              })
+                            }
+                          >
+                            {t("correct")}
+                          </Button>
+                        )}
+                        {speaker.displayName ? (
+                          <Button variant="ghost" iconOnly icon={<IconPencil size={16} />} onClick={toggle} aria-expanded={open}>
+                            {t("rename", { label: speaker.label })}
+                          </Button>
+                        ) : (
+                          <Button onClick={toggle} aria-expanded={open} aria-label={open ? t("closePicker", { label: speaker.label }) : t("pickFor", { label: speaker.label })}>
+                            {open ? t("close") : t("pick")}
+                          </Button>
+                        )}
+                      </span>
+                    </div>
+                    {open && (
+                      <SpeakerPicker
+                        speaker={speaker}
+                        people={people}
+                        onPick={(choice) => {
+                          onAssign(speaker, choice);
+                          setEditing(null);
+                        }}
+                      />
                     )}
-                    {speaker.displayName ? (
-                      <Button variant="ghost" iconOnly icon={<IconPencil size={16} />} onClick={toggle} aria-expanded={open}>
-                        {t("rename", { label: speaker.label })}
-                      </Button>
-                    ) : (
-                      <Button onClick={toggle} aria-expanded={open} aria-label={open ? t("closePicker", { label: speaker.label }) : t("pickFor", { label: speaker.label })}>
-                        {open ? t("close") : t("pick")}
-                      </Button>
-                    )}
-                  </span>
-                </div>
-                {open && (
-                  <SpeakerPicker
-                    speaker={speaker}
-                    people={people}
-                    onPick={(choice) => {
-                      onAssign(speaker, choice);
-                      setEditing(null);
-                    }}
-                  />
-                )}
-              </li>
-            );
-          })}
+                  </div>
+                </PresenceLi>
+              );
+            })}
+          </Presence>
         </ul>
       )}
     </section>
@@ -128,7 +134,7 @@ function SpeakerPicker({
           <button
             key={person.id}
             type="button"
-            className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink transition-colors duration-120 hover:border-ink-3 hover:bg-sunk", person.name === speaker.displayName && "border-ink bg-ink text-on-ink hover:border-ink hover:bg-ink")}
+            className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink press hover:border-ink-3 hover:bg-sunk", person.name === speaker.displayName && "border-ink bg-ink text-on-ink hover:border-ink hover:bg-ink")}
             aria-pressed={person.name === speaker.displayName}
             onClick={() => onPick({ personId: person.id, displayName: person.name })}
           >
@@ -136,7 +142,7 @@ function SpeakerPicker({
           </button>
         ))}
         {!adding && (
-          <button type="button" className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink transition-colors duration-120 hover:border-ink-3 hover:bg-sunk", "border-dashed text-ink-2")} onClick={() => setAdding(true)}>
+          <button type="button" className={cn("inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-md border border-control bg-surface px-4 text-sm font-medium text-ink press hover:border-ink-3 hover:bg-sunk", "border-dashed text-ink-2")} onClick={() => setAdding(true)}>
             <IconPlus size={14} /> {t("someoneElse")}
           </button>
         )}
