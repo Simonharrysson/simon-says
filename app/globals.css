@@ -262,8 +262,6 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
-    /* The page doesn't shift sideways when a long page's scrollbar comes or goes on navigation. */
-    scrollbar-gutter: stable;
     /* Buttons and rows draw their own pressed state; no grey flash on tap. */
     -webkit-tap-highlight-color: transparent;
   }
