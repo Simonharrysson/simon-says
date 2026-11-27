@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { CountUp } from "@/components/motion/CountUp";
+import { Enter } from "@/components/motion/Enter";
 import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -51,8 +53,9 @@ export function HomeView({
   }
   const names = new Intl.ListFormat(locale === "en" ? "en-GB" : "sv-SE", { type: "conjunction" }).format(unlinked.map((u) => u.name));
 
+  // On a client navigation (not a page load) the content rises in, row by row, and the counts count up.
   const body = (
-    <>
+    <Enter>
         {unlinked.length > 0 && (
           <Banner
             tone="info"
@@ -83,8 +86,8 @@ export function HomeView({
         )}
         {approvals.length > 0 && <HandoffApprovals items={approvals} />}
         <section aria-labelledby="my-tasks-title" className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 id="my-tasks-title" className="text-lg tracking-[-0.02em]">
+          <div data-enter-item className="flex flex-col gap-1">
+            <h2 id="my-tasks-title" tabIndex={-1} className="text-lg tracking-[-0.02em] focus:outline-none">
               {t("tasksTitle")}
             </h2>
             <p className="max-w-[34rem] text-ink-2">{t("intro")}</p>
@@ -94,7 +97,7 @@ export function HomeView({
 
       {/* mt-6 on the column's gap-4: the 40px between Mina uppgifter and Senaste mötena. */}
       {recent.length === 0 ? (
-        <div className="mt-6">
+        <div data-enter-item className="mt-6">
           <EmptyState title={t("recentEmptyTitle")}>
             <p>{t("recentEmptyText")}</p>
           </EmptyState>
@@ -117,7 +120,7 @@ export function HomeView({
                   meta={
                     <>
                       <span className="font-medium text-ink-2">{space}</span> · {day}
-                      <span className="block text-ink-2">{counts}</span>
+                      <CountUp className="block text-ink-2" text={counts} />
                     </>
                   }
                   actions={
@@ -129,7 +132,7 @@ export function HomeView({
           </ul>
         </Panel>
       )}
-    </>
+    </Enter>
   );
   if (bare) return body;
   return (

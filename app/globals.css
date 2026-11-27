@@ -182,6 +182,13 @@
   --container-page: 72rem;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Springs as linear() easings, sampled from motion's spring() (lib/motion.ts holds the same).
+     Sliding markers and entrances: visualDuration 0.3 s, bounce 0.15, settled after 550 ms. */
+  --ease-spring: linear(0, 0.038, 0.1281, 0.2432, 0.3653, 0.483, 0.5898, 0.6827, 0.7607, 0.8243, 0.8747, 0.9138, 0.9433, 0.965, 0.9804, 0.9911, 0.9981, 1.0025, 1.0049, 1.006, 1.0063, 1.006, 1.0054, 1.0047, 1.0039, 1.0032, 1.0025, 1.0019, 1.0015, 1.0011, 1.0008, 1.0005, 1);
+  --dur-spring: 550ms;
+  /* Press feedback: visualDuration 0.2 s, no bounce, settled after 390 ms. */
+  --ease-press: linear(0, 0.0413, 0.1346, 0.2485, 0.3647, 0.4736, 0.5703, 0.6535, 0.7233, 0.7808, 0.8276, 0.8651, 0.895, 0.9187, 0.9372, 0.9517, 0.963, 0.9717, 0.9784, 0.9836, 0.9875, 0.9905, 0.9928, 0.9946, 0.9959, 0.9969, 0.9977, 0.9983, 0.9987, 0.999, 0.9993, 0.9994, 1);
+  --dur-press: 390ms;
 
   --animate-write: write 700ms var(--ease-out) both;
   --animate-caret: caret-blink 1.1s steps(2, jump-none) infinite;
@@ -392,32 +399,111 @@
   animation: 120ms var(--ease-out) both vt-out;
 }
 ::view-transition-new(.page-nav) {
-  animation: 220ms var(--ease-out) 40ms both vt-rise;
+  animation: 160ms var(--ease-out) 40ms both vt-in;
+}
+/* The page heading (PageHeader's h1) morphs from the old page's to the new one's: the group moves
+   to the new place on the spring, the two titles crossfade through a slight blur, at their own
+   size (no stretching between titles of different widths). */
+::view-transition-group(page-title) {
+  z-index: 50;
+  animation-duration: var(--dur-spring);
+  animation-timing-function: var(--ease-spring);
+}
+::view-transition-old(page-title),
+::view-transition-new(page-title) {
+  inline-size: auto;
+  block-size: auto;
+  object-fit: none;
+  object-position: left top;
+}
+::view-transition-old(page-title) {
+  animation: 150ms var(--ease-out) both vt-blur-out;
+}
+::view-transition-new(page-title) {
+  animation: 260ms var(--ease-out) 60ms both vt-blur-in;
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes vt-blur-out {
+  to {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+@keyframes vt-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
 }
 @keyframes vt-out {
   to {
     opacity: 0;
   }
 }
-@keyframes vt-rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
+
+/* ---------- Motion (lib/motion.ts, components/motion) ---------- */
+
+/* Entrances, count-ups and list rows run in JS (WAAPI and motion) and check reduced motion
+   themselves. What CSS owns: */
+
+/* Press: a pressed control dips to 98 % on a spring and comes back (rows to 99 %: on a row the
+   width of the page 2 % is a lot). It uses `scale`, not `transform`, so it composes with the
+   entrance and FLIP animations; the colour transitions are part of it (one transition list). */
+@utility press {
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 200ms var(--ease-out),
+    translate 200ms var(--ease-out),
+    scale var(--dur-press) var(--ease-press);
+  &:active:not(:disabled, [aria-disabled="true"], [data-loading="true"]) {
+    scale: 0.98;
+  }
+}
+@utility press-row {
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 200ms var(--ease-out),
+    translate 200ms var(--ease-out),
+    scale var(--dur-press) var(--ease-press);
+  &:active {
+    scale: 0.99;
+  }
+}
+/* Lift: a clickable row or card rises 1 px onto the lifted shadow under a mouse (never on touch,
+   which "hovers" on tap). Pair with `press` / `press-row`, whose transition list carries it. */
+@utility lift {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      position: relative;
+      z-index: 1;
+      translate: 0 -1px;
+      box-shadow: var(--shadow-lift);
+    }
   }
 }
 
-/* A förening tab's panel (components/views/OrgTabsShell.tsx) fades in with a 4px rise when a tab
-   is switched to. Opacity and transform only: no layout shift. `backwards` so nothing is held
-   after the end (the stale dimming still applies). */
-@keyframes tab-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
+/* Rows that close (components/motion/Presence.tsx): when the first row of a list closes, the
+   row under it is about to be first, so its separator fades now rather than vanishing after. */
+li:first-child[data-exiting] + li > :first-child {
+  border-top-color: transparent;
+  transition: border-top-color 150ms ease;
 }
-[data-tab-in] > :not([data-panel]),
-[data-tab-in] > [data-panel] > * {
-  animation: tab-in 180ms var(--ease-out) backwards;
+
+/* Sliders (components/motion/Slider.tsx): once the marker is measured, it carries the active
+   look; the links' own aria-current background and underline (the server HTML's) step aside, and
+   so does their hover background (the hover pill slides instead). */
+[data-slider] > [data-slider-key] {
+  background-color: transparent;
+}
+[data-slider] > [data-slider-key]::after {
+  content: none;
 }
 
 /* ---------- Reduced motion: every animation and transition off; content is always visible. ---------- */
