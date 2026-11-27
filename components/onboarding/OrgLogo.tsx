@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 
 const sizes = { sm: "size-9 text-sm rounded-md", md: "size-12 text-lg rounded-lg", lg: "size-28 text-4xl rounded-lg" } as const;
+/** Intrinsic size per size (the box's px), so the image reserves its space before it loads. */
+const px = { sm: 36, md: 48, lg: 112 } as const;
 
 /**
  * The förening's logo, or its first letter on ink when it has none. Shown only on the förening
@@ -11,7 +13,7 @@ export function OrgLogo({ name, src, size = "sm", className }: { name: string; s
   if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- a private, member-checked route; next/image would proxy it
-      <img src={src} alt="" aria-hidden="true" className={cn(box, "bg-surface object-cover shadow-panel")} />
+      <img src={src} alt="" aria-hidden="true" width={px[size]} height={px[size]} decoding="async" loading={size === "sm" ? "lazy" : undefined} className={cn(box, "bg-surface object-cover shadow-panel")} />
     );
   }
   return (

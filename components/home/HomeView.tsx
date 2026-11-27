@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Banner } from "@/components/ui/Banner";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -23,6 +24,7 @@ export function HomeView({
   save,
   initialStates,
   initialShowDone,
+  bare,
 }: {
   tasks: MyTask[];
   recent: RecentMeeting[];
@@ -34,6 +36,8 @@ export function HomeView({
   save?: SaveTick;
   initialStates?: Record<string, TickState>;
   initialShowDone?: boolean;
+  /** Only the content under the title, for a page that renders the title itself (/hem). */
+  bare?: boolean;
 }) {
   const t = useTranslations("home");
   const common = useTranslations("common");
@@ -44,10 +48,8 @@ export function HomeView({
   }
   const names = new Intl.ListFormat(locale === "en" ? "en-GB" : "sv-SE", { type: "conjunction" }).format(unlinked.map((u) => u.name));
 
-  return (
-    <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-10 px-gutter">
-      <div className="flex flex-col gap-4">
-        <PageHeader title={t("title")} />
+  const body = (
+    <>
         {unlinked.length > 0 && (
           <Banner
             tone="info"
@@ -71,14 +73,16 @@ export function HomeView({
           </div>
           <MyTasks tasks={tasks} today={today} docs={docs} meetingHrefs={meetingHrefs} save={save} initialStates={initialStates} initialShowDone={initialShowDone} />
         </section>
-      </div>
 
+      {/* mt-6 on the column's gap-4: the 40px between Mina uppgifter and Senaste mötena. */}
       {recent.length === 0 ? (
-        <EmptyState title={t("recentEmptyTitle")}>
-          <p>{t("recentEmptyText")}</p>
-        </EmptyState>
+        <div className="mt-6">
+          <EmptyState title={t("recentEmptyTitle")}>
+            <p>{t("recentEmptyText")}</p>
+          </EmptyState>
+        </div>
       ) : (
-        <Panel flush title={t("recentTitle")} titleId="recent-title">
+        <Panel flush title={t("recentTitle")} titleId="recent-title" className="mt-6">
           <ul aria-labelledby="recent-title">
             {recent.map((m) => {
               const day = meetingDayLabel(m.startedAt, locale);
@@ -107,6 +111,18 @@ export function HomeView({
           </ul>
         </Panel>
       )}
-    </div>
+    </>
   );
+  if (bare) return body;
+  return (
+    <HomeColumn>
+      <PageHeader title={t("title")} />
+      {body}
+    </HomeColumn>
+  );
+}
+
+/** /hem's page column. */
+export function HomeColumn({ children }: { children: ReactNode }) {
+  return <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-4 px-gutter">{children}</div>;
 }

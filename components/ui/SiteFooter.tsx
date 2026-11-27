@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/ui/AppLink";
 import { useTranslations } from "next-intl";
 import { LanguageSwitch } from "./LanguageSwitch";
 
@@ -10,8 +11,8 @@ export function SiteFooter() {
       <div className="mx-auto flex w-full max-w-page flex-wrap items-center justify-between gap-x-6 gap-y-3 px-gutter">
         <p>{t("footerTagline")}</p>
         <nav aria-label={t("footerNav")} className="flex flex-wrap items-center gap-5">
-          <a href="/status">{t("status")}</a>
-          <a href="/integritet">{t("privacy")}</a>
+          <AppLink href="/status">{t("status")}</AppLink>
+          <AppLink href="/integritet">{t("privacy")}</AppLink>
           <a href={REPO} rel="noopener">
             {t("sourceCode")}
           </a>

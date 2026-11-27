@@ -14,7 +14,7 @@ export function Switch({ className, ...props }: ComponentProps<typeof SwitchPrim
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        "peer inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-control bg-sunk p-0.5 transition-colors duration-120",
+        "peer inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-control bg-sunk p-0.5 transition-colors duration-120 hover:border-ink-2",
         "data-[state=checked]:border-ink data-[state=checked]:bg-ink",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,

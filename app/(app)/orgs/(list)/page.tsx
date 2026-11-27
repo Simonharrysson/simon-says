@@ -5,7 +5,7 @@ import { listMyOrgs } from "@/lib/db/orgs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgsNotice } from "@/lib/ui/messages";
 import { logoUrl } from "@/lib/orgs/logo";
-import { createOrgAction } from "./actions";
+import { createOrgAction } from "../actions";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {

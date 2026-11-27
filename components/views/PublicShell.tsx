@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/ui/AppLink";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/ui/SiteFooter";
@@ -22,9 +23,9 @@ export function PublicShell({
       <SiteHeader
         nav={
           signedIn ? (
-            <a className={navLinkClass} href="/orgs">
+            <AppLink className={navLinkClass} href="/orgs">
               {t("orgs")}
-            </a>
+            </AppLink>
           ) : noLoginLink ? null : (
             <a className={navLinkClass} href="/login">
               {t("signIn")}

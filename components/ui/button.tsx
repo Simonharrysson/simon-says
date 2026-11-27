@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/ui/AppLink";
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Slot } from "radix-ui";
@@ -137,13 +138,14 @@ export function ButtonLink({
   block,
   className,
   children,
+  href,
   ...rest
 }: Common & AnchorHTMLAttributes<HTMLAnchorElement>) {
   return (
-    <a data-slot="button" className={cn(buttonVariants({ variant, size, iconOnly, block }), className)} {...rest}>
+    <AppLink data-slot="button" className={cn(buttonVariants({ variant, size, iconOnly, block }), className)} href={href ?? ""} {...rest}>
       <Inner icon={icon} iconOnly={iconOnly}>
         {children}
       </Inner>
-    </a>
+    </AppLink>
   );
 }

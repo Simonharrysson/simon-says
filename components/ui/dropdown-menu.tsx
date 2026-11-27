@@ -21,7 +21,7 @@ export function DropdownMenuContent({ className, sideOffset = 6, align = "end", 
         collisionPadding={16}
         className={cn(
           "z-50 w-[min(20rem,calc(100vw-2rem))] rounded-lg bg-surface p-1 text-ink shadow-lift outline-none",
-          "duration-120 ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-97",
+          "origin-(--radix-dropdown-menu-content-transform-origin) duration-150 ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-97",
           className,
         )}
         {...props}

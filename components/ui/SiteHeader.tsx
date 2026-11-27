@@ -10,7 +10,7 @@ export const navLinkClass =
 export function SiteHeader({ nav, homeHref = "/" }: { nav?: ReactNode; homeHref?: string }) {
   const t = useTranslations("common");
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-[color-mix(in_srgb,var(--board)_92%,transparent)] backdrop-blur-[10px] backdrop-saturate-[1.4]">
+    <header style={{ viewTransitionName: "site-header" }} className="sticky top-0 z-20 border-b border-line bg-[color-mix(in_srgb,var(--board)_92%,transparent)] backdrop-blur-[10px] backdrop-saturate-[1.4]">
       <div className="mx-auto flex min-h-16 w-full max-w-page items-center gap-4 px-gutter">
         <Wordmark href={homeHref} />
         {nav && (

@@ -31,6 +31,14 @@ const WARM = [
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   const ctx = await request.newContext({ baseURL: APP_URL });
+  if (process.env.E2E_PROD) {
+    // A production build (the opt-in capture spec): the test sign-in route is off there by
+    // design (lib/e2e/guard.ts), so the capture signs in on its own; nothing to compile.
+    mkdirSync(dirname(STORAGE_ADMIN), { recursive: true });
+    await ctx.storageState({ path: STORAGE_ADMIN });
+    await ctx.dispose();
+    return;
+  }
   const started = Date.now();
   // Signed in, so the app pages compile their real code paths (not just the login redirect).
   const login = await ctx.get(`/api/e2e/login?email=${encodeURIComponent(ADMIN_EMAIL)}&next=/orgs`, { maxRedirects: 0 });

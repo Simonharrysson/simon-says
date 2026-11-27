@@ -1,5 +1,6 @@
 "use client";
 
+import { AppLink } from "@/components/ui/AppLink";
 import { useLocale, useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -91,9 +92,9 @@ export function StartMeetingForm({
               {t("agenda")}
               <IconExternal size={14} />
             </a>
-            <a href={`/orgs/${orgId}/forbered?datum=${next.date}`} className="text-ink-3">
+            <AppLink href={`/orgs/${orgId}/forbered?datum=${next.date}`} className="text-ink-3">
               {t("change")}
-            </a>
+            </AppLink>
           </span>
         </p>
       )}

@@ -90,3 +90,33 @@ test("meeting list: titles, counts, five shown, Testmöten folded @phone", async
   await expectAccessible(page);
   await expectNoOverflow(page);
 });
+
+test("tabs switch in place: the URL follows ?flik=, a visited tab keeps its state, back works", async ({ page, seedOrg, db }) => {
+  const org = await seedOrg();
+  for (let i = 0; i < 7; i++) await seedMeeting(db, org, { daysAgo: i + 1 });
+
+  await page.goto(org.url);
+  const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
+  // State on Möten: the older meetings unfolded.
+  await page.getByText("Visa fler (2)").click();
+  const older = page.getByRole("list", { name: "Äldre möten" });
+  await expect(older).toBeVisible();
+
+  await tabs.getByRole("link", { name: "Översikt" }).click();
+  await expect(tabs.getByRole("link", { name: "Översikt" })).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=oversikt$`));
+  await expect(older).toBeHidden();
+
+  // Back on Möten: the same list, still unfolded (kept, not re-rendered from scratch).
+  await tabs.getByRole("link", { name: "Möten" }).click();
+  await expect(tabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}$`));
+  await expect(older).toBeVisible();
+  await expect(older.getByRole("listitem")).toHaveCount(2);
+
+  // Browser back returns to Översikt.
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?flik=oversikt$`));
+  await expect(tabs.getByRole("link", { name: "Översikt" })).toHaveAttribute("aria-current", "page");
+  await expectAccessible(page);
+});

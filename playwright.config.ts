@@ -54,10 +54,14 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: `npx next dev --port ${new URL(APP_URL).port} --hostname 127.0.0.1`,
+      // E2E_PROD=1: a production build (prefetching and the client cache as in production), for
+      // the opt-in capture spec. Every check runs under `next dev`.
+      command: process.env.E2E_PROD
+        ? `npx next build && npx next start --port ${new URL(APP_URL).port} --hostname 127.0.0.1`
+        : `npx next dev --port ${new URL(APP_URL).port} --hostname 127.0.0.1`,
       url: `${APP_URL}/api/health`,
       env,
-      timeout: 240_000,
+      timeout: process.env.E2E_PROD ? 600_000 : 240_000,
       reuseExistingServer: !CI,
       stdout: CI ? "pipe" : "ignore",
       stderr: "pipe",

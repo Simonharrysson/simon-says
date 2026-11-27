@@ -36,7 +36,7 @@ import type { InviteRow } from "@/lib/invites/rules";
 import { loadOnboarding } from "@/lib/onboarding/store";
 import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
-import { dismissAction, saveProfileAction } from "./kom-igang/actions";
+import { dismissAction, saveProfileAction } from "../kom-igang/actions";
 import { Suspense } from "react";
 import { OrgCalendarSlot, StartCalendarSlot } from "@/components/calendar/CalendarSlots";
 import { calendarResult } from "@/lib/calendar/events";
@@ -64,7 +64,7 @@ import {
   rotateInviteAction,
   updateOrgAction,
   updateSummaryAction,
-} from "../actions";
+} from "../../actions";
 
 export const dynamic = "force-dynamic";
 // "Avsluta mötet" (endMeetingAction) runs the final notes pass after its response, in after().
