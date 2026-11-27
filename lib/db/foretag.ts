@@ -88,7 +88,7 @@ export async function audienceIds(orgId: string, groupId: string | null, priv: b
 }
 
 /** A Företag meeting's tasks for owners who can't see it, held for approval (service role). `owners`: each task's resolved owner. */
-export async function createTaskHandoffs(meetingId: string, owners: { item_id: string; person_id: string }[]): Promise<number> {
+export async function createTaskHandoffs(meetingId: string, owners: { item_id: string; person_id: string; text?: string }[]): Promise<number> {
   const { data, error } = await supabaseAdmin().rpc("create_task_handoffs", { p_meeting_id: meetingId, p_owners: owners });
   if (error) fail("create handoffs", error);
   return (data as number) ?? 0;

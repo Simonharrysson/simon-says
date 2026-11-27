@@ -44,3 +44,14 @@ describe("whoami", () => {
     expect(suggestedName(null)).toBe("");
   });
 });
+
+describe("a förening with groups (0054)", () => {
+  it("a placed name is not offered, and claim_person's 'ask_admin' asks for an admin", () => {
+    const people = [
+      { id: "1", name: "Placerad", member_user_id: null, group_id: "g1" },
+      { id: "2", name: "Fri", member_user_id: null, group_id: null },
+    ];
+    expect(claimable(people, null).map((p) => p.id)).toEqual(["2"]);
+    expect(whoamiError("ask_admin")).toBe("upptagen");
+  });
+});

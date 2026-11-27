@@ -72,14 +72,14 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     must("speaker", await admin.from("speaker_map").insert({ meeting_id: m.dev, el_session_id: `el-${m.dev}`, speaker_label: "s0", display_name: "Talare 1" }));
     must("event", await admin.from("meeting_events").insert({ meeting_id: m.dev, kind: "tick_ok" }));
 
-    // A förening: a stray group_id / private flag never narrows what its members see.
+    // A förening: a stray group_id never narrows what its members see (a Privat möte does, 0054).
     const member = await createTestUser("ftg-fmember");
     const fOrg = (must("forening", await admin.from("orgs").insert({ name: "Föreningen", created_by: u.olle.id }).select("id").single()) as { id: string }).id;
     must("fmember", await admin.from("org_members").insert({ org_id: fOrg, user_id: member.id, role: "member" }));
     const stray = (must("stray", await admin.from("groups").insert({ org_id: fOrg, name: "Grupp" }).select("id").single()) as { id: string }).id;
     const fm = (must(
       "fmeeting",
-      await admin.from("meetings").insert({ org_id: fOrg, started_by: u.olle.id, doc_id: "doc", notes_tab_id: "t.0", status: "done", group_id: stray, private: true }).select("id").single(),
+      await admin.from("meetings").insert({ org_id: fOrg, started_by: u.olle.id, doc_id: "doc", notes_tab_id: "t.0", status: "done", group_id: stray }).select("id").single(),
     ) as { id: string }).id;
     forening = { id: fOrg, meeting: fm, member };
   });
@@ -395,7 +395,7 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
   });
 
   it("föreningar are unchanged: every member sees every meeting", async () => {
-    // Every row of the förening (the stray-group private one and those other tests started).
+    // Every row of the förening (the stray-group one and those other tests started).
     const all = must("all", await adminClient().from("meetings").select("id").eq("org_id", forening.id)) as { id: string }[];
     const { data } = await forening.member.db.from("meetings").select("id").eq("org_id", forening.id);
     expect((data ?? []).map((r) => r.id).sort()).toEqual(all.map((r) => r.id).sort());

@@ -1,10 +1,11 @@
 import "server-only";
 import { createTaskHandoffs, viewerIds } from "@/lib/db/foretag";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { hasPlaceholder, stripPlaceholders } from "@/lib/notes/tasks";
 import { resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { audiencePeople } from "./audience";
 
-// A Företag meeting's summary (0050): who it is for (the meeting's group + attendees, only viewers)
+// A Företag meeting's summary (0050; a förening with groups, 0054, for the held tasks): who it is for (the meeting's group + attendees, only viewers)
 // and, first, its tasks for owners who can't see the meeting, held for approval (task_handoffs).
 
 export interface ForetagScope {
@@ -47,14 +48,18 @@ export function foretagSummaryPeople<T extends { id: string; member_user_id?: st
  * rule as Mina uppgifter). Pure.
  */
 export function taskOwners(
-  rows: { id: string; section: string; owner: string | null; owner_person_id: string | null; deleted_by_human?: boolean | null; done?: boolean | null }[],
+  rows: { id: string; section: string; text?: string | null; locked?: boolean | null; owner: string | null; owner_person_id: string | null; deleted_by_human?: boolean | null; done?: boolean | null }[],
   people: RolePerson[],
-): { item_id: string; person_id: string }[] {
-  const out: { item_id: string; person_id: string }[] = [];
+): { item_id: string; person_id: string; text?: string }[] {
+  const out: { item_id: string; person_id: string; text?: string }[] = [];
   for (const r of rows) {
     if (r.section !== "action" || r.deleted_by_human || r.done) continue;
     const id = r.owner_person_id ?? (r.owner ? resolveOwner(r.owner, people)?.id : null);
-    if (id) out.push({ item_id: r.id, person_id: id });
+    if (!id) continue;
+    // A line a person edited (a förening that requires Vem/När/Klart när) may still show our
+    // placeholders: the approver and the owner get it without them.
+    const clean = r.locked && r.text && hasPlaceholder(r.text) ? stripPlaceholders(r.text) : "";
+    out.push(clean ? { item_id: r.id, person_id: id, text: clean } : { item_id: r.id, person_id: id });
   }
   return out;
 }
@@ -66,7 +71,7 @@ export async function holdCrossingTasks(meetingId: string): Promise<void> {
     const { data: m, error: me } = await db.from("meetings").select("org_id").eq("id", meetingId).maybeSingle();
     if (me || !m) throw new Error(me?.message ?? "meeting not found");
     const [rows, people] = await Promise.all([
-      db.from("note_items").select("id, section, owner, owner_person_id, deleted_by_human, done").eq("meeting_id", meetingId).eq("section", "action"),
+      db.from("note_items").select("id, section, text, locked, owner, owner_person_id, deleted_by_human, done").eq("meeting_id", meetingId).eq("section", "action"),
       db.from("people").select("id, name, role").eq("org_id", (m as { org_id: string }).org_id),
     ]);
     if (rows.error || people.error) throw new Error((rows.error ?? people.error)!.message);

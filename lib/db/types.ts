@@ -89,6 +89,8 @@ export interface OrgRow {
   calendar_filter?: string | null;
   /** 0045: the kind of space; absent on rows read before 0045 (= förening). */
   kind?: SpaceKind;
+  /** 0054: a förening that organises its people in groups (the Företag tree and its visibility rule). Off by default. */
+  groups_enabled?: boolean;
   created_by: string | null;
   created_at: string;
 }

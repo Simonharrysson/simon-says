@@ -129,6 +129,7 @@
   "futureDate": "Ange ett datum som inte ligger i framtiden.",
   "protocolNotFound": "Protokollet finns inte.",
   "libBadGroup": "Gruppen finns inte längre. Ladda om sidan och välj igen.",
+  "libAgendaRestricted": "Ett möte för en grupp eller ett privat möte får ett nytt dokument. Välj ”Skapa nytt dokument”, eller ”Hela föreningen”.",
   "websiteBoard": {
     "adminsOnly": "Bara administratörer kan hämta styrelsen från webbplatsen.",
     "noWebsite": "Spara föreningens webbplats först.",

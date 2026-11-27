@@ -49,6 +49,8 @@ export function sectionForCode(code: string | null | undefined): SettingsSection
   if (code === "kalender" || code.startsWith("kalender-")) return "moten";
   if (code.startsWith("org-")) return "radera";
   if (["personnamn", "rollnamn", "roll-admin", "medlem"].includes(code) || /^(medlem|admin)-/.test(code)) return "styrelsen";
+  // Grupper (0054) sits under Styrelsen och medlemmar.
+  if (["grupp", "grupp-arkiv", "placering", "grupper"].includes(code)) return "styrelsen";
   return null;
 }
 
