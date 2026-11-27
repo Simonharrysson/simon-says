@@ -42,6 +42,7 @@ import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/m
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPendingSummaries, trySendMeetingSummaries } from "@/lib/summaries/send";
+import { applyTaskAnswers, markPlaceholders, parseTaskAnswers, taskMode, withDueDates, type TaskAnswer } from "@/lib/notes/tasks";
 
 // Server-driven notes ticks (Task 10). One tick, under a per-meeting lease:
 //   assign tick_no to new segments → read notes tab → diff human edits → Claude (updateNotes)
@@ -654,7 +655,8 @@ async function loadContext(meeting: MeetingRow) {
       .select("el_session_id, speaker_label, display_name, person_id, merged_into_label")
       .eq("meeting_id", meeting.id),
     db().from("note_items").select("*").eq("meeting_id", meeting.id).order("section").order("position"),
-    db().from("orgs").select("name").eq("id", meeting.org_id).maybeSingle(),
+    // "*": taskMode also reads the space kind once there is one (orgs.kind, Privat).
+    db().from("orgs").select("*").eq("id", meeting.org_id).maybeSingle(),
   ]);
   return {
     segments,
@@ -662,6 +664,7 @@ async function loadContext(meeting: MeetingRow) {
     speakers: must("tick: speakers", speakers) as SpeakerRead[],
     rows: must("tick: note items", rows) as NoteItemRow[],
     orgName: (must("tick: org", org) as { name: string } | null)?.name ?? "Föreningen",
+    taskMode: taskMode(must("tick: org", org) as { require_task_fields?: boolean; kind?: string } | null),
   };
 }
 
@@ -975,7 +978,8 @@ export async function runTick(
         transcriptBlocks: send,
         speakerNames,
         notesTabText: first.text,
-        items: first.items,
+        // The same placeholder lines the render writes, so our own lines are not read as human text.
+        items: markPlaceholders(first.items, ctx.taskMode),
         locked: first.diff.locked,
         deletedIds: first.diff.deletedIds,
         final,
@@ -997,6 +1001,8 @@ export async function runTick(
       if (final && out.title) await saveTitle(meetingId, out.title);
       if (answered) items = out.items;
     }
+    // The Avsluta dialog's Vem / När / Klart när, after Claude's tidy-up: a person's answer wins.
+    if (final) items = applyTaskAnswers(items, parseTaskAnswers(meeting.task_answers));
 
     // Final pass that had to skip Claude although transcript was unsent (time or spend caps).
     const finalWithoutClaude = final && out === null && send.length > sentTick;
@@ -1040,17 +1046,19 @@ export async function runTick(
           newLabels = newAnchors.map((a) => ({ key: a.key, label: itemAt(scan, a.start)?.label ?? "" }));
           const groupBy = fmt.profile.tasksSection?.groupBy ?? "person";
           const people = fmt.people;
-          res = await deps.render(auth, target, st.diff.rows, formatDesired(unproxy(items, fmt.proxied), st.diff, server, fmt.profile), st.revisionId, header, {
+          const desired = markPlaceholders(formatDesired(unproxy(items, fmt.proxied), st.diff, server, fmt.profile), ctx.taskMode);
+          res = await deps.render(auth, target, st.diff.rows, desired, st.revisionId, header, {
             plan: planFormatRender,
             profile: fmt.profile,
             ownerLabel: (owner: string) => ownerLabel(resolveOwner(owner, people), owner, groupBy),
             newAnchors,
           });
         } else {
-          res = await deps.render(auth, target, st.diff.rows, desiredItems(items, st.diff), st.revisionId, header);
+          res = await deps.render(auth, target, st.diff.rows, desiredItems(markPlaceholders(items, ctx.taskMode), st.diff), st.revisionId, header);
         }
         if (res.status === "ok") {
-          let rows = res.rows;
+          // Deadlines as days ("fredag" → the Friday after the meeting), for overdue marks later.
+          let rows = withDueDates(res.rows, meeting.started_at);
           if (fmt) {
             if (newAnchors.length) {
               // The ranges exist in the Doc now: store them (role topic, F5) under our lease. Lost
@@ -1356,7 +1364,14 @@ export async function endMeeting(
  */
 export async function claimEnd(
   meetingId: string,
-  opts: { abandon?: boolean; endedAt?: Date; staleBefore?: StaleBefore; deps?: Partial<TickDeps> } = {},
+  opts: {
+    abandon?: boolean;
+    endedAt?: Date;
+    staleBefore?: StaleBefore;
+    deps?: Partial<TickDeps>;
+    /** The Avsluta dialog's answers (concrete tasks), stored in the claim's own update (atomic). */
+    taskAnswers?: TaskAnswer[];
+  } = {},
 ): Promise<"claimed" | "noop" | "not_found"> {
   // `endedAt`: the presence end stamps when the last tab was heard from, not when the cron ran.
   const now = opts.endedAt ?? (opts.deps?.now ?? (() => new Date()))();
@@ -1368,6 +1383,7 @@ export async function claimEnd(
         end_status: opts.abandon ? "abandoned" : "done",
         end_attempts: 0,
         end_lease_until: null,
+        ...(opts.taskAnswers?.length ? { task_answers: opts.taskAnswers } : {}),
       })
       .eq("id", meetingId)
       .eq("status", "live");
@@ -1386,6 +1402,32 @@ export async function claimEnd(
     return exists ? "noop" : "not_found";
   }
   return "claimed";
+}
+
+/**
+ * Avsluta answers for a meeting that was already ending when they arrived: another tab, the org
+ * page or an automatic end claimed it first, or this same end's first POST timed out on the client
+ * after the claim had stored them (a retry). True when they are stored now:
+ * - every answer is already stored as sent (the retry): nothing to write;
+ * - else, while no final pass has started (status `ending`, no live end lease), merged per task
+ *   into what is stored (these answers win for their tasks), for the pending or cron-retried pass.
+ * False: the final pass is running or done, so they were not saved (the page says so).
+ */
+export async function saveLateTaskAnswers(meetingId: string, answers: TaskAnswer[], now: Date = new Date()): Promise<boolean> {
+  if (!answers.length) return true;
+  const row = must("end: late answers", await db().from("meetings").select("task_answers").eq("id", meetingId).maybeSingle()) as {
+    task_answers: unknown;
+  } | null;
+  const stored = parseTaskAnswers(row?.task_answers);
+  const same = (a: TaskAnswer, b: TaskAnswer | undefined) => !!b && a.owner === b.owner && a.due === b.due && a.doneWhen === b.doneWhen;
+  if (answers.every((a) => same(a, stored.find((s) => s.id === a.id)))) return true;
+  const merged = [...stored.filter((s) => !answers.some((a) => a.id === s.id)), ...answers];
+  // Two guarded updates (no lease, or an expired one) rather than one or-filter: each is atomic.
+  const update = () => db().from("meetings").update({ task_answers: merged }).eq("id", meetingId).eq("status", "ending");
+  const free = must("end: late answers", await update().is("end_lease_until", null).select("id")) as { id: string }[];
+  if (free.length) return true;
+  const expired = must("end: late answers", await update().lt("end_lease_until", now.toISOString()).select("id")) as { id: string }[];
+  return expired.length > 0;
 }
 
 // ---------------------------------------------------------------------------------------------

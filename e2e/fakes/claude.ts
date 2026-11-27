@@ -53,6 +53,8 @@ const userText = (b: Body) =>
     .map((m) => (typeof m.content === "string" ? m.content : m.content.map((c) => c.text ?? "").join("\n")))
     .join("\n");
 
+/** The scripted task's Vem, När and Klart när. */
+const complete = { owner: SCRIPTED.actionOwner, due: SCRIPTED.actionDue, done_when: SCRIPTED.actionDoneWhen };
 /** The final notes pass asks for the meeting's title (0048): the scripted one goes with its ops. */
 const withTitle = (text: string, out: { ops: unknown[] }) => (text.includes('Also set "title"') ? { ...out, title: SCRIPTED.title } : out);
 
@@ -64,8 +66,9 @@ function answer(kind: ClaudeKind, text: string): unknown {
       return withTitle(text, {
         ops: [
           { op: "add", id: "a", section: "decision", text: SCRIPTED.decision },
-          { op: "add", id: "b", section: "action", text: SCRIPTED.action },
+          { op: "add", id: "b", section: "action", text: SCRIPTED.action, ...complete },
           { op: "add", id: "c", section: "now", text: SCRIPTED.now },
+          ...(text.includes(SCRIPTED.tasksOrg) ? SCRIPTED.incomplete.map((t, i) => ({ op: "add", id: `t${i}`, section: "action", text: t, owner: "Erik Lund" })) : []),
         ],
       });
     case "agenda-notes":
@@ -73,7 +76,10 @@ function answer(kind: ClaudeKind, text: string): unknown {
       return withTitle(text, {
         ops: [
           { op: "add", id: "a", kind: "decision", anchor: "notes", text: SCRIPTED.decision },
-          { op: "add", id: "b", kind: "task", anchor: "notes", text: SCRIPTED.action },
+          { op: "add", id: "b", kind: "task", anchor: "notes", text: SCRIPTED.action, ...complete },
+          ...(text.includes(SCRIPTED.tasksOrg)
+            ? SCRIPTED.incomplete.map((t, i) => ({ op: "add", id: `t${i}`, kind: "task", anchor: "notes", text: t, owner: "Erik Lund" }))
+            : []),
         ],
       });
     case "names": {

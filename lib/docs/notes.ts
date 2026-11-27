@@ -4,6 +4,7 @@ import { kindOfSection, type MeetingRow, type NoteItemRow, type NoteSection } fr
 import type { FormatProfile } from "@/lib/formats/schema";
 import { docsApi, isRevisionConflict, replaceRange, type DocsRequest } from "@/lib/google/docs";
 import type { NotesItem } from "@/lib/notes/schema";
+import { DONE_WHEN_LABEL, PLACEHOLDER } from "@/lib/notes/tasks";
 
 // Notes items in the notes tab: one paragraph per item, one named range `ss-<meetingId>-<itemId>`
 // over the item's text. What Task 2 measured on a real Doc decides the rules here:
@@ -24,13 +25,15 @@ export function clean(s: string): string {
 }
 
 /** The single line we render for an item (what `last_rendered_text` stores). Never contains a newline. */
-export function formatItem(item: Pick<NotesItem, "section" | "text" | "owner" | "due">): string {
+export function formatItem(item: Pick<NotesItem, "section" | "text" | "owner" | "due"> & Partial<Pick<NotesItem, "doneWhen" | "placeholders">>): string {
   const text = clean(item.text);
-  const owner = item.owner ? clean(item.owner) : "";
-  const due = item.due ? clean(item.due) : "";
+  const ask = item.placeholders === true;
+  const owner = item.owner ? clean(item.owner) : ask ? PLACEHOLDER.owner : "";
+  const due = item.due ? `(${clean(item.due)})` : ask ? PLACEHOLDER.due : "";
+  const doneWhen = item.doneWhen ? `${DONE_WHEN_LABEL} ${clean(item.doneWhen)}` : ask ? PLACEHOLDER.doneWhen : "";
   switch (item.section) {
     case "action":
-      return `☐ ${owner ? `${owner}: ` : ""}${text}${due ? ` (${due})` : ""}`;
+      return `☐ ${owner ? `${owner}: ` : ""}${text}${due ? ` ${due}` : ""}${doneWhen ? ` – ${doneWhen}` : ""}`;
     case "decision":
       return `✓ ${text}`;
     default:
@@ -45,6 +48,8 @@ export function toNotesItem(row: NoteItemRow): NotesItem {
     text: row.text,
     ...(row.owner ? { owner: row.owner } : {}),
     ...(row.due ? { due: row.due } : {}),
+    ...(row.done_when ? { doneWhen: row.done_when } : {}),
+    ...(row.due_date ? { dueDate: row.due_date } : {}),
     // Format fields only when set, so a v1 row maps to exactly the v1 item.
     ...(row.anchor ? { anchor: row.anchor } : {}),
     ...(row.done ? { done: true } : {}),
@@ -197,7 +202,7 @@ export function diffHumanEdits(
     } else if (row.section === "now") {
       // never locked: always reflects the current topic
     } else if (row.locked || cur !== row.last_rendered_text || suggested.has(row.id)) {
-      next = { ...row, locked: true, text: cur, owner: null, due: null };
+      next = { ...row, locked: true, text: cur, owner: null, due: null, done_when: null, due_date: null };
     }
     if (next.deleted_by_human) deletedIds.push(next.id);
     else if (next.locked) locked.push(toNotesItem(next));
@@ -521,6 +526,7 @@ export function renderedRows(
       text: item.text,
       owner: item.owner ?? null,
       due: item.due ?? null,
+      done_when: item.doneWhen ?? null,
       locked: false,
       deleted_by_human: false,
       last_rendered_text: formatItem({ ...item, section }),

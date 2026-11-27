@@ -43,6 +43,10 @@ describe("openTasks", () => {
     ]);
     expect(out.map((r) => r.id)).toEqual(["n6"]);
   });
+  it("a locked row's line loses our placeholders (concrete tasks): Från förra veckan never shows '(deadline?)'", () => {
+    const [r] = openTasks([row({ id: "n1", locked: true, text: "Kassör: Boka lokal (deadline?) – (klart när?).", done_when: "x", due_date: "2026-11-27" })]);
+    expect(r).toMatchObject({ text: "Kassör: Boka lokal.", owner: null, due: null, done_when: null, due_date: null });
+  });
   it("a locked row keeps its human text and has no owner or due", () => {
     const [r] = openTasks([
       row({

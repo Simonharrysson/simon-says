@@ -34,6 +34,13 @@ function docWith(lines: { id: string; text: string }[]) {
 const textOf = (doc: ReturnType<typeof docOf>) => parseNotesTab(doc, TAB).paragraphs.map((p) => p.text.replace(/\n$/, ""));
 
 describe("planDocDone: ✓ klart on our own lines only", () => {
+  it("a line still asking for fields (concrete tasks) loses its placeholders when ticked done", () => {
+    const line = "Kassör: Boka lokal (deadline?) – (klart när?).";
+    const doc = docWith([{ id: "n1", text: line }]);
+    const plan = planDocDone(parseNotesTab(doc, TAB), TAB, [row("n1", line)]);
+    expect(plan.written).toEqual([{ id: "n1", text: "Kassör: Boka lokal. ✓ klart" }]);
+  });
+
   it("appends ✓ klart to the task's line and its tasks copy", () => {
     const lines = [
       { id: "n1", text: "Simon: Boka lokal (fredag)." },

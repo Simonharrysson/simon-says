@@ -3,6 +3,7 @@ import type { MeetingRow, NoteItemRow } from "@/lib/db/types";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { replaceRange, type DocsRequest } from "@/lib/google/docs";
 import type { NotesItem } from "@/lib/notes/schema";
+import { DONE_WHEN_LABEL, OVERDUE_MARK, PLACEHOLDER, isOverdue, stockholmDay } from "@/lib/notes/tasks";
 import {
   INSERT,
   REPLACE,
@@ -40,6 +41,8 @@ import { paraBullet, paraInTable, paraLine, paraStyle, type NotesTab, type Parag
 export interface LineCtx {
   profile: FormatProfile;
   ownerLabel(owner: string): string;
+  /** The meeting's day (YYYY-MM-DD): a carried task whose deadline is before it is marked "försenad". */
+  today?: string;
 }
 
 /** The A1-measured nested insert rules, by name. */
@@ -65,11 +68,15 @@ export function sentence(s: string): string {
  * The single line we render for an item (without a placement prefix). Never contains a newline.
  * - `info.*` anchors, attendees and "now": the text as is (F1: "18:05–19:10" gets no ".");
  * - decision: "<decisionPrefix> <sentence>";
- * - task: "<label>: <text without final period>[ (<due>)].[ ✓ klart]" (no owner: no label);
+ * - task: "<label>: <text without final period>[ (<due>)][ – klart när: <doneWhen>].[ ✓ klart]" (no
+ *   owner: no label). With `placeholders` the missing ones read "(vem?)", "(deadline?)",
+ *   "(klart när?)"; a carried task past its deadline (`dueDate` before `ctx.today`) gets
+ *   "(<due>, försenad)";
  * - note: <sentence>.
  */
 export function formatLine(
-  item: Pick<NotesItem, "section" | "text"> & Partial<Pick<NotesItem, "id" | "owner" | "due" | "anchor" | "done">>,
+  item: Pick<NotesItem, "section" | "text"> &
+    Partial<Pick<NotesItem, "id" | "owner" | "due" | "anchor" | "done" | "doneWhen" | "placeholders" | "carried" | "dueDate">>,
   ctx: LineCtx,
 ): string {
   const raw = clean(item.text);
@@ -80,12 +87,16 @@ export function formatLine(
     case "decision":
       return `${clean(ctx.profile.decisionPrefix)} ${sentence(text)}`;
     case "action": {
-      const owner = item.owner ? clean(ctx.ownerLabel(clean(item.owner))) : "";
+      const ask = item.placeholders === true && !item.done && !item.carried;
+      const owner = item.owner ? clean(ctx.ownerLabel(clean(item.owner))) : ask ? PLACEHOLDER.owner : "";
       const body = text.replace(/[.\s]+$/, "");
-      const due = item.due ? clean(item.due) : "";
+      const overdue = item.carried && !item.done && ctx.today && isOverdue(item.dueDate, ctx.today);
+      const due = item.due ? `(${clean(item.due)}${overdue ? `, ${OVERDUE_MARK}` : ""})` : ask ? PLACEHOLDER.due : "";
+      const doneWhen = item.doneWhen ? `${DONE_WHEN_LABEL} ${clean(item.doneWhen).replace(/[.\s]+$/, "")}` : ask ? PLACEHOLDER.doneWhen : "";
       let line = `${owner ? `${owner}: ` : ""}${body}`;
-      if (due) line += ` (${due}).`;
-      else if (!/[!?]$/.test(body)) line += ".";
+      if (due) line += ` ${due}`;
+      if (doneWhen) line += ` – ${doneWhen}`;
+      if (due || doneWhen || !/[!?]$/.test(body)) line += ".";
       if (item.done) line += " ✓ klart";
       return line;
     }
@@ -204,7 +215,7 @@ export function planFormatRender(
 ): RenderPlan {
   desired = dedupeById(desired);
   const tabId = meeting.notes_tab_id;
-  const ctx: LineCtx = { profile: opts.profile, ownerLabel: opts.ownerLabel };
+  const ctx: LineCtx = { profile: opts.profile, ownerLabel: opts.ownerLabel, ...(meeting.started_at ? { today: stockholmDay(meeting.started_at) } : {}) };
   const byId = new Map(rows.map((r) => [r.id, r]));
   const desiredIds = new Set(desired.map((d) => d.id));
   const groups: Group[] = [];

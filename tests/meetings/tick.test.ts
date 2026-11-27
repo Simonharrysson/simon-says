@@ -681,6 +681,8 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     const r = await createOrg(starter.db, "Tickföreningen");
     if (!r.ok) throw new Error("org");
     orgId = r.id;
+    // Lines pinned without the concrete-tasks placeholders (tests/suite/tasks.test.ts covers those).
+    await adminClient().from("orgs").update({ require_task_fields: false }).eq("id", orgId);
   });
 
   beforeEach(() => {
@@ -1340,6 +1342,8 @@ describe.skipIf(!hasLocalSupabase)("ticks in the format layout (A12)", () => {
     const r = await createOrg(starter.db, "Kodklubben");
     if (!r.ok) throw new Error("org");
     orgId = r.id;
+    // Lines pinned without the concrete-tasks placeholders (tests/suite/tasks.test.ts covers those).
+    await adminClient().from("orgs").update({ require_task_fields: false }).eq("id", orgId);
     profileId = await ensureStandardRow(orgId, "veckomote");
     const { data, error } = await adminClient()
       .from("people")

@@ -20,10 +20,10 @@ export const demoSummaryEmails: Record<"missed" | "admin" | "short", SummaryEmai
         "Vi söker sponsring från tre företag före jul.",
       ],
       tasks: [
-        { text: "Boka DJ till julfesten", owner: "Sara", due: "fre 4 dec", mine: true },
+        { text: "Boka DJ till julfesten", owner: "Sara", due: "fre 4 dec", doneWhen: "kontraktet är påskrivet", mine: true },
         { text: "Skicka fakturan till kåren", owner: "Kassör", due: null, mine: true },
         { text: "Skriva inbjudan till julfesten", owner: "Erik", due: "mån 30 nov", mine: false },
-        { text: "Fråga Ica om sponsring", owner: "Anna", due: null, mine: false },
+        { text: "Fråga Ica om sponsring", owner: "Anna", due: null, missing: ["due", "doneWhen"], mine: false },
       ],
       other: ["Lokalen på Kårallen är bokad varannan tisdag resten av terminen."],
       more: { decisions: 0, tasks: 0, other: 0 },

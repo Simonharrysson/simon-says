@@ -27,10 +27,10 @@ export default async function MeetingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ stoppat?: string }>;
+  searchParams: Promise<{ stoppat?: string; svar?: string }>;
 }) {
   const { id } = await params;
-  const { stoppat } = await searchParams;
+  const { stoppat, svar } = await searchParams;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -77,6 +77,7 @@ export default async function MeetingPage({
         shareTranscript={org.share_transcript}
         privat={privat}
         autoStopped={stoppat !== undefined}
+        answersLost={svar === "ej-sparade"}
         stopReason={stoppat && stoppat !== "1" && /^[a-z_]{1,30}$/.test(stoppat) ? stoppat : null}
         shareFailed={shareFailed}
         missedMeetingFolder={missedMeetingFolder}

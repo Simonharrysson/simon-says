@@ -5,6 +5,7 @@ import { Fragment, useCallback, useEffect, useState, type ComponentProps, type R
 import type { Locale } from "@/lib/i18n/config";
 import { AgendaStepView, type AgendaFormatOption, type AgendaStepViewProps, type AgendaViewState, type GoalOption } from "@/components/live/AgendaStep";
 import { LiveMeeting, type LiveMeetingProps } from "@/components/live/LiveMeeting";
+import type { TaskView } from "@/lib/notes/tasks";
 import type { Speaker } from "@/components/live/types";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
@@ -109,6 +110,13 @@ const speakers: Speaker[] = [
   { elSessionId: "s2", speakerLabel: "0", label: "Talare 4", displayName: null, needsConfirm: false },
 ];
 
+/** "Uppgifter" (concrete tasks): one complete, two that lack something (fictional). */
+const demoTasks: TaskView[] = [
+  { id: "n3", text: "Boka Kårallen till hackathonet", owner: "Anna Berg", due: "fredag", doneWhen: "kontraktet är påskrivet", missing: [], locked: false },
+  { id: "n5", text: "Fråga kåren om bidrag", owner: "Erik Lund", due: null, doneWhen: null, missing: ["due", "doneWhen"], locked: false },
+  { id: "n7", text: "Sätta upp affischer", owner: null, due: "nästa vecka", doneWhen: null, missing: ["owner", "doneWhen"], locked: false },
+];
+
 const liveBase: LiveMeetingProps = {
   phase: "live",
   orgName: "Exempelföreningen",
@@ -137,6 +145,8 @@ const liveBase: LiveMeetingProps = {
   onResumeMeeting: noop,
   onEndUnfinished: noop,
   onRetry: noop,
+  tasks: demoTasks,
+  askTasks: async () => demoTasks.filter((t) => t.missing.length > 0),
 };
 
 /** The protocol import's meeting list (fictional förening and titles). */

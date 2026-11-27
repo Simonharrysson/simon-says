@@ -48,6 +48,11 @@ export interface Expected {
     anchor?: string;
     /** The label the format shows for the owner (their role). */
     ownerLabel?: string;
+    /**
+     * Concrete tasks: "Klart när" as said (the item's done_when must match), or null when the
+     * meeting never said it (the item must have none: never invented). Absent: not checked.
+     */
+    done_when?: Match | null;
   }[];
   /** Agenda mode: the agenda Doc's items, as the tick's agenda context has them, and its standard format. */
   agenda?: { profile: "veckomote" | "styrelseprotokoll"; items: { key: string; label: string; role: ItemRole; sub?: string[] }[] };
@@ -98,7 +103,7 @@ const hasName = (text: string, name: string) => matches(text, [[firstName(name)]
 
 /** One line as the notes tab shows it (the same shape as formatItem, without its Doc cleaning). */
 export function itemLine(i: NotesItem): string {
-  if (i.section === "action") return `☐ ${i.owner ? `${i.owner}: ` : ""}${i.text}${i.due ? ` (${i.due})` : ""}`;
+  if (i.section === "action") return `☐ ${i.owner ? `${i.owner}: ` : ""}${i.text}${i.due ? ` (${i.due})` : ""}${i.doneWhen ? ` – klart när: ${i.doneWhen}` : ""}`;
   if (i.section === "decision") return `✓ ${i.text}`;
   return i.text;
 }
@@ -132,6 +137,8 @@ export interface Score {
   roles: { ok: number; total: number };
   /** Agenda mode: carried tasks whose final `done` is the expected one. */
   followup: { ok: number; total: number };
+  /** Concrete tasks: actions with a `done_when` expectation met (said and matching, or not said and empty). */
+  doneWhen?: { ok: number; total: number };
   /**
    * Agenda mode: items under a followup item; with Må-runda hiding on also Må-runda content in the
    * final or any live notes, or items under the checkin item.
@@ -153,6 +160,7 @@ export function score(items: NotesItem[], expected: Expected, ticks: TickItems[]
   const wrong: string[] = [];
   const placement = { ok: 0, total: 0 };
   const roles = { ok: 0, total: 0 };
+  const doneWhen = { ok: 0, total: 0 };
   const people = rolePeople(expected);
   for (const d of expected.decisions ?? []) {
     total++;
@@ -185,6 +193,13 @@ export function score(items: NotesItem[], expected: Expected, ticks: TickItems[]
       if (got === a.ownerLabel) roles.ok++;
       else if (hit) wrong.push(`WRONG   ${a.key} owner shown as "${got}", want "${a.ownerLabel}"`);
     }
+    if (a.done_when !== undefined) {
+      doneWhen.total++;
+      const got = hit?.doneWhen?.trim() ?? "";
+      const ok = hit ? (a.done_when === null ? got === "" : got !== "" && matches(got, a.done_when)) : false;
+      if (ok) doneWhen.ok++;
+      else if (hit) wrong.push(`WRONG   ${a.key} done_when ${got ? `"${got}"` : "missing"}, want ${a.done_when === null ? "none (not said)" : JSON.stringify(a.done_when)}`);
+    }
     recall.push(`${hit ? "FOUND  " : "MISSING"} ${a.key} ${a.owner ?? "–"}: ${a.text}${hit ? `  ← ${hit.id} ${itemLine(hit)}` : ""}`);
   }
   const mustNot: string[] = [];
@@ -215,7 +230,7 @@ export function score(items: NotesItem[], expected: Expected, ticks: TickItems[]
     else wrong.push(`WRONG   ${c.id} done=${done}, want ${c.done}`);
   }
   recall.push(...wrong);
-  return { found, total, recall, mustNot, mustNotPersistent, mustNotLive, placement, roles, followup, checkinLeaks: checkinLeaks(items, expected, ticks, opts.hideCheckin) };
+  return { found, total, recall, mustNot, mustNotPersistent, mustNotLive, placement, roles, followup, doneWhen, checkinLeaks: checkinLeaks(items, expected, ticks, opts.hideCheckin) };
 }
 
 /**
@@ -257,6 +272,7 @@ export const scorePasses = (s: Score) =>
   (s.placement.total === 0 || s.placement.ok / s.placement.total >= 0.9) &&
   s.roles.ok === s.roles.total &&
   s.followup.ok === s.followup.total &&
+  (s.doneWhen?.ok ?? 0) === (s.doneWhen?.total ?? 0) &&
   s.checkinLeaks.length === 0;
 
 /**
