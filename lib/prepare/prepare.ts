@@ -382,6 +382,10 @@ async function create(
   });
   const ok = new Set(doc.shared.map((e) => e.toLowerCase()));
   const sharedWith = members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => m.userId);
+  // 0053: the permission we created per member, carried to the meeting's shares at its start.
+  const shareGrants = Object.fromEntries(
+    members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => [m.userId, { email: m.email.toLowerCase(), permission_id: doc.grants[m.email.toLowerCase()] ?? null }]),
+  );
   try {
     const lines = await guarded(auth, doc.docId, doc.tabId, (tab) => {
       const r = planItemRanges(tab, src.profile, key, items);
@@ -404,6 +408,7 @@ async function create(
       dropped,
       source_meeting_id: src.prevId,
       shared_with: sharedWith,
+      share_grants: shareGrants,
       prepared_by: user.id,
     });
     if (error) {

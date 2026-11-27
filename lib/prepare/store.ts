@@ -28,6 +28,8 @@ export interface PreparedAgenda {
   dropped: string[];
   source_meeting_id: string | null;
   shared_with: string[];
+  /** 0053: per member it was shared with, the Drive permission Simon Says created (absent on older rows). */
+  share_grants?: Record<string, { email: string; permission_id: string | null }> | null;
   gen: number;
   journal: Journal | null;
   prepared_by: string | null;
@@ -38,7 +40,7 @@ export interface PreparedAgenda {
 export const missingTable = (code: string | undefined) => code === "42P01" || code === "PGRST205";
 
 const COLUMNS =
-  "id, org_id, meeting_date, meeting_time, kind, format_profile_id, doc_id, tab_id, doc_name, items, doc_lines, carried, dropped, source_meeting_id, shared_with, prepared_by, updated_at, gen, journal";
+  "id, org_id, meeting_date, meeting_time, kind, format_profile_id, doc_id, tab_id, doc_name, items, doc_lines, carried, dropped, source_meeting_id, shared_with, share_grants, prepared_by, updated_at, gen, journal";
 
 async function one(label: string, query: PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>): Promise<PreparedAgenda | null> {
   const { data, error } = await query;

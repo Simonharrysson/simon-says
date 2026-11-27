@@ -126,7 +126,9 @@ export default async function NewMeetingPage({
           title: event.title,
           colleagues: event.guests.flatMap((g) => {
             const id = byEmail.get(g.email.toLowerCase());
-            return id && id !== user.id ? [{ userId: id, name: names.get(id) ?? g.name ?? g.email, accepted: g.response === "accepted" }] : [];
+            return id && id !== user.id
+              ? [{ userId: id, name: names.get(id) ?? g.name ?? g.email, accepted: g.response === "accepted", declined: g.response === "declined" }]
+              : [];
           }),
           customerDomain: customerDomain(event.guests.map((g) => g.email), ownDomains(members.map((m) => m.email))),
         }

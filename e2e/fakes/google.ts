@@ -260,8 +260,10 @@ export class GoogleFake {
     const f = this.file(id);
     const email = String(body.emailAddress ?? "").toLowerCase();
     if (!email || this.unshareable.has(email)) throw new HttpError(400, `Invalid sharing request: ${email} has no Google account.`, "invalidSharingRequest");
-    const perm = { id: newId(), emailAddress: email, role: String(body.role ?? "writer") };
-    f.permissions.push(perm);
+    // As Drive: an address that already has access gets its existing permission back.
+    const had = f.permissions.find((p) => p.emailAddress === email);
+    const perm = had ?? { id: newId(), emailAddress: email, role: String(body.role ?? "writer") };
+    if (!had) f.permissions.push(perm);
     return { kind: "drive#permission", id: perm.id, role: perm.role, type: "user" };
   }
 

@@ -245,17 +245,18 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
 test("Företag: the calendar event attaches only when the starter confirms it, with the colleagues they tick @phone", async ({ db, signedIn, newEmail }) => {
   test.setTimeout(180_000);
   // A company of its own: the CEO, the starter and two colleagues, all in Ledning.
-  const [ceoEmail, starterEmail, lisaEmail, perEmail] = [newEmail("vd"), newEmail("starter"), newEmail("lisa"), newEmail("per")];
-  const [ceoId, starterId, lisaId, perId] = await Promise.all([ceoEmail, starterEmail, lisaEmail, perEmail].map((e) => ensureUser(db, e)));
+  const [ceoEmail, starterEmail, lisaEmail, perEmail, danEmail] = [newEmail("vd"), newEmail("starter"), newEmail("lisa"), newEmail("per"), newEmail("dan")];
+  const [ceoId, starterId, lisaId, perId, danId] = await Promise.all([ceoEmail, starterEmail, lisaEmail, perEmail, danEmail].map((e) => ensureUser(db, e)));
   const companyId = must("company", await db.rpc("create_foretag", { p_user: ceoId, p_name: `Kalenderbolag ${Date.now().toString(36)}`, p_root_name: "Ledning", p_person_name: "Vera Vd" })) as string;
   const root = (must("root", await db.from("groups").select("id").eq("org_id", companyId).single()) as { id: string }).id;
-  must("members", await db.from("org_members").insert([starterId, lisaId, perId].map((user_id) => ({ org_id: companyId, user_id, role: "member" }))));
+  must("members", await db.from("org_members").insert([starterId, lisaId, perId, danId].map((user_id) => ({ org_id: companyId, user_id, role: "member" }))));
   must(
     "people",
     await db.from("people").insert([
       { org_id: companyId, name: "Sam Startare", member_user_id: starterId, group_id: root },
       { org_id: companyId, name: "Lisa Lind", member_user_id: lisaId, group_id: root },
       { org_id: companyId, name: "Per Persson", member_user_id: perId, group_id: root },
+      { org_id: companyId, name: "Dan Dahl", member_user_id: danId, group_id: root },
     ]),
   );
 
@@ -269,6 +270,7 @@ test("Företag: the calendar event attaches only when the starter confirms it, w
       { email: starterEmail, displayName: "Sam", responseStatus: "accepted" },
       { email: lisaEmail, displayName: "Lisa", responseStatus: "accepted" },
       { email: perEmail, displayName: "Per", responseStatus: "needsAction" },
+      { email: danEmail, displayName: "Dan", responseStatus: "declined" },
       { email: "anna@acme.se", displayName: "Anna på Acme", responseStatus: "accepted" },
     ],
   };
@@ -287,6 +289,9 @@ test("Företag: the calendar event attaches only when the starter confirms it, w
   // The colleagues on the invite: the accepted one pre-ticked, the other not; the customer from the outside domain.
   await expect(page.getByRole("checkbox", { name: /Lisa Lind/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Per Persson/ })).not.toBeChecked();
+  // Dan declined: shown as such and can't be ticked.
+  await expect(page.getByRole("checkbox", { name: /Dan Dahl/ })).toBeDisabled();
+  await expect(page.getByText("Tackade nej, räknas inte som deltagare")).toBeVisible();
   await expect(page.getByText("Kund: gästerna från acme.se")).toBeVisible();
   await expect(page.getByText(/Plus 1 deltagare du kryssat i/)).toBeVisible();
   await expectAccessible(page);

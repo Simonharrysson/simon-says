@@ -12,7 +12,7 @@ import { planFormatRender } from "@/lib/docs/format-render";
 import { itemSpan, readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
 import { logEvent } from "@/lib/db/events";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
-import { recordDocShares } from "@/lib/docs/access";
+import { recordDocShares, type ShareDetail } from "@/lib/docs/access";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { CheckinWindow, ItemRole, MeetingEventKind, MeetingRow, NoteItemRow } from "@/lib/db/types";
 import { meetingRoles, parseProfile, type FormatProfile } from "@/lib/formats/schema";
@@ -159,6 +159,8 @@ interface DocSetup {
   shareFailed: number;
   /** Members (user ids) the new Doc was shared with. */
   sharedWith: string[];
+  /** Per shared member: the Drive permission Simon Says created (0053). */
+  shareDetails?: Record<string, ShareDetail>;
   place: DocPlace | "agenda";
   title: string;
   /** Format layout: the anchoring result. Null for a v1 Doc. */
@@ -410,7 +412,7 @@ export async function startMeeting(
   const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
   // A prepared agenda was shared with the members when it was made (through the preparer's grant).
-  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])]);
+  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])], { ...preparedShareDetails(prepared?.share_grants), ...(setup.shareDetails ?? {}) });
 
   const log = (kind: MeetingEventKind, detail: Record<string, unknown>) =>
     logEvent(meetingId, kind, detail).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
@@ -586,6 +588,23 @@ const sharedIds = (members: OrgMember[], shared: string[]) => {
   return members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => m.userId);
 };
 
+/** Per member the new Doc was shared with: the permission we created (a new Doc: never preexisting). */
+const shareDetails = (members: OrgMember[], grants: Record<string, string> | undefined): Record<string, ShareDetail> =>
+  Object.fromEntries(
+    members.flatMap((m) => {
+      const id = grants?.[m.email.toLowerCase()];
+      return id ? [[m.userId, { email: m.email, permissionId: id, preexisting: false }] as const] : [];
+    }),
+  );
+
+/** A prepared agenda's shares (0053): made on a new Doc of ours, so never preexisting. */
+const preparedShareDetails = (grants: Record<string, { email: string; permission_id: string | null }> | null | undefined): Record<string, ShareDetail> =>
+  Object.fromEntries(
+    Object.entries(grants ?? {}).flatMap(([userId, g]) =>
+      g?.permission_id && g.email ? [[userId, { email: g.email, permissionId: g.permission_id, preexisting: false }] as const] : [],
+    ),
+  );
+
 /** The new Doc's file name: date and time, "Mötesprotokoll", the förening; a Testmöte marked. */
 const docTitle = (ctx: SetupCtx) => meetingTitle(ctx.orgName, ctx.startedAt, { test: ctx.isTest, eventTitle: ctx.eventTitle });
 
@@ -709,6 +728,7 @@ async function v1Setup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: b
       sectionRanges: doc.sectionRanges,
       shareFailed: doc.shareFailed.length,
       sharedWith: sharedIds(members, doc.shared),
+      shareDetails: shareDetails(members, doc.grants),
       place: doc.place,
       title,
       anchor: null,
@@ -754,6 +774,7 @@ async function formatSetup(ctx: SetupCtx, profile: FormatProfile, shareTranscrip
       sectionRanges: anchor.sectionRanges,
       shareFailed: doc.shareFailed.length,
       sharedWith: sharedIds(members, doc.shared),
+      shareDetails: shareDetails(members, doc.grants),
       place: doc.place,
       title,
       anchor,

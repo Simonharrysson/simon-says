@@ -61,6 +61,12 @@ describe("planForetagStart: attendees only by the starter's confirmation", () =>
     expect(attendees(r)).toEqual(["ceo", "kim"]);
   });
 
+  it("a colleague who declined the invite never attends, even ticked", async () => {
+    m.event!.guests.push({ email: "eva@bolaget.se", name: "Eva", response: "declined" });
+    const r = await planForetagStart({ ...base, private: true, calendarEventId: "ev1", attendeeIds: ["kim", "eva"] });
+    expect(attendees(r)).toEqual(["ceo", "kim"]);
+  });
+
   it("a Privat möte never gets a customer; another meeting gets the confirmed event's", async () => {
     await planForetagStart({ ...base, private: true, calendarEventId: "ev1", attendeeIds: [] });
     expect(m.customer).not.toHaveBeenCalled();

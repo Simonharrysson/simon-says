@@ -54,6 +54,8 @@ export interface MeetingDoc {
   place: DocPlace;
   /** Emails the Doc was shared with (writer). */
   shared: string[];
+  /** The Drive permission Simon Says created per shared email (lower case), for revoking exactly it (0053). */
+  grants: Record<string, string>;
   /** Emails the Doc could not be shared with (the meeting still works). */
   shareFailed: string[];
 }
@@ -167,44 +169,81 @@ async function createDocFile(
   return { docId, tabId, place };
 }
 
-/** Writer access for one address, no notification email. Throws on failure. */
-export async function shareWith(auth: OAuth2Client, docId: string, emailAddress: string): Promise<void> {
-  await driveApi(auth).permissions.create({
+/** What one share did: the permission Simon Says created, or `preexisting` when the address already had access. */
+export interface ShareGrant {
+  permissionId: string | null;
+  preexisting: boolean;
+}
+
+/**
+ * Writer access for one address, no notification email. Throws on failure. On a Doc that may
+ * already be shared (`checkExisting`: a later share, not a brand-new Doc) the address's existing
+ * access is left alone and reported as `preexisting`: Drive would hand back that permission's id,
+ * and it is not ours to take away later (0053).
+ */
+export async function shareWith(auth: OAuth2Client, docId: string, emailAddress: string, opts: { checkExisting?: boolean } = {}): Promise<ShareGrant> {
+  const drive = driveApi(auth);
+  if (opts.checkExisting) {
+    const target = emailAddress.trim().toLowerCase();
+    const list = await drive.permissions.list({ fileId: docId, supportsAllDrives: true, fields: "permissions(id,emailAddress,role)" });
+    if ((list.data.permissions ?? []).some((p) => (p.emailAddress ?? "").toLowerCase() === target)) return { permissionId: null, preexisting: true };
+  }
+  const res = await drive.permissions.create({
     fileId: docId,
     sendNotificationEmail: false,
     supportsAllDrives: true,
     requestBody: { role: "writer", type: "user", emailAddress },
   });
+  return { permissionId: res?.data?.id ?? null, preexisting: false };
+}
+
+const notFound = (err: unknown) => {
+  const e = err as { code?: number; status?: number; response?: { status?: number } };
+  return e?.code === 404 || e?.status === 404 || e?.response?.status === 404;
+};
+
+/**
+ * Removes exactly the permission Simon Says created (Företag, 0053: they can no longer see the
+ * meeting). Never a share someone added by hand. Already gone is a success. Throws on a Drive failure.
+ */
+export async function revokePermission(auth: OAuth2Client, docId: string, permissionId: string): Promise<void> {
+  try {
+    await driveApi(auth).permissions.delete({ fileId: docId, permissionId, supportsAllDrives: true });
+  } catch (err) {
+    if (!notFound(err)) throw err;
+  }
 }
 
 /**
- * Takes one address's access away (Företag, 0050: they can no longer see the meeting). Idempotent:
- * no permission for the address is a success. Throws on a Drive failure.
+ * A share recorded before 0053 (no permission id): it was made on a Doc Simon Says created, so the
+ * address's non-owner permission is the one we gave (0050's rule). Idempotent. Throws on a Drive failure.
  */
-export async function unshareWith(auth: OAuth2Client, docId: string, emailAddress: string): Promise<boolean> {
+export async function revokeLegacyShare(auth: OAuth2Client, docId: string, emailAddress: string): Promise<void> {
   const drive = driveApi(auth);
   const list = await drive.permissions.list({ fileId: docId, supportsAllDrives: true, fields: "permissions(id,emailAddress,role)" });
   const target = emailAddress.trim().toLowerCase();
   const hits = (list.data.permissions ?? []).filter((p) => (p.emailAddress ?? "").toLowerCase() === target && p.role !== "owner");
-  for (const p of hits) await drive.permissions.delete({ fileId: docId, permissionId: p.id!, supportsAllDrives: true });
-  return hits.length > 0;
+  for (const p of hits) await revokePermission(auth, docId, p.id!);
 }
 
 /** Writer access for each member, no notification email; the addresses that worked and that failed. */
-async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[]): Promise<{ shared: string[]; shareFailed: string[] }> {
-  // One failing address (e.g. not a Google account) must not stop the meeting.
+async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[]): Promise<{ shared: string[]; shareFailed: string[]; grants: Record<string, string> }> {
+  // One failing address (e.g. not a Google account) must not stop the meeting. A brand-new Doc:
+  // nobody else has access yet, so every permission is ours.
   const shared: string[] = [];
   const shareFailed: string[] = [];
+  const grants: Record<string, string> = {};
   for (const emailAddress of memberEmails) {
     try {
-      await shareWith(auth, docId, emailAddress);
+      const grant = await shareWith(auth, docId, emailAddress);
+      if (grant.permissionId) grants[emailAddress.toLowerCase()] = grant.permissionId;
       shared.push(emailAddress);
     } catch (err) {
       console.error(`createMeetingDoc: share failed: ${(err as Error).message}`);
       shareFailed.push(emailAddress);
     }
   }
-  return { shared, shareFailed };
+  return { shared, shareFailed, grants };
 }
 
 /** Best effort after a refused start: the unused new Doc goes to the trash (we created it, drive.file may). */
@@ -263,8 +302,8 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
     : null;
   if (shareTranscript && !transcriptTabId) throw new Error("createMeetingDoc: transcript tab was not created");
 
-  const { shared, shareFailed } = await shareDoc(auth, docId, memberEmails);
-  return { docId, notesTabId, transcriptTabId, headerRange, headerRendered: INITIAL_HEADER, sectionRanges, place, shared, shareFailed };
+  const { shared, shareFailed, grants } = await shareDoc(auth, docId, memberEmails);
+  return { docId, notesTabId, transcriptTabId, headerRange, headerRendered: INITIAL_HEADER, sectionRanges, place, shared, shareFailed, grants };
 }
 
 /**
@@ -277,7 +316,7 @@ export async function createMeetingDoc(auth: OAuth2Client, input: CreateMeetingD
 export async function createFormatDoc(
   auth: OAuth2Client,
   input: CreateMeetingDocInput & { profile: FormatProfile; blocks?: SkeletonBlock[] },
-): Promise<{ docId: string; tabId: string; transcriptTabId: string | null; place: DocPlace; shared: string[]; shareFailed: string[] }> {
+): Promise<{ docId: string; tabId: string; transcriptTabId: string | null; place: DocPlace; shared: string[]; shareFailed: string[]; grants: Record<string, string> }> {
   const { memberEmails, shareTranscript, profile } = input;
   const docs = docsApi(auth);
   const { docId, tabId, place } = await createDocFile(auth, input);
@@ -300,6 +339,6 @@ export async function createFormatDoc(
     if (fill.length) await docs.documents.batchUpdate({ documentId: docId, requestBody: { requests: fill } });
   }
 
-  const { shared, shareFailed } = await shareDoc(auth, docId, memberEmails);
-  return { docId, tabId, transcriptTabId, place, shared, shareFailed };
+  const { shared, shareFailed, grants } = await shareDoc(auth, docId, memberEmails);
+  return { docId, tabId, transcriptTabId, place, shared, shareFailed, grants };
 }

@@ -60,7 +60,8 @@ export async function planForetagStart(input: {
     input.readCalendar && input.calendarEventId ? foretagEventById(input.user.id, input.calendarEventId) : Promise.resolve(null),
   ]);
   const guests = event ? event.guests.map((g) => g.email) : [];
-  const onEvent = new Set(attendeeIdsFor(guests, members));
+  // A colleague who declined the invite never attends, whatever was ticked.
+  const onEvent = new Set(attendeeIdsFor(event ? event.guests.filter((g) => g.response !== "declined").map((g) => g.email) : [], members));
   const ticked = new Set(input.attendeeIds ?? []);
   const attendees: ForetagStart["attendees"] = [
     { userId: input.user.id, source: "starter" },

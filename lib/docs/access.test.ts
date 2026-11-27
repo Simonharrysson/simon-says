@@ -17,7 +17,7 @@ const g = vi.hoisted(() => ({
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
   driveApi: (auth: { who: string }) => ({
-    permissions: { create: (args: unknown) => g.permCreate(auth.who, args) },
+    permissions: { create: (args: unknown) => g.permCreate(auth.who, args), list: async () => ({ data: { permissions: [] } }) },
   }),
 }));
 vi.mock("@/lib/google/client", async (importOriginal) => ({
@@ -47,7 +47,7 @@ const { recordDocShares, shareMeetingDocWith, shareOrgDocsWithNewMember } = awai
 const NEW = { id: "u-new", email: "nyss@ekdala.test" };
 
 beforeEach(() => {
-  g.permCreate.mockReset().mockResolvedValue({ data: {} });
+  g.permCreate.mockReset().mockResolvedValue({ data: { id: "perm-1" } });
   g.getGoogleAuth.mockReset().mockImplementation(async (who: string) => ({ who }));
   g.meetings = [];
   g.members = ["s1", "s2"];
@@ -76,7 +76,7 @@ describe("shareOrgDocsWithNewMember", () => {
       sendNotificationEmail: false,
       requestBody: { role: "writer", type: "user", emailAddress: NEW.email },
     });
-    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }], [{ meeting_id: "m2", user_id: NEW.id }]]);
+    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id, email: NEW.email, permission_id: "perm-1", preexisting: false }], [{ meeting_id: "m2", user_id: NEW.id, email: NEW.email, permission_id: "perm-1", preexisting: false }]]);
     // Only Docs Simon Says created, never the new member's own meetings.
     const meetingFilters = g.filters.filter((f) => f[0] === "meetings").map((f) => [f[1], ...(f[2] as unknown[])]);
     expect(meetingFilters).toContainEqual(["neq", "started_by", NEW.id]);
@@ -120,7 +120,7 @@ describe("shareMeetingDocWith", () => {
   it("shares through the starter's grant and records it", async () => {
     expect(await shareMeetingDocWith(meeting, NEW)).toBe("shared");
     expect(g.getGoogleAuth).toHaveBeenCalledWith("s1");
-    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }]]);
+    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id, email: NEW.email, permission_id: "perm-1", preexisting: false }]]);
   });
 
   it("only Docs Simon Says created: the förening's own agenda Doc is never shared, with no Drive call", async () => {
