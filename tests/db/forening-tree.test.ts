@@ -234,9 +234,8 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       const viaAdd = await u.olle.db.rpc("add_self_person", { p_org_id: orgId, p_name: "Karin", p_role: "" });
       expect((viaAdd.data as { result: string }).result).toBe("ask_admin");
       expect(await seen("olle")).toEqual([]);
-      // An admin links it: the link change clears the place, which an admin then sets on purpose.
-      expect((await u.anna.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("group_id")).data).toEqual([{ group_id: null }]);
-      expect(await seen("olle")).toEqual([]);
+      // An admin links it (as an invitee joining would be): the place the admin gave it stays.
+      expect((await u.anna.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("group_id")).data).toEqual([{ group_id: g.styrelsen }]);
       must("cleanup", await adminClient().from("people").delete().eq("id", id));
     });
 

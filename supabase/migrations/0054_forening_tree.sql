@@ -282,14 +282,15 @@ create policy people_delete on public.people for delete to authenticated
 -- (0051, security definer) and every unlink are made safe for the tree here:
 -- * claim_person() never links a person who has a place (group_id): 'ask_admin', an admin links
 --   them (else a member could claim a placed name and inherit its place);
--- * any change of who a person stands for clears their place (leaving, an admin's new e-mail,
---   a relink): the next account starts unplaced, and an admin places it.
+-- * removing a person's link clears their place (leaving, an admin's new e-mail, an unlink): the
+--   next account to claim the name starts unplaced. Linking (an invitee joining through
+--   link_person_by_email, an admin's link) keeps the place an admin gave the name.
 create function public.people_unplace_on_relink()
 returns trigger
 language plpgsql set search_path = ''
 as $$
 begin
-  if new.member_user_id is distinct from old.member_user_id and old.group_id is not null
+  if old.member_user_id is not null and new.member_user_id is null and old.group_id is not null
     and new.group_id is not distinct from old.group_id then
     new.group_id := null;
   end if;
