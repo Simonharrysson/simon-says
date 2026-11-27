@@ -1,3 +1,4 @@
+import { refuseForetag } from "@/lib/foretag/guard";
 import { NextResponse, type NextRequest } from "next/server";
 import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
@@ -23,6 +24,9 @@ export const maxDuration = 300;
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const guard = await requireAdmin(id, t);
   if (!guard.ok) return guard.reply;
   try {
@@ -51,6 +55,9 @@ interface PickedBody {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const guard = await requireAdmin(id, t);
   if (!guard.ok) return guard.reply;
   const { db, userId } = guard;

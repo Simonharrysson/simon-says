@@ -1,3 +1,4 @@
+import { isForetagOrg } from "@/lib/foretag/guard";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
@@ -24,6 +25,8 @@ export default async function PreparePage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const { datum, event } = await searchParams;
   if (!isUuid(id)) notFound();
+  // Förening only: a Företag (0050) has none of this.
+  if (await isForetagOrg(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
   if (!org || (await myRole(db, id)) === null) notFound();

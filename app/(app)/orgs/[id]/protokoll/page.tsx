@@ -1,3 +1,4 @@
+import { isForetagOrg } from "@/lib/foretag/guard";
 import { notFound, redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
 
@@ -18,6 +19,8 @@ export default async function ProtocolImportReturn({
   const { id } = await params;
   const { drive } = await searchParams;
   if (!isUuid(id)) notFound();
+  // Förening only: a Företag (0050) has none of this.
+  if (await isForetagOrg(id)) notFound();
   const result = drive === "ok" || drive === "nej" || drive === "fel" || drive === "konto" ? `&drive=${drive}` : "";
   redirect(`/orgs/${id}?flik=oversikt&import=1${result}`);
 }

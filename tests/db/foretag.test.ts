@@ -211,6 +211,28 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect(write.error?.message).toMatch(/permission denied/i);
   });
 
+  it("placing a member account and archiving a group: admins only; archiving unplaces its people", async () => {
+    const admin = adminClient();
+    const extra = await createTestUser("ftg-extra");
+    must("join", await admin.from("org_members").insert({ org_id: orgId, user_id: extra.id, role: "member" }));
+    // A member can't place anyone; an admin places the account (its person row made on the way).
+    expect((await u.jonas.db.rpc("place_member", { p_org_id: orgId, p_user_id: extra.id, p_group_id: g.dev, p_name: "Extra" })).data).toBeNull();
+    const personId = (await u.anna.db.rpc("place_member", { p_org_id: orgId, p_user_id: extra.id, p_group_id: g.com, p_name: "Extra" })).data as string;
+    expect(personId).toBeTruthy();
+    const row = must("row", await admin.from("people").select("name, member_user_id, group_id").eq("id", personId).single());
+    expect(row).toEqual({ name: "Extra", member_user_id: extra.id, group_id: g.com });
+    // Placing again moves the same row.
+    expect((await u.anna.db.rpc("place_member", { p_org_id: orgId, p_user_id: extra.id, p_group_id: g.eko, p_name: "Extra" })).data).toBe(personId);
+    // Archive: never by a member, never with active child groups; a leaf archives and unplaces.
+    const leaf = (must("leaf", await admin.from("groups").insert({ org_id: orgId, name: "Tillfällig", parent_group_id: g.eko }).select("id").single()) as { id: string }).id;
+    expect((await u.anna.db.rpc("set_person_group", { p_person_id: personId, p_group_id: leaf })).data).toBe(true);
+    expect((await u.jonas.db.rpc("archive_group", { p_id: leaf })).data).toBe(false);
+    expect((await u.anna.db.rpc("archive_group", { p_id: g.eko })).data).toBe(false);
+    expect((await u.anna.db.rpc("archive_group", { p_id: leaf })).data).toBe(true);
+    expect(must("unplaced", await admin.from("people").select("group_id").eq("id", personId).single())).toEqual({ group_id: null });
+    expect((await u.anna.db.rpc("set_person_group", { p_person_id: personId, p_group_id: leaf })).data).toBe(false);
+  });
+
   it("deleting a company cascades through its tree, meetings and held tasks", async () => {
     const admin = adminClient();
     const id = must("create", await admin.rpc("create_foretag", { p_user: u.olle.id, p_name: "Raderas AB", p_root_name: "VD", p_person_name: "Olle" })) as string;

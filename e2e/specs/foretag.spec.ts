@@ -84,6 +84,7 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
   await expect(dev.getByRole("heading", { name: "Namnrunda" })).toBeVisible({ timeout: 30_000 });
   const meetingId = dev.url().split("/").at(-1)!;
   await dev.getByRole("button", { name: "Klar, alla har sagt sitt namn" }).click();
+  await expect(dev.getByRole("heading", { name: "Namnrunda" })).toHaveCount(0, { timeout: 30_000 });
   await dev.getByRole("button", { name: "Avsluta", exact: true }).click();
   await dev.getByRole("dialog", { name: "Avsluta mötet?" }).getByRole("button", { name: "Avsluta mötet" }).click();
   await expect(dev.getByRole("heading", { name: "Mötet är avslutat" })).toBeVisible({ timeout: 60_000 });
@@ -115,6 +116,16 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
   await com.goto(`/orgs/${company.id}/mote/${meetingId}`);
   await expect(com.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
   await expectAccessible(com);
+  // Nor the live page or the meeting's APIs (they read the meeting as the caller first: RLS).
+  await com.goto(`/meetings/${meetingId}`);
+  await expect(com.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
+  expect((await com.request.post(`/api/meetings/${meetingId}/token`, { data: {} })).status()).toBe(404);
+  expect((await com.request.post(`/api/meetings/${meetingId}/end`, { data: {} })).status()).toBe(404);
+  expect((await com.request.get(`/api/meetings/${meetingId}/tasks`)).status()).toBe(404);
+  // Förening-only features don't exist for a company (they would read around the tree).
+  await com.goto(`/orgs/${company.id}/forbered`);
+  await expect(com.getByRole("heading", { name: "Här finns ingenting" })).toBeVisible();
+  expect((await com.request.get(`/api/orgs/${company.id}/prepare`)).status()).toBe(404);
 
   // The customer page: a meeting with Acme (found from a guest's domain) and its open task.
   const devId = await ensureUser(db, people.dev);
@@ -143,12 +154,20 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
 
 test("Företag: a task from a CEO meeting waits for approval, then reaches its owner as the task only @phone", async ({ db, signedIn, newEmail }) => {
   test.setTimeout(180_000);
-  const people = { dev: newEmail("utvecklare"), head: newEmail("kommchef"), com: newEmail("kommunikator") };
-  const { page: ceo } = await signedIn(ADMIN_EMAIL, "/orgs");
-  const company = await buildCompany(ceo, db, people);
-  const ceoId = await ensureUser(db, ADMIN_EMAIL);
-  const comPerson = (must("person", await db.from("people").select("id").eq("org_id", company.id).eq("member_user_id", await ensureUser(db, people.com)).single()) as { id: string }).id;
-  const doc = await fake.createDoc({ name: "Ledningsmöte", owner: ADMIN_EMAIL });
+  // A fresh CEO and company of its own (the tree is built in the UI in the test above), so parallel
+  // runs and retries never share an approver's list.
+  const ceoEmail = newEmail("vd");
+  const comEmail = newEmail("kommunikator");
+  const [ceoId, comId] = await Promise.all([ensureUser(db, ceoEmail), ensureUser(db, comEmail)]);
+  const companyId = must("company", await db.rpc("create_foretag", { p_user: ceoId, p_name: `Ledningsbolag ${Date.now().toString(36)}`, p_root_name: "Ledning", p_person_name: "Vera Vd" })) as string;
+  const root = (must("root", await db.from("groups").select("id").eq("org_id", companyId).single()) as { id: string }).id;
+  const comGroup = (must("com", await db.from("groups").insert({ org_id: companyId, name: "Kommunikation", parent_group_id: root }).select("id").single()) as { id: string }).id;
+  must("member", await db.from("org_members").insert({ org_id: companyId, user_id: comId, role: "member" }));
+  const comPerson = (must("person", await db.from("people").insert({ org_id: companyId, name: "Kim Kommunikatör", member_user_id: comId, group_id: comGroup }).select("id").single()) as { id: string }).id;
+  const company = { id: companyId, groups: { root } };
+  const people = { com: comEmail };
+  const { page: ceo } = await signedIn(ceoEmail, "/hem");
+  const doc = await fake.createDoc({ name: "Ledningsmöte", owner: ceoEmail });
   const meeting = (must(
     "ceo meeting",
     await db
@@ -176,8 +195,9 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
   await ceo.goto("/hem");
   const approvals = ceo.getByRole("region", { name: /Väntar på godkännande/ });
   await expect(approvals).toBeVisible();
+  await expect(approvals.getByText("Till Kim Kommunikatör")).toBeVisible();
   await expectAccessible(ceo);
-  const text = approvals.getByLabel(/Uppgiften som .* får se/);
+  const text = approvals.getByLabel("Uppgiften som Kim Kommunikatör får se");
   await text.fill("Ta fram siffror för Kommunikation till fredag");
   await approvals.getByRole("button", { name: "Godkänn och skicka" }).click();
   // Sent: the list refreshes without it (nothing else waits).
@@ -187,7 +207,7 @@ test("Företag: a task from a CEO meeting waits for approval, then reaches its o
   await com.reload();
   const task = com.getByRole("list", { name: /uppgifter/i }).getByRole("listitem").filter({ hasText: "Ta fram siffror för Kommunikation till fredag" });
   await expect(task).toBeVisible();
-  await expect(task).toContainText("Från");
+  await expect(task).toContainText("Från Vera Vd");
   await expect(task.locator("a")).toHaveCount(0);
   await expect(com.getByText(/nedskärningen|Hemligt ledningsbeslut|Ledningsmöte/)).toHaveCount(0);
   await expectAccessible(com);
