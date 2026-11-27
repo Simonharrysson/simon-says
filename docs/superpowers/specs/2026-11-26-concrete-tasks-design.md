@@ -27,21 +27,24 @@ Service admin only (Supabase SQL editor on the prod project, read-only; no UI). 
 
 ```sql
 -- Per week: meetings ended, how many the dialog ended, and what people did there.
+-- One row per meeting (a resumed meeting can end twice: the latest counts).
 with ended as (
-  select e.meeting_id, date_trunc('week', e.at) as week
+  select distinct on (e.meeting_id) e.meeting_id, date_trunc('week', e.at) as week
   from meeting_events e join meetings m on m.id = e.meeting_id
   where e.kind = 'ended' and not m.is_test
+  order by e.meeting_id, e.at desc
 ),
 dialog as (
-  select e.meeting_id, (e.detail->>'incomplete')::int as incomplete, (e.detail->>'filled')::int as filled,
+  select distinct on (e.meeting_id) e.meeting_id, (e.detail->>'incomplete')::int as incomplete, (e.detail->>'filled')::int as filled,
          (e.detail->>'dismissed')::int as dismissed, (e.detail->>'untouched')::int as untouched,
          (e.detail->>'skipped')::boolean as skipped
   from meeting_events e join meetings m on m.id = e.meeting_id
   where e.kind = 'end_tasks' and not m.is_test
+  order by e.meeting_id, e.at desc
 )
 select ended.week,
        count(*) as meetings_ended,
-       count(dialog.meeting_id) as dialog_shown,
+       count(dialog.meeting_id) as ended_via_dialog, -- "Fortsätt mötet" logs nothing
        count(*) filter (where dialog.skipped) as ended_anyway,
        count(*) filter (where dialog.filled = 0 and dialog.dismissed = 0) as one_tap_skip,
        sum(dialog.incomplete) as tasks_incomplete,
