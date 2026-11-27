@@ -22,7 +22,7 @@ function orgIdFrom(form: FormData): string {
 
 /** Where a refusal comes back: a Företag's Personer & grupper, or a förening's Inställningar (`from=forening`, 0054). */
 const back = (orgId: string, code?: string, form?: FormData) =>
-  `/orgs/${orgId}?flik=${form && field(form, "from") === "forening" ? "installningar" : "personer"}${code ? `&fel=${code}` : ""}`;
+  `/orgs/${orgId}?flik=${form && field(form, "from") === "forening" ? "installningar&del=styrelsen" : "personer"}${code ? `&fel=${code}` : ""}`;
 
 /** The signed-in user's first name for their person row ("Simon"), else their address before @. */
 function personName(user: { email?: string | null; user_metadata?: Record<string, unknown> }): string {
@@ -126,7 +126,7 @@ export async function setGroupsAction(form: FormData): Promise<void> {
   const rootName = field(form, "rootName").trim() || t("rootDefault");
   const { data, error } = await db.rpc("set_org_groups", { p_org_id: orgId, p_on: on, p_root_name: rootName.slice(0, 40) });
   if (error) console.error(`set_org_groups: ${error.message}`);
-  if (error || data !== true) redirect(`/orgs/${orgId}?flik=installningar&fel=grupper`);
+  if (error || data !== true) redirect(`/orgs/${orgId}?flik=installningar&del=styrelsen&fel=grupper`);
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);

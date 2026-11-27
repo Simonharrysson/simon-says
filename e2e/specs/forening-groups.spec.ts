@@ -34,7 +34,7 @@ test("Förening: turn groups on, build the tree, a meeting for Utveckling is see
   await expect(dev.getByLabel("Möte för")).toHaveCount(0);
 
   // The admin turns groups on in Inställningar.
-  const { page: admin } = await signedIn(ADMIN_EMAIL, `${org.url}?flik=installningar`);
+  const { page: admin } = await signedIn(ADMIN_EMAIL, `${org.url}?flik=installningar&del=styrelsen`);
   const groups = admin.getByRole("region", { name: "Grupper" });
   await expect(groups.getByText("Av just nu: alla medlemmar ser alla möten.")).toBeVisible();
   await groups.getByRole("button", { name: "Organisera i grupper" }).click();

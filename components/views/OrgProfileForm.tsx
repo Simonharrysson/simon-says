@@ -1,14 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import { Field, fieldErrorClass, hintClass } from "@/components/ui/Field";
-import { IconAlert, IconCheck } from "@/components/ui/icons";
+import { IconAlert } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
-import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Textarea } from "@/components/ui/textarea";
-import { ABOUT_MAX, profileInput, type OrgProfile, type ProfileErrors, type ProfileInput } from "@/lib/orgs/profile";
+import { ABOUT_MAX, type OrgProfile, type ProfileErrors, type ProfileInput } from "@/lib/orgs/profile";
 import { cn } from "@/lib/utils";
 
 export type SaveProfile = (
@@ -18,7 +16,7 @@ export type SaveProfile = (
 
 /**
  * The "Om oss" fields (todo #13): the short text and the three links. Controlled, so Kom igång's
- * first step and Inställningar share them; the server (lib/orgs/profile.ts) decides what is valid.
+ * first step and Inställningar → Föreningen share them (`useOrgDetails`); the server (lib/orgs/profile.ts) decides what is valid.
  */
 export function OrgProfileFields({
   value,
@@ -92,66 +90,5 @@ export function OrgProfileFields({
         error={errors?.instagram}
       />
     </div>
-  );
-}
-
-/** Inställningar → "Om oss". Saves through `save` (saveProfileAction) and shows the stored form back. */
-export function OrgProfileForm({ orgId, profile, save }: { orgId: string; profile: Partial<OrgProfile>; save: SaveProfile }) {
-  const t = useTranslations("profile");
-  const [value, setValue] = useState(() => profileInput(profile));
-  const [errors, setErrors] = useState<ProfileErrors | undefined>();
-  const [message, setMessage] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    if (!saved) return;
-    const timer = setTimeout(() => setSaved(false), 3000);
-    return () => clearTimeout(timer);
-  }, [saved]);
-
-  return (
-    <form
-      className="flex max-w-[40rem] flex-col gap-5"
-      action={async () => {
-        setSaved(false);
-        setMessage(null);
-        const r = await save(orgId, value).catch(() => ({ ok: false as const, message: t("offline"), errors: undefined }));
-        if (r.ok) {
-          setValue(profileInput(r.profile));
-          setErrors(undefined);
-          setSaved(true);
-        } else {
-          setErrors(r.errors);
-          setMessage(r.message);
-        }
-      }}
-    >
-      <fieldset className="flex flex-col gap-5">
-        <legend className="mb-1 font-medium">{t("legend")}</legend>
-        <p className="-mt-3 text-sm text-ink-2">{t("intro")}</p>
-        <OrgProfileFields
-          value={value}
-          errors={errors}
-          onChange={(field, text) => {
-            setValue((v) => ({ ...v, [field]: text }));
-            setErrors((e) => (e?.[field] ? { ...e, [field]: undefined } : e));
-            setSaved(false);
-          }}
-        />
-      </fieldset>
-      <div className="flex flex-wrap items-center gap-3">
-        <SubmitButton variant="primary" pendingLabel={t("saving")}>
-          {t("save")}
-        </SubmitButton>
-        <span className={cn("inline-flex items-center gap-1 text-sm font-semibold", saved ? "text-green" : "text-red")} role="status" aria-live="polite">
-          {saved ? (
-            <>
-              <IconCheck size={18} /> {t("saved")}
-            </>
-          ) : (
-            message
-          )}
-        </span>
-      </div>
-    </form>
   );
 }

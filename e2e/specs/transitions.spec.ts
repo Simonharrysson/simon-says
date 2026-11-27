@@ -20,7 +20,7 @@ test.describe("transitions", () => {
         const style = getComputedStyle(el);
         rec.anims.push({
           name: e.animationName,
-          inSettings: Boolean(el.closest?.("[data-tab-in]")?.textContent?.includes("Radera föreningen")),
+          inSettings: Boolean(el.closest?.("[data-tab-in]")?.textContent?.includes("Namn, logga och om oss")),
           // A real box (display: contents or an empty element would fade nothing visible).
           boxed: style.display !== "contents" && el.getBoundingClientRect().height > 0,
           duration: style.animationDuration,
@@ -51,7 +51,7 @@ test.describe("transitions", () => {
     expect((await motion(page)).anims.filter((a) => a.name === "tab-in")).toHaveLength(0);
 
     await tabs.getByRole("link", { name: "Inställningar" }).click();
-    await expect(page.getByRole("heading", { name: "Radera föreningen", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Namn, logga och om oss", exact: true })).toBeVisible();
     await expect.poll(async () => (await motion(page)).anims.some((a) => fade(a) && a.inSettings)).toBe(true);
 
     // Back to a kept tab: it fades in again (no new server content needed).

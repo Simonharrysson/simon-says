@@ -28,10 +28,12 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
     { id: `ev${randomUUID().slice(0, 8)}`, summary: "Lunch", start: hourFromNow(72), end: hourFromNow(73) },
   ]);
 
-  // Inställningar tab; "Koppla kalender" comes back to it through /orgs/<id>/installningar.
+  // Inställningar → Möten; "Koppla kalender" comes back to it through /orgs/<id>/installningar
+  // (the result opens the section it is about).
   const { page: adminPage } = await signedIn(admin, `${org.url}/installningar`);
   await expect(adminPage).toHaveURL(/flik=installningar/);
-  const settings = adminPage.locator("section", { has: adminPage.getByRole("heading", { name: "Allmänt" }) });
+  await adminPage.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Möten" }).click();
+  const settings = adminPage.locator("section", { has: adminPage.getByRole("heading", { name: "Mötenas kalender" }) });
   await expect(settings.getByText("Koppla din kalender först")).toBeVisible();
   await settings.getByRole("button", { name: "Koppla kalender" }).click();
   await expect(adminPage.getByText("Kalendern är kopplad.")).toBeVisible();
@@ -41,13 +43,19 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
   expect(token?.scope).toContain("https://www.googleapis.com/auth/calendar.readonly");
   expect(token?.scope).not.toContain("drive");
 
-  // Choose the shared calendar, only events whose name contains "möte".
+  await expect(adminPage.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "true");
+
+  // Choose the shared calendar (saved on change), then only events whose name contains "möte" (text: Spara).
   await settings.getByLabel("Kalender", { exact: true }).selectOption({ label: "Föreningens kalender" });
+  await expect(settings.getByText("Sparat")).toBeVisible();
+  await expect
+    .poll(async () => (await db.from("orgs").select("calendar_id").eq("id", org.id).single()).data?.calendar_id)
+    .toBe(shared);
   await settings.getByLabel("Bara händelser vars namn innehåller").fill("möte");
   await settings.getByRole("button", { name: "Spara kalender" }).click();
-  await expect(settings.getByText("Sparat")).toBeVisible();
-  const { data: saved } = await db.from("orgs").select("calendar_id, calendar_name, calendar_filter").eq("id", org.id).single();
-  expect(saved).toEqual({ calendar_id: shared, calendar_name: "Föreningens kalender", calendar_filter: "möte" });
+  await expect
+    .poll(async () => (await db.from("orgs").select("calendar_id, calendar_name, calendar_filter").eq("id", org.id).single()).data)
+    .toEqual({ calendar_id: shared, calendar_name: "Föreningens kalender", calendar_filter: "möte" });
 
   // The Starta möte card: the next meetings, soonest first; the lunch is filtered out.
   await adminPage.goto(org.url);

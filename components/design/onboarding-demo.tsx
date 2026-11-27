@@ -5,8 +5,8 @@ import { useState, type ReactNode } from "react";
 import { KomIgangCard } from "@/components/onboarding/KomIgangCard";
 import { Onboarding } from "@/components/onboarding/Onboarding";
 import { OnboardingShell, StepFooter, type ShellStep } from "@/components/onboarding/OnboardingShell";
-import { BoardStep, DoneStep, FolderStep, FormatStep, HistoryStep, LogoStep, VoicesStep, type StadgarPhase, type WeeklyChoice } from "@/components/onboarding/steps";
-import { LearnFormatView } from "@/components/views/FormatEditor";
+import { BoardStep, DoneStep, FolderStep, HistoryStep, LogoStep, VoicesStep } from "@/components/onboarding/steps";
+import { FormatCard } from "@/components/views/FormatCard";
 import { OrgDetailView, type OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgsView } from "@/components/views/OrgsView";
 import type { StepId } from "@/lib/onboarding/steps";
@@ -98,22 +98,11 @@ function BoardDemo({ rows }: { rows: BoardRow[] }) {
   );
 }
 
-function FormatDemo({ stadgar, choice: initial = "veckomote", learnOpen }: { stadgar: StadgarPhase; choice?: WeeklyChoice; learnOpen?: boolean }) {
-  const [choice, setChoice] = useState<WeeklyChoice>(learnOpen ? "learn" : initial);
-  const [s, setS] = useState(stadgar);
+/** Step 4 renders the format card of Inställningar → Möten (Veckomöte until something is chosen). */
+function FormatDemo() {
   return (
     <Frame step="format" done={["namn", "styrelsen", "mapp"]} logo={DEMO_LOGO} footer={footer()}>
-      <FormatStep
-        choice={choice}
-        onChoice={setChoice}
-        learn={<LearnFormatView orgId={ORG_ID} view={{ phase: "idle" }} onStart={noop} onCancel={noop} />}
-        pickerEnabled
-        stadgar={s}
-        onStadgarPick={noop}
-        onStadgarChange={(arsmote) => setS({ phase: "review", arsmote })}
-        onStadgarSave={noop}
-        onStadgarCancel={noop}
-      />
+      <FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={async () => {}} pickerEnabled />
     </Frame>
   );
 }
@@ -130,23 +119,6 @@ function VoicesDemo({ empty }: { empty?: boolean }) {
     </Frame>
   );
 }
-
-const STADGAR_ARS = [
-  "Mötets öppnande",
-  "Fastställande av röstlängd",
-  "Val av mötesordförande",
-  "Val av mötessekreterare",
-  "Val av två justerare tillika rösträknare",
-  "Fråga om mötet är stadgeenligt utlyst",
-  "Verksamhetsberättelse",
-  "Ekonomisk berättelse",
-  "Revisionsberättelse",
-  "Fråga om ansvarsfrihet för styrelsen",
-  "Fastställande av medlemsavgift",
-  "Val av styrelse",
-  "Val av revisorer",
-  "Motioner",
-];
 
 const orgActions: OrgDetailViewProps["actions"] = {
   rotateInvite: async () => {},
@@ -171,8 +143,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
       invites={[]}
       inviterName="Anna Berg"
       pickerEnabled={false}
-      format={{ kind: null, name: "Enkel", profile: null }}
-      stadgarSaved={false}
+      formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={async () => {}} />}
       historyCount={0}
     />
   ),
@@ -191,11 +162,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
       <FolderStep folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={noop} message="Mötesmappen är sparad." />
     </Frame>
   ),
-  "onboarding-4": () => <FormatDemo stadgar={{ phase: "idle" }} />,
-  "onboarding-4-learn": () => <FormatDemo stadgar={{ phase: "idle" }} learnOpen />,
-  "onboarding-4-reading": () => <FormatDemo stadgar={{ phase: "reading" }} />,
-  "onboarding-4-stadgar": () => <FormatDemo stadgar={{ phase: "review", arsmote: STADGAR_ARS }} />,
-  "onboarding-4-saved": () => <FormatDemo stadgar={{ phase: "saved", arsmote: 14 }} />,
+  "onboarding-4": () => <FormatDemo />,
   "onboarding-5": () => (
     <Frame step="protokoll" done={["namn", "styrelsen", "mapp", "format"]} logo={DEMO_LOGO} footer={footer()}>
       <HistoryStep importHref="#" historyCount={0} />
@@ -205,7 +172,7 @@ export const onboardingRender: Record<string, () => ReactNode> = {
   "onboarding-6-empty": () => <VoicesDemo empty />,
   "onboarding-klart": () => (
     <Frame step="klart" done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} logo={DEMO_LOGO}>
-      <DoneStep done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} prepareHref="#" orgHref="#" onGo={noop} />
+      <DoneStep done={["namn", "styrelsen", "mapp", "format", "roster"]} skipped={["protokoll"]} prepareHref="#" orgHref="#" onGo={noop} editHref={() => "/design?vy=org-settings"} />
     </Frame>
   ),
   "org-kom-igang": () => (
