@@ -64,7 +64,10 @@ test("no double borders: Företag, a company's tabs and its start screen @phone"
   const tab = (label: string) => (p: Page) => p.getByRole("navigation", { name: "Företagets flikar" }).getByRole("link", { name: label, exact: true }).and(p.locator('[aria-current="page"]'));
   await visit(page, `/orgs/${id}`, offenders, tab("Möten"));
   await visit(page, `/orgs/${id}?flik=kunder`, offenders, tab("Kunder"));
-  await visit(page, `/orgs/${id}?flik=personer`, offenders, (p) => p.getByRole("heading", { name: "Ledning", level: 3 }));
+  // People first (0062): the canvas card on a desktop, the list row on a phone; never a group name.
+  await visit(page, `/orgs/${id}?flik=personer`, offenders, (p) =>
+    p.locator('[data-person-card="Vera Dahl"], [data-person-row="Vera Dahl"]').filter({ visible: true }).first(),
+  );
   await visit(page, `/orgs/${id}?flik=installningar`, offenders, tab("Inställningar"));
   await visit(page, `/meetings/ny/${id}`, offenders, (p) => p.getByRole("heading", { name: "Innan ni börjar" }));
 

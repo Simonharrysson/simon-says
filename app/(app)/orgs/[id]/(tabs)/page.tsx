@@ -55,10 +55,10 @@ import { orgTab, orgTabHref, sectionForCode } from "@/lib/orgs/tabs";
 import { ForetagPage } from "./foretag-page";
 import { boardRows } from "@/lib/people/board";
 import { ForeningGroups } from "@/components/groups/ForeningGroups";
-import type { TreePerson } from "@/components/groups/GroupTree";
-import { listGroups } from "@/lib/db/foretag";
+import type { PersonRow } from "@/lib/groups/people";
+import { listTeams } from "@/lib/foretag/teams";
 import type { GroupRow } from "@/lib/foretag/tree";
-import { archiveGroupAction, placeAction, saveGroupAction, setGroupsAction } from "../../foretag-actions";
+import { addTreePersonAction, setGroupsAction, setManagerAction } from "../../foretag-actions";
 import {
   addPersonAction,
   changeFormatAction,
@@ -163,11 +163,11 @@ function calendarNotice(raw: string | undefined, locale: Locale): Notice | null 
 }
 
 /** Grupper's data (0054): the groups and each person's place. A failed read leaves the section out. */
-async function loadGroupSettings(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<{ groups: GroupRow[]; people: TreePerson[] } | null> {
+async function loadGroupSettings(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<{ groups: GroupRow[]; people: PersonRow[] } | null> {
   try {
-    const [groups, people] = await Promise.all([listGroups(db, orgId), db.from("people").select("*").eq("org_id", orgId).order("name")]);
+    const [groups, people] = await Promise.all([listTeams(db, orgId), db.from("people").select("*").eq("org_id", orgId).order("name")]);
     if (people.error) throw new Error(people.error.message);
-    return { groups, people: (people.data ?? []) as TreePerson[] };
+    return { groups, people: (people.data ?? []) as PersonRow[] };
   } catch (err) {
     console.error(`org page: groups: ${(err as Error).message}`);
     return null;
@@ -177,7 +177,7 @@ async function loadGroupSettings(db: Awaited<ReturnType<typeof createSupabaseSer
 /** Group names by id (0054), read as the user; a failed read only leaves the names out. */
 async function safeGroupNames(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<Map<string, string> | null> {
   try {
-    return new Map((await listGroups(db, orgId)).map((g) => [g.id, g.name]));
+    return new Map((await listTeams(db, orgId)).map((g) => [g.id, g.name]));
   } catch (err) {
     console.error(`org page: group names: ${(err as Error).message}`);
     return null;
@@ -333,7 +333,7 @@ export default async function OrgPage({
             groups={tree.groups}
             people={tree.people}
             members={members ?? []}
-            actions={{ saveGroup: saveGroupAction, archiveGroup: archiveGroupAction, place: placeAction, setGroups: setGroupsAction }}
+            actions={{ setManager: setManagerAction, addPerson: addTreePersonAction, setGroups: setGroupsAction }}
           />
         ) : undefined
       }

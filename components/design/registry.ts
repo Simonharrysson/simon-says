@@ -13,6 +13,7 @@ import { summaryViews } from "./summary-views";
 import { inviteViews } from "./invite-views";
 import { privatLiveViews, privatViews } from "./privat-views";
 import { homeViews } from "./home-demo";
+import { treeCanvasViews } from "./tree-canvas-demo";
 import { briefViews } from "./brief-demo";
 
 export const designViews: DesignView[] = [
@@ -96,6 +97,7 @@ export const designViews: DesignView[] = [
   ...inviteViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...homeViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...treeCanvasViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...briefViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatLiveViews.map((v) => ({ ...v, group: "Mötet live" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
