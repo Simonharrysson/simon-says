@@ -20,16 +20,16 @@ export function AppNav({ email, signOut }: { email: string; signOut: FormAction 
   const current = (prefix: string) => (path === prefix || path.startsWith(`${prefix}/`) ? "page" : undefined);
   return (
     <>
-      <AppLink prefetch="viewport" className={navLinkClass} href="/hem" aria-current={current("/hem")}>
+      <AppLink className={navLinkClass} href="/hem" aria-current={current("/hem")}>
         {t("home")}
       </AppLink>
-      <AppLink prefetch="viewport" className={navLinkClass} href="/privat" aria-current={current("/privat")}>
+      <AppLink className={navLinkClass} href="/privat" aria-current={current("/privat")}>
         {t("privat")}
       </AppLink>
-      <AppLink prefetch="viewport" className={navLinkClass} href="/orgs" aria-current={current("/orgs")}>
+      <AppLink className={navLinkClass} href="/orgs" aria-current={current("/orgs")}>
         {t("orgs")}
       </AppLink>
-      <AppLink prefetch="viewport" className={navLinkClass} href="/installningar" aria-current={current("/installningar")}>
+      <AppLink className={navLinkClass} href="/installningar" aria-current={current("/installningar")}>
         {t("account")}
       </AppLink>
       {email && (

@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, addTransitionType, startTransition, useEffect, useOptimistic, useRef, useState, type ReactNode } from "react";
+import { Activity, addTransitionType, startTransition, useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export type OrgTabId = "moten" | "oversikt" | "installningar";
 
-/** A full prefetch older than this is shown at once and then refreshed (stale-while-revalidate). */
-const FRESH_MS = 10_000;
 /** How long next keeps a full prefetch (staleTimes.static, 5 min): only then is it fetched again. */
 const KEPT_MS = 5 * 60_000;
 
@@ -20,7 +18,9 @@ const KEPT_MS = 5 * 60_000;
  * - the tab is marked at once (optimistic `aria-current`) and its panel shows: the last visited
  *   content, kept mounted but hidden in <Activity> (state, open folds and drafts survive), or a
  *   panel-shaped skeleton on a first visit;
- * - the server's fresh render replaces it when it arrives;
+ * - kept or prefetched content may be old (a meeting ended meanwhile), so until the server's
+ *   fresh render has replaced it, it is inert (no "Fortsätt", no delete) and dims after 200 ms;
+ *   content from a prefetch is refreshed as soon as it shows;
  * - hovering, focusing or touching a tab prefetches it in full, so a first visit is usually
  *   instant too. Nothing is prefetched without intent: a page view costs one render, as before.
  */
@@ -61,11 +61,14 @@ export function OrgTabsShell({
     // PrefetchKind.FULL; the public type does not list it yet.
     router.prefetch(tab.href, { kind: "full" } as Parameters<typeof router.prefetch>[1]);
   };
-  // A tab served from an older prefetch is refreshed once it shows.
+  // A tab served from a prefetch (as old as the prefetch) is refreshed once it shows; the
+  // refresh also drops that cache entry, so the next hover prefetches anew.
+  const [refreshing, startRefresh] = useTransition();
   useEffect(() => {
     if (refreshFor.current === active) {
       refreshFor.current = null;
-      startTransition(() => router.refresh());
+      delete prefetchedAt.current[active];
+      startRefresh(() => router.refresh());
     }
   }, [active, router]);
 
@@ -84,8 +87,7 @@ export function OrgTabsShell({
             onFocus={() => warm(tab)}
             onTouchStart={() => warm(tab)}
             onNavigate={() => {
-              const at = prefetchedAt.current[tab.id];
-              refreshFor.current = at && Date.now() - at > FRESH_MS ? tab.id : null;
+              refreshFor.current = prefetchedAt.current[tab.id] ? tab.id : null;
               startTransition(() => {
                 addTransitionType("tab");
                 setShown(tab.id);
@@ -101,9 +103,23 @@ export function OrgTabsShell({
       {tabs.map((tab) => {
         const panel = panels[tab.id];
         if (panel === undefined && tab.id !== shown) return null;
+        // Not yet confirmed by the server: the navigation is pending, or the prefetched copy is
+        // being refreshed.
+        const stale = panel !== undefined && tab.id === shown && (shown !== active || refreshing || refreshFor.current === tab.id);
         return (
           <Activity key={tab.id} mode={tab.id === shown ? "visible" : "hidden"}>
-            {panel ?? <TabSkeleton tab={tab.id} label={loadingLabel} />}
+            {panel === undefined ? (
+              <TabSkeleton tab={tab.id} label={loadingLabel} />
+            ) : (
+              <div
+                className="contents [&>*]:transition-opacity [&>*]:duration-200 [&[data-stale]>*]:opacity-60 [&[data-stale]>*]:delay-200"
+                data-stale={stale || undefined}
+                inert={stale}
+                aria-busy={stale || undefined}
+              >
+                {panel}
+              </div>
+            )}
           </Activity>
         );
       })}

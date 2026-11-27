@@ -126,3 +126,56 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # TEMPORARY (polish PR): screenshots + LCP/CLS of the main surfaces on a production build,
+  # uploaded as the `capture` artifact. Removed before the PR leaves draft.
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.65.5
+
+      - name: supabase start
+        run: |
+          sed -i -E 's/^(sign_in_sign_ups|token_verifications|token_refresh) = .*/\1 = 10000/' supabase/config.toml
+          supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      - name: supabase db reset
+        run: supabase db reset
+
+      - name: local Supabase env
+        run: |
+          supabase status -o env \
+            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)="?([^"]*)"?$/LOCAL_SUPABASE_\1=\2/p' > local.env
+          cat local.env >> "$GITHUB_ENV"
+          rm local.env
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npx playwright test capture --project desktop --retries 0
+        env:
+          E2E_CAPTURE: ${{ github.sha }}
+          E2E_PROD: "1"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: capture
+          path: test-results/
+          retention-days: 7
