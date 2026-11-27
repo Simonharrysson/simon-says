@@ -191,9 +191,9 @@ function ItemList({ uid, title, empty, items, max, onChange }: { uid: string; ti
       {items.length === 0 ? (
         <p className="text-sm text-ink-3">{empty}</p>
       ) : (
-        <ol className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-4 in-card:bg-transparent in-card:shadow-none">
+        <ol className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-6 in-card:bg-transparent in-card:shadow-none">
           {items.map((item, i) => (
-            <li key={`${i}-${item}`} className="flex min-h-11 items-center gap-3 border-t border-line px-4 py-1 first:border-t-0">
+            <li key={`${i}-${item}`} className="flex min-h-11 items-center gap-3 border-t border-line px-4 py-1 first:border-t-0 in-card:px-6">
               <span className="w-6 flex-none font-mono text-xs text-ink-3">{i + 1}.</span>
               <span className="min-w-0 flex-1 text-sm wrap-anywhere">{item}</span>
               <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash size={16} />} onClick={() => onChange(items.filter((_, j) => j !== i))}>

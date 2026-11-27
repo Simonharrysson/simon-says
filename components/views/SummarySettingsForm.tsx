@@ -49,8 +49,8 @@ export function SummarySettingsForm({
   const save = (nextMode: SummaryMode, nextPeople: string[]) => setting.change({ mode: nextMode, people: nextPeople });
 
   return (
-    <div className="flex max-w-[40rem] flex-col gap-5">
-      <fieldset className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
+      <fieldset className="flex max-w-[40rem] flex-col gap-3">
         <legend className="mb-1 font-medium">{t("legend")}</legend>
         <p className="mb-2 text-sm text-ink-2">{t("intro")}</p>
         {MODES.map((m) => {
@@ -88,13 +88,13 @@ export function SummarySettingsForm({
           {people.length === 0 ? (
             <p className="text-sm text-ink-3">{t("emptyList")}</p>
           ) : (
-            <ul className="-mx-4 flex flex-col">
+            <ul className="-mx-6 flex flex-col">
               {people.map((p) => {
                 const id = `summary-person-${p.id}`;
                 const note = !p.hasEmail ? t("noEmail") : null;
                 return (
                   <li key={p.id} className="border-t border-line first:border-t-0">
-                    <label htmlFor={id} className={cn("flex min-h-11 items-center gap-3 px-4 py-2", p.hasEmail ? "cursor-pointer" : "cursor-not-allowed")}>
+                    <label htmlFor={id} className={cn("flex min-h-11 items-center gap-3 px-6 py-2", p.hasEmail ? "cursor-pointer" : "cursor-not-allowed")}>
                       <Checkbox
                         id={id}
                         checked={chosen.includes(p.id)}
@@ -117,7 +117,7 @@ export function SummarySettingsForm({
         </fieldset>
       ) : (
         mode !== "off" && (
-          <p className="text-sm text-ink-3">
+          <p className="max-w-[40rem] text-sm text-ink-3">
             {withEmail === 0 ? t("noneWithEmail") : t("withEmail", { count: withEmail })}
           </p>
         )

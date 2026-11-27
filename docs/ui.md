@@ -120,10 +120,10 @@ a small soft drop. Dialog footers sit on `--board` behind a hairline.
 **No double borders.** Inside a card, never a second full frame (border or ring): a box in a box
 reads as clutter, and two lines whose edges touch read as one thick line. Group things inside a card
 with a tint (`rounded-lg bg-sunk/60`) or with row hairlines (`border-t border-line`, none above the
-first) and no outer frame; a list that runs to the card's padding takes `-mx-4` so its rows keep
-their own padding. Choice tiles on a card (radio/checkbox labels) are frameless too: `tileClass`,
-and `tileOnClass` when chosen (`components/ui/tile.ts`); the consent box is a tinted tile that turns
-green. Shared pieces that also stand alone on the board (alerts, `EmptyState`, Kom igång's lists)
+first) and no outer frame; a list in a Panel takes `-mx-6` (its rows `px-6`) so the hairlines run
+to the card's edge. Choice tiles on a card (radio/checkbox labels) are frameless too: a visible grey
+fill (`tileClass`, about 1.2:1 against the card) and an inverted ink fill when chosen (`tileOnClass`,
+`components/ui/tile.ts`); the consent box is a grey tile that fills green when ticked. Shared pieces that also stand alone on the board (alerts, `EmptyState`, Kom igång's lists)
 drop their frame with the `in-card:` variant, which matches inside `data-slot="card"` (Card, Panel)
 or an ad-hoc sheet marked `data-card`. Exceptions: controls (inputs, selects, buttons), a table's
 grid, and faithful pictures of another product (`data-picture`, the invite e-mail; the Doc paper

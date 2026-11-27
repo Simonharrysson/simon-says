@@ -7,6 +7,7 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconChevronDown, IconMic, IconMicOff } from "@/components/ui/icons";
+import { tileClass } from "@/components/ui/tile";
 import type { CaptureSource } from "@/lib/audio/call";
 import { cn } from "@/lib/utils";
 import { SourcePicker } from "./CallSetup";
@@ -194,9 +195,12 @@ export function ConsentStep({
 
       <label
         className={cn(
-          // The one choice on the card: a tinted tile, no second frame; ticked, it turns green.
-          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg bg-sunk p-4 leading-[1.35] font-medium transition-colors duration-120 hover:bg-[color-mix(in_srgb,var(--ink)_5%,var(--surface-sunk))]",
-          confirmed && "bg-green-wash hover:bg-green-wash",
+          // The one choice on the card: a grey tile, no second frame (components/ui/tile.ts); ticked,
+          // it fills green (over 4:1 against the grey) with the box outlined in on-green.
+          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg p-4 leading-[1.35] font-medium transition-colors duration-120",
+          confirmed
+            ? "bg-green text-on-green [&_.text-ink-2]:text-on-green [&_[data-slot=checkbox]]:border-on-green"
+            : tileClass,
         )}
         htmlFor={`${id}-ok`}
       >

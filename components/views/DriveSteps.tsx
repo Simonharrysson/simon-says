@@ -464,7 +464,8 @@ export function FileStep({
 
       {list.files.length > 0 && (
         <div className="rounded-lg bg-sunk/60">
-          <div className={cn(rowBase, "border-t-0 bg-sunk/60 rounded-t-lg")}>
+          {/* The select-all header: a darker band over the list's tint, no border. */}
+          <div className={cn(rowBase, "rounded-t-lg border-t-0 bg-[color-mix(in_srgb,var(--ink)_8%,var(--surface))]")}>
             <Checkbox
               id="import-all"
               checked={allTicked}
