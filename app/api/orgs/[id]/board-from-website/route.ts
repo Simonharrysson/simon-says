@@ -13,7 +13,7 @@ export const maxDuration = 60;
 // "Hämta styrelsen från webbplatsen" (föreningar, admins): reads the förening's SAVED website and
 // returns suggested board members. Saves nothing: the admin confirms each person, who is then
 // added with the normal board action. A route, not a server action, so a slow site never holds
-// up the page's other actions. Limited per förening and per user (claim_website_fetch, 0057).
+// up the page's other actions. Limited per förening and per user (claim_website_fetch, 0061).
 
 const HOUR_LIMIT = 5;
 const DAY_LIMIT = 20;

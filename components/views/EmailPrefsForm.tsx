@@ -14,6 +14,12 @@ import {
 
 export type SaveEmailPrefs = (prefs: EmailPrefs) => Promise<boolean>;
 
+/** Inför möten for föreningar (0059): an opt-in under the meeting_brief switch (Konto only). */
+export interface BriefForeningarPref {
+  initial: boolean;
+  save: (on: boolean) => Promise<boolean>;
+}
+
 /**
  * One switch per kind of mail, and under them "Stäng av alla mejl". Each change saves at once (no
  * Save button) and says "Sparat"; a failed save puts the switch back and says so. "Stäng av alla
@@ -25,10 +31,12 @@ export function EmailPrefsForm({
   save,
   idPrefix = "mail",
   highlight,
+  briefForeningar,
 }: {
   initial: EmailPrefs;
   save: SaveEmailPrefs;
   idPrefix?: string;
+  briefForeningar?: BriefForeningarPref;
   /** The category the mail's link was about: named first, so it's the obvious one to turn off. */
   highlight?: EmailCategory;
 }) {
@@ -61,6 +69,23 @@ export function EmailPrefsForm({
     });
   };
 
+  const [orgBriefs, setOrgBriefs] = useState(briefForeningar?.initial ?? false);
+  const applyOrgBriefs = (on: boolean) => {
+    if (!briefForeningar) return;
+    const id = ++latest.current;
+    setOrgBriefs(on);
+    setStatus("idle");
+    startTransition(async () => {
+      const ok = await briefForeningar.save(on).catch(() => false);
+      if (id !== latest.current) return;
+      if (ok) setStatus("saved");
+      else {
+        setOrgBriefs(!on);
+        setStatus("failed");
+      }
+    });
+  };
+
   const order = highlight ? [highlight, ...EMAIL_CATEGORIES.filter((c) => c !== highlight)] : [...EMAIL_CATEGORIES];
 
   return (
@@ -79,6 +104,19 @@ export function EmailPrefsForm({
               >
                 {t(`categories.${category}.description`)}
               </SwitchRow>
+              {category === "meeting_brief" && briefForeningar && (
+                <div className="mt-3 border-l-2 border-line pl-4">
+                  <SwitchRow
+                    id={`${idPrefix}-brief-foreningar`}
+                    title={t("briefForeningar.label")}
+                    checked={orgBriefs && !prefs.off.includes("meeting_brief")}
+                    disabled={prefs.allOff || prefs.off.includes("meeting_brief")}
+                    onChange={applyOrgBriefs}
+                  >
+                    {t("briefForeningar.description")}
+                  </SwitchRow>
+                </div>
+              )}
             </li>
           );
         })}

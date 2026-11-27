@@ -2,7 +2,7 @@ import { ADMIN_EMAIL } from "../env";
 import { ensureUser, expect, expectAccessible, test } from "../fixtures";
 import { FAKE_BOARD, FAKE_SITE_HOST } from "../fakes/website";
 
-// "Hämta styrelsen från webbplatsen" (0057): the admin saves the förening's website; the app reads
+// "Hämta styrelsen från webbplatsen" (0061): the admin saves the förening's website; the app reads
 // the fake site (e2e/fakes/website.ts: robots.txt, the start page, the board page in ISO-8859-1),
 // asks the fake Claude once and suggests the board. Nothing is saved until the admin confirms; a
 // name the fake Claude made up (not on the site) is never offered; someone already on the board is

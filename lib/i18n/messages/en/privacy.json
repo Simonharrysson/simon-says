@@ -1,7 +1,7 @@
 {
   "metaTitle": "Privacy",
   "metaDescription": "How Simon Says handles audio, text and accounts: no audio is stored, what is stored and for how long, and your rights under GDPR.",
-  "updated": "26 November 2026",
+  "updated": "27 November 2026",
   "draft": "Draft · updated {date} · legal review pending",
   "title": "Privacy",
   "lead": "Simon Says listens to your meetings. Here is what that means: what is sent where, what is stored, and how you remove it.",
@@ -9,6 +9,7 @@
   "toc": {
     "kort": "In short",
     "rummet": "In the room",
+    "videosamtal": "In a video call",
     "sparas": "What is stored",
     "mejl": "E-mail",
     "vem": "Who processes data",
@@ -100,5 +101,10 @@
   },
   "statusTitle": "The status page",
   "status": "The public status page shows the number of meetings in progress, the number of meetings and minutes transcribed in the last week, and whether the service works. An association is shown by name only if an admin has ticked that in the settings.",
-  "contact": "Questions, or want to know what we have stored about you? Write to Harrysson & Company AB at <mail>simon@harrysson.co</mail>."
+  "contact": "Questions, or want to know what we have stored about you? Write to Harrysson & Company AB at <mail>simon@harrysson.co</mail>.",
+  "call": {
+    "what": "A meeting in a video call (e.g. Google Meet) is recorded from the browser of the person who starts it: the call tab's audio and that person's microphone. No bot joins the call. The tab's video is never used or stored, and as in the room no audio recording is stored: the audio becomes text as you speak.",
+    "processing": "What everyone in the call says is transcribed and processed the same way as in a meeting in the room: the same services, the same notes, and the same storage and deletion.",
+    "responsibility": "The person recording is responsible for having the right to record the call. In an association the person starting confirms that everyone in the call knows the meeting is transcribed; in Företag and Privat the person starting confirms that they take part in the call themselves. The confirmation, and that the meeting was a video call, are stored with the meeting."
+  }
 }

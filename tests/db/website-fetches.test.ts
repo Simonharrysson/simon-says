@@ -2,10 +2,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import { createOrg } from "@/lib/db/orgs";
 
-// "Hämta styrelsen från webbplatsen" (0057): attempts are limited per förening by
+// "Hämta styrelsen från webbplatsen" (0061): attempts are limited per förening by
 // claim_website_fetch, and the log is service role only. Fictional data.
 
-describe.skipIf(!hasLocalSupabase)("website fetches (0057)", () => {
+describe.skipIf(!hasLocalSupabase)("website fetches (0061)", () => {
   let admin: TestUser;
   let orgId: string;
   let otherOrgId: string;

@@ -40,5 +40,31 @@
     "accessMember": "The button opens the meeting on the association's page in Simon Says. There you get access to the document.",
     "accessOther": "The minutes are a Google Doc. If you can't open it, ask {starter} to share it with you.",
     "starterFallback": "the person who started the meeting"
+  },
+  "brief": {
+    "subject": "Before {title} at {time}",
+    "preview": "You last met on {date}.",
+    "previewNoLast": "What matters before the meeting.",
+    "title": "Before {title}",
+    "lead": "Hi {first}! {group} meets at {time}. This is what Simon Says has from your meetings.",
+    "leadNoName": "{group} meets at {time}. This is what Simon Says has from your meetings.",
+    "last": "Last time you met",
+    "lastLine": "{date}: {title}",
+    "decisions": "Decisions to keep in mind",
+    "promised": "Promised",
+    "open": "Open tasks",
+    "agenda": "Prepared agenda",
+    "openAgenda": "Open the agenda",
+    "overdue": "overdue",
+    "dueOn": "due {day}",
+    "unassigned": "No owner",
+    "you": "You",
+    "more": "… and {count} more",
+    "from": "from the meeting on {date}",
+    "button": "Open the last meeting",
+    "buttonText": "Open the last meeting: {url}",
+    "why": "You get this e-mail because the meeting is in your connected calendar and you are in {space} on Simon Says.",
+    "unsubscribe": "No e-mails before meetings",
+    "unsubscribeText": "No e-mails before meetings: {url}"
   }
 }

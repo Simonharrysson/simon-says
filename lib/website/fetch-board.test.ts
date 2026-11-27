@@ -134,6 +134,13 @@ describe("boardFromWebsite", () => {
     expect(c.bodies).toHaveLength(0);
   });
 
+  it("never reads (or matches robots against) a path over 2048 characters", async () => {
+    const s = site({ "/robots.txt": { body: "" } });
+    const r = await boardFromWebsite(`https://${HOST}/${"x".repeat(2100)}`, { orgId: "o", existingNames: [], deps: { fetch: s.deps, client: claude({ board: [] }).client as never } });
+    expect(r).toEqual({ ok: false, reason: "robots" });
+    expect(s.asked).toEqual([]);
+  });
+
   it("refuses a website that isn't https", async () => {
     expect(await boardFromWebsite(`http://${HOST}/`, { orgId: "o", existingNames: [] })).toEqual({ ok: false, reason: "bad_url" });
   });

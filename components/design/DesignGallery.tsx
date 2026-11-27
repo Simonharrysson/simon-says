@@ -1,5 +1,7 @@
 "use client";
 
+import type { CaptureSource, TabAudioSupport } from "@/lib/audio/call";
+import { CallSetup, type CallShareError } from "@/components/live/CallSetup";
 import { useLocale, useTranslations } from "next-intl";
 import { Fragment, useCallback, useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import type { Locale } from "@/lib/i18n/config";
@@ -55,6 +57,7 @@ import { onboardingRender } from "./onboarding-demo";
 import { SummarySettingsDemo, summaryRender } from "./summary-demo";
 import { inviteRender } from "./invite-demo";
 import { privatRender } from "./privat-demo";
+import { briefRender } from "./brief-demo";
 import { homeRender } from "./home-demo";
 import { ContextPicker } from "@/components/privat/ContextPicker";
 
@@ -265,6 +268,40 @@ function MicCheckDemo({ settingsOpen = false, silent = false }: { settingsOpen?:
       }}
       onMicCheckStop={() => setLevel(null)}
       agenda={<AgendaDemoStep view={{ state: "none" }} />}
+    />
+  );
+}
+
+/** A video call on the start screen: the steps and Chrome's dialog, then the two meters (local state). */
+function CallDemo({ initial = "none", support = "ok", foretag = false }: { initial?: "none" | "shared" | "no-audio"; support?: TabAudioSupport; foretag?: boolean }) {
+  const [source, setSource] = useState<CaptureSource>("call");
+  const [shared, setShared] = useState(initial === "shared");
+  const [micOnly, setMicOnly] = useState(false);
+  const [error, setError] = useState<CallShareError | null>(initial === "no-audio" ? "no-audio" : null);
+  return (
+    <LiveDemo
+      phase="consent"
+      agenda={<AgendaDemoStep view={{ state: "none" }} />}
+      source={source}
+      onSourceChange={setSource}
+      foretag={foretag}
+      callReady={support !== "ok" ? micOnly : shared}
+      callHint={support !== "ok" ? "Välj Spela in med bara mikrofonen, eller öppna sidan i Chrome eller Edge." : undefined}
+      callSetup={
+        <CallSetup
+          support={support}
+          micOnly={micOnly}
+          onMicOnly={() => setMicOnly(true)}
+          shared={shared}
+          sharing={false}
+          error={error}
+          levels={shared ? { mic: 0.42, call: 0.7 } : null}
+          onShare={() => {
+            setError(null);
+            setShared(true);
+          }}
+        />
+      }
     />
   );
 }
@@ -1148,6 +1185,11 @@ const render: Record<string, () => ReactNode> = {
   "live-consent": () => <MicCheckDemo />,
   "live-consent-settings": () => <MicCheckDemo settingsOpen />,
   "live-consent-silent": () => <MicCheckDemo silent settingsOpen />,
+  "live-call": () => <CallDemo />,
+  "live-call-shared": () => <CallDemo initial="shared" />,
+  "live-call-no-audio": () => <CallDemo initial="no-audio" />,
+  "live-call-foretag": () => <CallDemo initial="shared" foretag />,
+  "live-call-unsupported": () => <CallDemo support="browser" />,
   "live-mic-denied": () => <LiveDemo phase="consent" startError="mic-denied" agenda={<AgendaDemoStep view={{ state: "none" }} />} />,
   "live-agenda-loading": () => <AgendaDemo view={{ state: "loading" }} inFolder={false} />,
   "live-agenda-today": () => (
@@ -1199,6 +1241,7 @@ const render: Record<string, () => ReactNode> = {
   ...Object.fromEntries(Object.entries(inviteRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   ...Object.fromEntries(Object.entries(homeRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   ...Object.fromEntries(Object.entries(privatRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
+  ...Object.fromEntries(Object.entries(briefRender).map(([id, view]) => [id, () => <AppChrome>{view()}</AppChrome>])),
   "live-privat-consent": () => <PrivatConsentDemo contexts={[{ id: "c1", name: "TDDE15" }, { id: "c2", name: "Exjobb" }, { id: "c3", name: "Övrigt" }]} />,
   "live-privat-first": () => <PrivatConsentDemo contexts={[]} />,
   "live-privat-ended": () => (

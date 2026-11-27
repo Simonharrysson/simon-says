@@ -13,6 +13,8 @@ import { ROBOTS_MAX_BYTES, robotsAllows, robotsRules } from "./robots";
 // never logs page text, names or URLs.
 
 export const MAX_SUBPAGES = 2;
+/** Longest URL path (+ query) we read or match against robots.txt. */
+export const PATH_MAX = 2048;
 /** Hard wall-clock budget for reading the site (robots, pages, parsing); Claude has its own. */
 export const SITE_BUDGET_MS = 10_000;
 export const BOARD_TIMEOUT_MS = 15_000;
@@ -61,8 +63,11 @@ async function readSite(start: URL, net: Pick<SafeFetchOptions, "resolve" | "tra
     return p;
   };
   const allowed = async (url: URL) => {
+    const path = `${url.pathname}${url.search}`;
+    // A path this long is not a page we need (and keeps the robots match bounded): skip it.
+    if (path.length > PATH_MAX) return false;
     const rules = await rulesFor(url);
-    return rules !== null && robotsAllows(rules, `${url.pathname}${url.search}`);
+    return rules !== null && robotsAllows(rules, path);
   };
 
   if (!(await allowed(start))) return { ok: false, reason: "robots" };

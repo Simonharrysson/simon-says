@@ -13,6 +13,7 @@ import { summaryViews } from "./summary-views";
 import { inviteViews } from "./invite-views";
 import { privatLiveViews, privatViews } from "./privat-views";
 import { homeViews } from "./home-demo";
+import { briefViews } from "./brief-demo";
 
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
@@ -95,10 +96,16 @@ export const designViews: DesignView[] = [
   ...inviteViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...homeViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...briefViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatLiveViews.map((v) => ({ ...v, group: "Mötet live" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
   { id: "live-consent-settings", title: "Före start · inställningar för mötet", group: "Mötet live" },
   { id: "live-consent-silent", title: "Före start · mikrofonen hör inget", group: "Mötet live" },
+  { id: "live-call", title: "Före start · videosamtal, steg", group: "Mötet live" },
+  { id: "live-call-shared", title: "Före start · videosamtal, Du och Samtalet hörs", group: "Mötet live" },
+  { id: "live-call-no-audio", title: "Före start · videosamtal, inget flikljud", group: "Mötet live" },
+  { id: "live-call-foretag", title: "Före start · videosamtal i ett företag", group: "Mötet live" },
+  { id: "live-call-unsupported", title: "Före start · videosamtal i Safari/Firefox", group: "Mötet live" },
   { id: "live-mic-denied", title: "Före start · mikrofonen blockerad", group: "Mötet live" },
   { id: "live-agenda-loading", title: "Före start · letar efter dagordning", group: "Mötet live" },
   { id: "live-agenda-today", title: "Före start · dagens dagordning vald", group: "Mötet live" },

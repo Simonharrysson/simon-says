@@ -179,6 +179,8 @@ export interface MeetingRow {
   context_id?: string | null;
   /** 0048: the short title the final notes pass gave (lib/meetings/title.ts). */
   title?: string | null;
+  /** 0058: 'room' (the laptop's mic) or 'call' (a video call's tab audio + the mic). */
+  capture_source?: "room" | "call";
 }
 
 /** Every ElevenLabs session the server minted. Usage: see `orgMonthSeconds`. */
