@@ -13,7 +13,7 @@ import { NoticeBanner } from "./NoticeBanner";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
 
 export interface ForetagListViewProps {
-  companies: { id: string; name: string; role: "admin" | "member" }[];
+  companies: { id: string; name: string; role: "admin" | "member"; logoUrl?: string | null }[];
   notice: Notice | null;
   /** "Skapa ett företag": the allow-list only (lib/foretag/gate.ts). */
   createForetag?: FormAction;
@@ -40,7 +40,7 @@ export function ForetagListView({ companies, notice, createForetag, nameError }:
               <ListRow
                 key={c.id}
                 href={`/orgs/${c.id}`}
-                leading={<OrgLogo name={c.name} size="sm" />}
+                leading={<OrgLogo name={c.name} src={c.logoUrl} size="sm" />}
                 title={c.name}
                 actions={
                   <>

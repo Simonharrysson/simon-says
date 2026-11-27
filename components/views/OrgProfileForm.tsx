@@ -6,7 +6,7 @@ import { Field, fieldErrorClass, hintClass } from "@/components/ui/Field";
 import { IconAlert } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ABOUT_MAX, type OrgProfile, type ProfileErrors, type ProfileInput } from "@/lib/orgs/profile";
+import { ABOUT_MAX, type OrgProfile, type ProfileErrors, type ProfileField, type ProfileInput } from "@/lib/orgs/profile";
 import { cn } from "@/lib/utils";
 
 export type SaveProfile = (
@@ -22,10 +22,13 @@ export function OrgProfileFields({
   value,
   onChange,
   errors,
+  fields = ["about", "website", "facebook", "instagram"],
 }: {
   value: ProfileInput;
   onChange: (field: keyof ProfileInput, text: string) => void;
   errors?: ProfileErrors;
+  /** Which fields to show (Företag: the website only). */
+  fields?: ProfileField[];
 }) {
   const t = useTranslations("profile");
   const id = useId();
@@ -33,6 +36,7 @@ export function OrgProfileFields({
   const over = count > ABOUT_MAX;
   return (
     <div className="flex flex-col gap-5">
+      {fields.includes("about") && (
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-about`}>{t("about")}</Label>
         <Textarea
@@ -57,6 +61,8 @@ export function OrgProfileFields({
           </p>
         )}
       </div>
+      )}
+      {fields.includes("website") && (
       <Field
         id={`${id}-website`}
         name="website"
@@ -68,6 +74,8 @@ export function OrgProfileFields({
         onChange={(e) => onChange("website", e.target.value)}
         error={errors?.website}
       />
+      )}
+      {fields.includes("facebook") && (
       <Field
         id={`${id}-facebook`}
         name="facebook"
@@ -78,6 +86,8 @@ export function OrgProfileFields({
         onChange={(e) => onChange("facebook", e.target.value)}
         error={errors?.facebook}
       />
+      )}
+      {fields.includes("instagram") && (
       <Field
         id={`${id}-instagram`}
         name="instagram"
@@ -89,6 +99,7 @@ export function OrgProfileFields({
         onChange={(e) => onChange("instagram", e.target.value)}
         error={errors?.instagram}
       />
+      )}
     </div>
   );
 }

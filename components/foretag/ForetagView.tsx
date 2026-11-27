@@ -15,6 +15,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { NoticeBanner } from "@/components/views/NoticeBanner";
+import { OrgLogo } from "@/components/onboarding/OrgLogo";
+import { OrgAbout } from "@/components/views/OrgAbout";
 import { OrgTabsShell, type OrgTabId } from "@/components/views/OrgTabsShell";
 import type { CustomerRow } from "@/lib/db/foretag";
 import type { ForetagMeeting, ForetagPageData } from "@/lib/foretag/page";
@@ -41,7 +43,7 @@ export interface ForetagActions {
 }
 
 export interface ForetagViewProps {
-  org: { id: string; name: string };
+  org: { id: string; name: string; logoUrl?: string | null; website_url?: string | null };
   isAdmin: boolean;
   userId: string;
   tab: ForetagTab;
@@ -50,6 +52,8 @@ export interface ForetagViewProps {
   notice: Notice | null;
   data: ForetagPageData;
   actions: ForetagActions;
+  /** Admins, Inställningar: the logo and website editor (`CompanyDetailsForm`). */
+  detailsSettings?: ReactNode;
 }
 
 const TABS: { id: ForetagTab; adminOnly?: boolean }[] = [{ id: "moten" }, { id: "kunder" }, { id: "personer" }, { id: "installningar", adminOnly: true }];
@@ -61,9 +65,19 @@ export function ForetagView(props: ForetagViewProps) {
   return (
     <div className="mx-auto flex w-full max-w-[56rem] flex-col gap-6 px-gutter">
       <PageHeader
-        title={org.name}
+        title={
+          <span className="flex items-center gap-4">
+            <OrgLogo name={org.name} src={org.logoUrl} size="md" />
+            <span className="min-w-0">{org.name}</span>
+          </span>
+        }
         back={{ href: "/foretag", label: t("list.back") }}
-        meta={<p className="text-sm font-medium tracking-wide text-ink-3 uppercase">{t("kicker")}</p>}
+        meta={
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium tracking-wide text-ink-3 uppercase">{t("kicker")}</p>
+            <OrgAbout profile={{ website_url: org.website_url ?? null }} label={t("settings.onlineLabel")} />
+          </div>
+        }
       />
       <OrgTabsShell
         key={org.id}
@@ -219,7 +233,7 @@ function PeopleTab({ org, isAdmin, userId, data, actions }: ForetagViewProps) {
   );
 }
 
-function SettingsTab({ org, userId, inviteUrl, data, actions }: ForetagViewProps) {
+function SettingsTab({ org, userId, inviteUrl, data, actions, detailsSettings }: ForetagViewProps) {
   const t = useTranslations("foretag.settings");
   const tp = useTranslations("foretag.people");
   const names = new Map(data.people.flatMap((p) => (p.member_user_id ? [[p.member_user_id, p.name] as const] : [])));
@@ -234,6 +248,12 @@ function SettingsTab({ org, userId, inviteUrl, data, actions }: ForetagViewProps
           </SubmitButton>
         </form>
       </Panel>
+
+      {detailsSettings && (
+        <Panel title={t("detailsTitle")} titleId="details-title">
+          {detailsSettings}
+        </Panel>
+      )}
 
       <Panel title={t("inviteTitle")} titleId="invite-title">
         <div className="flex flex-col gap-4">

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ForetagListView } from "@/components/views/ForetagListView";
 import { listMyForetag } from "@/lib/db/foretag";
+import { logoUrl } from "@/lib/orgs/logo";
 import { canCreateForetag } from "@/lib/foretag/gate";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { orgsNotice } from "@/lib/ui/messages";
@@ -21,7 +22,7 @@ export default async function ForetagListPage({ searchParams }: { searchParams: 
 
   return (
     <ForetagListView
-      companies={companies}
+      companies={companies.map(({ id, name, role, logo_updated_at }) => ({ id, name, role, logoUrl: logoUrl(id, logo_updated_at) }))}
       notice={fel === "invalid" ? null : notice}
       nameError={fel === "invalid" ? notice?.text : undefined}
       // Only the allow-list may create one until a DPA exists.

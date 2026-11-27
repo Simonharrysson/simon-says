@@ -129,5 +129,12 @@
   "futureDate": "Ange ett datum som inte ligger i framtiden.",
   "protocolNotFound": "Protokollet finns inte.",
   "libBadGroup": "Gruppen finns inte längre. Ladda om sidan och välj igen.",
-  "libAgendaRestricted": "Ett möte för en grupp eller ett privat möte får ett nytt dokument. Välj ”Skapa nytt dokument”, eller ”Hela föreningen”."
+  "libAgendaRestricted": "Ett möte för en grupp eller ett privat möte får ett nytt dokument. Välj ”Skapa nytt dokument”, eller ”Hela föreningen”.",
+  "websiteBoard": {
+    "adminsOnly": "Bara administratörer kan hämta styrelsen från webbplatsen.",
+    "noWebsite": "Spara föreningens webbplats först.",
+    "limit": "Ni har hämtat från webbplatsen många gånger nyss. Försök igen om en stund.",
+    "failed": "Vi kunde inte läsa webbplatsen just nu.",
+    "robots": "Webbplatsen ber automatiska läsare att inte hämta sidorna, så vi lät bli."
+  }
 }

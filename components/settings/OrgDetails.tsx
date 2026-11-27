@@ -2,13 +2,14 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LogoStep } from "@/components/onboarding/steps";
 import { squareLogo } from "@/components/onboarding/logo-image";
 import { renameOrgAction, saveProfileAction } from "@/app/(app)/orgs/[id]/kom-igang/actions";
 import { logoUrl as versionedLogoUrl } from "@/lib/orgs/logo";
 import { parseProfile, profileInput, sameProfile, type OrgProfile, type ProfileErrors, type ProfileInput } from "@/lib/orgs/profile";
+import { BoardFromWebsite } from "./BoardFromWebsite";
 import { SaveState, useSaveState } from "./SaveState";
 
 // Föreningen: the name, the logo and "Om oss" with its links. One editor, used by Inställningar →
@@ -107,6 +108,8 @@ export function useOrgDetails(org: OrgDetailsInitial) {
   return {
     name,
     savedName,
+    /** The website as saved (canonical), or null. */
+    savedWebsite: savedProfile.website_url ?? null,
     dirty,
     save,
     fields: {
@@ -137,9 +140,48 @@ const sameProfileInput = (input: ProfileInput, saved: Partial<OrgProfile>) => {
   return (Object.keys(input) as (keyof ProfileInput)[]).every((k) => input[k].trim() === s[k].trim());
 };
 
-/** Inställningar → Föreningen: the editor with its Spara (text fields; the logo saves on its own). */
+/**
+ * Inställningar → Föreningen: the editor with its Spara (text fields; the logo saves on its own),
+ * and "Hämta styrelsen från webbplatsen" under it, which also starts by itself when Spara saved a
+ * new website. Kom igång shares `useOrgDetails` but never fetches the website.
+ */
 export function OrgDetailsForm({ org }: { org: OrgDetailsInitial }) {
   const t = useTranslations("org.settings");
+  const details = useOrgDetails(org);
+  const { status, run } = useSaveState();
+  const [autoFetch, setAutoFetch] = useState(0);
+  const lastWebsite = useRef(details.savedWebsite);
+  useEffect(() => {
+    if (details.savedWebsite === lastWebsite.current) return;
+    lastWebsite.current = details.savedWebsite;
+    if (details.savedWebsite) setAutoFetch((n) => n + 1);
+  }, [details.savedWebsite]);
+  return (
+    <div className="flex max-w-[40rem] flex-col gap-6">
+      <form
+        className="flex flex-col gap-6"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(details.save);
+        }}
+      >
+        <LogoStep {...details.fields} profileOpen />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" variant="primary" loading={status.state === "saving"} disabled={!details.dirty && status.state !== "error"}>
+            {t("save")}
+          </Button>
+          <SaveState status={status} />
+        </div>
+      </form>
+      {details.savedWebsite && <BoardFromWebsite orgId={org.id} website={details.savedWebsite} autoStart={autoFetch} />}
+    </div>
+  );
+}
+
+/** Företag → Inställningar: the logo and the website (no name: it has its own form; no Om oss). */
+export function CompanyDetailsForm({ org }: { org: OrgDetailsInitial }) {
+  const t = useTranslations("foretag.settings");
   const details = useOrgDetails(org);
   const { status, run } = useSaveState();
   return (
@@ -151,7 +193,7 @@ export function OrgDetailsForm({ org }: { org: OrgDetailsInitial }) {
         void run(details.save);
       }}
     >
-      <LogoStep {...details.fields} profileOpen />
+      <LogoStep {...details.fields} hideName logoHint={t("logoHint")} profileOpen profileFields={["website"]} profileLegend={t("websiteLegend")} profileIntro={t("websiteIntro")} />
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="primary" loading={status.state === "saving"} disabled={!details.dirty && status.state !== "error"}>
           {t("save")}

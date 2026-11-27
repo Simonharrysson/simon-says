@@ -129,5 +129,12 @@
   "futureDate": "Enter a date that isn't in the future.",
   "protocolNotFound": "The minutes don't exist.",
   "libBadGroup": "That group no longer exists. Reload the page and choose again.",
-  "libAgendaRestricted": "A meeting for a group or a private meeting gets a new document. Choose “Create new document”, or “Whole association”."
+  "libAgendaRestricted": "A meeting for a group or a private meeting gets a new document. Choose “Create new document”, or “Whole association”.",
+  "websiteBoard": {
+    "adminsOnly": "Only admins can fetch the board from the website.",
+    "noWebsite": "Save the association's website first.",
+    "limit": "You've fetched from the website several times just now. Try again in a while.",
+    "failed": "We couldn't read the website right now.",
+    "robots": "The website asks automated readers not to fetch its pages, so we didn't."
+  }
 }

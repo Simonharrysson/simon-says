@@ -110,7 +110,12 @@
     "leave": "Lämna företaget",
     "leaveTitle": "Lämna {org}?",
     "leaveText": "Du ser inte längre företagets möten. En admin kan bjuda in dig igen.",
-    "leaving": "Lämnar…"
+    "leaving": "Lämnar…",
+    "detailsTitle": "Logga och webbplats",
+    "logoHint": "PNG, JPEG eller WebP. Simon Says beskär den till en kvadrat. Den syns bara här i Simon Says – på företagssidan och i listan – aldrig i mötesdokumenten.",
+    "websiteLegend": "Webbplats",
+    "websiteIntro": "Visas överst på företagssidan för alla kolleger. Valfritt.",
+    "onlineLabel": "Företaget på nätet"
   },
   "picker": {
     "label": "Möte för",

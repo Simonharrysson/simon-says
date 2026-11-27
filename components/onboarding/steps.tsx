@@ -19,7 +19,7 @@ import type { BoardRow } from "@/lib/people/board";
 import { cn } from "@/lib/utils";
 import { OrgLogo } from "./OrgLogo";
 import { OrgProfileFields } from "@/components/views/OrgProfileForm";
-import type { ProfileErrors, ProfileInput } from "@/lib/orgs/profile";
+import type { ProfileErrors, ProfileField, ProfileInput } from "@/lib/orgs/profile";
 
 // Kom igång's six steps and the end, presentational (no fetching): the container
 // (Onboarding.tsx) and the /design gallery give them data and callbacks.
@@ -53,6 +53,13 @@ export interface LogoStepProps {
   profileErrors?: ProfileErrors;
   /** Inställningar → Föreningen: Om oss and the links always shown (no disclosure). */
   profileOpen?: boolean;
+  /** Företag: the name has its own form, so no name field here. */
+  hideName?: boolean;
+  /** Företag: its own hint under the logo, and only some of the profile fields with their own legend. */
+  logoHint?: string;
+  profileFields?: ProfileField[];
+  profileLegend?: string;
+  profileIntro?: string;
 }
 
 export function LogoStep(p: LogoStepProps) {
@@ -68,15 +75,17 @@ export function LogoStep(p: LogoStepProps) {
   };
   return (
     <div className="flex flex-col gap-8">
-      <Field
-        id={`${id}-name`}
-        label={t("orgName")}
-        value={p.name}
-        maxLength={100}
-        autoComplete="organization"
-        onChange={(e) => p.onName(e.target.value)}
-        error={p.nameError}
-      />
+      {!p.hideName && (
+        <Field
+          id={`${id}-name`}
+          label={t("orgName")}
+          value={p.name}
+          maxLength={100}
+          autoComplete="organization"
+          onChange={(e) => p.onName(e.target.value)}
+          error={p.nameError}
+        />
+      )}
       <div className="flex flex-col gap-3">
         <span className="text-sm font-medium">{t("label")}</span>
         <div className="flex items-center gap-6 max-[30rem]:flex-col max-[30rem]:items-start">
@@ -124,7 +133,7 @@ export function LogoStep(p: LogoStepProps) {
               )}
             </div>
             <p id={`${id}-hint`} className={cn(hintClass, "max-w-[22rem]")}>
-              {t("hint")}
+              {p.logoHint ?? t("hint")}
             </p>
           </div>
         </div>
@@ -143,20 +152,46 @@ export function LogoStep(p: LogoStepProps) {
         />
         <Note tone={p.message?.tone}>{p.message?.text}</Note>
       </div>
-      {p.profile && p.onProfile && <ProfileSection value={p.profile} onChange={p.onProfile} errors={p.profileErrors} alwaysOpen={p.profileOpen} />}
+      {p.profile && p.onProfile && (
+        <ProfileSection
+          value={p.profile}
+          onChange={p.onProfile}
+          errors={p.profileErrors}
+          alwaysOpen={p.profileOpen}
+          fields={p.profileFields}
+          legend={p.profileLegend}
+          intro={p.profileIntro}
+        />
+      )}
     </div>
   );
 }
 
-function ProfileSection({ value, onChange, errors, alwaysOpen }: { value: ProfileInput; onChange: (field: keyof ProfileInput, text: string) => void; errors?: ProfileErrors; alwaysOpen?: boolean }) {
+function ProfileSection({
+  value,
+  onChange,
+  errors,
+  alwaysOpen,
+  fields,
+  legend,
+  intro,
+}: {
+  value: ProfileInput;
+  onChange: (field: keyof ProfileInput, text: string) => void;
+  errors?: ProfileErrors;
+  alwaysOpen?: boolean;
+  fields?: ProfileField[];
+  legend?: string;
+  intro?: string;
+}) {
   const pt = useTranslations("profile");
   const id = useId();
   if (alwaysOpen) {
     return (
       <fieldset className="flex flex-col gap-4 border-t border-line pt-6">
-        <legend className="float-left mb-1 font-medium">{pt("legend")}</legend>
-        <p className={cn(hintClass, "clear-left -mt-2 max-w-[40rem]")}>{pt("intro")}</p>
-        <OrgProfileFields value={value} onChange={onChange} errors={errors} />
+        <legend className="float-left mb-1 font-medium">{legend ?? pt("legend")}</legend>
+        <p className={cn(hintClass, "clear-left -mt-2 max-w-[40rem]")}>{intro ?? pt("intro")}</p>
+        <OrgProfileFields value={value} onChange={onChange} errors={errors} fields={fields} />
       </fieldset>
     );
   }
