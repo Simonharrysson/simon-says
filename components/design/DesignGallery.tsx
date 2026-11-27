@@ -764,7 +764,6 @@ const render: Record<string, () => ReactNode> = {
             meetings={meetings}
             notice={orgNotice("mote-active", undefined, locale)}
             summarySettings={<SummarySettingsDemo />}
-            startMeetingHref="#"
             formatCard={
               <FormatCard
                 orgId={ORG_ID}
