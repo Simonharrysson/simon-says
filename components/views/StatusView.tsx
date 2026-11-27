@@ -38,7 +38,7 @@ export function StatusView({ data }: { data: StatusData | null }) {
         </EmptyState>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-4 rounded-lg bg-surface p-6 shadow-panel" role="status">
+          <div data-card className="flex flex-wrap items-center gap-4 rounded-lg bg-surface p-6 shadow-panel" role="status">
             <div>
               <p className={cn("text-xl font-semibold", health.tone === "ok" ? "text-green" : "text-red")}>{health.title}</p>
               <p className="text-ink-2">{health.text}</p>

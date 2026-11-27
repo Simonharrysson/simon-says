@@ -369,7 +369,7 @@ export function ImportProgress({
         )}
       </div>
 
-      <ol className="max-h-[26rem] overflow-y-auto overscroll-contain rounded-lg border border-line bg-surface" aria-label={tr("listLabel")}>
+      <ol className="max-h-[26rem] overflow-y-auto overscroll-contain rounded-lg bg-sunk/60" aria-label={tr("listLabel")}>
         {job.items.map((i) => (
           <Row
             key={i.id}

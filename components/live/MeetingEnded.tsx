@@ -73,7 +73,7 @@ export function MeetingEnded({
         ? t("sharedWith")
         : "";
   return (
-    <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="ended-title" aria-live="polite">
+    <section data-card className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="ended-title" aria-live="polite">
       <h1 id="ended-title" className="text-2xl" ref={heading} tabIndex={-1}>
         {finalizing ? t("finalizing") : t("ended")}
       </h1>

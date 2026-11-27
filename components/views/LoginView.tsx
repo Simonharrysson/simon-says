@@ -20,7 +20,7 @@ export function LoginView({ error, next, signIn, joining }: LoginViewProps) {
   const message = loginError(error, useLocale());
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] grid items-start justify-items-center pt-[clamp(1rem,6vh,4rem)]">
-      <div className="w-full max-w-[30rem] rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel flex flex-col gap-6">
+      <div data-card className="w-full max-w-[30rem] rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel flex flex-col gap-6">
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl">{message ? t("titleRetry") : t("title")}</h1>
           <p className="text-ink-2">
@@ -62,7 +62,7 @@ function DriveScopeHelp() {
   return (
     <figure className="flex flex-col gap-2">
       <figcaption className="text-sm text-ink-3">{t("scopeCaption")}</figcaption>
-      <div className="grid grid-cols-[auto_1fr] items-start gap-3 rounded-md border border-line bg-board px-4 py-3 font-system text-sm [&_em]:font-semibold [&_em]:not-italic" aria-hidden="true">
+      <div className="grid grid-cols-[auto_1fr] items-start gap-3 rounded-md bg-sunk px-4 py-3 font-system text-sm [&_em]:font-semibold [&_em]:not-italic" aria-hidden="true">
         <span className="mt-[0.1rem] grid size-5 animate-scope-tick place-items-center rounded-[3px] bg-blue text-on-ink">
           <IconCheck size={16} />
         </span>

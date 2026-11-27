@@ -7,6 +7,7 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconChevronDown, IconMic, IconMicOff } from "@/components/ui/icons";
+import { tileClass } from "@/components/ui/tile";
 import type { CaptureSource } from "@/lib/audio/call";
 import { cn } from "@/lib/utils";
 import { SourcePicker } from "./CallSetup";
@@ -157,7 +158,7 @@ export function ConsentStep({
   };
 
   return (
-    <section className="flex flex-col gap-5 rounded-lg bg-surface p-[clamp(1.25rem,4vw,2.5rem)] shadow-panel" aria-labelledby={`${id}-title`}>
+    <section data-card className="flex flex-col gap-5 rounded-lg bg-surface p-[clamp(1.25rem,4vw,2.5rem)] shadow-panel" aria-labelledby={`${id}-title`}>
       <div className="flex flex-col gap-1">
         <p className="text-ink-2">{orgName}</p>
         <h1 id={`${id}-title`} className="text-2xl">
@@ -194,8 +195,12 @@ export function ConsentStep({
 
       <label
         className={cn(
-          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg border border-control p-4 leading-[1.35] font-medium transition-colors duration-120 hover:border-ink-3",
-          confirmed && "border-green bg-green-wash hover:border-green",
+          // The one choice on the card: a grey tile, no second frame (components/ui/tile.ts); ticked,
+          // it fills green (over 4:1 against the grey) with the box outlined in on-green.
+          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg p-4 leading-[1.35] font-medium transition-colors duration-120",
+          confirmed
+            ? "bg-green text-on-green [&_.text-ink-2]:text-on-green [&_[data-slot=checkbox]]:border-on-green"
+            : tileClass,
         )}
         htmlFor={`${id}-ok`}
       >

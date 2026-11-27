@@ -19,7 +19,7 @@ type RowState = { kind: "idle" } | { kind: "busy"; action: "approve" | "drop" } 
 export function HandoffApprovals({ items }: { items: PendingHandoff[] }) {
   const t = useTranslations("home.approvals");
   return (
-    <section aria-labelledby="approvals-title" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 shadow-panel sm:p-6">
+    <section data-card aria-labelledby="approvals-title" className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel sm:p-6">
       <div className="flex flex-col gap-1">
         <h2 id="approvals-title" className="text-lg tracking-[-0.02em]">
           {t("title")} <span className="text-ink-3 tabular-nums">{items.length}</span>

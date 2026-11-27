@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-/** Dashed outline on the board: nothing here yet, and what to do about it. */
+/** Dashed outline on the board: nothing here yet, and what to do about it. In a card: a quiet tint, no second frame. */
 export function EmptyState({ title, children, action }: { title: ReactNode; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
+    <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2 in-card:border-0 in-card:bg-sunk/60">
       <p className="text-base font-semibold text-ink">{title}</p>
       {children && <div className="max-w-[34rem] text-sm">{children}</div>}
       {action && <div className="mt-2">{action}</div>}

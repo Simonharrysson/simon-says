@@ -107,7 +107,7 @@ export function BoardFromWebsite({ orgId, website, autoStart = 0 }: { orgId: str
   );
 
   return (
-    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5 shadow-[0_1px_0_rgb(0_0_0/0.02)]">
+    <section aria-labelledby={`${id}-title`} className="flex flex-col gap-4 rounded-lg bg-sunk/60 p-5">
       <div className="flex flex-col gap-1">
         <h3 id={`${id}-title`} className="text-base font-semibold">
           {t("title")}

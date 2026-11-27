@@ -146,7 +146,7 @@ export function FolderStep({
       </div>
 
       {meetingFolder && (
-        <div className="rounded-lg border border-line bg-surface">
+        <div className="rounded-lg bg-sunk/60">
           <FolderRow
             folder={meetingFolder}
             label={meetingFolder.name}
@@ -217,7 +217,7 @@ export function FolderStep({
           </nav>
         )}
 
-        <div className="rounded-lg border border-line bg-surface" aria-busy={loading}>
+        <div className="rounded-lg bg-sunk/60" aria-busy={loading}>
           {error ? (
             <div className="p-3">
               <Banner tone="danger" action={<Button size="sm" variant="secondary" onClick={() => load()}>{t("tryAgain")}</Button>}>
@@ -463,8 +463,9 @@ export function FileStep({
       )}
 
       {list.files.length > 0 && (
-        <div className="rounded-lg border border-line bg-surface">
-          <div className={cn(rowBase, "border-t-0 bg-sunk/60 rounded-t-lg")}>
+        <div className="rounded-lg bg-sunk/60">
+          {/* The select-all header: a darker band over the list's tint, no border. */}
+          <div className={cn(rowBase, "rounded-t-lg border-t-0 bg-[color-mix(in_srgb,var(--ink)_8%,var(--surface))]")}>
             <Checkbox
               id="import-all"
               checked={allTicked}
