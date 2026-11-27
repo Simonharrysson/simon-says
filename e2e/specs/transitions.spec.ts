@@ -68,6 +68,11 @@ test.describe("transitions", () => {
     await rail.getByRole("link", { name: "Föreningar", exact: true }).click();
     await expect(page).toHaveURL(/\/orgs$/);
     await expect.poll(async () => (await motion(page)).vts.some((types) => types.includes("nav"))).toBe(true);
+    // Let Föreningar finish arriving (streamed content, the running view transition) first: a
+    // click during it can be committed together with that work rather than as its own transition.
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    await page.waitForFunction(() => !document.getAnimations().some((a) => String((a.effect as KeyframeEffect | null)?.pseudoElement ?? "").startsWith("::view-transition")));
     await rail.getByRole("link", { name: "Hem", exact: true }).click();
     await expect(page).toHaveURL(/\/hem$/);
     await expect.poll(async () => (await motion(page)).vts.filter((types) => types.includes("nav")).length).toBeGreaterThanOrEqual(2);
