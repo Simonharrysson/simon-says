@@ -13,7 +13,7 @@ export function OrgLogo({ name, src, size = "sm", className }: { name: string; s
   if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- a private, member-checked route; next/image would proxy it
-      <img src={src} alt="" aria-hidden="true" width={px[size]} height={px[size]} decoding="async" className={cn(box, "bg-surface object-cover shadow-panel")} />
+      <img src={src} alt="" aria-hidden="true" width={px[size]} height={px[size]} decoding="async" loading="lazy" className={cn(box, "bg-surface object-cover shadow-panel")} />
     );
   }
   return (

@@ -9,6 +9,8 @@ export type OrgTabId = "moten" | "oversikt" | "installningar";
 
 /** A full prefetch older than this is shown at once and then refreshed (stale-while-revalidate). */
 const FRESH_MS = 10_000;
+/** How long next keeps a full prefetch (staleTimes.static, 5 min): only then is it fetched again. */
+const KEPT_MS = 5 * 60_000;
 
 /**
  * The förening page's tab bar and panels. The tabs stay real links (`?flik=`, shareable and
@@ -50,8 +52,10 @@ export function OrgTabsShell({
   const refreshFor = useRef<OrgTabId | null>(null);
   const warm = (tab: { id: OrgTabId; href: string }) => {
     if (tab.id === active) return;
+    // Another hover while next still holds the prefetch is a cache hit, not new data: keep the
+    // first prefetch's time, so a later click knows how old what it shows is.
     const at = prefetchedAt.current[tab.id];
-    if (at && Date.now() - at < FRESH_MS) return;
+    if (at && Date.now() - at < KEPT_MS) return;
     prefetchedAt.current[tab.id] = Date.now();
     // A full prefetch (the page's data, not only its loading state). `kind` is next's
     // PrefetchKind.FULL; the public type does not list it yet.
