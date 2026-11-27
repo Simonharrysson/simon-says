@@ -14,7 +14,7 @@ import { SettingsSections } from "./SettingsSections";
  * MeetingFolderSetting, FormatCard, VoicesSetting) and links here once a step is done.
  */
 export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record<string, ReactNode>; rotateInvite: ReactNode }) {
-  const { org, actions, boardList, memberControls, rotateInvite, detailsSettings, reopenKomIgang, formatCard, folderSettings, calendarSettings, voiceSettings, summarySettings } = props;
+  const { org, actions, boardList, memberControls, rotateInvite, detailsSettings, reopenKomIgang, formatCard, folderSettings, calendarSettings, voiceSettings, summarySettings, groupSettings } = props;
   const t = useTranslations("org");
   const tasks = useTranslations("tasks.settings");
   const s = useTranslations("org.settings");
@@ -41,10 +41,14 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
             </>
           ),
           styrelsen: (
-            <Panel sunk title={t("boardTitle")} titleId="board-title">
-              <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
-              {boardList?.(memberControls, rotateInvite)}
-            </Panel>
+            <>
+              <Panel sunk title={t("boardTitle")} titleId="board-title">
+                <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
+                {boardList?.(memberControls, rotateInvite)}
+              </Panel>
+              {/* Grupper (0054): opt-in, right under the people it organises. */}
+              {groupSettings}
+            </>
           ),
           moten: (
             <>

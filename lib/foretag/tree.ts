@@ -1,4 +1,13 @@
-// The company tree for the UI (Personer & grupper, Möte för). Pure.
+// The tree of a Företag, or of a förening with groups turned on (0050, 0054), for the UI
+// (Personer & grupper, Grupper, Möte för). Pure.
+
+/**
+ * Does this org follow the tree (meetings per group, the visibility rule, held tasks)? A Företag
+ * always; a förening once an admin turned groups on (0054). Read from a whole orgs row (`*`).
+ */
+export function hasTree(org: { kind?: string | null; groups_enabled?: boolean | null } | null | undefined): boolean {
+  return org?.kind === "foretag" || org?.groups_enabled === true;
+}
 
 export interface GroupRow {
   id: string;

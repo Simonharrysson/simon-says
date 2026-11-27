@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => ({}) }));
 vi.mock("@/lib/db/foretag", () => ({ createTaskHandoffs: vi.fn(), viewerIds: vi.fn() }));
-const { foretagSummaryPeople } = await import("./summary");
+const { foretagSummaryPeople, taskOwners } = await import("./summary");
 
 describe("foretagSummaryPeople", () => {
   const people = [
@@ -30,5 +30,23 @@ describe("foretagSummaryPeople", () => {
   it("keeps the rows' own fields", () => {
     const out = foretagSummaryPeople(people, { groupId: null, attendeeIds: [], viewerIds: ["erik"], personGroups });
     expect(out).toEqual([expect.objectContaining({ id: "p-erik", name: "Erik" })]);
+  });
+});
+
+describe("taskOwners", () => {
+  const people = [{ id: "p-maja", name: "Maja", role: null }];
+  it("a person's edited line goes to approval without our placeholders; an AI row's text is the database's own", () => {
+    const out = taskOwners(
+      [
+        { id: "t1", section: "action", text: "(vem?): Boka lokal (deadline?) – (klart när?).", locked: true, owner: null, owner_person_id: "p-maja" },
+        { id: "t2", section: "action", text: "Maja gör bilden", locked: false, owner: "Maja", owner_person_id: null },
+        { id: "t3", section: "action", text: "Klar sak", owner: null, owner_person_id: "p-maja", done: true },
+      ],
+      people as never,
+    );
+    expect(out).toEqual([
+      { item_id: "t1", person_id: "p-maja", text: "Boka lokal." },
+      { item_id: "t2", person_id: "p-maja" },
+    ]);
   });
 });

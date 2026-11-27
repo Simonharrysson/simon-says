@@ -40,7 +40,10 @@ export function GroupPicker({
   event,
   onChange,
   disabled,
+  space = "foretag",
 }: {
+  /** The wording: a Företag ("Hela företaget") or a förening with groups (0054, "Hela föreningen"). */
+  space?: "foretag" | "forening";
   /** Active groups in tree order, with their depth. */
   groups: { id: string; name: string; depth: number }[];
   initialGroupId: string | null;
@@ -48,7 +51,11 @@ export function GroupPicker({
   onChange: (choice: ForetagChoice) => void;
   disabled?: boolean;
 }) {
-  const t = useTranslations("foretag.picker");
+  const tc = useTranslations("foretag.picker");
+  // A förening's own words where they differ (no colleagues to tick: its Privat möte is the starter's and the admins').
+  const tf = useTranslations("foretag.picker.forening");
+  const t = (key: string, values?: Record<string, string | number>) =>
+    space === "forening" && ["whole", "privateHint", "seesWhole", "seesPrivate"].includes(key) ? tf(key as "whole", values) : tc(key as "whole", values);
   const id = useId();
   const [group, setGroup] = useState<string>(initialGroupId && groups.some((g) => g.id === initialGroupId) ? initialGroupId : WHOLE);
   const [priv, setPriv] = useState(false);

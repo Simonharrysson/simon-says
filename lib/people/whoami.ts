@@ -8,6 +8,8 @@ export interface WhoamiPerson {
   role?: string | null;
   member_user_id: string | null;
   email?: string | null;
+  /** 0054: a place in the group tree; such a name is only an admin's to link (claim_person: 'ask_admin'). */
+  group_id?: string | null;
 }
 
 /** Is the account linked to a person of this förening? */
@@ -22,7 +24,7 @@ export function isLinked(people: Pick<WhoamiPerson, "member_user_id">[], userId:
 export function claimable(people: WhoamiPerson[], myEmail: string | null | undefined): { id: string; name: string; role: string | null }[] {
   const mine = myEmail?.trim().toLowerCase() ?? null;
   return people
-    .filter((p) => p.member_user_id === null && (!p.email?.trim() || p.email.trim().toLowerCase() === mine))
+    .filter((p) => p.member_user_id === null && !p.group_id && (!p.email?.trim() || p.email.trim().toLowerCase() === mine))
     .map((p) => ({ id: p.id, name: p.name, role: p.role ?? null }))
     .sort((a, b) => a.name.localeCompare(b.name, "sv"));
 }
@@ -39,7 +41,8 @@ export type WhoamiError = "upptagen" | "redan" | "namn" | "roll" | "fel";
 
 export function whoamiError(result: string): WhoamiError | null {
   if (result === "ok") return null;
-  if (result === "taken") return "upptagen";
+  // 'ask_admin' (0054): the name has a place in the förening's groups, so an admin links it.
+  if (result === "taken" || result === "ask_admin") return "upptagen";
   if (result === "already") return "redan";
   if (result === "invalid") return "namn";
   return "fel";

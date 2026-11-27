@@ -1,4 +1,5 @@
 import "server-only";
+import { hasTree } from "@/lib/foretag/tree";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ItemRole } from "@/lib/db/types";
 import { docUrl } from "@/lib/ui/meetings";
@@ -67,19 +68,23 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
   const orgIds = [...roleOf.keys()];
   if (!orgIds.length) return { spaces: [], tasks: [], recent: [], brandNew: true, unlinked: [], docs: {}, approvals: [] };
 
-  const { data: orgs, error: e2 } = await db.from("orgs").select("id, name, kind").in("id", orgIds);
+  // `*`: groups_enabled (0054) is read where the database has it.
+  const { data: orgs, error: e2 } = await db.from("orgs").select("*").in("id", orgIds);
   if (e2) fail("orgs", e2);
-  const spaces: HomeSpace[] = ((orgs ?? []) as { id: string; name: string; kind: string }[])
+  const spaces: HomeSpace[] = ((orgs ?? []) as { id: string; name: string; kind: string; groups_enabled?: boolean }[])
     .map((o) => ({
       id: o.id,
       name: o.name,
       kind: o.kind === "privat" ? ("privat" as const) : o.kind === "foretag" ? ("foretag" as const) : ("forening" as const),
       isAdmin: roleOf.get(o.id) === "admin",
+      tree: hasTree(o),
     }))
     .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "sv") : KIND_ORDER[a.kind] - KIND_ORDER[b.kind]));
   // Föreningar and Företag share the note-row path (RLS narrows a Företag to what the user may see).
   const foreningIds = spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => s.id);
-  const foretagIds = spaces.filter((s) => s.kind === "foretag").map((s) => s.id);
+  // Handoffs (0050, 0054): a Företag, a förening with groups, or one that had them (its Privat
+  // möten still hold tasks). RLS returns none for a förening that never had groups.
+  const foretagIds = spaces.filter((s) => s.kind !== "privat").map((s) => s.id);
   const privat = spaces.find((s) => s.kind === "privat") ?? null;
 
   // Finished meetings per space, newest first (a förening's `title` once 0048 is there: select *).

@@ -25,6 +25,8 @@ export interface HomeSpace {
   kind: SpaceKind;
   /** The user is an admin of this förening (may tick anyone's task). */
   isAdmin: boolean;
+  /** Follows the tree (a Företag, or a förening with groups, 0054): tasks may arrive as reviewed handoffs. */
+  tree?: boolean;
 }
 
 export interface HomePerson extends RolePerson {
@@ -212,11 +214,12 @@ export function myForeningTasks(input: {
 }
 
 /**
- * Reviewed Företag tasks for this user (0050 task_handoffs, approved, owner linked to them): only
+ * Reviewed tasks for this user from a Företag or a förening with groups (0050/0054 task_handoffs, approved, owner linked to them): only
  * the reviewed text, the giver and the deadline. No meeting id leaves here (nothing to link).
  */
 export function myHandoffTasks(input: { userId: string; spaces: HomeSpace[]; handoffs: HandoffRow[]; people: HomePerson[] }): MyTask[] {
-  const spaces = new Map(input.spaces.filter((s) => s.kind === "foretag").map((s) => [s.id, s]));
+  // A Företag, or a förening with groups (0054): the same handoffs.
+  const spaces = new Map(input.spaces.filter((s) => s.kind === "foretag" || s.kind === "forening").map((s) => [s.id, s]));
   const out: MyTask[] = [];
   for (const h of input.handoffs) {
     const space = spaces.get(h.org_id);
@@ -227,7 +230,7 @@ export function myHandoffTasks(input: { userId: string; spaces: HomeSpace[]; han
       kind: "handoff",
       spaceId: space.id,
       spaceName: space.name,
-      spaceKind: "foretag",
+      spaceKind: space.kind,
       meetingId: "",
       itemId: h.id,
       text: trimmed(h.text)!,
