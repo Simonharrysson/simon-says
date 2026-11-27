@@ -6,6 +6,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { isUuid } from "@/lib/db/ids";
 import { archiveGroup, createForetag, placeMember, placePerson, saveGroup } from "@/lib/db/foretag";
 import { canCreateForetag } from "@/lib/foretag/gate";
+import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Server actions for the Företag pages (0050). Everything but the creation runs as the signed-in
@@ -52,6 +53,8 @@ export async function saveGroupAction(form: FormData): Promise<void> {
     parentId: isUuid(parent) ? parent : null,
   });
   if (!ok) redirect(back(orgId, "grupp"));
+  // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -60,6 +63,8 @@ export async function archiveGroupAction(form: FormData): Promise<void> {
   const groupId = field(form, "groupId");
   const db = await createSupabaseServerClient();
   if (!isUuid(groupId) || !(await archiveGroup(db, groupId))) redirect(back(orgId, "grupp-arkiv"));
+  // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -77,6 +82,8 @@ export async function placeAction(form: FormData): Promise<void> {
       ? await placeMember(db, orgId, userId, target, field(form, "name"))
       : false;
   if (!ok) redirect(back(orgId, "placering"));
+  // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 

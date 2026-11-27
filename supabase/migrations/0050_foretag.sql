@@ -3,7 +3,8 @@
 --
 -- The rule (Simon 2026-11-27): you see the meetings of your own group, plus every meeting of any
 -- group deeper in the tree than your own level. Company admins see everything. A meeting for
--- Hela företaget (no group) is seen by every member. The starter and the attendees always see the
+-- Hela företaget (no group) is seen by every placed member; an unplaced account sees only what it
+-- started or attended. The starter and the attendees always see the
 -- meeting. A "Privat möte" is seen only by its attendees (and starter) and admins.
 -- Task delivery across visibility: note_items stay readable by the meeting's viewers only. A task
 -- whose owner can't see the meeting is copied to task_handoffs as pending; the starter or an admin
@@ -106,6 +107,26 @@ create trigger groups_redepth_children
 alter table public.people add column group_id uuid references public.groups (id) on delete set null;
 create index people_group_idx on public.people (group_id) where group_id is not null;
 
+-- A person's group is always one of their own company's (whoever writes the row).
+create function public.people_group_same_org()
+returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if new.group_id is not null and not exists (
+    select 1 from public.groups g where g.id = new.group_id and g.org_id = new.org_id
+  ) then
+    raise exception 'people: the group is not in this company' using errcode = '22023';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.people_group_same_org() from public, anon, authenticated;
+
+create trigger people_group_same_org
+  before insert or update of group_id, org_id on public.people
+  for each row execute function public.people_group_same_org();
+
 alter table public.meetings
   -- No action, not restrict: a company delete cascades to both groups and meetings in one statement.
   add column group_id uuid references public.groups (id),
@@ -147,8 +168,41 @@ create policy groups_select on public.groups for select to authenticated
 -- ---------------------------------------------------------------------------------------------
 -- The visibility predicate
 
--- The core, for any user: the same answer RLS gives that user (the server asks it for Doc shares
--- and summary recipients).
+-- The Företag rule itself, for a member of a Företag (the callers checked both). Unplaced
+-- accounts (no person row at a node) see only what they started or attended (Simon 2026-11-27).
+create function public.foretag_rule(
+  p_user uuid,
+  p_org uuid,
+  p_group uuid,
+  p_private boolean,
+  p_started_by uuid,
+  p_attended boolean,
+  p_admin boolean
+)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select case
+    when p_admin then true
+    when p_started_by = p_user or p_attended then true
+    when p_private then false
+    else exists (
+      select 1
+      from public.people p
+      join public.groups mine on mine.id = p.group_id
+      where p.org_id = p_org and p.member_user_id = p_user
+        and (
+          p_group is null
+          or mine.id = p_group
+          or (select theirs.depth from public.groups theirs where theirs.id = p_group) > mine.depth
+        )
+    )
+  end;
+$$;
+revoke all on function public.foretag_rule(uuid, uuid, uuid, boolean, uuid, boolean, boolean) from public, anon, authenticated;
+
+-- The same answer for any user and meeting fields (the server's Doc share list before the row
+-- exists): membership, then the org's kind, then the rule.
 create function public.foretag_can_see_parts(
   p_user uuid,
   p_org uuid,
@@ -160,37 +214,37 @@ create function public.foretag_can_see_parts(
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
-  select case
-    when p_user is null then false
-    when not exists (select 1 from public.org_members m where m.org_id = p_org and m.user_id = p_user) then false
-    when coalesce((select o.kind from public.orgs o where o.id = p_org), 'forening') <> 'foretag' then true
-    when exists (select 1 from public.org_members m where m.org_id = p_org and m.user_id = p_user and m.role = 'admin') then true
-    when p_started_by = p_user or p_attended then true
-    when p_private then false
-    when p_group is null then true
-    else exists (
-      select 1
-      from public.people p
-      join public.groups mine on mine.id = p.group_id
-      join public.groups theirs on theirs.id = p_group
-      where p.org_id = p_org and p.member_user_id = p_user
-        and (mine.id = theirs.id or theirs.depth > mine.depth)
-    )
-  end;
+  select coalesce((
+    select o.kind <> 'foretag'
+      or public.foretag_rule(p_user, p_org, p_group, p_private, p_started_by, p_attended, m.role = 'admin')
+    from public.org_members m
+    join public.orgs o on o.id = m.org_id
+    where m.org_id = p_org and m.user_id = p_user
+  ), false);
 $$;
 revoke all on function public.foretag_can_see_parts(uuid, uuid, uuid, boolean, uuid, boolean) from public, anon, authenticated;
 
+-- What RLS asks per row. One join for a förening or Privat meeting (meeting → membership → kind,
+-- as 0002's is_meeting_member plus the org's primary key); only a Företag row runs the rule.
 create function public.foretag_can_see(p_user uuid, p_meeting_id uuid)
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
-  select coalesce((
-    select public.foretag_can_see_parts(
-      p_user, mt.org_id, mt.group_id, mt.private, mt.started_by,
-      exists (select 1 from public.meeting_attendees a where a.meeting_id = mt.id and a.user_id = p_user)
-    )
-    from public.meetings mt where mt.id = p_meeting_id
-  ), false);
+  select exists (
+    select 1
+    from public.meetings mt
+    join public.org_members m on m.org_id = mt.org_id and m.user_id = p_user
+    join public.orgs o on o.id = mt.org_id
+    where mt.id = p_meeting_id
+      and (
+        o.kind <> 'foretag'
+        or public.foretag_rule(
+          p_user, mt.org_id, mt.group_id, mt.private, mt.started_by,
+          exists (select 1 from public.meeting_attendees a where a.meeting_id = mt.id and a.user_id = p_user),
+          m.role = 'admin'
+        )
+      )
+  );
 $$;
 revoke all on function public.foretag_can_see(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.foretag_can_see(uuid, uuid) to service_role;
@@ -462,6 +516,24 @@ $$;
 revoke all on function public.customer_for_domain(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.customer_for_domain(uuid, text, text) to service_role;
 
+-- contexts (0045): in a Företag a customer is read only by admins and by members who can see at
+-- least one meeting with it (a customer's name can tell what a meeting was about), and renamed by
+-- admins only. Föreningar have no contexts; Privat keeps 0045's rules.
+drop policy contexts_select on public.contexts;
+create policy contexts_select on public.contexts for select to authenticated
+  using (
+    public.is_org_member(org_id)
+    and (
+      not public.org_is_foretag(org_id)
+      or public.is_org_admin(org_id)
+      or exists (select 1 from public.meetings mt where mt.context_id = contexts.id and public.can_see_meeting(mt.id))
+    )
+  );
+drop policy contexts_update on public.contexts;
+create policy contexts_update on public.contexts for update to authenticated
+  using (public.is_org_member(org_id) and (not public.org_is_foretag(org_id) or public.is_org_admin(org_id)))
+  with check (public.is_org_member(org_id) and (not public.org_is_foretag(org_id) or public.is_org_admin(org_id)));
+
 -- contexts (0045): deleting one deletes its meetings (cascade). A Företag customer is never
 -- deleted by a client: it would take meetings the member may not even see with it.
 drop policy contexts_delete on public.contexts;
@@ -528,9 +600,12 @@ create policy task_handoffs_select on public.task_handoffs for select to authent
     )
   );
 
--- After a Företag meeting: every open task whose owner is an account that can't see the meeting
--- becomes a pending handoff (once per task). Returns the number of new rows. Service role.
-create function public.create_task_handoffs(p_meeting_id uuid)
+-- After a Företag meeting (and again when people move): every open task whose owner is an account
+-- that can't see the meeting becomes a pending handoff (once per task). The server resolves owners
+-- (the person link, else the owner text by name or role: lib/people/roles.ts) and passes
+-- [{ "item_id", "person_id" }]. A pending handoff whose owner can now see the meeting is dropped
+-- (they read the task in the meeting). Returns the number of new rows. Service role.
+create function public.create_task_handoffs(p_meeting_id uuid, p_owners jsonb)
 returns int
 language plpgsql volatile security definer set search_path = ''
 as $$
@@ -542,19 +617,24 @@ begin
     (select s.name from public.people s where s.org_id = mt.org_id and s.member_user_id = mt.started_by limit 1)
   from public.meetings mt
   join public.orgs o on o.id = mt.org_id and o.kind = 'foretag'
-  join public.note_items n on n.meeting_id = mt.id
-  join public.people p on p.id = n.owner_person_id and p.member_user_id is not null
-  where mt.id = p_meeting_id
+  join jsonb_to_recordset(coalesce(p_owners, '[]'::jsonb)) as w(item_id text, person_id uuid) on true
+  join public.note_items n on n.meeting_id = mt.id and n.id = w.item_id
+  join public.people p on p.id = w.person_id and p.org_id = mt.org_id and p.member_user_id is not null
+  where mt.id = p_meeting_id and mt.status = 'done'
     and n.section = 'action' and not n.deleted_by_human and not coalesce(n.done, false)
     and length(btrim(n.text)) between 1 and 500
     and not public.foretag_can_see(p.member_user_id, mt.id)
   on conflict (meeting_id, item_id) do nothing;
   get diagnostics v_n = row_count;
+  update public.task_handoffs h set status = 'dropped', decided_at = now()
+  from public.people p
+  where h.meeting_id = p_meeting_id and h.status = 'pending' and p.id = h.owner_person_id
+    and p.member_user_id is not null and public.foretag_can_see(p.member_user_id, p_meeting_id);
   return v_n;
 end;
 $$;
-revoke all on function public.create_task_handoffs(uuid) from public, anon, authenticated;
-grant execute on function public.create_task_handoffs(uuid) to service_role;
+revoke all on function public.create_task_handoffs(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.create_task_handoffs(uuid, jsonb) to service_role;
 
 -- Approve (with the reviewed wording) or drop a pending handoff. Approvers only.
 create function public.approve_task_handoff(p_id uuid, p_text text)
