@@ -154,15 +154,14 @@ export function MeetingEnded({
             {tp("toSummary")}
           </ButtonLink>
         )}
-        {!privat && meetingHref && !finalizing ? (
+        {!privat && meetingHref && !finalizing && (
           <ButtonLink href={meetingHref} variant={docUrl ? "secondary" : "primary"} size="lg">
             {t("toMeeting")}
           </ButtonLink>
-        ) : (
-          <ButtonLink href={orgHref} variant="ghost" size="lg">
-            {privat ? privat.backLabel : t("backToOrg")}
-          </ButtonLink>
         )}
+        <ButtonLink href={orgHref} variant="ghost" size="lg">
+          {privat ? privat.backLabel : t("backToOrg")}
+        </ButtonLink>
       </div>
     </section>
   );

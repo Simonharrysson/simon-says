@@ -4,7 +4,6 @@ import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
-import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
@@ -52,8 +51,10 @@ export function AccountView({
         <form action={saveLocale} className="flex flex-col gap-4">
           <p className="text-ink-2 max-w-[68ch]">{t("languageIntro")}</p>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="account-locale">{t("languageLabel")}</Label>
-            <LanguageSelect id="account-locale" defaultValue={locale} savingLabel={t("languageSaving")} />
+            <span id="account-locale" className="text-sm font-medium">
+              {t("languageLabel")}
+            </span>
+            <LanguageSelect labelId="account-locale" current={locale} savingLabel={t("languageSaving")} />
           </div>
           {localeFailed && (
             <Banner tone="warning" live={false}>

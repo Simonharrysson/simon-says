@@ -25,12 +25,14 @@ export function CopyButton({
 }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   useEffect(() => {
-    if (state === "idle") return;
+    // A failure stays until the next try; only "Kopierad" goes back by itself.
+    if (state !== "copied") return;
     const timer = setTimeout(() => setState("idle"), 2400);
     return () => clearTimeout(timer);
   }, [state]);
 
   async function copy() {
+    setState("idle");
     try {
       await navigator.clipboard.writeText(value);
       setState("copied");
