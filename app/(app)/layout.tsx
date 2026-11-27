@@ -20,10 +20,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <SiteHeader homeHref="/hem" nav={<AppNav email={user.email ?? ""} signOut={signOut} />} />
-      {/* Link navigations (AppLink tags them "nav") crossfade the page under a still header;
-          tab switches ("tab") fade the panel. Refreshes, server actions and back/forward don't
+      {/* Link navigations (AppLink tags them "nav") crossfade the page under a still header.
+          Tab switches ("tab") don't animate here: their panel swap is a sync render, so
+          OrgTabsShell fades the panel with CSS. Refreshes, server actions and back/forward don't
           animate. CSS: app/globals.css "View transitions". */}
-      <ViewTransition default="none" update={{ nav: "page-nav", tab: "page-tab", default: "none" }}>
+      <ViewTransition default="none" update={{ nav: "page-nav", default: "none" }}>
         <main id="innehall" className="flex-1 pt-8 pb-16">
           {children}
         </main>

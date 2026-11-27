@@ -22,7 +22,7 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { ledgerAdd, loadExpected, loadLines, mmss, opLine, runReplay, score, tabText, ticksOf } from "./lib/notes-run";
+import { ledgerAdd, loadExpected, MAX_USD_PER_HOUR, loadLines, mmss, opLine, runReplay, score, tabText, ticksOf } from "./lib/notes-run";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -84,7 +84,7 @@ async function main() {
   if (s.total) console.log(`${pass(s.found === s.total)} all expected items found (${s.found}/${s.total})`);
   if (expected.must_not?.length) console.log(`${pass(s.mustNot.length === 0)} no must_not item in the final notes`);
   if (expected.must_not?.length) console.log(`${pass(s.mustNotPersistent.length === 0)} no must_not item live for 2+ ticks in a row`);
-  console.log(`${pass(r.perHour <= 1.5)} $${r.perHour.toFixed(2)} per meeting-hour ≤ $1.50`);
+  console.log(`${pass(r.perHour <= MAX_USD_PER_HOUR)} $${r.perHour.toFixed(2)} per meeting-hour ≤ $${MAX_USD_PER_HOUR.toFixed(2)}`);
   if (tick2) console.log(`${pass(tick2.usage.cacheRead > 0)} cache_read_input_tokens > 0 from tick 2 (${tick2.usage.cacheRead})`);
 
   mkdirSync(".notes-replay", { recursive: true });

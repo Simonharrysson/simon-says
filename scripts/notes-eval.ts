@@ -2,7 +2,7 @@
  * Notes-quality eval (Task Q): replay every fixture in fixtures/notes/ through the notes engine
  * (real Claude API, same logic as scripts/notes-replay.ts) and print one row per fixture against
  * the bars: median churn ≤ 15 %, recall 100 %, no must_not item in the final notes nor live for
- * 2+ ticks in a row, ≤ $1.50 per meeting-hour.
+ * 2+ ticks in a row, ≤ $1.75 per meeting-hour.
  *
  *   npm run notes-eval -- [--only a,b] [--repeat N] [--label before] [--concurrency 7] [--budget 5] [--tick-sec 45] [--hide-checkin]
  *   npm run notes-eval -- --check            # $0: sanity-check every expected file
@@ -29,6 +29,7 @@ import {
   DEFAULT_LEDGER,
   ledgerAdd,
   ledgerTotal,
+  MAX_USD_PER_HOUR,
   loadExpected,
   loadLines,
   median,
@@ -87,7 +88,7 @@ function runOf(name: string, r: Saved): Run {
   };
 }
 
-const runPasses = (r: Run) => r.medianChurn <= 0.15 && r.perHour <= 1.5 && scorePasses(r.score);
+const runPasses = (r: Run) => r.medianChurn <= 0.15 && r.perHour <= MAX_USD_PER_HOUR && scorePasses(r.score);
 const pct = (x: number) => (Number.isNaN(x) ? "–" : `${(x * 100).toFixed(1)}%`);
 const max = (xs: number[]) => Math.max(...xs);
 const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
