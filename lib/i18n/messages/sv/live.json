@@ -149,6 +149,18 @@
       "limit": {
         "title": "Månadens tid är slut",
         "text": "Föreningen har använt sina 20 timmar den här månaden. Tiden fylls på den 1:a."
+      },
+      "call-no-audio": {
+        "title": "Vi får inget ljud från fliken",
+        "text": "Rutan Dela flikljud var inte ibockad. Tryck Välj mötesfliken igen och bocka i den längst ner i rutan innan du trycker Dela."
+      },
+      "call-not-tab": {
+        "title": "Välj en flik, inte ett fönster",
+        "text": "Ljud går bara att dela från en Chrome-flik. Tryck Välj mötesfliken igen, välj Chrome-flik överst och sedan fliken med mötet."
+      },
+      "call-failed": {
+        "title": "Det gick inte att dela fliken",
+        "text": "Försök igen. Hjälper det inte: ladda om sidan."
       }
     },
     "title": "Innan ni börjar",
@@ -261,5 +273,69 @@
     "supersededTitle": "Mötet körs i en annan flik",
     "supersededText": "Mötet fortsatte i en annan flik eller på en annan dator, så den här fliken slutade lyssna. Du kan stänga den.",
     "backToOrg": "Tillbaka till föreningen"
+  },
+  "call": {
+    "question": "Var hålls mötet?",
+    "room": "Här i rummet",
+    "call": "I ett videosamtal (Google Meet m.fl.)",
+    "everyoneCall": "Alla i samtalet vet att mötet transkriberas och kan be om paus",
+    "ownCall": "Jag spelar in samtalet jag själv deltar i",
+    "ownCallHint": "Ingen bot ansluter och inget syns för de andra i samtalet. Det är du som spelar in.",
+    "step1": "Öppna mötet i en annan flik i Chrome eller Edge. Använd hörlurar, så hörs de andra bara en gång.",
+    "step2": "Tryck Välj mötesfliken här nedan.",
+    "step3": "Välj fliken med mötet · bocka i Dela flikljud · tryck Dela.",
+    "share": "Välj mötesfliken",
+    "shareAgain": "Välj en annan flik",
+    "sharing": "Väntar på att du väljer en flik…",
+    "you": "Du",
+    "theCall": "Samtalet",
+    "heard": "Hörs",
+    "silent": "Tyst än",
+    "levelOf": "Ljudnivå: {who}",
+    "bothHeard": "Vi hör både dig och samtalet.",
+    "callQuiet": "Hör inget från samtalet än. Är det tyst där just nu går det bra att starta ändå.",
+    "headphones": "Inga hörlurar? Då hör mikrofonen även högtalarna och de andra kan transkriberas två gånger.",
+    "shareFirst": "Välj mötesfliken först.",
+    "illustration": "Så ser Chromes delningsruta ut",
+    "dlgTitle": "Välj vad du vill dela",
+    "dlgTab": "Chrome-flik",
+    "dlgWindow": "Fönster",
+    "dlgScreen": "Hela skärmen",
+    "dlgMeet": "Möte – Google Meet",
+    "dlgOther": "Inkorg – Gmail",
+    "dlgAudio": "Dela flikljud",
+    "dlgCancel": "Avbryt",
+    "dlgShare": "Dela",
+    "errors": {
+      "no-audio": {
+        "title": "Vi får inget ljud från fliken",
+        "text": "Rutan Dela flikljud var inte ibockad. Tryck Välj mötesfliken igen och bocka i den längst ner i rutan innan du trycker Dela."
+      },
+      "not-tab": {
+        "title": "Välj en flik, inte ett fönster",
+        "text": "Ljud går bara att dela från en Chrome-flik. Tryck Välj mötesfliken igen, välj Chrome-flik överst och sedan fliken med mötet."
+      },
+      "failed": {
+        "title": "Det gick inte att dela fliken",
+        "text": "Försök igen. Hjälper det inte: ladda om sidan."
+      },
+      "unsupported": {
+        "title": "Den här webbläsaren kan inte spela in ljud från en flik",
+        "text": "Öppna Simon Says i Chrome eller Edge på datorn för att få med de andra i samtalet. Du kan också spela in med bara mikrofonen; då hörs de andra bara om samtalet går ut genom högtalarna."
+      },
+      "device": {
+        "title": "Telefoner kan inte dela en flik",
+        "text": "Öppna Simon Says i Chrome eller Edge på datorn. Du kan också spela in med bara mikrofonen; då hörs de andra bara om samtalet går ut genom högtalaren."
+      }
+    },
+    "micOnly": "Spela in med bara mikrofonen",
+    "micOnlyOn": "Bara din mikrofon spelas in. Låt samtalet gå ut genom högtalarna.",
+    "lostTitle": "Mötesfliken delas inte längre",
+    "lostPaused": "Inspelningen är pausad. Dela fliken igen för att fortsätta.",
+    "lostLive": "Bara din mikrofon spelas in nu. Dela fliken igen för att få med de andra.",
+    "lostNoAudio": "Rutan Dela flikljud var inte ibockad. Försök igen och bocka i den.",
+    "reshare": "Dela fliken igen",
+    "resumeHint": "Mötet hölls i ett videosamtal: när du trycker Fortsätt mötet väljer du mötesfliken igen och bockar i Dela flikljud.",
+    "micOnlyFirst": "Välj Spela in med bara mikrofonen, eller öppna sidan i Chrome eller Edge."
   }
 }

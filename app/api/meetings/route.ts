@@ -42,9 +42,13 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
   const priv = opt("private");
   if (priv !== undefined && typeof priv !== "boolean") return null;
   // Företag: the colleagues the starter confirmed as attending (checked against the event's guests).
+  // A video call (0058): the call tab + mic, consented to as such. Absent: the room.
+  const captureSource = opt("captureSource");
+  if (captureSource !== undefined && captureSource !== "room" && captureSource !== "call") return null;
   const attendeeIds = opt("attendeeIds");
   if (attendeeIds !== undefined && (!Array.isArray(attendeeIds) || attendeeIds.length > 100 || !attendeeIds.every((a) => typeof a === "string" && isUuid(a)))) return null;
   return {
+    ...(captureSource === "call" ? { captureSource: "call" as const } : {}),
     ...(attendeeIds !== undefined ? { attendeeIds: attendeeIds as string[] } : {}),
     ...(groupId !== undefined ? { groupId: groupId as string | null } : {}),
     ...(priv !== undefined ? { private: priv as boolean } : {}),

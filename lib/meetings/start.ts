@@ -42,6 +42,8 @@ export type { StandardKind } from "@/lib/formats/standard";
 import type { StandardKind } from "@/lib/formats/standard";
 
 export interface StartOptions {
+  /** Recorded from a video call (0058; the consent differs). Absent: the room. */
+  captureSource?: "room" | "call";
   /** Agenda mode: the förening's own agenda Doc (picked by the starter). Absent: a new Doc (fallback). */
   agendaDocId?: string | null;
   /** A format_profiles row of this org (the start screen's override). */
@@ -195,6 +197,8 @@ export async function startMeeting(
   if ((await myRole(supabase, orgId)) === null) {
     return failed("not_member", 403, "Du är inte medlem i föreningen.");
   }
+  // Kept apart: the Privat and Företag branches below replace `opts`.
+  const captureSource = opts.captureSource === "call" ? "call" : "room";
   // Privat (0045): a context of this space is required; a new Doc only when asked for (Enkel), else none.
   const privat = isPrivat(org) ? await privatContext(orgId, opts.contextId) : null;
   if (isPrivat(org) && !privat) return failed("bad_context", 400, "Välj vad inspelningen gäller och försök igen.");
@@ -331,10 +335,13 @@ export async function startMeeting(
   };
   // 0030: Simon Says only ever shares a Doc it created.
   const appCreated = !agendaMode || opts.agendaCreatedByApp === true || prepared !== null;
-  let { error: insertError } = await supabaseAdmin().from("meetings").insert({ ...row, app_created_doc: appCreated });
+  // capture_source only when it isn't the default, so a database without 0058 still takes room meetings.
+  let { error: insertError } = await supabaseAdmin()
+    .from("meetings")
+    .insert({ ...row, app_created_doc: appCreated, ...(captureSource === "call" ? { capture_source: captureSource } : {}) });
   // A database without 0030 (deploy order): the row without the column.
   if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703")) {
-    console.warn("meetings: app_created_doc missing (0030 not applied)");
+    console.warn("meetings: app_created_doc or capture_source missing (0030/0058 not applied)");
     ({ error: insertError } = await supabaseAdmin().from("meetings").insert(row));
   }
   // A refused start never leaves a new, empty Doc in the förening's folder (an agenda Doc is theirs).

@@ -149,6 +149,18 @@
       "limit": {
         "title": "This month's time is used up",
         "text": "The association has used its 20 hours this month. The time is topped up on the 1st."
+      },
+      "call-no-audio": {
+        "title": "No sound from the tab",
+        "text": "Also share tab audio wasn't ticked. Press Choose the meeting tab again and tick it at the bottom of the dialog before you press Share."
+      },
+      "call-not-tab": {
+        "title": "Pick a tab, not a window",
+        "text": "Sound can only be shared from a Chrome tab. Press Choose the meeting tab again, pick Chrome tab at the top, then the meeting's tab."
+      },
+      "call-failed": {
+        "title": "Couldn't share the tab",
+        "text": "Try again. If that doesn't help, reload the page."
       }
     },
     "title": "Before you begin",
@@ -261,5 +273,69 @@
     "supersededTitle": "The meeting is running in another tab",
     "supersededText": "The meeting continued in another tab or on another computer, so this tab stopped listening. You can close it.",
     "backToOrg": "Back to the association"
+  },
+  "call": {
+    "question": "Where is the meeting?",
+    "room": "Here in the room",
+    "call": "In a video call (Google Meet etc.)",
+    "everyoneCall": "Everyone in the call knows the meeting is transcribed and can ask for a pause",
+    "ownCall": "I'm recording a call I take part in myself",
+    "ownCallHint": "No bot joins and nothing shows to the others in the call. You are the one recording.",
+    "step1": "Open the meeting in another tab in Chrome or Edge. Wear headphones, so the others are only heard once.",
+    "step2": "Press Choose the meeting tab below.",
+    "step3": "Pick the tab with the meeting · tick Also share tab audio · press Share.",
+    "share": "Choose the meeting tab",
+    "shareAgain": "Choose another tab",
+    "sharing": "Waiting for you to pick a tab…",
+    "you": "You",
+    "theCall": "The call",
+    "heard": "Heard",
+    "silent": "Silent so far",
+    "levelOf": "Sound level: {who}",
+    "bothHeard": "We hear both you and the call.",
+    "callQuiet": "Nothing from the call yet. If it's just quiet there, you can still start.",
+    "headphones": "No headphones? Then the mic also hears the speakers and the others may be transcribed twice.",
+    "shareFirst": "Choose the meeting tab first.",
+    "illustration": "What Chrome's share dialog looks like",
+    "dlgTitle": "Choose what to share",
+    "dlgTab": "Chrome tab",
+    "dlgWindow": "Window",
+    "dlgScreen": "Entire screen",
+    "dlgMeet": "Möte – Google Meet",
+    "dlgOther": "Inbox – Gmail",
+    "dlgAudio": "Also share tab audio",
+    "dlgCancel": "Cancel",
+    "dlgShare": "Share",
+    "errors": {
+      "no-audio": {
+        "title": "No sound from the tab",
+        "text": "Also share tab audio wasn't ticked. Press Choose the meeting tab again and tick it at the bottom of the dialog before you press Share."
+      },
+      "not-tab": {
+        "title": "Pick a tab, not a window",
+        "text": "Sound can only be shared from a Chrome tab. Press Choose the meeting tab again, pick Chrome tab at the top, then the meeting's tab."
+      },
+      "failed": {
+        "title": "Couldn't share the tab",
+        "text": "Try again. If that doesn't help, reload the page."
+      },
+      "unsupported": {
+        "title": "This browser can't record sound from a tab",
+        "text": "Open Simon Says in Chrome or Edge on a computer to include the others in the call. You can also record with the mic only; the others are then only heard if the call plays through the speakers."
+      },
+      "device": {
+        "title": "Phones can't share a tab",
+        "text": "Open Simon Says in Chrome or Edge on a computer. You can also record with the mic only; the others are then only heard if the call plays through the speaker."
+      }
+    },
+    "micOnly": "Record with the mic only",
+    "micOnlyOn": "Only your mic is recorded. Let the call play through the speakers.",
+    "lostTitle": "The meeting tab is no longer shared",
+    "lostPaused": "Recording is paused. Share the tab again to continue.",
+    "lostLive": "Only your mic is recorded now. Share the tab again to include the others.",
+    "lostNoAudio": "Also share tab audio wasn't ticked. Try again and tick it.",
+    "reshare": "Share the tab again",
+    "resumeHint": "This meeting is a video call: when you press Continue, pick the meeting tab again and tick Also share tab audio.",
+    "micOnlyFirst": "Choose Record with the mic only, or open the page in Chrome or Edge."
   }
 }
