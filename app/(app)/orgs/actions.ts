@@ -6,9 +6,14 @@ import { redirect } from "next/navigation";
 import { getEnv } from "@/lib/env";
 import { isAdminEmail } from "@/lib/testmeeting/admin";
 import { isUuid } from "@/lib/db/ids";
+import { validName } from "@/lib/names/validate";
+import { afterJoinPath, welcomePath, whoamiError } from "@/lib/people/whoami";
 import {
   addPerson,
+  addSelfPerson,
+  claimPerson,
   createOrg,
+  isLinkedIn,
   deleteMeeting,
   deleteOrg,
   deletePerson,
@@ -60,18 +65,42 @@ export async function createOrgAction(form: FormData): Promise<void> {
 export async function joinOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const orgId = await joinOrg(db, field(form, "code"));
-  if (orgId) {
+  if (!orgId) redirect("/orgs?fel=inbjudan");
+  const { data } = await db.auth.getUser();
+  const user = data.user;
+  if (user?.email) {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
-    const { data } = await db.auth.getUser();
-    const user = data.user;
-    if (user?.email) {
-      const member = { id: user.id, email: user.email };
-      after(() =>
-        shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
-      );
-    }
+    const member = { id: user.id, email: user.email };
+    after(() =>
+      shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
+    );
   }
-  redirect(orgId ? `/orgs/${orgId}` : "/orgs?fel=inbjudan");
+  // The join trigger (0035) already linked them when an admin wrote their e-mail at their name;
+  // otherwise "Vem av dessa är du?" (0051).
+  const linked = user ? await isLinkedIn(db, orgId, user.id) : false;
+  redirect(afterJoinPath(orgId, linked));
+}
+
+/** "Vem av dessa är du?": the member taps their name (0051 checks: a member, an unlinked person, only themselves). */
+export async function claimPersonAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const personId = field(form, "personId");
+  const db = await createSupabaseServerClient();
+  const error = whoamiError(isUuid(personId) ? await claimPerson(db, personId) : "forbidden");
+  redirect(error ? `/orgs/${orgId}/vem?fel=${error}` : welcomePath(orgId));
+}
+
+/** "Jag finns inte med": the member adds their own name (+ optional role), linked to them. */
+export async function addSelfAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const name = validName(field(form, "name"));
+  if (!name) redirect(`/orgs/${orgId}/vem?fel=namn&ny=1`);
+  const rawRole = field(form, "role");
+  const role = validRole(rawRole);
+  if (rawRole.trim() !== "" && role === null) redirect(`/orgs/${orgId}/vem?fel=roll&ny=1`);
+  const db = await createSupabaseServerClient();
+  const error = whoamiError(await addSelfPerson(db, orgId, name, role));
+  redirect(error ? `/orgs/${orgId}/vem?fel=${error}&ny=1` : welcomePath(orgId));
 }
 
 export async function updateOrgAction(form: FormData): Promise<void> {

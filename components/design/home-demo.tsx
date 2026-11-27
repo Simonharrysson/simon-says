@@ -86,7 +86,7 @@ export const homeRender: Record<string, () => React.ReactNode> = {
       />,
     ),
   "home-done": () => page(<HomeView tasks={[...tasks, ...doneTasks]} recent={recent} unlinked={[]} docs={docs} today={today} save={save} initialShowDone />),
-  "home-empty": () => page(<HomeView tasks={[]} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }]} email="anna.berg@example.com" docs={{}} today={today} save={save} />),
+  "home-empty": () => page(<HomeView tasks={[]} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }]} docs={{}} today={today} save={save} />),
   "home-all-done": () => page(<HomeView tasks={doneTasks} recent={[]} unlinked={[]} docs={{}} today={today} save={save} />),
   "org-meeting": () =>
     page(
