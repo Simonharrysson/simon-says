@@ -31,6 +31,11 @@ const SPEAKERS_POLL_MS = 15_000;
 const TASKS_POLL_MS = 20_000;
 /** Avsluta waits at most this long for the tasks before asking the usual question (never blocks). */
 const TASKS_ASK_TIMEOUT_MS = 5000;
+/**
+ * "Fråga inte igen" / Ångra: a write the admin asked for. Not the ask's 5 s: aborting a slow but
+ * successful write showed "Det gick inte" while the setting had changed (a cold route took 5.5 s).
+ */
+const TASK_SETTING_TIMEOUT_MS = 20_000;
 /** POST /end must answer within this long, or the page offers a retry (C6). */
 const END_TIMEOUT_MS = 15_000;
 
@@ -658,7 +663,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ on, meetingId }),
-          signal: AbortSignal.timeout(TASKS_ASK_TIMEOUT_MS),
+          signal: AbortSignal.timeout(TASK_SETTING_TIMEOUT_MS),
         });
         return res.ok;
       } catch {
