@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parentChoices, seenByGroups, treeRows, type GroupRow } from "./tree";
+import { hasTree, parentChoices, seenByGroups, treeRows, type GroupRow } from "./tree";
 
 const g = (id: string, parent: string | null, depth: number, position = 0, archived = false): GroupRow => ({
   id,
@@ -31,5 +31,18 @@ describe("parentChoices", () => {
 describe("seenByGroups", () => {
   it("the groups above a group's level", () => {
     expect(seenByGroups(groups, groups[0]).map((x) => x.id).sort()).toEqual(["Ledning", "VD"]);
+  });
+});
+
+describe("hasTree", () => {
+  it("a Företag always; a förening only with groups turned on; never Privat", () => {
+    expect(hasTree({ kind: "foretag" })).toBe(true);
+    expect(hasTree({ kind: "forening", groups_enabled: true })).toBe(true);
+    expect(hasTree({ kind: "forening", groups_enabled: false })).toBe(false);
+    // A row read before 0054 (no column) or before 0045 (no kind): a plain förening.
+    expect(hasTree({ kind: "forening" })).toBe(false);
+    expect(hasTree({})).toBe(false);
+    expect(hasTree(null)).toBe(false);
+    expect(hasTree({ kind: "privat" })).toBe(false);
   });
 });

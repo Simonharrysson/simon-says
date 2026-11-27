@@ -150,6 +150,9 @@
     },
     "kundnamn": {
       "text": "Kundens namn kunde inte sparas. Det kan redan finnas en kund med det namnet."
+    },
+    "grupper": {
+      "text": "Grupperna kunde inte slås på eller av. Försök igen."
     }
   }
 }

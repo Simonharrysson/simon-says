@@ -20,7 +20,7 @@ import { suggestedContext } from "@/lib/privat/contexts";
 import { listContexts } from "@/lib/privat/contexts-db";
 import { isPrivat, privatHref } from "@/lib/privat/space";
 import { listGroups } from "@/lib/db/foretag";
-import { treeRows } from "@/lib/foretag/tree";
+import { hasTree, treeRows } from "@/lib/foretag/tree";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -153,12 +153,20 @@ export default async function NewMeetingPage({
 
   // "Starta" on a calendar event (todo #14): its title for the consent step, read with the
   // starter's own grant (the start reads it again; nothing is taken from the URL but the id).
-  const [def, rows, goals, picked] = await Promise.all([
+  // A förening with groups (0054): "Möte för" (the starter's own group preselected) and Privat möte.
+  const [def, rows, goals, picked, tree] = await Promise.all([
     orgDefaultFormat(db, orgId),
     listOrgFormats(db, orgId),
     goalSuggestionsFor(db, orgId),
     event ? orgEvent(user.id, org, event) : Promise.resolve(null),
+    hasTree(org)
+      ? Promise.all([
+          listGroups(db, orgId),
+          db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
+        ])
+      : Promise.resolve(null),
   ]);
+  const groupRows = tree ? treeRows(tree[0]) : [];
 
   return (
     <main id="innehall">
@@ -172,6 +180,14 @@ export default async function NewMeetingPage({
         pickerEnabled={pickerEnabled(getEnv())}
         goals={goals.map((g) => ({ id: g.goalId, label: goalLabel(g.title), reason: g.reason }))}
         calendarEvent={picked ? { id: picked.id, title: picked.title } : null}
+        groups={
+          tree && groupRows.length
+            ? {
+                groups: groupRows.map(({ group, depth }) => ({ id: group.id, name: group.name, depth })),
+                initialGroupId: ((tree[1].data ?? [])[0] as { group_id: string } | undefined)?.group_id ?? null,
+              }
+            : undefined
+        }
       />
     </main>
   );

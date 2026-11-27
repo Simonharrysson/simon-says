@@ -89,7 +89,8 @@ export async function joinOrgAction(form: FormData): Promise<void> {
   }
   if (user?.email && !wasMember) {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
-    // (Företag returned above: a new member is unplaced and sees no group's meetings, so no Docs.)
+    // Only Docs of meetings this member can see under the visibility rule (lib/docs/access.ts):
+    // never a Privat möte, nor a group's meeting outside their place.
     const member = { id: user.id, email: user.email };
     after(() =>
       shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),

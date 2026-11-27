@@ -12,6 +12,9 @@ const g = vi.hoisted(() => ({
   upserts: [] as unknown[],
   filters: [] as [string, string, unknown][],
   upsertError: null as { code?: string; message: string } | null,
+  /** visible_meeting_ids (0054): the meetings the joiner may see; null = all of them. */
+  visible: null as string[] | null,
+  rpcs: [] as [string, unknown][],
 }));
 
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
@@ -26,6 +29,7 @@ vi.mock("@/lib/google/client", async (importOriginal) => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({
+    rpc: async (name: string, args: { p_ids: string[] }) => (g.rpcs.push([name, args]), { data: g.visible ?? args.p_ids, error: null }),
     from: (table: string) => {
       const b: Record<string, unknown> = {};
       for (const op of ["select", "eq", "neq", "not", "in", "order", "limit"]) {
@@ -55,9 +59,23 @@ beforeEach(() => {
   g.upserts = [];
   g.filters = [];
   g.upsertError = null;
+  g.visible = null;
+  g.rpcs = [];
 });
 
 describe("shareOrgDocsWithNewMember", () => {
+  it("shares only meetings the joiner can see by the database's rule (never a Privat möte or another group's)", async () => {
+    g.meetings = [
+      { id: "m-open", org_id: "org1", doc_id: "d-open", started_by: "s1", agenda_doc: false },
+      { id: "m-priv", org_id: "org1", doc_id: "d-priv", started_by: "s1", agenda_doc: false },
+    ];
+    g.visible = ["m-open"];
+    expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(1);
+    expect(g.rpcs).toEqual([["visible_meeting_ids", { p_user: "u-new", p_ids: ["m-open", "m-priv"] }]]);
+    expect(g.permCreate).toHaveBeenCalledTimes(1);
+    expect(g.permCreate.mock.calls[0][1]).toMatchObject({ fileId: "d-open" });
+  });
+
   it("shares earlier Docs through each starter's own grant, skips ones already shared, records each", async () => {
     g.meetings = [
       { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false },

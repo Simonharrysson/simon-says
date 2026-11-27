@@ -15,6 +15,7 @@ export type FormAction = (form: FormData) => void | Promise<void>;
  * Esc and a backdrop click close, focus returns to the trigger). The dialog's form posts `hidden`
  * fields to `action` unchanged, so server actions keep their signature. With `requireText`, the
  * confirm button stays disabled until the typed value matches (and is posted as `name`).
+ * `children`: more fields in the dialog, posted with it (e.g. a name to create something with).
  */
 export function ConfirmAction({
   action,
@@ -31,6 +32,7 @@ export function ConfirmAction({
   confirmVariant = "danger",
   requireText,
   disabled,
+  children,
 }: {
   action: FormAction;
   hidden: Record<string, string>;
@@ -46,6 +48,7 @@ export function ConfirmAction({
   confirmVariant?: ButtonVariant;
   requireText?: { name: string; value: string; label: ReactNode };
   disabled?: boolean;
+  children?: ReactNode;
 }) {
   const common = useTranslations("common");
   const id = useId();
@@ -77,6 +80,7 @@ export function ConfirmAction({
                 <div>{description}</div>
               </DialogDescription>
             )}
+            {children}
             {requireText && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`${id}-confirm`}>{requireText.label}</Label>
