@@ -92,8 +92,8 @@ export async function authorize(params: URLSearchParams, store: McpStore, origin
   if (params.get("code_challenge_method") !== "S256" || !validChallenge(challenge)) {
     return back("invalid_request", "PKCE with code_challenge_method S256 is required");
   }
-  const scope = params.get("scope");
-  if (scope && !scope.split(" ").filter(Boolean).every((s) => s === SCOPE)) return back("invalid_scope", `the only scope is ${SCOPE}`);
+  // Any requested scope is answered with the one scope there is (`meetings`): RFC 6749 §3.3 lets the
+  // server grant a different scope, and clients differ in what they ask for.
   if (!resourceMatches(params.get("resource"), origin)) return back("invalid_target", "resource is not this server");
   const id = newToken("request");
   await store.createRequest({

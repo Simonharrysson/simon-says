@@ -67,17 +67,21 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0056, RLS)", () => {
       (must("meeting", await admin.from("meetings").insert({ org_id: org, started_by: by, doc_id: "doc", notes_tab_id: "t.0", status: "done", group_id: groupId, title }).select("id").single()) as { id: string }).id;
     devMeeting = await meeting(orgId, jonas.id, dev, "Sprintmöte");
     allMeeting = await meeting(orgId, anna.id, null, "Hela företaget");
+    must("roles", await admin.from("meetings").update({ agenda_roles: { "ag-1": "checkin" } }).eq("id", allMeeting));
     must(
       "notes",
       await admin.from("note_items").insert([
         { meeting_id: devMeeting, id: "t1", section: "action", text: "Maja gör bilden till lanseringen", owner: "Maja" },
         { meeting_id: devMeeting, id: "d1", section: "decision", text: "Vi lanserar hemligprojektet" },
         { meeting_id: allMeeting, id: "d1", section: "decision", text: "Julfest den 18 december" },
+        // Rows the app never shows: a line a human deleted, and one under a Må-runda item.
+        { meeting_id: allMeeting, id: "n1", section: "note", text: "Raderad dolkstöt", deleted_by_human: true },
+        { meeting_id: allMeeting, id: "n2", section: "note", text: "Mående dolkstöt", anchor: "ag-1" },
       ]),
     );
-    fOrg = (must("forening", await admin.from("orgs").insert({ name: "MCP-föreningen", created_by: fmember.id }).select("id").single()) as { id: string }).id;
-    must("fmember", await admin.from("org_members").upsert({ org_id: fOrg, user_id: fmember.id, role: "member" }, { onConflict: "org_id,user_id" }));
-    fMeeting = await meeting(fOrg, fmember.id, null, "Styrelsemöte");
+    fOrg = (must("forening", await admin.from("orgs").insert({ name: "MCP-föreningen", created_by: anna.id }).select("id").single()) as { id: string }).id;
+    must("fmember", await admin.from("org_members").insert({ org_id: fOrg, user_id: fmember.id, role: "member" }));
+    fMeeting = await meeting(fOrg, anna.id, null, "Styrelsemöte");
     must("fnote", await admin.from("note_items").insert({ meeting_id: fMeeting, id: "d1", section: "decision", text: "Budgeten antas" }));
   });
 
@@ -106,6 +110,8 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0056, RLS)", () => {
     const get = await call(client, "get_meeting", { meeting_id: devMeeting });
     expect(get.isError).toBe(false);
     expect(get.data).toMatchObject({ title: "Sprintmöte", org_kind: "foretag", decisions: ["Vi lanserar hemligprojektet"] });
+    // Never a hit from a deleted line or a Må-runda row (the app's own visible() rule).
+    expect((await call(client, "search_meetings", { query: "dolkstöt" })).data).toMatchObject({ meetings: [] });
     const orgs = await call(client, "list_orgs");
     expect((orgs.data as { orgs: { org_id: string }[] }).orgs.map((o) => o.org_id)).toContain(orgId);
     await client.close();

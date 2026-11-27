@@ -39,7 +39,6 @@ describe("authorize", () => {
       [{ code_challenge_method: "plain" }, "invalid_request"],
       [{ response_type: "token" }, "unsupported_response_type"],
       [{ resource: "https://other.example/mcp" }, "invalid_target"],
-      [{ scope: "admin" }, "invalid_scope"],
     ] as const) {
       const out = await authorize(params(extra), m.store, O);
       expect(out.kind).toBe("redirect");
