@@ -17,7 +17,7 @@ export function SiteHeader({ nav, homeHref = "/", wideNav = false }: { nav?: Rea
       <div className={`mx-auto flex min-h-16 w-full max-w-page items-center gap-4 px-gutter ${wideNav ? "max-[30rem]:flex-wrap max-[30rem]:gap-y-0 max-[30rem]:pb-1" : ""}`}>
         <Wordmark href={homeHref} />
         {nav && (
-          <nav aria-label={t("mainNav")} className={`ml-auto flex items-center gap-1 ${wideNav ? "max-[30rem]:-mx-1.5 max-[30rem]:basis-full max-[30rem]:justify-between max-[30rem]:gap-0" : ""}`}>
+          <nav aria-label={t("mainNav")} className={`ml-auto flex items-center gap-1 ${wideNav ? "max-[30rem]:ml-0 max-[30rem]:basis-full max-[30rem]:justify-between max-[30rem]:gap-0" : ""}`}>
             {nav}
           </nav>
         )}
