@@ -158,3 +158,18 @@ export async function customerForDomain(orgId: string, domain: string, name: str
   if (error) fail("customer", error);
   return (data as string | null) ?? null;
 }
+
+/** The companies the signed-in user is a member of (RLS), oldest first. */
+export async function listMyForetag(db: Db): Promise<{ id: string; name: string; role: "admin" | "member" }[]> {
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await db.from("orgs").select("id, name, kind, org_members!inner(role)").eq("org_members.user_id", user.id).eq("kind", "foretag").order("created_at");
+  if (error) fail("my companies", error);
+  return ((data ?? []) as unknown as { id: string; name: string; org_members: { role: "admin" | "member" }[] }[]).map((o) => ({
+    id: o.id,
+    name: o.name,
+    role: o.org_members[0].role,
+  }));
+}

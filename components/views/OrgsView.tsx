@@ -18,10 +18,14 @@ export interface OrgsViewProps {
   createOrg: FormAction;
   /** True when the last create failed validation (?fel=invalid), to mark the field. */
   nameError?: string;
+  /** Företag (0050): the user's companies, and "Skapa ett företag" for the allow-list only. */
+  companies?: { id: string; name: string; role: "admin" | "member" }[];
+  createForetag?: FormAction;
 }
 
-export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) {
+export function OrgsView({ orgs, notice, createOrg, nameError, companies = [], createForetag }: OrgsViewProps) {
   const t = useTranslations("orgs");
+  const tf = useTranslations("foretag.orgs");
   return (
     <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-8">
       <PageHeader
@@ -55,6 +59,27 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
         </Panel>
       )}
 
+      {companies.length > 0 && (
+        <Panel flush title={tf("yours")} titleId="companies-title">
+          <ul aria-labelledby="companies-title">
+            {companies.map((c) => (
+              <ListRow
+                key={c.id}
+                href={`/orgs/${c.id}`}
+                leading={<OrgLogo name={c.name} size="sm" />}
+                title={c.name}
+                actions={
+                  <>
+                    {c.role === "admin" && <Badge tone="info">{t("admin")}</Badge>}
+                    <IconArrowRight size={18} className="text-ink-3 transition-transform duration-120 ease-out group-hover/row:translate-x-[3px] group-hover/row:text-ink" />
+                  </>
+                }
+              />
+            ))}
+          </ul>
+        </Panel>
+      )}
+
       <Panel title={t("createTitle")} titleId="create-title">
         <form action={createOrg} className="flex flex-col gap-8">
           <div className="flex items-end gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch">
@@ -76,6 +101,20 @@ export function OrgsView({ orgs, notice, createOrg, nameError }: OrgsViewProps) 
           <p className="text-xs text-ink-3">{t("limit")}</p>
         </form>
       </Panel>
+
+      {createForetag && (
+        <Panel title={tf("createTitle")} titleId="create-company-title">
+          <form action={createForetag} className="flex flex-col gap-4">
+            <p className="max-w-[60ch] text-sm text-ink-2">{tf("createText")}</p>
+            <div className="flex items-end gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch">
+              <Field id="company-name" name="name" label={tf("name")} placeholder={tf("namePlaceholder")} required maxLength={100} autoComplete="organization" className="min-w-0 flex-1" />
+              <SubmitButton variant="secondary" icon={<IconPlus />} pendingLabel={tf("creating")}>
+                {tf("create")}
+              </SubmitButton>
+            </div>
+          </form>
+        </Panel>
+      )}
     </div>
   );
 }

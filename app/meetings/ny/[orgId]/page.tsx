@@ -17,6 +17,8 @@ import { createContextAction } from "@/app/(app)/privat/actions";
 import { suggestedContext } from "@/lib/privat/contexts";
 import { listContexts } from "@/lib/privat/contexts-db";
 import { isPrivat, privatHref } from "@/lib/privat/space";
+import { listGroups } from "@/lib/db/foretag";
+import { treeRows } from "@/lib/foretag/tree";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -100,6 +102,29 @@ export default async function NewMeetingPage({
             createContext: createContextAction,
             summaryHref: null,
             backLabel: from ? tp("live.back", { name: from.name }) : tp("live.backHome"),
+          }}
+        />
+      </main>
+    );
+  }
+
+  // Företag (0050): "Möte för" (the starter's own group preselected) and Privat möte; always a new Enkel Doc.
+  if (org.kind === "foretag") {
+    const [groups, mine] = await Promise.all([
+      listGroups(db, orgId),
+      db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
+    ]);
+    return (
+      <main id="innehall">
+        <LiveMeetingController
+          orgId={org.id}
+          orgName={org.name}
+          orgHref={`/orgs/${org.id}`}
+          shareTranscript={org.share_transcript}
+          meeting={null}
+          foretag={{
+            groups: treeRows(groups).map(({ group, depth }) => ({ id: group.id, name: group.name, depth })),
+            initialGroupId: ((mine.data ?? [])[0] as { group_id: string } | undefined)?.group_id ?? null,
           }}
         />
       </main>

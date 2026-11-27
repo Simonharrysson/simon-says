@@ -48,6 +48,7 @@ import { OrgBoard } from "@/components/views/OrgBoard";
 import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
 import { loadMeetingList, type MeetingListInfo } from "@/lib/meetings/list";
 import { orgTab, orgTabHref } from "@/lib/orgs/tabs";
+import { ForetagPage } from "./foretag-page";
 import { boardRows } from "@/lib/people/board";
 import {
   addPersonAction,
@@ -171,6 +172,12 @@ export default async function OrgPage({
   // The Privat space (0045) is not a förening: it has its own page.
   if (org.kind === "privat") redirect("/privat");
   const role = await myRole(db, id);
+  // A Företag (0050) has its own page; nothing of the förening page below runs for it.
+  if (org.kind === "foretag") {
+    const { data: me } = await db.auth.getUser();
+    if (!role || !me.user) notFound();
+    return <ForetagPage org={org} role={role} userId={me.user.id} flik={flik} fel={fel} klart={klart} />;
+  }
   const notice = orgNotice(fel, klart, locale) ?? calendarNotice(kalender, locale);
   const tab: OrgTab = orgTab({ flik, isAdmin: role === "admin", noticeCode: notice?.code });
   const [people, meetings, members, userResult, format, formats, dashboard, prepared, onboarding] = await Promise.all([

@@ -45,6 +45,8 @@ import enFormats from "./en/formats.json";
 import svFormats from "./sv/formats.json";
 import enOrg from "./en/org.json";
 import svOrg from "./sv/org.json";
+import enForetag from "./en/foretag.json";
+import svForetag from "./sv/foretag.json";
 import enOrgs from "./en/orgs.json";
 import svOrgs from "./sv/orgs.json";
 import enPrivacy from "./en/privacy.json";
@@ -92,6 +94,7 @@ export const sv = {
   formats: svFormats,
   org: svOrg,
   orgs: svOrgs,
+  foretag: svForetag,
   privacy: svPrivacy,
   landing: svLanding,
   status: svStatus,
@@ -129,6 +132,7 @@ export const en: Messages = {
   formats: enFormats,
   org: enOrg,
   orgs: enOrgs,
+  foretag: enForetag,
   privacy: enPrivacy,
   landing: enLanding,
   status: enStatus,

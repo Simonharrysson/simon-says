@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Activity, addTransitionType, startTransition, useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export type OrgTabId = "moten" | "oversikt" | "installningar";
+/** Föreningar: moten | oversikt | installningar. Företag (0050): moten | kunder | personer | installningar. */
+export type OrgTabId = "moten" | "oversikt" | "installningar" | "kunder" | "personer";
 
 /** How long next keeps a full prefetch (staleTimes.static, 5 min): only then is it fetched again. */
 const KEPT_MS = 5 * 60_000;
