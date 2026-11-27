@@ -16,7 +16,8 @@ import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
-import type { TaskAnswer, TaskMode, TaskView } from "@/lib/notes/tasks";
+import type { EndStats, TaskAnswer, TaskMode, TaskView } from "@/lib/notes/tasks";
+import type { EndAsk } from "./EndTasksDialog";
 
 /** Notes count as stale when runs posted this long ago have not reached the Doc yet. */
 const STALE_AFTER_MS = 3 * 60_000;
@@ -267,7 +268,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
    * keeps the page here with a retry instead of navigating away from unsent work.
    */
   const endOnServer = useCallback(
-    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false, answers: TaskAnswer[] = []) => {
+    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false, answers: TaskAnswer[] = [], stats?: EndStats) => {
       endStarted.current = true;
       setPhase("ending");
       setStoppedAt((t) => t ?? Date.now());
@@ -285,8 +286,11 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           const res = await fetch(`/api/meetings/${id}/end`, {
             method: "POST",
             signal: AbortSignal.timeout(END_TIMEOUT_MS),
-            // The Avsluta dialog's Vem / När / Klart när: the final pass writes them to the Doc.
-            ...(answers.length ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) } : {}),
+            // The Avsluta dialog's Vem / När / Klart när (the final pass writes them to the Doc),
+            // and how the dialog was met (counts only), sent even when nothing was filled in.
+            ...(answers.length || stats
+              ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers, ...(stats ? { stats } : {}) }) }
+              : {}),
           });
           if (res.ok && answers.length) {
             const body = (await res.json().catch(() => null)) as { answers?: string } | null;
@@ -599,12 +603,12 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [tasks, setTasks] = useState<TaskView[] | undefined>(undefined);
   const tasksUrl = meeting ? `/api/meetings/${meeting.id}/tasks` : null;
   const fetchTasks = useCallback(
-    async (timeoutMs?: number): Promise<{ mode: TaskMode; tasks: TaskView[] } | null> => {
+    async (timeoutMs?: number): Promise<{ mode: TaskMode; tasks: TaskView[]; admin?: boolean } | null> => {
       if (!tasksUrl) return null;
       try {
         const res = await fetch(tasksUrl, { cache: "no-store", ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
         if (!res.ok) return null;
-        const v = (await res.json()) as { mode: TaskMode; tasks: TaskView[] };
+        const v = (await res.json()) as { mode: TaskMode; tasks: TaskView[]; admin?: boolean };
         setTasks(v.tasks);
         return v;
       } catch {
@@ -621,10 +625,31 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return () => clearInterval(t);
   }, [tasksPolling, tasksUrl, fetchTasks]);
   /** Avsluta: the incomplete tasks to ask about, fresh; none when the förening doesn't require them or the read fails. */
-  const askTasks = useCallback(async (): Promise<TaskView[]> => {
+  const meetingId = meeting?.id;
+  const orgId = props.orgId;
+  /** Admins: "Fråga inte igen i den här föreningen" (false) and its Ångra (true), logged with this meeting. */
+  const setAsking = useCallback(
+    async (on: boolean): Promise<boolean> => {
+      try {
+        const res = await fetch(`/api/orgs/${orgId}/task-fields`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ on, meetingId }),
+          signal: AbortSignal.timeout(TASKS_ASK_TIMEOUT_MS),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    },
+    [orgId, meetingId],
+  );
+  const askTasks = useCallback(async (): Promise<EndAsk> => {
     const v = await fetchTasks(TASKS_ASK_TIMEOUT_MS);
-    return v?.mode === "require" ? v.tasks.filter((x) => x.missing.length > 0) : [];
-  }, [fetchTasks]);
+    if (v?.mode !== "require") return { tasks: [] };
+    const owners = [...new Set(people.map((x) => x.name.trim()).filter(Boolean))];
+    return { tasks: v.tasks.filter((x) => x.missing.length > 0), owners, ...(v.admin ? { setAsking } : {}) };
+  }, [fetchTasks, people, setAsking]);
 
   /** "Klar": read the names now (the server only fills voices nobody has named). */
   const onNameRoundDone = () => {
@@ -676,18 +701,20 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
 
   /** The Avsluta dialog's answers, kept for "Försök igen" after a failed POST /end. */
   const endAnswers = useRef<TaskAnswer[]>([]);
-  const onStop = (answers?: TaskAnswer[]) => {
+  const endStats = useRef<EndStats | undefined>(undefined);
+  const onStop = (answers?: TaskAnswer[], stats?: EndStats) => {
     const s = stream.current;
     if (!meeting || endStarted.current) return;
     endStarted.current = true;
     endAnswers.current = answers ?? [];
+    endStats.current = stats;
     userStopped.current = true;
     setPhase("ending");
     setBusy(true);
     void (async () => {
       await s?.stop();
       capture.current?.stop();
-      await endOnServer(meeting.id, false, undefined, false, answers);
+      await endOnServer(meeting.id, false, undefined, false, answers, stats);
     })();
   };
 
@@ -695,14 +722,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const onRetryEnd = () => {
     if (!meeting) return;
     setBusy(true);
-    void endOnServer(meeting.id, autoStopped, limitReason, false, endAnswers.current);
+    void endOnServer(meeting.id, autoStopped, limitReason, false, endAnswers.current, endStats.current);
   };
 
   /** Signed out: end with what the server has; the unsent lines are given up (R3). */
   const onEndWithoutUnsent = () => {
     if (!meeting) return;
     setBusy(true);
-    void endOnServer(meeting.id, autoStopped, limitReason, true, endAnswers.current);
+    void endOnServer(meeting.id, autoStopped, limitReason, true, endAnswers.current, endStats.current);
   };
 
   const onEndUnfinished = () => {

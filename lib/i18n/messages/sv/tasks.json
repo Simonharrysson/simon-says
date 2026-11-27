@@ -15,23 +15,31 @@
   },
   "end": {
     "title": "Avsluta mötet?",
-    "intro": "{count, plural, one {En uppgift saknar} other {# uppgifter saknar}} vem, när eller klart när. Fyll i det som saknas eller lämna uppgiften som den är.",
+    "intro": "{count, plural, one {En uppgift saknar} other {# uppgifter saknar}} vem, när eller klart när. Vill ni fylla i något nu? Det går lika bra att avsluta ändå.",
     "save": "Spara",
     "leave": "Lämna som det är",
     "saved": "Skrivs in i dokumentet",
     "left": "Lämnas som den är",
     "undo": "Ändra",
     "editedInDoc": "Raden är ändrad i dokumentet, så den lämnas som den är.",
-    "remaining": "{count, plural, one {# uppgift kvar} other {# uppgifter kvar}}",
-    "allHandled": "Alla uppgifter är klara att avsluta.",
     "stay": "Fortsätt mötet",
     "confirm": "Avsluta mötet",
     "whoHint": "Namn eller roll",
     "whenHint": "Till exempel fredag 5 dec",
     "doneWhenHint": "Till exempel kontraktet är påskrivet",
-    "fillAll": "Fyll i det som saknas, eller välj Lämna som det är.",
     "answersLostTitle": "Mötet avslutades redan — svaren sparades inte",
-    "answersLostText": "Någon annan avslutade mötet innan dina svar kom fram. Skriv in vem, när och klart när direkt i dokumentet."
+    "answersLostText": "Någon annan avslutade mötet innan dina svar kom fram. Skriv in vem, när och klart när direkt i dokumentet.",
+    "endAnyway": "Avsluta ändå",
+    "turnOff": "Fråga inte igen i den här föreningen",
+    "turnedOff": "Vi frågar inte igen i den här föreningen. Det går att slå på igen under Inställningar.",
+    "turnOn": "Ångra",
+    "turnOffFailed": "Det gick inte att ändra just nu. Det går också under Inställningar.",
+    "whenSuggestions": [
+      "Till nästa möte",
+      "Fredag",
+      "Om en vecka",
+      "Om två veckor"
+    ]
   },
   "summary": {
     "doneWhen": "klart när: {text}",
@@ -42,7 +50,7 @@
     "missing": "saknar {fields}"
   },
   "settings": {
-    "label": "Uppgifter: Kräv vem, när och klart när",
-    "hint": "Saknas något skrivs det ut i dokumentet, och när ni avslutar mötet får ni fylla i det eller lämna det som det är."
+    "label": "Fråga efter Vem, När och Klart när när mötet avslutas",
+    "hint": "Saknas något skrivs det ut i dokumentet, och när ni avslutar mötet får ni fylla i det om ni vill. Det går alltid att avsluta ändå."
   }
 }

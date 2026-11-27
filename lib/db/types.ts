@@ -53,7 +53,9 @@ export type MeetingEventKind =
   | "format_learned"
   | "followup_prefilled"
   | "checkin"
-  | "summary";
+  | "summary"
+  | "end_tasks"
+  | "task_setting";
 
 /** 0045: a förening (the default), the user's own Privat space, or (later) a company. */
 export type SpaceKind = "forening" | "privat" | "foretag";

@@ -363,10 +363,14 @@ Building blocks (usable on their own):
   När / Klart när ("saknas" in grey italics when missing). A task that lacks something shows one calm
   question ("Vem ansvarar och när ska det vara klart?" or "Hur vet ni att det är klart?") and "Fråga nu",
   which makes the question big (blue wash) until "Klar". A badge counts what is left to ask; no dots.
-- `EndTasksDialog {open, tasks, onConfirm}` — Avsluta when the förening requires Vem, När and Klart när
-  and tasks lack something: each is completed inline (only its missing fields) or "Lämna som det är";
-  "Avsluta mötet" is enabled once all are handled, "Fortsätt mötet" is first and focused. A line a
-  person edited in the Doc can only be left as it is. Only the live page's Avsluta asks: the org page's
+- `EndTasksDialog {open, tasks, owners?, setAsking?, onConfirm}` — Avsluta when the förening asks for Vem,
+  När and Klart när and tasks lack something. A gentle offer, never a gate: each task can be completed
+  inline (only its missing fields; Enter saves; Vem and När suggest via a datalist, never prefilled) or
+  "Lämna som det är"; "Avsluta ändå" ends at once (it says "Avsluta mötet" once all are handled), typed
+  but unsaved fields included; "Fortsätt mötet" is first and focused. No counters or pressure copy.
+  Admins (`setAsking`) get a small "Fråga inte igen i den här föreningen" link that turns the setting
+  off, replaced by "Vi frågar inte igen …" with **Ångra** (inside the modal). A line a person edited in
+  the Doc can only be left as it is. Counts only are logged (meeting_events `end_tasks`, `task_setting`). Only the live page's Avsluta asks: the org page's
   end, the resume screen's end and the automatic ends never do.
 - `ResumeMeeting {startedAt, orgName, onResume, onEnd?, resuming?}` — "Fortsätt mötet"; "Avsluta mötet" asks first.
 - `LiveDialog` — the shared confirm dialog, a shadcn Dialog opened through a `LiveDialogHandle` ref

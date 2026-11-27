@@ -6,16 +6,16 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IconPause, IconPlay, IconStop } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import type { TaskAnswer, TaskView } from "@/lib/notes/tasks";
-import { EndTasksDialog } from "./EndTasksDialog";
+import type { EndStats, TaskAnswer } from "@/lib/notes/tasks";
+import { EndTasksDialog, type EndAsk } from "./EndTasksDialog";
 import { LiveDialog, type LiveDialogHandle } from "./LiveDialog";
 
 /**
  * Paus / Fortsätt and Avsluta. Paus is the big, always-reachable button (people ask for it
  * mid-sentence). Avsluta asks once, because ending runs the final pass and can't be undone.
  * With `canPause={false}` (the meeting has stopped on its own) only Avsluta is offered.
- * With `askTasks` (the förening requires Vem, När and Klart när) Avsluta first reads the
- * incomplete tasks: any → the tasks dialog (complete or leave each), none → the usual question.
+ * With `askTasks` (the förening asks for Vem, När and Klart när) Avsluta first reads the
+ * incomplete tasks: any → the tasks dialog (fill in, leave, or Avsluta ändå), none → the usual question.
  */
 export function MeetingControls({
   status,
@@ -30,9 +30,9 @@ export function MeetingControls({
   status: "live" | "paused" | "ending";
   onPause: () => void;
   onResume: () => void;
-  onStop: (answers?: TaskAnswer[]) => void;
+  onStop: (answers?: TaskAnswer[], stats?: EndStats) => void;
   /** The incomplete tasks to ask about before ending (empty: none); never throws. */
-  askTasks?: () => Promise<TaskView[]>;
+  askTasks?: () => Promise<EndAsk>;
   /** A pause/resume/stop request is in flight. */
   busy?: boolean;
   canPause?: boolean;
@@ -41,13 +41,13 @@ export function MeetingControls({
   const t = useTranslations("live");
   const dialog = useRef<LiveDialogHandle>(null);
   const ending = status === "ending";
-  const [tasks, setTasks] = useState<TaskView[] | null>(null);
+  const [ask, setAsk] = useState<EndAsk | null>(null);
   const [checking, setChecking] = useState(false);
   // The meeting stopped on its own (a cap, another tab) while a dialog was open: close it, so it
   // can't end the meeting a second time.
   useEffect(() => {
     if (!ending) return;
-    setTasks(null);
+    setAsk(null);
     dialog.current?.close();
   }, [ending]);
   const askEnd = async () => {
@@ -56,7 +56,7 @@ export function MeetingControls({
     const open = await askTasks();
     setChecking(false);
     if (ending) return;
-    if (open.length) setTasks(open);
+    if (open.tasks.length) setAsk(open);
     else dialog.current?.showModal();
   };
   return (
@@ -102,15 +102,17 @@ export function MeetingControls({
       >
         {t("stopCopy")}
       </LiveDialog>
-      {tasks && (
+      {ask && (
         <EndTasksDialog
           open
-          tasks={tasks}
+          tasks={ask.tasks}
+          owners={ask.owners}
+          setAsking={ask.setAsking}
           onOpenChange={(o) => {
-            if (!o) setTasks(null);
+            if (!o) setAsk(null);
           }}
-          onConfirm={(answers) => {
-            if (!ending) onStop(answers);
+          onConfirm={(answers, stats) => {
+            if (!ending) onStop(answers, stats);
           }}
         />
       )}

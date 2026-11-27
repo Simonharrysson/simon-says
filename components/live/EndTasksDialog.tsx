@@ -8,48 +8,120 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, Dia
 import { IconStop } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { endAnswers, endReady, type EndHandled as Handled, type TaskAnswer, type TaskField, type TaskView } from "@/lib/notes/tasks";
+import {
+  endAnswers,
+  endReady,
+  endStats,
+  type EndDrafts,
+  type EndHandled as Handled,
+  type EndStats,
+  type TaskAnswer,
+  type TaskField,
+  type TaskView,
+} from "@/lib/notes/tasks";
 import { taskText } from "./TasksPanel";
 
+/** What Avsluta asks about (GET /api/meetings/[id]/tasks), for a förening that asks. */
+export interface EndAsk {
+  /** The incomplete tasks; empty: Avsluta asks the usual question instead. */
+  tasks: TaskView[];
+  /** Names to suggest for Vem (the meeting's speakers): suggestions only, never filled in. */
+  owners?: string[];
+  /** Admins: turn the question off (false) or back on (true) for the förening. True when saved. */
+  setAsking?: (on: boolean) => Promise<boolean>;
+}
+
 /**
- * Avsluta with incomplete tasks (the förening requires Vem, När and Klart när): each must be
- * completed inline (written to the Doc by the final pass) or left as it is. "Avsluta mötet" is
- * enabled once every task is handled; "Fortsätt mötet" is the safe, focused choice.
+ * Avsluta with incomplete tasks (the förening asks for Vem, När and Klart när). A gentle offer,
+ * never a gate: "Avsluta ändå" ends at once with whatever is filled in; a task can be filled in
+ * (Enter saves; Vem and När suggest) or left as it is. Typed but unsaved fields are sent too.
+ * Admins get "Fråga inte igen i den här föreningen", with Ångra, right here (inside the modal,
+ * so it stays reachable).
  */
 export function EndTasksDialog({
   open,
   onOpenChange,
   tasks,
+  owners = [],
+  setAsking,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tasks: TaskView[];
-  onConfirm: (answers: TaskAnswer[]) => void;
+  owners?: string[];
+  setAsking?: (on: boolean) => Promise<boolean>;
+  onConfirm: (answers: TaskAnswer[], stats: EndStats) => void;
 }) {
   const t = useTranslations("tasks.end");
+  const listId = useId();
   const [handled, setHandled] = useState<Record<string, Handled | undefined>>({});
-  const left = tasks.filter((x) => !handled[x.id]).length;
+  const [drafts, setDrafts] = useState<EndDrafts>({});
+  const [asking, setAskingState] = useState<"on" | "off" | "busy">("on");
+  const [askFailed, setAskFailed] = useState(false);
   const ready = endReady(tasks, handled);
+  const whenSuggestions = t.raw("whenSuggestions") as string[];
+
+  const changeAsking = async (on: boolean) => {
+    if (!setAsking) return;
+    setAskingState("busy");
+    setAskFailed(false);
+    const ok = await setAsking(on).catch(() => false);
+    setAskFailed(!ok);
+    setAskingState(ok === on ? "on" : "off");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent id="end-tasks" className="max-w-[40rem]">
         <DialogBody>
           <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>{t("intro", { count: tasks.length })}</DialogDescription>
+          <datalist id={`${listId}-owner`}>
+            {owners.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
+          <datalist id={`${listId}-due`}>
+            {whenSuggestions.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
           <ul className="-mx-1 mt-2 flex max-h-[55vh] flex-col gap-3 overflow-y-auto px-1" aria-label={t("title")}>
             {tasks.map((task) => (
               <TaskRow
                 key={task.id}
                 task={task}
+                listId={listId}
                 handled={handled[task.id]}
+                values={drafts[task.id] ?? {}}
+                onValues={(v) => setDrafts((cur) => ({ ...cur, [task.id]: v }))}
                 onHandled={(h) => setHandled((cur) => ({ ...cur, [task.id]: h }))}
               />
             ))}
           </ul>
-          <p className="mt-2 text-sm text-ink-2" role="status">
-            {left > 0 ? t("remaining", { count: left }) : t("allHandled")}
-          </p>
+          {setAsking && (
+            <div className="mt-3 text-sm" role="status" aria-live="polite">
+              {asking === "off" ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-sunk px-3 py-2">
+                  <span>{t("turnedOff")}</span>
+                  <Button size="sm" variant="ghost" onClick={() => void changeAsking(true)}>
+                    {t("turnOn")}
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="text-ink-2 underline underline-offset-2 hover:text-ink disabled:opacity-60"
+                  disabled={asking === "busy"}
+                  onClick={() => void changeAsking(false)}
+                >
+                  {t("turnOff")}
+                </button>
+              )}
+              {askFailed && <p className="mt-1 text-ink-2">{t("turnOffFailed")}</p>}
+            </div>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" autoFocus onClick={() => onOpenChange(false)}>
@@ -58,13 +130,13 @@ export function EndTasksDialog({
           <Button
             variant="danger"
             icon={<IconStop size={16} />}
-            disabled={!ready}
             onClick={() => {
+              const answers = endAnswers(tasks, handled, drafts);
               onOpenChange(false);
-              onConfirm(endAnswers(tasks, handled));
+              onConfirm(answers, endStats(tasks, handled, answers));
             }}
           >
-            {t("confirm")}
+            {ready ? t("confirm") : t("endAnyway")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -72,13 +144,27 @@ export function EndTasksDialog({
   );
 }
 
-function TaskRow({ task, handled, onHandled }: { task: TaskView; handled: Handled | undefined; onHandled: (h: Handled | undefined) => void }) {
+function TaskRow({
+  task,
+  listId,
+  handled,
+  values,
+  onValues,
+  onHandled,
+}: {
+  task: TaskView;
+  listId: string;
+  handled: Handled | undefined;
+  values: Partial<Record<TaskField, string>>;
+  onValues: (values: Partial<Record<TaskField, string>>) => void;
+  onHandled: (h: Handled | undefined) => void;
+}) {
   const t = useTranslations("tasks.end");
   const p = useTranslations("tasks.panel");
   const id = useId();
-  const [values, setValues] = useState<Partial<Record<TaskField, string>>>(handled?.kind === "completed" ? handled.values : {});
   const labels: Record<TaskField, string> = { owner: p("who"), due: p("when"), doneWhen: p("doneWhen") };
   const hints: Record<TaskField, string> = { owner: t("whoHint"), due: t("whenHint"), doneWhen: t("doneWhenHint") };
+  const lists: Partial<Record<TaskField, string>> = { owner: `${listId}-owner`, due: `${listId}-due` };
   const complete = task.missing.every((f) => values[f]?.trim());
   const text = taskText(task);
 
@@ -119,7 +205,10 @@ function TaskRow({ task, handled, onHandled }: { task: TaskView; handled: Handle
                 value={values[f] ?? ""}
                 placeholder={hints[f]}
                 maxLength={200}
-                onChange={(event) => setValues((cur) => ({ ...cur, [f]: event.target.value }))}
+                list={lists[f]}
+                autoComplete="off"
+                enterKeyHint="done"
+                onChange={(event) => onValues({ ...values, [f]: event.target.value })}
               />
             </div>
           ))}

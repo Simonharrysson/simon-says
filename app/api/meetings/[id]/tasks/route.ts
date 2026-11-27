@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
+import { memberRole } from "@/lib/db/orgs";
 import type { NoteItemRow } from "@/lib/db/types";
 import { meetingTasks, taskMode } from "@/lib/notes/tasks";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -12,6 +13,7 @@ const fail = (error: string, status: number) => NextResponse.json({ error }, { s
 /**
  * The live page's "Uppgifter" (concrete tasks): this meeting's own tasks with what each lacks,
  * and the förening's mode (`require`: the page asks, Avsluta asks to complete or dismiss).
+ * `admin`: the user may turn the question off from the Avsluta dialog.
  * Any member; RLS (note_items_select, orgs) hides other föreningar's meetings.
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,15 +27,20 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { data: meeting, error } = await supabase.from("meetings").select("id, org_id").eq("id", id).maybeSingle();
   if (error) throw new Error(`tasks: meeting: ${error.message}`);
   if (!meeting) return fail("not_found", 404);
-  const [rows, org] = await Promise.all([
+  const [rows, org, role] = await Promise.all([
     supabase.from("note_items").select("*").eq("meeting_id", id),
     // "*": taskMode also reads the space kind once there is one (orgs.kind).
     supabase.from("orgs").select("*").eq("id", meeting.org_id).maybeSingle(),
+    memberRole(supabase, meeting.org_id, user.id),
   ]);
   if (rows.error) throw new Error(`tasks: rows: ${rows.error.message}`);
   if (org.error) throw new Error(`tasks: org: ${org.error.message}`);
   return NextResponse.json(
-    { mode: taskMode(org.data as { require_task_fields?: boolean; kind?: string } | null), tasks: meetingTasks((rows.data ?? []) as NoteItemRow[]) },
+    {
+      mode: taskMode(org.data as { require_task_fields?: boolean; kind?: string } | null),
+      tasks: meetingTasks((rows.data ?? []) as NoteItemRow[]),
+      admin: role === "admin",
+    },
     { headers: noStore },
   );
 }

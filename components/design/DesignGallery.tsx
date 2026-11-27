@@ -146,7 +146,7 @@ const liveBase: LiveMeetingProps = {
   onEndUnfinished: noop,
   onRetry: noop,
   tasks: demoTasks,
-  askTasks: async () => demoTasks.filter((t) => t.missing.length > 0),
+  askTasks: async () => ({ tasks: demoTasks.filter((t) => t.missing.length > 0), owners: ["Anna Berg", "Erik Lund"], setAsking: async () => true }),
 };
 
 /** The protocol import's meeting list (fictional förening and titles). */

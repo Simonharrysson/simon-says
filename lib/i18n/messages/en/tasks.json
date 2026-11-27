@@ -15,23 +15,31 @@
   },
   "end": {
     "title": "End the meeting?",
-    "intro": "{count, plural, one {One task is missing} other {# tasks are missing}} who, when or done when. Fill in what is missing, or leave the task as it is.",
+    "intro": "{count, plural, one {One task is missing} other {# tasks are missing}} who, when or done when. Want to fill anything in now? Ending anyway is just as fine.",
     "save": "Save",
     "leave": "Leave as it is",
     "saved": "Goes into the document",
     "left": "Left as it is",
     "undo": "Change",
     "editedInDoc": "The line was edited in the document, so it is left as it is.",
-    "remaining": "{count, plural, one {# task left} other {# tasks left}}",
-    "allHandled": "Every task is ready to end.",
     "stay": "Continue the meeting",
     "confirm": "End the meeting",
     "whoHint": "Name or role",
     "whenHint": "For example Friday 5 Dec",
     "doneWhenHint": "For example the contract is signed",
-    "fillAll": "Fill in what is missing, or choose Leave as it is.",
     "answersLostTitle": "The meeting had already ended — your answers were not saved",
-    "answersLostText": "Someone else ended the meeting before your answers arrived. Write who, when and done when straight into the document."
+    "answersLostText": "Someone else ended the meeting before your answers arrived. Write who, when and done when straight into the document.",
+    "endAnyway": "End anyway",
+    "turnOff": "Don't ask again in this association",
+    "turnedOff": "We won't ask again in this association. You can turn it back on in Settings.",
+    "turnOn": "Undo",
+    "turnOffFailed": "That didn't work just now. You can also change it in Settings.",
+    "whenSuggestions": [
+      "By the next meeting",
+      "Friday",
+      "In a week",
+      "In two weeks"
+    ]
   },
   "summary": {
     "doneWhen": "done when: {text}",
@@ -42,7 +50,7 @@
     "missing": "missing {fields}"
   },
   "settings": {
-    "label": "Tasks: Require who, when and done when",
-    "hint": "Anything missing is written out in the document, and when you end the meeting you can fill it in or leave it as it is."
+    "label": "Ask for Who, When and Done when as the meeting ends",
+    "hint": "Anything missing is written out in the document, and when you end the meeting you can fill it in if you like. You can always end anyway."
   }
 }
