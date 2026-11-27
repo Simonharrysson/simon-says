@@ -60,7 +60,11 @@ export function ForetagView(props: ForetagViewProps) {
   const { org, isAdmin, tab, notice } = props;
   return (
     <div className="mx-auto flex w-full max-w-[56rem] flex-col gap-6 px-gutter">
-      <PageHeader title={org.name} meta={<p className="text-sm font-medium tracking-wide text-ink-3 uppercase">{t("kicker")}</p>} />
+      <PageHeader
+        title={org.name}
+        back={{ href: "/foretag", label: t("list.back") }}
+        meta={<p className="text-sm font-medium tracking-wide text-ink-3 uppercase">{t("kicker")}</p>}
+      />
       <OrgTabsShell
         key={org.id}
         active={tab}

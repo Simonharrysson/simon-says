@@ -51,6 +51,11 @@ function orgIdFrom(form: FormData): string {
   return id;
 }
 
+/** Where an org's list page is: /foretag for a company (0050), /orgs for a förening. */
+async function listPathOf(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<"/foretag" | "/orgs"> {
+  return (await getOrg(db, orgId))?.kind === "foretag" ? "/foretag" : "/orgs";
+}
+
 export async function createOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const { data } = await db.auth.getUser();
@@ -77,7 +82,11 @@ export async function joinOrgAction(form: FormData): Promise<void> {
   const user = data.user;
   const org = await getOrg(db, orgId);
   // Företag (0050): admins place people; no "Vem av dessa är du?" (0051 is föreningar only).
-  if (org?.kind === "foretag") redirect(`/orgs/${orgId}`);
+  if (org?.kind === "foretag") {
+    // The top rail gains Företag (from the layout) with the first company.
+    revalidatePath("/", "layout");
+    redirect(`/orgs/${orgId}`);
+  }
   if (user?.email && !wasMember) {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
     // (Företag returned above: a new member is unplaced and sees no group's meetings, so no Docs.)
@@ -230,11 +239,14 @@ export async function endMeetingAction(form: FormData): Promise<void> {
 export async function deleteOrgAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
+  // A company goes back to Företag, a förening to Föreningar (read before it is gone).
+  const list = await listPathOf(db, orgId);
   const result = await deleteOrg(db, orgId, field(form, "confirmName"));
   if (result === "deleted") {
     // The logo is not under the org's cascade (storage): remove it as the service role.
     await supabaseAdmin().storage.from(LOGO_BUCKET).remove([logoPath(orgId)]).catch(() => null);
-    redirect("/orgs?klart=raderad");
+    if (list === "/foretag") revalidatePath("/", "layout");
+    redirect(list === "/foretag" ? "/foretag?klart=foretag-raderat" : "/orgs?klart=raderad");
   }
   redirect(`/orgs/${orgId}?fel=org-${result}`);
 }
@@ -254,8 +266,12 @@ export async function leaveOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   // A Företag (0050): whoever can no longer see a meeting loses its Doc (no-op for a förening).
   reconcileAfter(orgId);
+  const list = await listPathOf(db, orgId);
   const result = await leaveOrg(db, orgId);
-  if (result === "removed") redirect("/orgs?klart=lamnat");
+  if (result === "removed") {
+    if (list === "/foretag") revalidatePath("/", "layout");
+    redirect(list === "/foretag" ? "/foretag?klart=foretag-lamnat" : "/orgs?klart=lamnat");
+  }
   redirect(`/orgs/${orgId}?fel=medlem-${result}`);
 }
 

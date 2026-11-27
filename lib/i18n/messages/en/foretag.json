@@ -131,7 +131,14 @@
     "customer": "Customer: the guests from {domain}",
     "seesAttendees": "{count, plural, one {Plus # attendee you ticked.} other {Plus # attendees you ticked.}}"
   },
-  "orgs": {
+  "list": {
+    "metaTitle": "Companies",
+    "title": "Companies",
+    "intro": "Each company has its tree of groups, its meetings and its customers.",
+    "emptyTitle": "You're not in any company yet",
+    "emptyText": "An admin of the company adds you. Have you got an invite link? Open it and you'll end up in the right place.",
+    "admin": "Admin",
+    "back": "Companies",
     "yours": "Your companies",
     "createTitle": "Create a company",
     "createText": "A company has a tree of groups. Everyone sees their group's meetings and everything below it. Tasks are suggested, never required.",

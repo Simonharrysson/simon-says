@@ -131,7 +131,14 @@
     "customer": "Kund: gästerna från {domain}",
     "seesAttendees": "{count, plural, one {Plus # deltagare du kryssat i.} other {Plus # deltagare du kryssat i.}}"
   },
-  "orgs": {
+  "list": {
+    "metaTitle": "Företag",
+    "title": "Företag",
+    "intro": "Varje företag har sitt träd av grupper, sina möten och sina kunder.",
+    "emptyTitle": "Du är inte med i något företag än",
+    "emptyText": "En admin i företaget lägger till dig. Har du fått en inbjudningslänk? Öppna den så hamnar du rätt.",
+    "admin": "Admin",
+    "back": "Företag",
     "yours": "Dina företag",
     "createTitle": "Skapa ett företag",
     "createText": "Ett företag har ett träd av grupper. Var och en ser sin grupps möten och allt under den. Uppgifter föreslås, de krävs aldrig.",

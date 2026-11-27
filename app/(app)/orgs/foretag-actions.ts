@@ -16,7 +16,7 @@ const field = (form: FormData, name: string) => form.get(name)?.toString() ?? ""
 
 function orgIdFrom(form: FormData): string {
   const id = field(form, "orgId");
-  if (!isUuid(id)) redirect("/orgs");
+  if (!isUuid(id)) redirect("/foretag");
   return id;
 }
 
@@ -34,10 +34,12 @@ export async function createForetagAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const { data } = await db.auth.getUser();
   const user = data.user;
-  if (!user || !canCreateForetag(user.email)) redirect("/orgs?fel=foretag");
-  const t = await getTranslations({ locale: await getLocale(), namespace: "foretag.orgs" });
+  if (!user || !canCreateForetag(user.email)) redirect("/foretag?fel=foretag");
+  const t = await getTranslations({ locale: await getLocale(), namespace: "foretag.list" });
   const result = await createForetag(user.id, field(form, "name"), t("rootName"), personName(user) || t("rootName"));
-  if (!result.ok) redirect("/orgs?fel=invalid");
+  if (!result.ok) redirect("/foretag?fel=invalid");
+  // The top rail shows Företag (and marks it) from the layout: re-render it with the new company.
+  revalidatePath("/", "layout");
   redirect(back(result.id));
 }
 
