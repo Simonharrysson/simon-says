@@ -439,6 +439,8 @@ function Canvas({ data, api }: { data: CanvasData; api: CanvasApi }) {
           snapGrid={[GRID, GRID]}
           fitView
           fitViewOptions={FIT}
+          // Inset from the first paint (before fitView measures), so a card never sits on the frame.
+          defaultViewport={{ x: 280, y: 96, zoom: 1 }}
           minZoom={0.2}
           maxZoom={1.75}
           nodeDragThreshold={2}
