@@ -15,6 +15,7 @@ export const homeViews = [
   { id: "home-unlinked-two", title: "Hem · inte kopplad i två föreningar" },
   { id: "home-all-done", title: "Hem · allt klart, inga möten" },
   { id: "org-meeting", title: "Förening · ett möte: beslut och uppgifter" },
+  { id: "org-meeting-ended", title: "Förening · mötet nyss avslutat: sammanfattningen, närvarande, mötestid" },
 ] as const;
 
 const DAY = 86_400_000;
@@ -101,6 +102,24 @@ export const homeRender: Record<string, () => React.ReactNode> = {
           decisions: ["Julvisningen blir den 18 december i Kårallen.", "Budgeten för våren godkänns med 4 000 kr till filmhyra.", "Medlemsavgiften är oförändrad, 50 kr."],
           tasks: meetingTasks,
           isAdmin: false,
+          docUrl: "#",
+        }}
+      />,
+    ),
+  "org-meeting-ended": () =>
+    page(
+      <OrgMeetingView
+        today={today}
+        save={save}
+        justEnded
+        summary={{ state: "sent", sent: 2, mode: "missed" }}
+        page={{
+          org: { id: "o2", name: "Filmföreningen" },
+          meeting: { id: "m-o2", startedAt: new Date(Date.now() - 95 * 60_000).toISOString(), endedAt: new Date(Date.now() - 2 * 60_000).toISOString(), status: "done", title: "Budget och julvisning", isTest: false },
+          decisions: ["Julvisningen blir den 18 december i Kårallen.", "Budgeten för våren godkänns med 4 000 kr till filmhyra.", "Medlemsavgiften är oförändrad, 50 kr."],
+          attendees: ["Anna Berg, Erik Lund, Sara Nyström, Johan Ek"],
+          tasks: meetingTasks,
+          isAdmin: true,
           docUrl: "#",
         }}
       />,

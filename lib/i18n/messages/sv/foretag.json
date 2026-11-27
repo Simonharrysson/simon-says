@@ -15,11 +15,7 @@
   },
   "start": {
     "title": "Starta ett möte",
-    "text": "Du väljer vem mötet är för innan du startar. Dokumentet och sammanfattningen går bara till dem som får se mötet.",
-    "button": "Starta möte",
-    "activeTitle": "Ett möte pågår",
-    "activeMine": "Ditt möte pågår.",
-    "toLive": "Till mötet"
+    "text": "Du väljer vem mötet är för innan du startar. Dokumentet och sammanfattningen går bara till dem som får se mötet."
   },
   "meetings": {
     "title": "Möten",

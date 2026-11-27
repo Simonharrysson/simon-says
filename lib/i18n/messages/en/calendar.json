@@ -27,14 +27,14 @@
   "save": "Save calendar",
   "saving": "Saving …",
   "saved": "Saved",
-  "upcomingLabel": "From the calendar",
-  "prepare": "Prepare",
-  "start": "Start",
-  "prepareLabel": "Prepare {title}",
-  "startLabel": "Start {title}",
   "nothingUpcoming": "No upcoming meetings in the calendar.",
   "connectHint": "Connect your calendar to see the association's upcoming meetings here.",
   "unavailable": "The calendar could not be read with your Google account.",
   "untitled": "Untitled meeting",
-  "fromCalendar": "From the calendar: {title}"
+  "fromCalendar": "From the calendar: {title}",
+  "prepare": "Prepare",
+  "start": "Start",
+  "prepareLabel": "Prepare {title}",
+  "startLabel": "Start {title}",
+  "laterLabel": "Later in the calendar"
 }

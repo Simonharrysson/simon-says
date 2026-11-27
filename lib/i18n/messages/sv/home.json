@@ -62,7 +62,17 @@
     "openDoc": "Öppna dokumentet",
     "docHint": "Hela protokollet, med allt som sades och skrevs, finns i dokumentet.",
     "canTickHint": "Du kan bocka av dina egna uppgifter här.",
-    "adminTickHint": "Som admin kan du bocka av alla uppgifter här."
+    "adminTickHint": "Som admin kan du bocka av alla uppgifter här.",
+    "ended": "Mötet är avslutat",
+    "recapTitle": "I korthet",
+    "statDecisions": "Beslut",
+    "statTasks": "Uppgifter",
+    "statDone": "{count, plural, one {# klar} other {# klara}}",
+    "statDuration": "Mötestid",
+    "attended": "Närvarande: {names}",
+    "summarySent": "{mode, select, missed {Sammanfattningen mejlades till {count, plural, one {den som missade mötet} other {de # som missade mötet}}.} other {Sammanfattningen mejlades till {count, plural, one {# person} other {# personer}}.}}",
+    "summaryPending": "Sammanfattningen mejlas strax till dem som ska ha den.",
+    "summaryOff": "Ingen sammanfattning mejlas, det är avstängt i inställningarna."
   },
   "openCount": "{count, plural, one {# öppen uppgift} other {# öppna uppgifter}}",
   "overdueCount": "{count, plural, one {# försenad} other {# försenade}}",

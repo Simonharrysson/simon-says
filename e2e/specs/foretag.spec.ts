@@ -156,7 +156,8 @@ test("Företag: create, build the tree, start a meeting for Utveckling, visibili
 
   const sees = async (page: Page, yes: boolean) => {
     await page.goto(company.url);
-    const link = page.locator(`a[href="/orgs/${company.id}/mote/${meetingId}"]`);
+    // In the list (the starter's Nästa möte card links to it too, as the meeting they just ended).
+    const link = page.getByRole("region", { name: "Möten" }).locator(`a[href="/orgs/${company.id}/mote/${meetingId}"]`);
     if (yes) await expect(link).toBeVisible();
     else await expect(link).toHaveCount(0);
   };

@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/Banner";
-import { ButtonLink } from "@/components/ui/button";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
-import { IconArrowRight, IconMic, IconPlus, IconRefresh, IconUsers } from "@/components/ui/icons";
+import { IconArrowRight, IconPlus, IconRefresh, IconUsers } from "@/components/ui/icons";
 import { ListRow } from "@/components/ui/ListRow";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -25,6 +23,9 @@ import { formatDateTime } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Notice } from "@/lib/ui/messages";
 import { PeopleTreeViews } from "@/components/groups/PeopleTreeViews";
+import { NextMeetingHero, type HeroMeetingInfo } from "@/components/views/NextMeetingHero";
+import type { HeroState } from "@/lib/meetings/next-meeting";
+import type { SummaryStatus } from "@/lib/meetings/recap";
 
 // The Företag page (0050): Möten · Kunder · Personer & grupper · Inställningar. Everything listed
 // here was read with the viewer's own client, so it is exactly what RLS lets them see.
@@ -53,6 +54,8 @@ export interface ForetagViewProps {
   actions: ForetagActions;
   /** Admins, Inställningar: the logo and website editor (`CompanyDetailsForm`). */
   detailsSettings?: ReactNode;
+  /** Möten: the Nästa möte card (the viewer's own running or just-ended meeting, else Starta). */
+  hero?: { state: HeroState; meeting?: HeroMeetingInfo | null; summary?: SummaryStatus | null };
 }
 
 const TABS: { id: ForetagTab; adminOnly?: boolean }[] = [{ id: "moten" }, { id: "kunder" }, { id: "personer" }, { id: "installningar", adminOnly: true }];
@@ -99,7 +102,7 @@ export function ForetagView(props: ForetagViewProps) {
 
 const groupName = (groups: GroupRow[], id: string | null) => (id ? (groups.find((g) => g.id === id)?.name ?? null) : null);
 
-function MeetingsTab({ org, isAdmin, data }: ForetagViewProps) {
+function MeetingsTab({ org, isAdmin, data, hero }: ForetagViewProps) {
   const t = useTranslations("foretag");
   const locale = useLocale() as Locale;
   const mine = groupName(data.groups, data.myGroupId);
@@ -111,19 +114,15 @@ function MeetingsTab({ org, isAdmin, data }: ForetagViewProps) {
         <IconUsers size={16} className="mt-[0.15rem] flex-none text-ink-3" />
         <span>{isAdmin ? t("visibility.admin") : mine ? t("visibility.placed", { group: mine }) : t("visibility.unplaced")}</span>
       </p>
-      {data.myLiveId ? (
-        <Banner tone="info" live={false} title={t("start.activeTitle")} action={<ButtonLink href={`/meetings/${data.myLiveId}`} size="sm" variant="secondary">{t("start.toLive")}</ButtonLink>}>
-          <p>{t("start.activeMine")}</p>
-        </Banner>
-      ) : (
-        <Panel title={t("start.title")} titleId="start-title">
-          <div className="flex flex-col gap-4">
-            <p className="max-w-[60ch] text-sm text-ink-2">{t("start.text")}</p>
-            <ButtonLink href={`/meetings/ny/${org.id}`} variant="primary" size="lg" icon={<IconMic />} className="self-start max-sm:w-full">
-              {t("start.button")}
-            </ButtonLink>
-          </div>
-        </Panel>
+      {hero && (
+        <NextMeetingHero
+          orgId={org.id}
+          foretag
+          state={hero.state}
+          meeting={hero.meeting}
+          summary={hero.summary}
+          continueHref={hero.state.kind === "live" ? `/meetings/${hero.state.meetingId}` : null}
+        />
       )}
       {done.length === 0 ? (
         <EmptyState title={t("meetings.emptyTitle")}>

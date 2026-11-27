@@ -16,9 +16,12 @@ export interface MeetingTask extends MyTask {
 }
 
 export interface OrgMeetingPage {
-  org: { id: string; name: string };
-  meeting: { id: string; startedAt: string; status: string; title: string | null; isTest: boolean };
+  /** `kind` (förening | foretag) when the loader read it. */
+  org: { id: string; name: string; kind?: string };
+  meeting: { id: string; startedAt: string; status: string; title: string | null; isTest: boolean; endedAt?: string | null };
   decisions: string[];
+  /** The Närvarande rows (as written: one name or a typed list each). */
+  attendees?: string[];
   tasks: MeetingTask[];
   isAdmin: boolean;
   docUrl: string | null;
@@ -34,13 +37,13 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
   ]);
   if (e1 || e2 || e3) throw new Error(`loadOrgMeeting: ${(e1 ?? e2 ?? e3)!.message}`);
   if (!org || org.kind === "privat" || !meeting || !member) return null;
-  const m = meeting as HomeMeeting & { notes_tab_id?: string | null };
+  const m = meeting as HomeMeeting & { notes_tab_id?: string | null; ended_at?: string | null };
   const [{ data: rows, error: e4 }, { data: people, error: e5 }] = await Promise.all([
     db.from("note_items").select("*").eq("meeting_id", meetingId).order("position"),
     db.from("people").select("id, org_id, name, role, member_user_id").eq("org_id", orgId),
   ]);
   if (e4 || e5) throw new Error(`loadOrgMeeting: ${(e4 ?? e5)!.message}`);
-  return buildOrgMeeting({
+  const page = buildOrgMeeting({
     userId,
     org: { id: org.id, name: org.name },
     meeting: m,
@@ -48,6 +51,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     rows: (rows ?? []) as HomeNoteRow[],
     people: (people ?? []) as HomePerson[],
   });
+  return { ...page, org: { ...page.org, kind: org.kind as string } };
 }
 
 /**
@@ -57,7 +61,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
 export function buildOrgMeeting(input: {
   userId: string;
   org: { id: string; name: string };
-  meeting: HomeMeeting;
+  meeting: HomeMeeting & { ended_at?: string | null };
   role: string;
   rows: HomeNoteRow[];
   people: HomePerson[];
@@ -106,8 +110,16 @@ export function buildOrgMeeting(input: {
     });
   return {
     org: { id: org.id, name: org.name },
-    meeting: { id: m.id, startedAt: m.started_at, status: m.status, title: (typeof m.title === "string" && m.title.trim()) || null, isTest: Boolean(m.is_test) },
+    meeting: {
+      id: m.id,
+      startedAt: m.started_at,
+      status: m.status,
+      title: (typeof m.title === "string" && m.title.trim()) || null,
+      isTest: Boolean(m.is_test),
+      endedAt: m.ended_at ?? null,
+    },
     decisions: shown.filter((r) => isDecision(chain(r))).map((r) => text(r.text)!),
+    attendees: shown.filter((r) => r.section === "attendees").map((r) => text(r.text)!),
     tasks,
     isAdmin,
     docUrl: m.doc_id ? docUrl(m.doc_id) : null,

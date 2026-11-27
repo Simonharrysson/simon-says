@@ -3,9 +3,10 @@ import { stockholmDateTime } from "@/lib/calendar/events";
 import { expect, expectAccessible, fake, test } from "../fixtures";
 
 // Kalender (todo #14): an admin connects their Google Calendar (read only, its own consent),
-// chooses the förening's calendar with a title filter, and the Starta möte card lists the next
-// meetings from it: "Förbered" opens Förbered möte with the event's date, time and title, "Starta"
-// is offered for the event happening now. A member who hasn't connected gets a quiet hint.
+// chooses the förening's calendar with a title filter, and its next meeting feeds the Möten tab's
+// Nästa möte card: one happening now is offered "Starta möte" (with the event), and "Förbered"
+// opens Förbered möte with the event's date, time and title. A member who hasn't connected gets
+// a quiet hint.
 // "Koppla från" in Inställningar deletes our copy. The calendar is the fake Calendar API.
 
 const hourFromNow = (h: number) => {
@@ -25,7 +26,8 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
   await fake.calendar(admin, { id: shared, summary: "Föreningens kalender" }, [
     board,
     now,
-    { id: `ev${randomUUID().slice(0, 8)}`, summary: "Lunch", start: hourFromNow(72), end: hourFromNow(73) },
+    // The soonest event, but not a meeting: the title filter leaves it out.
+    { id: `ev${randomUUID().slice(0, 8)}`, summary: "Lunch", start: new Date(Date.now() + 5 * 60_000).toISOString(), end: new Date(Date.now() + 65 * 60_000).toISOString() },
   ]);
 
   // Inställningar → Möten; "Koppla kalender" comes back to it through /orgs/<id>/installningar
@@ -57,23 +59,28 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
     .poll(async () => (await db.from("orgs").select("calendar_id, calendar_name, calendar_filter").eq("id", org.id).single()).data)
     .toEqual({ calendar_id: shared, calendar_name: "Föreningens kalender", calendar_filter: "möte" });
 
-  // The Starta möte card: the next meetings, soonest first; the lunch is filtered out.
+  // The Nästa möte card: the calendar's next meeting (the lunch is filtered out), happening now,
+  // so starting comes first; nothing is prepared for it.
   await adminPage.goto(org.url);
-  const list = adminPage.getByRole("list", { name: "Från kalendern" });
-  await expect(list.getByRole("listitem")).toHaveCount(2);
-  await expect(list.getByRole("listitem").nth(0)).toContainText("Medlemsmöte");
-  await expect(list.getByRole("listitem").nth(1)).toContainText("Styrelsemöte");
-  await expect(list.getByText("Lunch")).toHaveCount(0);
-  // "Starta" only for the event happening now.
-  await expect(list.getByRole("link", { name: "Starta Medlemsmöte" })).toHaveAttribute("href", `/meetings/ny/${org.id}?event=${now.id}`);
-  await expect(list.getByRole("link", { name: "Starta Styrelsemöte" })).toHaveCount(0);
+  const card = adminPage.locator('section[data-hero="unprepared"]');
+  await expect(card.getByRole("heading", { name: "Medlemsmöte" })).toBeVisible();
+  await expect(card).toContainText("Pågår nu enligt kalendern. Ingen dagordning än.");
+  await expect(card).toContainText("från kalendern");
+  await expect(adminPage.getByText("Lunch")).toHaveCount(0);
+  await expect(card.getByRole("link", { name: "Starta möte" })).toHaveAttribute("href", `/meetings/ny/${org.id}?event=${now.id}`);
+  // The meetings after it can be prepared too ("Senare i kalendern"); Starta only for one happening now.
+  const later = card.getByRole("list", { name: "Senare i kalendern" });
+  await expect(later.getByRole("listitem")).toHaveCount(1);
+  await expect(later.getByRole("listitem").first()).toContainText("Styrelsemöte");
+  await expect(later.getByRole("link", { name: "Förbered Styrelsemöte" })).toHaveAttribute("href", new RegExp(`/orgs/${org.id}/forbered\\?datum=.*&event=${board.id}$`));
+  await expect(later.getByRole("link", { name: "Starta Styrelsemöte" })).toHaveCount(0);
   await expectAccessible(adminPage);
 
   // Förbered: the event's date, time and title.
-  await list.getByRole("link", { name: "Förbered Styrelsemöte" }).click();
-  await expect(adminPage).toHaveURL(new RegExp(`/orgs/${org.id}/forbered\\?datum=.*&event=${board.id}`));
-  await expect(adminPage.getByText("Från kalendern: Styrelsemöte")).toBeVisible();
-  const when = stockholmDateTime(board.start);
+  await card.getByRole("link", { name: /^Förbered (dagens|morgondagens) möte$/ }).click();
+  await expect(adminPage).toHaveURL(new RegExp(`/orgs/${org.id}/forbered\\?datum=.*&event=${now.id}`));
+  await expect(adminPage.getByText("Från kalendern: Medlemsmöte")).toBeVisible();
+  const when = stockholmDateTime(now.start);
   await expect(adminPage.getByLabel("Datum")).toHaveValue(when.date);
   await expect(adminPage.getByLabel("Tid")).toHaveValue(when.time);
 
@@ -81,10 +88,11 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
   await adminPage.goto(`/meetings/ny/${org.id}?event=${now.id}`);
   await expect(adminPage.getByText("Från kalendern: Medlemsmöte")).toBeVisible();
 
-  // A member who hasn't connected their calendar: a quiet hint, no list.
+  // A member who hasn't connected their calendar: a quiet hint in the card, and the card as without a calendar.
   const { page: memberPage } = await signedIn(member, org.url);
-  await expect(memberPage.getByText("Koppla din kalender så visas föreningens kommande möten här.")).toBeVisible();
-  await expect(memberPage.getByRole("list", { name: "Från kalendern" })).toHaveCount(0);
+  const memberCard = memberPage.locator('section[data-hero="unprepared"]');
+  await expect(memberCard.getByText("Koppla din kalender så visas föreningens kommande möten här.")).toBeVisible();
+  await expect(memberCard.getByRole("heading", { name: "Ingen dagordning än" })).toBeVisible();
 
   // Koppla från (Inställningar): our copy is deleted.
   await adminPage.goto("/installningar");

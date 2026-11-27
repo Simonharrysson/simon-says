@@ -62,7 +62,17 @@
     "openDoc": "Open the document",
     "docHint": "The full minutes, with everything said and written, are in the document.",
     "canTickHint": "You can tick off your own tasks here.",
-    "adminTickHint": "As an admin you can tick off every task here."
+    "adminTickHint": "As an admin you can tick off every task here.",
+    "ended": "The meeting has ended",
+    "recapTitle": "At a glance",
+    "statDecisions": "Decisions",
+    "statTasks": "Tasks",
+    "statDone": "{count, plural, one {# done} other {# done}}",
+    "statDuration": "Length",
+    "attended": "Present: {names}",
+    "summarySent": "{mode, select, missed {The summary was e-mailed to {count, plural, one {the one who missed the meeting} other {the # who missed the meeting}}.} other {The summary was e-mailed to {count, plural, one {# person} other {# people}}.}}",
+    "summaryPending": "The summary is e-mailed shortly to the people who should get it.",
+    "summaryOff": "No summary is e-mailed; it is turned off in the settings."
   },
   "openCount": "{count, plural, one {# open task} other {# open tasks}}",
   "overdueCount": "{count} overdue",

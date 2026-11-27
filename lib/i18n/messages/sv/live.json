@@ -97,7 +97,7 @@
   "ended": {
     "membersFailed": " {count, plural, one {En medlem} other {# medlemmar}} fick inte åtkomst – dela dokumentet manuellt.",
     "sharedWith": " och delade med föreningens medlemmar",
-    "finalizing": "Gör anteckningarna klara…",
+    "finalizing": "Anteckningarna färdigställs…",
     "ended": "Mötet är avslutat",
     "waitingTitle": "{count, plural, one {# rad väntar} other {# rader väntar}} på nätet – stäng inte fliken",
     "waitingText": "Det som sades sist har inte nått servern än. Vi försöker igen hela tiden; låt fliken vara öppen tills det här försvinner.",
@@ -109,7 +109,7 @@
     "signedOutText": "Logga in igen (öppnas i en ny flik) och tryck sedan Försök igen, så sparas resten och mötet avslutas. Stänger du fliken nu avslutas mötet ändå inom en kvart, men utan de raderna.",
     "endFailedTitle": "Mötet kunde inte avslutas",
     "endFailedText": "Vi nådde inte servern. Kontrollera nätet och försök igen. Stänger du fliken avslutas mötet ändå inom en kvart.",
-    "finalizingText": "Ni pratade i {duration}. Anteckningarna får en sista genomgång, det tar ungefär en minut.",
+    "finalizingText": "Mötet är avslutat efter {duration}. Anteckningarna får en sista genomgång, sedan öppnas mötets sida med beslut och uppgifter.",
     "canClose": " Du kan stänga fliken, det blir klart ändå.",
     "doneShared": "Ni pratade i {duration}. Anteckningarna är färdiga.{shared}",
     "done": "Ni pratade i {duration}. Anteckningarna är färdiga{shared}.",

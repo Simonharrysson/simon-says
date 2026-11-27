@@ -42,7 +42,9 @@ import { InviteByEmail } from "@/components/views/InviteByEmail";
 import type { SettingsSectionId } from "@/lib/orgs/tabs";
 import { OrgsView } from "@/components/views/OrgsView";
 import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
-import { StartMeetingForm } from "@/components/views/StartMeetingForm";
+import { NextMeetingHero, type NextMeetingHeroProps } from "@/components/views/NextMeetingHero";
+import { MeetingMoreMenu } from "@/components/views/MeetingMoreMenu";
+import type { HeroState } from "@/lib/meetings/next-meeting";
 import type { DraftItem, MeetingType } from "@/lib/prepare/types";
 import { OverviewView, type GoalsPhase, type OverviewGoal } from "@/components/views/OverviewView";
 import type { Overview } from "@/lib/dashboard/overview";
@@ -670,6 +672,42 @@ const demoBoard: BoardRow[] = [
   { personId: null, name: null, role: null, email: "sara@example.com", status: "account", member: adminMembers[2], voiceConsent: false },
 ];
 
+/**
+ * The Möten tab with the Nästa möte card in a given state (the weekly loop). Without `state` the
+ * list decides: a live or ending meeting in it shows the card's running states.
+ */
+function HeroOrgDemo({
+  state,
+  list = meetings.slice(1),
+  calendar,
+  hero,
+}: {
+  state?: HeroState;
+  list?: OrgDetailViewProps["meetings"];
+  calendar?: NextMeetingHeroProps["calendar"];
+  hero?: Partial<NextMeetingHeroProps>;
+}) {
+  return (
+    <AppChrome>
+      <OrgDetailView
+        org={org}
+        isAdmin
+        userId={ME}
+        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+        members={adminMembers}
+        people={people}
+        meetings={list}
+        meetingInfo={meetingInfo}
+        notice={null}
+        startMeeting={state && <NextMeetingHero orgId={ORG_ID} state={state} calendar={calendar} more={<MeetingMoreMenu orgId={ORG_ID} />} {...hero} />}
+        liveMeetingHref={() => "/design?vy=live"}
+        tabs={{ active: "moten", href: orgTabsHref }}
+        actions={actions}
+      />
+    </AppChrome>
+  );
+}
+
 const render: Record<string, () => ReactNode> = {
   tokens: () => <Tokens />,
   primitives: () => <Primitives />,
@@ -727,7 +765,6 @@ const render: Record<string, () => ReactNode> = {
             meetings={meetings}
             notice={orgNotice("mote-active", undefined, locale)}
             summarySettings={<SummarySettingsDemo />}
-            startMeetingHref="#"
             formatCard={
               <FormatCard
                 orgId={ORG_ID}
@@ -940,50 +977,55 @@ const render: Record<string, () => ReactNode> = {
     </AppChrome>
   ),
   "org-prepared": () => (
-    <AppChrome>
-      <OrgDetailView
-        org={org}
-        isAdmin
-        userId={ME}
-        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
-        people={people}
-        meetings={meetings.slice(1)}
-        notice={null}
-        startMeeting={
-          <StartMeetingForm
-            orgId={ORG_ID}
-            showTestMeeting
-            prepared={[{ date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }]}
-          />
-        }
-        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={noopAction} />}
-        tabs={{ active: "moten", href: orgTabsHref }}
-        actions={actions}
-      />
-    </AppChrome>
+    <HeroOrgDemo
+      state={{ kind: "prepared", prepared: { date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }, event: null, day: { type: "weekday", weekday: 2 } }}
+    />
   ),
-  "org-start": () => (
+  "org-start": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} />,
+  "org-calendar": () => (
+    <HeroOrgDemo
+      state={{ kind: "unprepared", event: { id: "ev1", title: "Styrelsemöte", date: "2026-12-01", time: "18:00", now: false }, day: { type: "weekday", weekday: 2 } }}
+      calendar={{ state: "ok", events: [{ id: "ev1", title: "Styrelsemöte", date: "2026-12-01", time: "18:00", now: false }] }}
+      hero={{
+        later: [
+          { id: "ev3", title: "Medlemsmöte", date: "2026-12-03", time: "18:30", now: false },
+          { id: "ev4", title: "Styrelsemöte", date: "2026-12-08", time: "18:00", now: false },
+        ],
+      }}
+    />
+  ),
+  "org-calendar-prepared": () => (
+    <HeroOrgDemo
+      state={{ kind: "prepared", prepared: { date: "2026-12-01", time: "18:00", kind: "styrelsemote", docUrl: "#" }, event: null, day: { type: "weekday", weekday: 2 } }}
+      calendar={{ state: "ok", events: [{ id: "ev2", title: "Styrelsemöte med valberedningen", date: "2026-12-08", time: "18:00", now: false }] }}
+      hero={{ later: [{ id: "ev2", title: "Styrelsemöte med valberedningen", date: "2026-12-08", time: "18:00", now: false }] }}
+    />
+  ),
+  "org-calendar-disconnected": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "disconnected", connect: noopAction }} />,
+  "org-calendar-unavailable": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "unavailable" }} />,
+  "org-calendar-loading": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} hero={{ pending: true }} />,
+  "org-ending": () => (
+    <HeroOrgDemo list={[{ ...meetings[0], status: "ending" }, ...meetings.slice(1)]} />
+  ),
+  "org-ended": () => (
+    <HeroOrgDemo
+      list={[{ ...meetings[1], started_at: ago(130), ended_at: ago(46) }, ...meetings.slice(2)]}
+      state={{ kind: "ended", meetingId: "m2" }}
+      hero={{ meeting: { id: "m2", title: "Budget och prova-på-kväll", startedAt: ago(130), endedAt: ago(46), decisions: 3, tasks: 5 }, summary: { state: "sent", sent: 3, mode: "missed" } }}
+    />
+  ),
+  "org-ended-pending": () => (
+    <HeroOrgDemo
+      list={[{ ...meetings[1], started_at: ago(70), ended_at: ago(1) }, ...meetings.slice(2)]}
+      state={{ kind: "ended", meetingId: "m2" }}
+      hero={{ meeting: { id: "m2", title: null, startedAt: ago(70), endedAt: ago(1), decisions: 0, tasks: 2 }, summary: { state: "pending" } }}
+    />
+  ),
+  "org-hero-foretag": () => (
     <AppChrome>
-      <OrgDetailView
-        org={org}
-        isAdmin
-        userId={ME}
-        inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-        members={[{ userId: ME, email: "anna.berg@example.com", role: "admin" }]}
-        people={people}
-        meetings={meetings.slice(1)}
-        notice={null}
-        startMeeting={
-          <StartMeetingForm
-            orgId={ORG_ID}
-            showTestMeeting
-          />
-        }
-        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={noopAction} />}
-        tabs={{ active: "moten", href: orgTabsHref }}
-        actions={actions}
-      />
+      <div className="mx-auto flex w-full max-w-[56rem] flex-col gap-6 px-gutter">
+        <NextMeetingHero orgId={ORG_ID} state={{ kind: "start" }} foretag />
+      </div>
     </AppChrome>
   ),
   "prepare-type": () => <PrepareDemo phase={{ step: "type" }} />,

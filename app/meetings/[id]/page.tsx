@@ -62,6 +62,13 @@ export default async function MeetingPage({
   const shareFailedRaw = (started?.[0]?.detail as { shareFailed?: unknown } | undefined)?.shareFailed;
   const shareFailed = typeof shareFailedRaw === "number" ? shareFailedRaw : null;
   const missedMeetingFolder = (started?.[0]?.detail as { missedMeetingFolder?: unknown } | undefined)?.missedMeetingFolder === true;
+  // A finished förening (or Företag) meeting ends on its page in the app, the result from now on.
+  // Not when this page has something to say first: stopped by a limit (`stoppat`), the Avsluta
+  // answers came too late (`svar`), or members the Doc couldn't be shared with. Privat has its own
+  // summary page. Also reached while the end flow polls (router.refresh): the client follows it.
+  if (status === "done" && !isPrivat(org) && stoppat === undefined && svar === undefined && !(shareFailed && shareFailed > 0)) {
+    redirect(`/orgs/${org.id}/mote/${m.id}`);
+  }
   // Privat (0045): back to the context; the summary has its own page; there may be no Doc.
   const tp = await getTranslations("privat.live");
   const context = isPrivat(org) && m.context_id ? ((await db.from("contexts").select("id, name").eq("id", m.context_id).maybeSingle()).data as { id: string; name: string } | null) : null;

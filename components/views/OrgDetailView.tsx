@@ -4,7 +4,6 @@ import { AppLink } from "@/components/ui/AppLink";
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/Banner";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +29,7 @@ import { PersonRow } from "./PersonRow";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
 import type { OrgProfile } from "@/lib/orgs/profile";
 import { OrgAbout } from "./OrgAbout";
+import { NextMeetingHero } from "./NextMeetingHero";
 import type { MeetingListInfo } from "@/lib/meetings/list";
 
 export interface OrgDetailMeeting {
@@ -73,7 +73,7 @@ export interface OrgDetailViewProps {
   /** Per meeting id; a meeting not in the map is `open` (e.g. the /design gallery). */
   docAccess?: Record<string, DocAccess>;
   notice: Notice | null;
-  /** The "Starta möte" form, shown while no meeting is running. Omitted: no start panel. */
+  /** The Nästa möte card (`NextMeetingHero`) while no meeting is running. Omitted: no card. */
   startMeeting?: ReactNode;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
@@ -259,7 +259,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
   const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const t = useTranslations("org");
   const tc = useTranslations("common");
-  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  // A live meeting wins over one whose notes are still being finished.
+  const active = meetings.find((m) => m.status === "live") ?? meetings.find((m) => m.status === "ending");
   // Any member may continue the running meeting from their own device (Meet-like presence).
   const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
   // Without tabs (older callers) everything an admin has shows on the one page, as before.
@@ -340,7 +341,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </div>
         }
         actions={
-          running && liveMeetingHref ? (
+          // On Möten the Nästa möte card has "Fortsätt mötet"; elsewhere the header keeps it.
+          running && liveMeetingHref && !(tabs && tab === "moten") ? (
             <ButtonLink href={liveMeetingHref(running.id)} variant="primary" size="lg" icon={<IconPlay size={18} />}>
               {t("resume")}
             </ButtonLink>
@@ -387,7 +389,8 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => props.docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
-  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  // A live meeting wins over one whose notes are still being finished.
+  const active = meetings.find((m) => m.status === "live") ?? meetings.find((m) => m.status === "ending");
   const settingsHere = isAdmin && (!tabs || tab === "installningar");
   const meetingsHere = !tabs || tab === "moten";
   return (
@@ -396,40 +399,43 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
         <div className={isAdmin ? "flex flex-col gap-6" : "grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]"}>
           <div className="flex flex-col gap-6">
             {active ? (
-              <Banner tone="info" title={t("activeTitle")} live={false}>
-                {access(active) !== "open" && active.started_by !== userId ? (
-                  <div className="flex flex-col items-start gap-2">
+              // The Nästa möte card's running states: live ("Fortsätt mötet") or the notes being finished.
+              <NextMeetingHero
+                orgId={org.id}
+                state={active.status === "live" ? { kind: "live", meetingId: active.id } : { kind: "ending", meetingId: active.id }}
+                meeting={{ id: active.id, title: null, startedAt: active.started_at, endedAt: active.ended_at, decisions: 0, tasks: 0 }}
+                continueHref={active.status === "live" && userId !== null && liveMeetingHref ? liveMeetingHref(active.id) : null}
+                liveDoc={
+                  access(active) !== "open" && active.started_by !== userId ? (
+                    <div className="flex flex-col items-start gap-2">
+                      <p>
+                        {t("activeText")}
+                        {t("activeAutoEnd")}
+                      </p>
+                      <DocAccessButton
+                        meetingId={active.id}
+                        docHref={docUrl(active.doc_id)}
+                        starter={starter(active)}
+                        email={viewerEmail}
+                        askOnly={access(active) === "ask"}
+                      />
+                    </div>
+                  ) : (
                     <p>
-                      {t("activeText")}
-                      {active.status === "live" && t("activeAutoEnd")}
+                      {t.rich("activeTextLink", {
+                        link: (chunks) => (
+                          <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                            {chunks}
+                          </a>
+                        ),
+                      })}
+                      {t("activeAutoEnd")}
                     </p>
-                    <DocAccessButton
-                      meetingId={active.id}
-                      docHref={docUrl(active.doc_id)}
-                      starter={starter(active)}
-                      email={viewerEmail}
-                      askOnly={access(active) === "ask"}
-                    />
-                  </div>
-                ) : (
-                  <p>
-                    {t.rich("activeTextLink", {
-                      link: (chunks) => (
-                        <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
-                          {chunks}
-                        </a>
-                      ),
-                    })}
-                    {active.status === "live" && t("activeAutoEnd")}
-                  </p>
-                )}
-              </Banner>
+                  )
+                }
+              />
             ) : (
-              startMeeting && (
-                <Panel title={t("startPanel")} titleId="start-title">
-                  {startMeeting}
-                </Panel>
-              )
+              startMeeting
             )}
             <MeetingsPanel
               meetings={meetings}

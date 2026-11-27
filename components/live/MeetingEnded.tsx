@@ -144,19 +144,27 @@ export function MeetingEnded({
             : t("done", { duration: formatDuration(durationSeconds, locale), shared })}
       </p>
       <div className="flex flex-wrap items-center gap-3">
+        {/* A förening's meeting: its page in the app is the result (decisions, tasks); the Doc is secondary. */}
+        {!privat && meetingHref && !finalizing && (
+          <ButtonLink href={meetingHref} variant="primary" size="lg">
+            {t("toMeeting")}
+          </ButtonLink>
+        )}
         {docUrl && (
-          <ButtonLink href={docUrl} target="_blank" rel="noopener noreferrer" variant="primary" size="lg" icon={<IconExternal size={18} />}>
+          <ButtonLink
+            href={docUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant={!privat && meetingHref && !finalizing ? "secondary" : "primary"}
+            size="lg"
+            icon={<IconExternal size={18} />}
+          >
             {t("openDoc")}
           </ButtonLink>
         )}
         {privat?.summaryHref && !finalizing && (
           <ButtonLink href={privat.summaryHref} variant={docUrl ? "secondary" : "primary"} size="lg">
             {tp("toSummary")}
-          </ButtonLink>
-        )}
-        {!privat && meetingHref && !finalizing && (
-          <ButtonLink href={meetingHref} variant={docUrl ? "secondary" : "primary"} size="lg">
-            {t("toMeeting")}
           </ButtonLink>
         )}
         <ButtonLink href={orgHref} variant="ghost" size="lg">
