@@ -33,8 +33,11 @@ import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEdito
 import { OrgDetailView, type OrgDetailViewProps, type OrgTab } from "@/components/views/OrgDetailView";
 import { BoardStep } from "@/components/onboarding/steps";
 import type { BoardRow } from "@/lib/people/board";
-import { OrgProfileForm } from "@/components/views/OrgProfileForm";
-import { parseProfile } from "@/lib/orgs/profile";
+import { OrgDetailsForm } from "@/components/settings/OrgDetails";
+import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
+import { OrgCalendarForm } from "@/components/calendar/OrgCalendarForm";
+import { InviteByEmail } from "@/components/views/InviteByEmail";
+import type { SettingsSectionId } from "@/lib/orgs/tabs";
 import { OrgsView } from "@/components/views/OrgsView";
 import { PrepareMeetingView, type PreparePhase, type PrepareMeetingViewProps } from "@/components/views/PrepareMeeting";
 import { StartMeetingForm } from "@/components/views/StartMeetingForm";
@@ -522,6 +525,71 @@ function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginL
   );
 }
 
+/** The förening page's Inställningar, one section open (fictional data). */
+function SettingsDemo({ section }: { section: SettingsSectionId }) {
+  return (
+    <AppChrome>
+      <WithLocale
+        render={(locale) => (
+          <OrgDetailView
+            org={{ ...org, ...orgProfile }}
+            isAdmin
+            userId={ME}
+            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+            members={adminMembers}
+            people={people}
+            meetings={meetings}
+            notice={section === "styrelsen" ? orgNotice(undefined, "admin-ny", locale) : null}
+            settingsSection={section}
+            boardList={(memberControls, linkActions) => (
+              <BoardStep
+                orgName={org.name}
+                rows={demoBoard}
+                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                myEmail="anna.berg@example.com"
+                memberControls={memberControls}
+                linkActions={linkActions}
+                inviteEmail={
+                  <InviteByEmail
+                    orgId={ORG_ID}
+                    orgName={org.name}
+                    inviterName="Anna Berg"
+                    inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
+                    invites={[]}
+                    send={async () => ({ ok: true, results: [], invites: [] })}
+                  />
+                }
+                onInvite={async () => null}
+                onAdd={async () => null}
+                onUpdate={async () => null}
+                onRemove={async () => null}
+              />
+            )}
+            detailsSettings={<OrgDetailsForm org={{ id: ORG_ID, name: org.name, logoUpdatedAt: null, profile: orgProfile }} />}
+            folderSettings={<MeetingFolderSetting orgId={ORG_ID} folderName="Styrelsen 2026–2027" folderSet pickerEnabled />}
+            calendarSettings={
+              <OrgCalendarForm
+                orgId={ORG_ID}
+                connected
+                calendars={[{ id: "kal-1", name: "Styrelsen" }, { id: "kal-2", name: "Föreningens möten" }]}
+                current={{ id: "kal-1", name: "Styrelsen", filter: null }}
+                save={async () => ({ ok: true })}
+                connect={noopAction}
+              />
+            }
+            voiceSettings={<VoicesSetting orgId={ORG_ID} board={demoBoard} />}
+            summarySettings={<SummarySettingsDemo />}
+            formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={noopAction} />}
+            startMeetingHref="#"
+            tabs={{ active: "installningar", href: orgTabsHref }}
+            actions={actions}
+          />
+        )}
+      />
+    </AppChrome>
+  );
+}
+
 const meetings: OrgDetailViewProps["meetings"] = [
   { id: "m1", status: "live", started_at: ago(42), ended_at: null, doc_id: "exempel1", started_by: "other" },
   { id: "m2", status: "done", started_at: ago(7 * 24 * 60), ended_at: ago(7 * 24 * 60 - 84), doc_id: "exempel2", started_by: ME },
@@ -620,10 +688,6 @@ const render: Record<string, () => ReactNode> = {
             people={people}
             meetings={meetings}
             notice={orgNotice("mote-active", undefined, locale)}
-            profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async (_id, input) => {
-              const r = parseProfile(input);
-              return r.ok ? { ok: true, profile: r.profile } : { ok: false, message: "Kontrollera fälten och försök igen.", errors: r.errors };
-            }} />}
             summarySettings={<SummarySettingsDemo />}
             startMeetingHref="#"
             formatCard={
@@ -631,7 +695,6 @@ const render: Record<string, () => ReactNode> = {
                 orgId={ORG_ID}
                 current={{ kind: "veckomote", name: "Veckomöte" }}
                 isAdmin
-                meetingFolder={{ id: null }}
                 formats={[]}
                 changeFormat={noopAction}
               />
@@ -645,43 +708,11 @@ const render: Record<string, () => ReactNode> = {
       />
     </AppChrome>
   ),
-  "org-settings": () => (
-    <AppChrome>
-      <WithLocale
-        render={(locale) => (
-          <OrgDetailView
-            org={org}
-            isAdmin
-            userId={ME}
-            inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-            members={adminMembers}
-            people={people}
-            meetings={meetings}
-            notice={orgNotice(undefined, "admin-ny", locale)}
-            boardList={(memberControls) => (
-              <BoardStep
-                orgName={org.name}
-                rows={demoBoard}
-                inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
-                myEmail="anna.berg@example.com"
-                showInvite={false}
-                memberControls={memberControls}
-                onAdd={async () => null}
-                onUpdate={async () => null}
-                onRemove={async () => null}
-              />
-            )}
-            profileSettings={<OrgProfileForm orgId={ORG_ID} profile={orgProfile} save={async () => ({ ok: true, profile: orgProfile })} />}
-            summarySettings={<SummarySettingsDemo />}
-            formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: null }} formats={[]} changeFormat={noopAction} />}
-            startMeetingHref="#"
-            tabs={{ active: "installningar", href: orgTabsHref }}
-            actions={actions}
-          />
-        )}
-      />
-    </AppChrome>
-  ),
+  "org-settings": () => <SettingsDemo section="foreningen" />,
+  "org-settings-styrelsen": () => <SettingsDemo section="styrelsen" />,
+  "org-settings-moten": () => <SettingsDemo section="moten" />,
+  "org-settings-efter": () => <SettingsDemo section="efter-motet" />,
+  "org-settings-radera": () => <SettingsDemo section="radera" />,
   "org-member": () => (
     <AppChrome>
       <OrgDetailView
@@ -741,7 +772,7 @@ const render: Record<string, () => ReactNode> = {
             meetings={[]}
             notice={orgNotice(undefined, "admin-ny", locale)}
             startMeetingHref="#"
-            boardList={(memberControls) => (
+            boardList={(memberControls, linkActions) => (
               <BoardStep
                 orgName={org.name}
                 rows={[
@@ -751,8 +782,8 @@ const render: Record<string, () => ReactNode> = {
                 ]}
                 inviteUrl="https://simonsays.harrysson.co/join/Xk3fQ9pLm2"
                 myEmail="anna.berg@example.com"
-                showInvite={false}
                 memberControls={memberControls}
+                linkActions={linkActions}
                 onAdd={async () => null}
                 onUpdate={async () => null}
                 onRemove={async () => null}
@@ -820,7 +851,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "veckomote", name: "Veckomöte", id: null, profile: VECKOMOTE }}
       isAdmin
-      meetingFolder={{ id: null }}
+     
       formats={[]}
       changeFormat={noopAction}
       pickerEnabled
@@ -830,7 +861,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
       isAdmin
-      meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
+     
       formats={savedFormats}
       changeFormat={noopAction}
       pickerEnabled
@@ -840,7 +871,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "veckomote", name: "Veckomöte", id: null, profile: VECKOMOTE }}
       isAdmin
-      meetingFolder={{ id: null }}
+     
       formats={[]}
       changeFormat={noopAction}
     />
@@ -849,7 +880,7 @@ const render: Record<string, () => ReactNode> = {
     <FormatCardDemo
       current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll", id: "f-stadgar", profile: { ...STYRELSEPROTOKOLL, requiredItems: stadgarItems } }}
       isAdmin={false}
-      meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
+     
       formats={savedFormats}
     />
   ),
@@ -888,7 +919,7 @@ const render: Record<string, () => ReactNode> = {
             prepared={[{ date: "2026-12-01", time: "18:00", kind: "veckomote", docUrl: "https://docs.google.com/document/d/exempel/edit" }]}
           />
         }
-        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
+        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={noopAction} />}
         tabs={{ active: "moten", href: orgTabsHref }}
         actions={actions}
       />
@@ -911,7 +942,7 @@ const render: Record<string, () => ReactNode> = {
             showTestMeeting
           />
         }
-        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }} formats={[]} changeFormat={noopAction} />}
+        formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={noopAction} />}
         tabs={{ active: "moten", href: orgTabsHref }}
         actions={actions}
       />
@@ -999,7 +1030,7 @@ const render: Record<string, () => ReactNode> = {
             orgId={ORG_ID}
             current={{ kind: "styrelseprotokoll", name: "Styrelseprotokoll" }}
             isAdmin={false}
-            meetingFolder={{ id: "folder-exempel", name: "Verksamhetsår 2026-2027" }}
+           
             formats={[]}
           />
         }

@@ -63,8 +63,9 @@ test("admin handover: make a member admin, then step down", async ({ page, seedO
   const member = newEmail("blivande");
   const org = await seedOrg({ members: [member], people: ["Anna Berg"] });
 
-  // The one board list on Inställningar: names, roles, accounts and the admin handover.
-  await page.goto(`${org.url}?flik=installningar`);
+  // The one board list on Inställningar → Styrelsen och medlemmar: names, roles, accounts and the
+  // admin handover.
+  await page.goto(`${org.url}?flik=installningar&del=styrelsen`);
   await expect(page.getByText("Du är admin")).toBeVisible();
   const members = page.getByRole("list", { name: "Styrelsen" });
   const memberRow = members.getByRole("listitem").filter({ hasText: member });
@@ -79,6 +80,8 @@ test("admin handover: make a member admin, then step down", async ({ page, seedO
   await expectAccessible(page);
   await dialog.getByRole("button", { name: "Gör till admin" }).click();
   await expect(page.getByText("Medlemmen är nu admin.")).toBeVisible();
+  // The action's message opens the section it is about.
+  await expect(page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Styrelsen och medlemmar" })).toHaveAttribute("aria-current", "true");
   await expect(memberRow).toContainText("admin");
 
   // Two admins now: the shared admin can step down.
@@ -86,17 +89,17 @@ test("admin handover: make a member admin, then step down", async ({ page, seedO
   await page.getByRole("dialog").getByRole("button", { name: "Sluta vara admin" }).click();
   await expect(page.getByText("Du är medlem")).toBeVisible();
   // A member sees no admin panels.
-  await expect(page.getByRole("heading", { name: "Radera föreningen" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Inställningarnas delar" })).toHaveCount(0);
 
   // The new admin sees it from their own account (Inställningar, a plain path for the sign-in).
   const other = await signedIn(member, `${org.url}/installningar`);
   await expect(other.page.getByText("Du är admin")).toBeVisible();
-  await expect(other.page.getByRole("heading", { name: "Radera föreningen" })).toBeVisible();
+  await expect(other.page.getByRole("heading", { name: "Namn, logga och om oss" })).toBeVisible();
 });
 
 test("person roles: the admin sets a role on a person in the board list", async ({ page, seedOrg }) => {
   const org = await seedOrg({ people: ["Erik Lund"] });
-  await page.goto(`${org.url}?flik=installningar`);
+  await page.goto(`${org.url}?flik=installningar&del=styrelsen`);
   const board = page.getByRole("list", { name: "Styrelsen" });
   await board.getByRole("listitem").filter({ hasText: "Erik Lund" }).getByRole("button", { name: "Ändra Erik Lund" }).click();
   await board.getByLabel("Roll").fill("Kassör");

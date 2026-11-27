@@ -1,4 +1,4 @@
-import { requestCalendarAccess, saveOrgCalendarAction } from "@/app/(app)/calendar-actions";
+import { requestCalendarAccess, saveOrgCalendarResult } from "@/app/(app)/calendar-actions";
 import { isNow, orgCalendarChoices, stockholmDateTime } from "@/lib/calendar/events";
 import { myCalendars, orgUpcoming, safeCalendarConnected, type OrgCalendar, type UpcomingState } from "@/lib/calendar/load";
 import { CalendarUpcoming, type StartCalendar } from "./CalendarUpcoming";
@@ -34,7 +34,7 @@ export async function OrgCalendarSlot({ orgId, userId, org }: { orgId: string; u
       connected={connected}
       calendars={calendars ? orgCalendarChoices(calendars).map((c) => ({ id: c.id, name: c.name })) : null}
       current={{ id: org.calendar_id ?? null, name: org.calendar_name ?? null, filter: org.calendar_filter ?? null }}
-      save={saveOrgCalendarAction}
+      save={saveOrgCalendarResult}
       connect={requestCalendarAccess}
     />
   );

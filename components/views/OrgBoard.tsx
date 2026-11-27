@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { BoardStep } from "@/components/onboarding/steps";
+import { InviteByEmail, sendInvites } from "@/components/views/InviteByEmail";
 import type { InviteRow } from "@/lib/invites/rules";
 import type { BoardRow } from "@/lib/people/board";
 import {
@@ -15,9 +16,10 @@ import {
 } from "@/app/(app)/orgs/[id]/kom-igang/actions";
 
 /**
- * Inställningar → "Styrelsen och medlemmar": Kom igång's one board list (names, roles, e-mail and
- * account status) on the förening page, with the same actions as step 2, plus each member's
- * account controls (admin handover, remove, leave) from the page.
+ * The förening's one board list: names, roles, e-mail and account status, with every way in.
+ * Inställningar → "Styrelsen och medlemmar" and Kom igång's step 2 both render it. A person's
+ * invite goes out from their row; "Bjud in via mejl" (several addresses) and "Dela länk" are
+ * folded under the list. On the förening page each member's row also has their account controls.
  */
 export function OrgBoard({
   orgId,
@@ -25,8 +27,10 @@ export function OrgBoard({
   rows,
   inviteUrl,
   myEmail,
-  invites,
+  invites: initialInvites,
+  inviterName,
   memberControls,
+  linkActions,
 }: {
   orgId: string;
   orgName: string;
@@ -34,11 +38,22 @@ export function OrgBoard({
   inviteUrl: string;
   myEmail: string | null;
   invites: InviteRow[];
-  memberControls: Record<string, ReactNode>;
+  /** The name the invite e-mail says invites. */
+  inviterName: string;
+  memberControls?: Record<string, ReactNode>;
+  /** Under "Dela länk" (Inställningar: "Skapa ny länk"). */
+  linkActions?: ReactNode;
 }) {
   const router = useRouter();
   const t = useTranslations("onboarding");
+  const it = useTranslations("invites");
   const offline = t("offlineShort");
+  const [invites, setInvites] = useState(initialInvites);
+  const [seen, setSeen] = useState(initialInvites);
+  if (seen !== initialInvites) {
+    setSeen(initialInvites);
+    setInvites(initialInvites);
+  }
   const done = (r: Promise<ActionResult>) =>
     r.then(
       (x) => {
@@ -54,8 +69,26 @@ export function OrgBoard({
       inviteUrl={inviteUrl}
       myEmail={myEmail}
       invites={invites}
-      showInvite={false}
       memberControls={memberControls}
+      linkActions={linkActions}
+      inviteEmail={
+        <InviteByEmail
+          orgId={orgId}
+          orgName={orgName}
+          inviterName={inviterName}
+          inviteUrl={inviteUrl}
+          invites={invites}
+          memberEmails={rows.flatMap((r) => (r.member?.email ? [r.member.email.toLowerCase()] : []))}
+          onInvitesChange={setInvites}
+        />
+      }
+      onInvite={async (email) => {
+        const res = await sendInvites(orgId, [email.toLowerCase()], false, { failed: it("sendFailed"), offline: it("offline") });
+        if (!res.ok) return res.message;
+        setInvites(res.invites);
+        const outcome = res.results[0];
+        return outcome && outcome.result !== "sent" ? it(`result.${outcome.result}`) : null;
+      }}
       onAdd={(input, member) =>
         addBoardPersonAction(orgId, input, member).then(
           (x) => {

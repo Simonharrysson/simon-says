@@ -57,7 +57,8 @@ export interface InviteByEmailProps {
   send?: SendInvites;
 }
 
-async function postInvites(orgId: string, emails: string[], resend: boolean, copy: { failed: string; offline: string }): Promise<SendResponse> {
+/** POST the addresses to the invites route (also a board row's own "Skicka inbjudan"). */
+export async function sendInvites(orgId: string, emails: string[], resend: boolean, copy: { failed: string; offline: string }): Promise<SendResponse> {
   try {
     const res = await fetch(`/api/orgs/${orgId}/invites`, {
       method: "POST",
@@ -78,13 +79,19 @@ export function InviteByEmail(p: InviteByEmailProps) {
   const t = useTranslations("invites");
   const locale = useLocale();
   const id = useId();
-  const send: SendInvites = p.send ?? ((emails, resend) => postInvites(p.orgId, emails, resend, { failed: t("sendFailed"), offline: t("offline") }));
+  const send: SendInvites = p.send ?? ((emails, resend) => sendInvites(p.orgId, emails, resend, { failed: t("sendFailed"), offline: t("offline") }));
   const [text, setText] = useState(p.initialText ?? "");
   const [preview, setPreview] = useState(Boolean(p.initialPreview));
   const [sending, setSending] = useState(false);
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
   const [results, setResults] = useState<AddressOutcome[] | null>(p.initialResults ?? null);
   const [invites, setInvites] = useState<InviteRow[]>(p.invites);
+  const [seenInvites, setSeenInvites] = useState(p.invites);
+  // An invite sent elsewhere (a board row's own button): the list follows.
+  if (seenInvites !== p.invites) {
+    setSeenInvites(p.invites);
+    setInvites(p.invites);
+  }
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
