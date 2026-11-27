@@ -1,6 +1,7 @@
 import { expect, expectAccessible, test } from "../fixtures";
 
-// Om oss (todo #13): the admin writes the förening's short text and links in Inställningar; a
+// Om oss (todo #13): the admin writes the förening's short text and links in Inställningar →
+// Föreningen (one Spara with the name); a
 // member sees them in the förening page's header. The links are only checked, never followed
 // (the fixture blocks any request to the real internet).
 
@@ -11,19 +12,18 @@ test("Om oss: the admin adds text and links, a member sees them @phone", async (
   const header = page.locator("header").filter({ has: page.getByRole("heading", { level: 1 }) });
   await expect(header.getByRole("list", { name: "Föreningen på nätet" })).toHaveCount(0);
 
-  const settings = page.locator("section", { has: page.getByRole("heading", { name: "Allmänt" }) });
-  const form = settings.locator("form", { has: page.getByRole("button", { name: "Spara Om oss" }) });
+  const form = page.locator("section", { has: page.getByRole("heading", { name: "Namn, logga och om oss" }) }).locator("form");
   await form.getByLabel("Om oss").fill("Vi spelar golf varje tisdag.\nAlla är välkomna.");
   await form.getByLabel("Webbplats").fill("exempel.se");
   await form.getByLabel("Facebook").fill("https://www.facebook.com/exempel");
   // A wrong host is refused with a sentence under the field; nothing is saved.
   await form.getByLabel("Instagram").fill("https://evil.example/exempel");
-  await form.getByRole("button", { name: "Spara Om oss" }).click();
+  await form.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(form.getByText("Skriv ert Instagram-namn")).toBeVisible();
   await expectAccessible(page);
 
   await form.getByLabel("Instagram").fill("@exempel");
-  await form.getByRole("button", { name: "Spara Om oss" }).click();
+  await form.getByRole("button", { name: "Spara", exact: true }).click();
   await expect(form.getByText("Sparat")).toBeVisible();
   // The stored, canonical form comes back into the fields.
   await expect(form.getByLabel("Webbplats")).toHaveValue("https://exempel.se/");
@@ -55,6 +55,6 @@ test("Om oss: the admin adds text and links, a member sees them @phone", async (
     await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   }
   // Members get no settings.
-  await expect(other.page.getByRole("button", { name: "Spara Om oss" })).toHaveCount(0);
+  await expect(other.page.getByRole("heading", { name: "Namn, logga och om oss" })).toHaveCount(0);
   await expectAccessible(other.page);
 });

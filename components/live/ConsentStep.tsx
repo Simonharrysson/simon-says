@@ -7,9 +7,12 @@ import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconChevronDown, IconMic, IconMicOff } from "@/components/ui/icons";
+import { tileClass } from "@/components/ui/tile";
+import type { CaptureSource } from "@/lib/audio/call";
 import { cn } from "@/lib/utils";
+import { SourcePicker } from "./CallSetup";
 
-export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | null;
+export type StartError = "mic-denied" | "mic-missing" | "start-failed" | "limit" | "call-no-audio" | "call-not-tab" | "call-stopped" | "call-failed" | null;
 
 
 /** The banner for a start error; `text` replaces the default explanation (e.g. the server's own message). */
@@ -62,6 +65,12 @@ export function ConsentStep({
   eventTitle,
   privat = false,
   settingsOpen,
+  source,
+  onSourceChange,
+  foretag = false,
+  callSetup,
+  callReady = true,
+  callHint,
 }: {
   orgName: string;
   /** Started from a calendar event (todo #14): its title, as read on the server (Privat only; the AgendaStep line shows it otherwise). */
@@ -91,10 +100,22 @@ export function ConsentStep({
   privat?: boolean;
   /** /design: render "Inställningar för mötet" (and "Så fungerar det" in it) open. */
   settingsOpen?: boolean;
+  /** "Var hålls mötet?" (absent: no choice, the room as before). */
+  source?: CaptureSource;
+  onSourceChange?: (s: CaptureSource) => void;
+  /** A Företag: a video call is consented to as the user's own recording (like Privat). */
+  foretag?: boolean;
+  /** The video-call steps (CallSetup), shown under the choice when `source` is "call". */
+  callSetup?: ReactNode;
+  /** Video call: the meeting tab is shared (or the mic-only fallback was chosen). */
+  callReady?: boolean;
+  /** Why Start waits on the video call (default: share the tab first). */
+  callHint?: string;
 }) {
   const t = useTranslations("live.consent");
   const tCal = useTranslations("calendar");
   const tp = useTranslations("privat.live");
+  const tc = useTranslations("live.call");
   const [confirmed, setConfirmed] = useState(false);
   const id = useId();
   const testing = micLevel != null;
@@ -116,6 +137,19 @@ export function ConsentStep({
     return () => clearTimeout(timer);
   }, [testing, everHeard]);
 
+  const call = source === "call";
+  const ready = confirmed && agendaConfirmed && (!call || callReady);
+  // Video call: a Förening still confirms that everyone knows; Företag and Privat record a call the
+  // user takes part in, on their own responsibility (no announcement required).
+  const consentText = !call ? t("everyone") : privat || foretag ? tc("ownCall") : tc("everyoneCall");
+  const changeSource = (s: CaptureSource) => {
+    if (s === source) return;
+    // Another statement to confirm: the tick starts over, and the room's mic check stops.
+    setConfirmed(false);
+    if (testing) onMicCheckStop?.();
+    onSourceChange?.(s);
+  };
+
   const onConsent = (on: boolean) => {
     setConfirmed(on);
     // The tick is a click: open the mic from it, so Start finds it ready (and a problem shows now).
@@ -124,7 +158,7 @@ export function ConsentStep({
   };
 
   return (
-    <section className="flex flex-col gap-5 rounded-lg bg-surface p-[clamp(1.25rem,4vw,2.5rem)] shadow-panel" aria-labelledby={`${id}-title`}>
+    <section data-card className="flex flex-col gap-5 rounded-lg bg-surface p-[clamp(1.25rem,4vw,2.5rem)] shadow-panel" aria-labelledby={`${id}-title`}>
       <div className="flex flex-col gap-1">
         <p className="text-ink-2">{orgName}</p>
         <h1 id={`${id}-title`} className="text-2xl">
@@ -135,6 +169,9 @@ export function ConsentStep({
 
       {agenda}
       {privat && <p className="-mt-2 text-sm text-ink-2">{tp("consentFact")}</p>}
+
+      {onSourceChange && source && <SourcePicker value={source} onChange={changeSource} disabled={starting} />}
+      {call && callSetup}
 
       {error && (
         <StartErrorBanner
@@ -158,13 +195,20 @@ export function ConsentStep({
 
       <label
         className={cn(
-          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg border border-control p-4 leading-[1.35] font-medium transition-colors duration-120 hover:border-ink-3",
-          confirmed && "border-green bg-green-wash hover:border-green",
+          // The one choice on the card: a grey tile, no second frame (components/ui/tile.ts); ticked,
+          // it fills green (over 4:1 against the grey) with the box outlined in on-green.
+          "grid cursor-pointer grid-cols-[auto_1fr] items-center gap-3 rounded-lg p-4 leading-[1.35] font-medium transition-colors duration-120",
+          confirmed
+            ? "bg-green text-on-green [&_.text-ink-2]:text-on-green [&_[data-slot=checkbox]]:border-on-green"
+            : tileClass,
         )}
         htmlFor={`${id}-ok`}
       >
         <Checkbox id={`${id}-ok`} tone="green" checked={confirmed} onCheckedChange={(on) => onConsent(on === true)} disabled={starting} />
-        <span>{t("everyone")}</span>
+        <span className="flex flex-col gap-1">
+          <span>{consentText}</span>
+          {call && (privat || foretag) && <span className="text-sm font-normal text-ink-2">{tc("ownCallHint")}</span>}
+        </span>
       </label>
 
       <Button
@@ -172,16 +216,16 @@ export function ConsentStep({
         size="lg"
         block
         icon={<IconMic />}
-        disabled={!confirmed || !agendaConfirmed}
+        disabled={!ready}
         loading={starting}
         onClick={onStart}
-        aria-describedby={!confirmed || !agendaConfirmed ? `${id}-why` : undefined}
+        aria-describedby={!ready ? `${id}-why` : undefined}
       >
         {starting ? t("starting") : privat ? tp("start") : t("start")}
       </Button>
-      {(!confirmed || !agendaConfirmed) && (
+      {!ready && (
         <p id={`${id}-why`} className="-mt-3 text-center text-xs text-ink-3">
-          {!confirmed ? t("tickFirst") : privat ? tp("contextFirst") : t("agendaFirst")}
+          {call && !callReady ? (callHint ?? tc("shareFirst")) : !confirmed ? t("tickFirst") : privat ? tp("contextFirst") : t("agendaFirst")}
         </p>
       )}
 

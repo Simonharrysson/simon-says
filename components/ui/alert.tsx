@@ -4,10 +4,11 @@ import { cn } from "@/lib/utils";
 
 /**
  * shadcn/ui Alert, toned: a tinted wash with a faint ring in the tone. Red only when the user must
- * act; amber for warnings that fix themselves. The role is the caller's (Banner sets it).
+ * act; amber for warnings that fix themselves. The role is the caller's (Banner sets it). Inside a
+ * card the ring goes (no box in a box): the wash alone sets it apart; neutral sits on the sunk tint.
  */
 export const alertVariants = cva(
-  "grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-lg px-4 py-3 text-sm text-ink max-[30rem]:grid-cols-[auto_1fr]",
+  "grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-lg px-4 py-3 text-sm text-ink max-[30rem]:grid-cols-[auto_1fr] in-card:shadow-none",
   {
     variants: {
       tone: {
@@ -15,10 +16,10 @@ export const alertVariants = cva(
         success: "bg-green-wash shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--green)_22%,transparent)] [--tone:var(--green)]",
         warning: "bg-amber-wash shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--amber)_22%,transparent)] [--tone:var(--amber)]",
         danger: "bg-red-wash shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--red)_22%,transparent)] [--tone:var(--red)]",
-        neutral: "bg-surface shadow-[inset_0_0_0_1px_var(--line)] [--tone:var(--ink-2)]",
+        neutral: "bg-surface shadow-[inset_0_0_0_1px_var(--line)] [--tone:var(--ink-2)] in-card:bg-sunk",
       },
       // The stopped live meeting: the loudest thing on the page.
-      loud: { true: "px-6 py-4 text-base shadow-[inset_0_0_0_2px_var(--red)]", false: "" },
+      loud: { true: "px-6 py-4 text-base shadow-[inset_0_0_0_2px_var(--red)] in-card:shadow-[inset_0_0_0_2px_var(--red)]", false: "" },
     },
     defaultVariants: { tone: "info", loud: false },
   },

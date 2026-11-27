@@ -1,0 +1,176 @@
+/* The tree canvas (components/groups/canvas). React Flow's base.css plus the app's tokens: hairline
+   cards that lift while dragged, a spring when a card settles, arrows that draw themselves in. The
+   global reduced-motion rule (app/globals.css) turns every transition and animation off. */
+
+.tree-canvas {
+  --xy-background-pattern-dots-color-default: var(--rail);
+  --xy-edge-stroke-default: var(--ink-3);
+  --xy-edge-stroke-selected-default: var(--blue);
+  --xy-connectionline-stroke-default: var(--blue);
+  --xy-handle-background-color-default: var(--surface);
+  --xy-handle-border-color-default: var(--control-border);
+  --xy-minimap-background-color-default: var(--surface);
+  --xy-minimap-mask-background-color-default: color-mix(in srgb, var(--board) 70%, transparent);
+  --xy-minimap-node-background-color-default: var(--surface-sunk);
+  --xy-controls-button-background-color-default: var(--surface);
+  --xy-controls-button-background-color-hover-default: var(--surface-sunk);
+  --xy-controls-button-color-default: var(--ink);
+  --xy-controls-button-border-color-default: var(--line);
+  --xy-background-color-default: var(--board);
+}
+
+/* Cards settle with a soft spring after a drag, a keyboard nudge or "Ordna automatiskt". */
+.tree-canvas .react-flow__node {
+  transition: transform 420ms cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+.tree-canvas .react-flow__node.dragging {
+  transition: none;
+  z-index: 1000 !important;
+}
+.tree-canvas .react-flow__node:focus-visible {
+  outline: none;
+}
+.tree-canvas .react-flow__node:focus-visible .group-card {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.tree-canvas .group-card {
+  box-shadow:
+    0 0 0 1px transparent,
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 4px 12px -6px rgb(0 0 0 / 0.08);
+  transition:
+    box-shadow 200ms var(--ease-out),
+    transform 200ms var(--ease-out),
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.tree-canvas .react-flow__node:hover .group-card {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 8px 20px -8px rgb(0 0 0 / 0.14);
+}
+.tree-canvas .group-card.is-lifted {
+  transform: scale(1.025);
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.06),
+    0 18px 36px -12px rgb(0 0 0 / 0.22);
+  cursor: grabbing;
+}
+
+/* Handles: small rings on the card's top and bottom edge, bigger when you can use them. */
+.tree-canvas .tree-handle {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  border: 2px solid var(--control-border);
+  background: var(--surface);
+  opacity: 0;
+  transition:
+    opacity 150ms ease,
+    transform 150ms var(--ease-out),
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.tree-canvas .react-flow__node:hover .tree-handle.connectable,
+.tree-canvas .react-flow__node.selected .tree-handle.connectable,
+.tree-canvas .react-flow__node:focus-visible .tree-handle.connectable,
+.tree-canvas.is-connecting .tree-handle.connectable {
+  opacity: 1;
+}
+.tree-canvas .react-flow__node:hover .tree-handle.connectable,
+.tree-canvas .tree-handle.connectingto {
+  transform: translate(-50%, var(--handle-y, 0)) scale(1.35);
+  border-color: var(--blue);
+}
+.tree-canvas .react-flow__handle-top.tree-handle {
+  --handle-y: -50%;
+}
+.tree-canvas .react-flow__handle-bottom.tree-handle {
+  --handle-y: 50%;
+}
+.tree-canvas .tree-handle.valid {
+  background: var(--green);
+  border-color: var(--green);
+}
+.tree-canvas .tree-handle:not(.connectable) {
+  pointer-events: none;
+}
+
+/* Arrows */
+.tree-canvas .tree-arrow {
+  stroke-width: 1.75;
+  transition: stroke 150ms ease, stroke-width 150ms ease;
+}
+.tree-canvas .react-flow__edge:hover .tree-arrow {
+  stroke: var(--ink-2);
+}
+.tree-canvas .tree-arrow.is-selected {
+  stroke: var(--blue);
+  stroke-width: 2.5;
+}
+.tree-canvas .tree-arrow.is-fresh {
+  stroke: var(--blue);
+  stroke-dasharray: 1;
+  animation: tree-arrow-draw 650ms var(--ease-out) both;
+}
+@keyframes tree-arrow-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.tree-canvas .react-flow__edge:focus-visible .tree-arrow {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+.tree-canvas .react-flow__edge:focus-visible {
+  outline: none;
+}
+
+/* Controls and minimap: hairline cards like the rest of the app. */
+.tree-canvas .react-flow__controls {
+  box-shadow: var(--lift);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tree-canvas .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+}
+.tree-canvas .react-flow__controls-button svg {
+  fill: currentColor;
+}
+.tree-canvas .tree-minimap {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--lift);
+}
+.tree-canvas .tree-minimap-add {
+  fill: transparent;
+}
+
+/* The "+ Ny grupp" card is neither draggable nor selectable, so React Flow turns its pointer
+   events off; its button must still take clicks. */
+.tree-canvas .react-flow__node-add {
+  pointer-events: all !important; /* over React Flow's inline style */
+}
+
+/* The "+" under a card (add a report): shown when the card is hovered, selected or focused. */
+.tree-canvas .add-report {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.tree-canvas .react-flow__node:hover .add-report,
+.tree-canvas .react-flow__node.selected .add-report,
+.tree-canvas .react-flow__node:focus-within .add-report {
+  opacity: 1;
+}
+
+/* Until the first fit has placed the cards (PeopleCanvas `fitted`). */
+.tree-canvas:not([data-fitted]) .react-flow__viewport {
+  visibility: hidden;
+}

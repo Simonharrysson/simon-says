@@ -1,13 +1,14 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Tests against the local Supabase stack (`supabase start` + `supabase db reset`). CI exports
-// LOCAL_SUPABASE_API_URL / _ANON_KEY / _SERVICE_ROLE_KEY from `supabase status -o env`.
+// LOCAL_SUPABASE_API_URL / _ANON_KEY / _SERVICE_ROLE_KEY / _JWT_SECRET from `supabase status -o env`.
 // Without them the DB tests skip locally, but fail in CI so they can never silently not run.
 
 const url = process.env.LOCAL_SUPABASE_API_URL;
 const anonKey = process.env.LOCAL_SUPABASE_ANON_KEY;
 const serviceKey = process.env.LOCAL_SUPABASE_SERVICE_ROLE_KEY;
+const jwtSecret = process.env.LOCAL_SUPABASE_JWT_SECRET;
 
 export const hasLocalSupabase = Boolean(url && anonKey && serviceKey);
 if (!hasLocalSupabase && process.env.CI) {
@@ -86,4 +87,19 @@ export async function countRows(table: string, column: string, value: string): P
   const { count, error } = await adminClient().from(table).select("*", { count: "exact", head: true }).eq(column, value);
   if (error) throw new Error(`count ${table}: ${error.message}`);
   return count ?? 0;
+}
+
+/**
+ * A client acting as `userId` with a session token minted from the local JWT secret (HS256), the
+ * way PostgREST then sets request.jwt.claims. For users the auth server won't sign in (an
+ * unconfirmed address). Local stack only; the secret is the CLI's demo value.
+ */
+export function clientAs(userId: string, email: string): SupabaseClient {
+  if (!jwtSecret) throw new Error("LOCAL_SUPABASE_JWT_SECRET missing");
+  const b64 = (v: object) => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  const head = b64({ alg: "HS256", typ: "JWT" });
+  const body = b64({ sub: userId, email, role: "authenticated", aud: "authenticated", iat: now, exp: now + 3600 });
+  const sig = createHmac("sha256", jwtSecret).update(`${head}.${body}`).digest("base64url");
+  return createClient(url!, anonKey!, { ...options, global: { headers: { Authorization: `Bearer ${head}.${body}.${sig}` } } });
 }

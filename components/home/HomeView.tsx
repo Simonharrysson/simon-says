@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
+import { CountUp } from "@/components/motion/CountUp";
+import { Enter } from "@/components/motion/Enter";
 import { Banner } from "@/components/ui/Banner";
-import { CopyButton } from "@/components/ui/CopyButton";
+import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconArrowRight } from "@/components/ui/icons";
 import { ListRow } from "@/components/ui/ListRow";
@@ -9,6 +11,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { meetingDayLabel, type MyTask, type RecentMeeting } from "@/lib/home/tasks";
 import { MyTasks, type SaveTick, type TickState } from "./MyTasks";
+import { HandoffApprovals } from "./HandoffApprovals";
+import type { PendingHandoff } from "@/lib/home/tasks";
 
 /**
  * /hem, the page after sign-in: the user's own open tasks across every förening and Privat
@@ -18,19 +22,17 @@ export function HomeView({
   tasks,
   recent,
   unlinked,
-  email,
   docs,
   today,
   save,
   initialStates,
   initialShowDone,
   bare,
+  approvals = [],
 }: {
   tasks: MyTask[];
   recent: RecentMeeting[];
   unlinked: { id: string; name: string }[];
-  /** The user's sign-in address: what an admin writes next to their name to link them. */
-  email?: string | null;
   docs: Record<string, string>;
   today: string;
   save?: SaveTick;
@@ -38,35 +40,54 @@ export function HomeView({
   initialShowDone?: boolean;
   /** Only the content under the title, for a page that renders the title itself (/hem). */
   bare?: boolean;
+  /** Företag (0050): tasks waiting for this user's approval before their owner sees them. */
+  approvals?: PendingHandoff[];
 }) {
   const t = useTranslations("home");
-  const common = useTranslations("common");
   const locale = useLocale() === "en" ? "en" : "sv";
   const meetingHrefs: Record<string, string> = {};
   for (const task of tasks) {
+    // A reviewed Företag task (0050) has no meeting to link.
+    if (task.kind === "handoff") continue;
     meetingHrefs[task.meetingId] = task.kind === "privat" ? `/privat/mote/${task.meetingId}` : `/orgs/${task.spaceId}/mote/${task.meetingId}`;
   }
   const names = new Intl.ListFormat(locale === "en" ? "en-GB" : "sv-SE", { type: "conjunction" }).format(unlinked.map((u) => u.name));
 
+  // On a client navigation (not a page load) the content rises in, row by row, and the counts count up.
   const body = (
-    <>
+    <Enter>
         {unlinked.length > 0 && (
           <Banner
             tone="info"
             live={false}
             title={t("unlinkedTitle", { count: unlinked.length })}
             action={
-              email ? (
-                <CopyButton value={email} label={t("copyEmail")} copiedLabel={common("copied")} copiedText={t("emailCopied")} failedText={t("emailCopyManual")} />
+              unlinked.length === 1 ? (
+                <ButtonLink href={`/orgs/${unlinked[0].id}/vem`} size="sm" icon={<IconArrowRight />}>
+                  {t("unlinkedPick")}
+                </ButtonLink>
               ) : undefined
             }
           >
-            <p>{email ? t("unlinkedTextEmail", { names, email }) : t("unlinkedText", { names })}</p>
+            <p>{t("unlinkedText", { names })}</p>
+            {unlinked.length > 1 && (
+              // One "Välj ditt namn" per förening: each has its own people list.
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {unlinked.map((u) => (
+                  <li key={u.id}>
+                    <ButtonLink href={`/orgs/${u.id}/vem`} size="sm" icon={<IconArrowRight />}>
+                      {t("unlinkedPickIn", { name: u.name })}
+                    </ButtonLink>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Banner>
         )}
+        {approvals.length > 0 && <HandoffApprovals items={approvals} />}
         <section aria-labelledby="my-tasks-title" className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 id="my-tasks-title" className="text-lg tracking-[-0.02em]">
+          <div data-enter-item className="flex flex-col gap-1">
+            <h2 id="my-tasks-title" tabIndex={-1} className="text-lg tracking-[-0.02em] focus:outline-none">
               {t("tasksTitle")}
             </h2>
             <p className="max-w-[34rem] text-ink-2">{t("intro")}</p>
@@ -76,7 +97,7 @@ export function HomeView({
 
       {/* mt-6 on the column's gap-4: the 40px between Mina uppgifter and Senaste mötena. */}
       {recent.length === 0 ? (
-        <div className="mt-6">
+        <div data-enter-item className="mt-6">
           <EmptyState title={t("recentEmptyTitle")}>
             <p>{t("recentEmptyText")}</p>
           </EmptyState>
@@ -99,7 +120,7 @@ export function HomeView({
                   meta={
                     <>
                       <span className="font-medium text-ink-2">{space}</span> · {day}
-                      <span className="block text-ink-2">{counts}</span>
+                      <CountUp className="block text-ink-2" text={counts} />
                     </>
                   }
                   actions={
@@ -111,7 +132,7 @@ export function HomeView({
           </ul>
         </Panel>
       )}
-    </>
+    </Enter>
   );
   if (bare) return body;
   return (

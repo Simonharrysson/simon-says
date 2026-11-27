@@ -12,8 +12,10 @@ test("Bjud in via mejl: rendered invite, per-address results, opted-out address;
   const optedOut = newEmail("nej-tack");
   await db.from("email_address_preferences").insert({ email: optedOut, all_off: true });
 
-  await page.goto(`${org.url}?flik=installningar`);
-  const invite = page.locator("section", { has: page.getByRole("heading", { name: "Bjud in via mejl" }) });
+  // Inställningar → Styrelsen och medlemmar: "Bjud in via mejl" is folded under the board list.
+  await page.goto(`${org.url}?flik=installningar&del=styrelsen`);
+  await page.getByRole("button", { name: "Bjud in via mejl" }).click();
+  const invite = page.getByRole("region", { name: "Bjud in via mejl" });
   await invite.getByLabel("E-postadresser").fill(`${ok}\nErik Lund <${bounce}>, ${optedOut}\ninte-en-adress`);
   await expect(invite.getByText("inte e-post: inte-en-adress")).toBeVisible();
 

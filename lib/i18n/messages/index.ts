@@ -45,6 +45,8 @@ import enFormats from "./en/formats.json";
 import svFormats from "./sv/formats.json";
 import enOrg from "./en/org.json";
 import svOrg from "./sv/org.json";
+import enForetag from "./en/foretag.json";
+import svForetag from "./sv/foretag.json";
 import enOrgs from "./en/orgs.json";
 import svOrgs from "./sv/orgs.json";
 import enPrivacy from "./en/privacy.json";
@@ -68,6 +70,8 @@ import svCommon from "./sv/common.json";
 import svMailPrefs from "./sv/mailPrefs.json";
 import svNotices from "./sv/notices.json";
 import enTasks from "./en/tasks.json";
+import enConnect from "./en/connect.json";
+import svConnect from "./sv/connect.json";
 import svTasks from "./sv/tasks.json";
 
 export const sv = {
@@ -92,6 +96,7 @@ export const sv = {
   formats: svFormats,
   org: svOrg,
   orgs: svOrgs,
+  foretag: svForetag,
   privacy: svPrivacy,
   landing: svLanding,
   status: svStatus,
@@ -103,6 +108,7 @@ export const sv = {
   mailPrefs: svMailPrefs,
   notices: svNotices,
   tasks: svTasks,
+  connect: svConnect,
 };
 
 export type Messages = typeof sv;
@@ -129,6 +135,7 @@ export const en: Messages = {
   formats: enFormats,
   org: enOrg,
   orgs: enOrgs,
+  foretag: enForetag,
   privacy: enPrivacy,
   landing: enLanding,
   status: enStatus,
@@ -140,6 +147,7 @@ export const en: Messages = {
   mailPrefs: enMailPrefs,
   notices: enNotices,
   tasks: enTasks,
+  connect: enConnect,
 };
 
 export const messages: Record<Locale, Messages> = { sv, en };

@@ -63,3 +63,17 @@ export function e2eMailUrl(source: Source = process.env): string | undefined {
   if (!LOOPBACK.has(new URL(url).hostname)) throw new Error("E2E_MAIL_URL must be a loopback URL");
   return url;
 }
+
+/**
+ * The fake website host (`E2E_WEB_ROOT`, loopback, ends with "/"), or undefined: the real web.
+ * In the e2e mode "Hämta styrelsen från webbplatsen" asks `<root><host>/<path>` instead of
+ * `https://<host>/<path>`, so no test ever reaches a real site. Ignored outside the e2e mode, like
+ * `e2eGoogleRoot`: it only maps hosts to the fake, it never switches the address checks off for
+ * real traffic.
+ */
+export function e2eWebRoot(source: Source = process.env): string | undefined {
+  const root = source.E2E_WEB_ROOT;
+  if (!root || !e2eMode(source)) return undefined;
+  if (!LOOPBACK.has(new URL(root).hostname)) throw new Error("E2E_WEB_ROOT must be a loopback URL");
+  return root.endsWith("/") ? root : `${root}/`;
+}

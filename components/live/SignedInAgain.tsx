@@ -14,7 +14,7 @@ export function SignedInAgain() {
     ch.close();
   }, []);
   return (
-    <section className="flex flex-col gap-2 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="signed-in-title">
+    <section data-card className="flex flex-col gap-2 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="signed-in-title">
       <h1 id="signed-in-title" className="text-2xl">
         {t("signedInAgainTitle")}
       </h1>

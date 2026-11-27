@@ -8,9 +8,9 @@
   "legend": "Summary after the meeting",
   "intro": "When a meeting is over, Simon Says e-mails its decisions and tasks. Everyone sees their own tasks first and can opt out in the e-mail or under Account. Test meetings are never sent.",
   "whoLegend": "Who should get the summary?",
-  "emptyList": "The people list is empty. Add people under People.",
+  "emptyList": "The people list is empty. Add people under Board and members.",
   "noEmail": "No e-mail address",
-  "noneWithEmail": "Nobody on the people list has an e-mail address yet. Add addresses in Get started → The board.",
+  "noneWithEmail": "Nobody on the people list has an e-mail address yet. Add addresses under Board and members.",
   "withEmail": "{count, plural, one {# person} other {# people}} on the people list {count, plural, one {has} other {have}} an e-mail address.",
   "saved": "Saved"
 }

@@ -29,6 +29,9 @@ const orgsTones: Record<string, Notice["tone"]> = {
   inbjudan: "danger",
   raderad: "success",
   lamnat: "success",
+  foretag: "danger",
+  "foretag-raderat": "success",
+  "foretag-lamnat": "success",
 };
 
 const orgTones: Record<string, Notice["tone"]> = {
@@ -61,6 +64,18 @@ const orgTones: Record<string, Notice["tone"]> = {
   "admin-not_member": "danger",
   "admin-not_found": "danger",
   "admin-invalid": "danger",
+  // Företag (0050)
+  grupp: "danger",
+  "grupp-arkiv": "danger",
+  placering: "danger",
+  // The people tree (0062)
+  rapporterar: "danger",
+  person: "danger",
+  "person-finns": "danger",
+  "chef-utan-plats": "danger",
+  kundnamn: "danger",
+  // A förening's groups (0054)
+  grupper: "danger",
 };
 
 function pick(tones: Record<string, Notice["tone"]>, texts: Record<string, Copy>, fel?: string, klart?: string): Notice | null {

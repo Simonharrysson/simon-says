@@ -186,7 +186,7 @@ export const fake = {
     return (await (await fetch(`${FAKE_URL}/__e2e/mail${q}`)).json()) as { to: string[]; subject: string; text: string; html?: string; reply_to?: string; headers?: Record<string, string> }[];
   },
   /** Give `email` a Google calendar (and events) in the fake Calendar API. */
-  async calendar(email: string, calendar: { id: string; summary: string; primary?: boolean }, events: { id: string; summary: string; start: string; end: string; attendees?: { email?: string; displayName?: string; responseStatus?: string }[] }[] = []) {
+  async calendar(email: string, calendar: { id: string; summary: string; primary?: boolean }, events: { id: string; summary: string; start: string; end: string; organizer?: { email: string }; attendees?: { email?: string; displayName?: string; responseStatus?: string }[] }[] = []) {
     const res = await fetch(`${FAKE_URL}/__e2e/google/calendar`, { method: "POST", body: JSON.stringify({ email, calendar, events }) });
     if (!res.ok) throw new Error(`fake calendar: ${res.status}`);
   },
@@ -212,6 +212,15 @@ export async function expectAccessible(page: Page, opts: { exclude?: string[] } 
     bad.map((v) => `${v.impact} ${v.id}: ${v.help} → ${v.nodes.map((n) => n.target.join(" ")).slice(0, 3).join(" | ")}`),
     `axe on ${page.url()}`,
   ).toEqual([]);
+}
+
+/**
+ * The tree editor as the list (0055: a desktop gets the canvas by default; "Lista" is remembered
+ * per browser). For specs that drive the list's forms; the canvas has its own spec.
+ */
+export async function treeAsList(page: Page): Promise<void> {
+  await page.addInitScript(() => window.localStorage.setItem("tree-view", "list"));
+  if (page.url().startsWith("http")) await page.evaluate(() => window.localStorage.setItem("tree-view", "list"));
 }
 
 export interface Fixtures {

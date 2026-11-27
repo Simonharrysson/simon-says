@@ -26,6 +26,7 @@ const processorNames: Record<(typeof processors)[number], string> = {
 const toc = [
   ["kort", "kort"],
   ["i-rummet", "rummet"],
+  ["videosamtal", "videosamtal"],
   ["sparas", "sparas"],
   ["mejl", "mejl"],
   ["vem", "vem"],
@@ -71,6 +72,11 @@ export default async function PrivacyPage() {
           <p>{t("room.consent")}</p>
           <p>{t("room.transcript")}</p>
 
+          <h2 id="videosamtal">{t("toc.videosamtal")}</h2>
+          <p>{t("call.what")}</p>
+          <p>{t("call.processing")}</p>
+          <p>{t("call.responsibility")}</p>
+
           <h2 id="sparas">{t("toc.sparas")}</h2>
           <h3>{t("stored.signedInTitle")}</h3>
           <ul>
@@ -90,6 +96,7 @@ export default async function PrivacyPage() {
             <li>{t("stored.history")}</li>
             <li>{t("stored.drive")}</li>
             <li>{t("stored.calendar")}</li>
+            <li>{t("stored.foretag")}</li>
           </ul>
           <p>{t.rich("stored.kept", { strong })}</p>
           <h3>{t("stored.notTitle")}</h3>

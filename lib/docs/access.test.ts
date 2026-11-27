@@ -12,12 +12,15 @@ const g = vi.hoisted(() => ({
   upserts: [] as unknown[],
   filters: [] as [string, string, unknown][],
   upsertError: null as { code?: string; message: string } | null,
+  /** visible_meeting_ids (0054): the meetings the joiner may see; null = all of them. */
+  visible: null as string[] | null,
+  rpcs: [] as [string, unknown][],
 }));
 
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
   driveApi: (auth: { who: string }) => ({
-    permissions: { create: (args: unknown) => g.permCreate(auth.who, args) },
+    permissions: { create: (args: unknown) => g.permCreate(auth.who, args), list: async () => ({ data: { permissions: [] } }) },
   }),
 }));
 vi.mock("@/lib/google/client", async (importOriginal) => ({
@@ -26,6 +29,7 @@ vi.mock("@/lib/google/client", async (importOriginal) => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({
+    rpc: async (name: string, args: { p_ids: string[] }) => (g.rpcs.push([name, args]), { data: g.visible ?? args.p_ids, error: null }),
     from: (table: string) => {
       const b: Record<string, unknown> = {};
       for (const op of ["select", "eq", "neq", "not", "in", "order", "limit"]) {
@@ -47,7 +51,7 @@ const { recordDocShares, shareMeetingDocWith, shareOrgDocsWithNewMember } = awai
 const NEW = { id: "u-new", email: "nyss@ekdala.test" };
 
 beforeEach(() => {
-  g.permCreate.mockReset().mockResolvedValue({ data: {} });
+  g.permCreate.mockReset().mockResolvedValue({ data: { id: "perm-1" } });
   g.getGoogleAuth.mockReset().mockImplementation(async (who: string) => ({ who }));
   g.meetings = [];
   g.members = ["s1", "s2"];
@@ -55,9 +59,23 @@ beforeEach(() => {
   g.upserts = [];
   g.filters = [];
   g.upsertError = null;
+  g.visible = null;
+  g.rpcs = [];
 });
 
 describe("shareOrgDocsWithNewMember", () => {
+  it("shares only meetings the joiner can see by the database's rule (never a Privat möte or another group's)", async () => {
+    g.meetings = [
+      { id: "m-open", org_id: "org1", doc_id: "d-open", started_by: "s1", agenda_doc: false },
+      { id: "m-priv", org_id: "org1", doc_id: "d-priv", started_by: "s1", agenda_doc: false },
+    ];
+    g.visible = ["m-open"];
+    expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(1);
+    expect(g.rpcs).toEqual([["visible_meeting_ids", { p_user: "u-new", p_ids: ["m-open", "m-priv"] }]]);
+    expect(g.permCreate).toHaveBeenCalledTimes(1);
+    expect(g.permCreate.mock.calls[0][1]).toMatchObject({ fileId: "d-open" });
+  });
+
   it("shares earlier Docs through each starter's own grant, skips ones already shared, records each", async () => {
     g.meetings = [
       { id: "m1", org_id: "org1", doc_id: "d1", started_by: "s1", agenda_doc: false },
@@ -76,7 +94,7 @@ describe("shareOrgDocsWithNewMember", () => {
       sendNotificationEmail: false,
       requestBody: { role: "writer", type: "user", emailAddress: NEW.email },
     });
-    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }], [{ meeting_id: "m2", user_id: NEW.id }]]);
+    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id, email: NEW.email, permission_id: "perm-1", preexisting: false }], [{ meeting_id: "m2", user_id: NEW.id, email: NEW.email, permission_id: "perm-1", preexisting: false }]]);
     // Only Docs Simon Says created, never the new member's own meetings.
     const meetingFilters = g.filters.filter((f) => f[0] === "meetings").map((f) => [f[1], ...(f[2] as unknown[])]);
     expect(meetingFilters).toContainEqual(["neq", "started_by", NEW.id]);
@@ -120,7 +138,7 @@ describe("shareMeetingDocWith", () => {
   it("shares through the starter's grant and records it", async () => {
     expect(await shareMeetingDocWith(meeting, NEW)).toBe("shared");
     expect(g.getGoogleAuth).toHaveBeenCalledWith("s1");
-    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id }]]);
+    expect(g.upserts).toEqual([[{ meeting_id: "m1", user_id: NEW.id, email: NEW.email, permission_id: "perm-1", preexisting: false }]]);
   });
 
   it("only Docs Simon Says created: the förening's own agenda Doc is never shared, with no Drive call", async () => {

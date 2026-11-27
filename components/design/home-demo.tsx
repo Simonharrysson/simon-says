@@ -12,8 +12,10 @@ export const homeViews = [
   { id: "home-ticked", title: "Hem · bockat av: Ångra, skrivet i dokumentet, bocka av i dokumentet också" },
   { id: "home-done", title: "Hem · Visa klara" },
   { id: "home-empty", title: "Hem · inga uppgifter, inte kopplad i en förening" },
+  { id: "home-unlinked-two", title: "Hem · inte kopplad i två föreningar" },
   { id: "home-all-done", title: "Hem · allt klart, inga möten" },
   { id: "org-meeting", title: "Förening · ett möte: beslut och uppgifter" },
+  { id: "org-meeting-ended", title: "Förening · mötet nyss avslutat: sammanfattningen, närvarande, mötestid" },
 ] as const;
 
 const DAY = 86_400_000;
@@ -86,7 +88,8 @@ export const homeRender: Record<string, () => React.ReactNode> = {
       />,
     ),
   "home-done": () => page(<HomeView tasks={[...tasks, ...doneTasks]} recent={recent} unlinked={[]} docs={docs} today={today} save={save} initialShowDone />),
-  "home-empty": () => page(<HomeView tasks={[]} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }]} email="anna.berg@example.com" docs={{}} today={today} save={save} />),
+  "home-empty": () => page(<HomeView tasks={[]} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }]} docs={{}} today={today} save={save} />),
+  "home-unlinked-two": () => page(<HomeView tasks={tasks} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }, { id: "o3", name: "Körföreningen" }]} docs={docs} today={today} save={save} />),
   "home-all-done": () => page(<HomeView tasks={doneTasks} recent={[]} unlinked={[]} docs={{}} today={today} save={save} />),
   "org-meeting": () =>
     page(
@@ -99,6 +102,24 @@ export const homeRender: Record<string, () => React.ReactNode> = {
           decisions: ["Julvisningen blir den 18 december i Kårallen.", "Budgeten för våren godkänns med 4 000 kr till filmhyra.", "Medlemsavgiften är oförändrad, 50 kr."],
           tasks: meetingTasks,
           isAdmin: false,
+          docUrl: "#",
+        }}
+      />,
+    ),
+  "org-meeting-ended": () =>
+    page(
+      <OrgMeetingView
+        today={today}
+        save={save}
+        justEnded
+        summary={{ state: "sent", sent: 2, mode: "missed" }}
+        page={{
+          org: { id: "o2", name: "Filmföreningen" },
+          meeting: { id: "m-o2", startedAt: new Date(Date.now() - 95 * 60_000).toISOString(), endedAt: new Date(Date.now() - 2 * 60_000).toISOString(), status: "done", title: "Budget och julvisning", isTest: false },
+          decisions: ["Julvisningen blir den 18 december i Kårallen.", "Budgeten för våren godkänns med 4 000 kr till filmhyra.", "Medlemsavgiften är oförändrad, 50 kr."],
+          attendees: ["Anna Berg, Erik Lund, Sara Nyström, Johan Ek"],
+          tasks: meetingTasks,
+          isAdmin: true,
           docUrl: "#",
         }}
       />,

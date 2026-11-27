@@ -1,8 +1,9 @@
 // The Google Doc keeps its own look wherever we draw it (landing demo, format preview): white
 // paper in a system face, Google's greys, in both themes, so people recognise "that's the Doc".
+// Lifted by a soft drop, not a ring: it often sits in a card, and a frame there is a box in a box.
 
 export const docPaperClass =
-  "rounded-[4px] bg-white px-[clamp(1.25rem,3.5vw,2.25rem)] pt-[clamp(1.25rem,3vw,2rem)] pb-[clamp(1.5rem,3vw,2.25rem)] font-system text-[clamp(0.8125rem,0.75rem+0.3vw,0.9375rem)] leading-normal text-[#202124] shadow-[0_0_0_1px_rgb(0_0_0/0.08),0_4px_12px_-6px_rgb(0_0_0/0.12)]";
+  "rounded-[4px] bg-white px-[clamp(1.25rem,3.5vw,2.25rem)] pt-[clamp(1.25rem,3vw,2rem)] pb-[clamp(1.5rem,3vw,2.25rem)] font-system text-[clamp(0.8125rem,0.75rem+0.3vw,0.9375rem)] leading-normal text-[#202124] shadow-[0_1px_3px_rgb(0_0_0/0.12),0_6px_16px_-6px_rgb(0_0_0/0.16)]";
 export const docTitleClass = "text-[1.45em] leading-tight font-semibold tracking-[-0.01em]";
 export const docLiveClass = "mt-[0.2em] text-[0.85em] font-semibold text-[#b3261e]";
 export const docAttendClass = "mt-[0.75em] text-[#5f6368]";

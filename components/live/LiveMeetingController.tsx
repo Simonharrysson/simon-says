@@ -6,17 +6,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buttonVariants } from "@/components/ui/button";
 import { MicCapture } from "@/lib/audio/capture";
+import { tabAudioSupport, type CaptureSource, type TabAudioSupport } from "@/lib/audio/call";
+import { CallCapture, type CallLevels, type ShareResult } from "@/lib/audio/call-capture";
 import { LiveStream, STOP_FLUSH_MAX_MS, type HeartbeatInfo, type StreamHealth, type StreamStatus } from "@/lib/audio/stream";
 import { runEndFlow } from "@/lib/live/end-flow";
 import { SIGNED_IN_CHANNEL, SIGNED_IN_PATH } from "@/lib/live/signed-in";
 import { stopParam } from "@/lib/ui/limit-copy";
 import { ContextPicker, type CreateContext, type PrivatChoice } from "@/components/privat/ContextPicker";
+import { GroupPicker, type ForetagChoice, type ForetagEventOffer } from "@/components/foretag/GroupPicker";
 import { AgendaStep, missingItemsText, type AgendaChoice, type AgendaFormatOption, type GoalOption } from "./AgendaStep";
+import { CallSetup, type CallShareError } from "./CallSetup";
 import type { StartError } from "./ConsentStep";
 import { LiveMeeting, type LiveNotice } from "./LiveMeeting";
 import type { NameRoundEntry } from "./NameRound";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
-import type { TaskAnswer, TaskMode, TaskView } from "@/lib/notes/tasks";
+import type { EndStats, TaskAnswer, TaskMode, TaskView } from "@/lib/notes/tasks";
+import type { EndAsk } from "./EndTasksDialog";
 
 /** Notes count as stale when runs posted this long ago have not reached the Doc yet. */
 const STALE_AFTER_MS = 3 * 60_000;
@@ -29,6 +34,11 @@ const SPEAKERS_POLL_MS = 15_000;
 const TASKS_POLL_MS = 20_000;
 /** Avsluta waits at most this long for the tasks before asking the usual question (never blocks). */
 const TASKS_ASK_TIMEOUT_MS = 5000;
+/**
+ * "Fråga inte igen" / Ångra: a write the admin asked for. Not the ask's 5 s: aborting a slow but
+ * successful write showed "Det gick inte" while the setting had changed (a cold route took 5.5 s).
+ */
+const TASK_SETTING_TIMEOUT_MS = 20_000;
 /** POST /end must answer within this long, or the page offers a retry (C6). */
 const END_TIMEOUT_MS = 15_000;
 
@@ -56,6 +66,8 @@ export interface LiveMeetingInfo {
   docPaused: boolean;
   /** Seconds the meeting lasted, for an ended meeting. */
   durationSeconds?: number;
+  /** Held in a video call (0058): resuming shares the call tab again. */
+  captureSource?: CaptureSource;
 }
 
 export interface LiveMeetingControllerProps {
@@ -94,6 +106,21 @@ export interface LiveMeetingControllerProps {
     summaryHref: string | null;
     backLabel: string;
   };
+  /** A new Företag meeting (0050): the groups for "Möte för" (tree order) and the starter's own (preselected). */
+  foretag?: {
+    groups: { id: string; name: string; depth: number }[];
+    initialGroupId: string | null;
+    /** The event happening now in the starter's calendar, offered to confirm (never attached by itself). */
+    event?: ForetagEventOffer | null;
+  };
+  /**
+   * A new meeting in a förening with groups (0054): "Möte för" and Privat möte above its usual
+   * agenda step (formats and agenda Docs stay). Absent: a förening without groups, exactly as before.
+   */
+  groups?: {
+    groups: { id: string; name: string; depth: number }[];
+    initialGroupId: string | null;
+  };
 }
 
 function initialPhase(m: LiveMeetingInfo | null): LivePhase {
@@ -119,6 +146,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [meeting, setMeeting] = useState<LiveMeetingInfo | null>(props.meeting);
   const t = useTranslations("live.controller");
   const tPicker = useTranslations("privat.picker");
+  const tCall = useTranslations("live.call");
   const locale = useLocale();
   const [phase, setPhase] = useState<LivePhase>(() => initialPhase(props.meeting));
   const [startError, setStartError] = useState<StartError>(null);
@@ -133,6 +161,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setAgendaState(choice);
   }, []);
   const [privatChoice, setPrivatChoice] = useState<PrivatChoice | null>(null);
+  const [foretagChoice, setForetagChoice] = useState<ForetagChoice | null>(null);
+  /** A förening with groups (0054): "Möte för" and Privat möte, sent with the agenda choice. */
+  const [groupChoice, setGroupChoice] = useState<ForetagChoice | null>(null);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
   /** The format override kept across that remount. */
@@ -176,7 +207,27 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** The name round is on (a new meeting, until "Klar", "Hoppa över" or the server ran it). */
   const nameRoundOpen = useRef(false);
 
-  const capture = useRef<MicCapture | null>(null);
+  const capture = useRef<MicCapture | CallCapture | null>(null);
+  /** "Var hålls mötet?": the room (laptop mic) or a video call (the call tab + the mic). */
+  const [source, setSource] = useState<CaptureSource>(props.meeting?.captureSource ?? "room");
+  /** Read after mount: the server can't know the browser. */
+  const [callSupport, setCallSupport] = useState<TabAudioSupport>("ok");
+  useEffect(() => setCallSupport(tabAudioSupport(navigator)), []);
+  /** A video call in a browser without tab audio: the user chose to record the mic only. */
+  const [micOnly, setMicOnly] = useState(false);
+  const [callShared, setCallShared] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [callError, setCallError] = useState<CallShareError | null>(null);
+  const [callLevels, setCallLevels] = useState<CallLevels | null>(null);
+  /** Live: the call tab stopped being shared (paused until it is shared again). */
+  const [callLost, setCallLost] = useState(false);
+  const [reshareNoAudio, setReshareNoAudio] = useState(false);
+  /** The user pressed Paus (and not Fortsätt since). */
+  const userPaused = useRef(false);
+  /** The stream is paused because the call tab went away (Dela fliken igen resumes it). */
+  const pausedForCall = useRef(false);
+  /** Capture the call tab (not only the mic): a video call where the browser can share tab audio. */
+  const tabCapture = source === "call" && callSupport === "ok" && !micOnly;
   const stream = useRef<LiveStream | null>(null);
   const userStopped = useRef(false);
   /** An end is under way (Avsluta, or the stream stopped on its own): a second Avsluta does nothing. */
@@ -186,7 +237,15 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** When posted runs were acknowledged; pruned once a notes write is newer. */
   const postedAt = useRef<number[]>([]);
 
-  const mic = () => (capture.current ??= new MicCapture());
+  const mic = () => (capture.current ??= tabCapture ? new CallCapture() : new MicCapture());
+  /** The call capture, made from scratch if the room's mic capture is open. */
+  const callCapture = (): CallCapture => {
+    if (capture.current instanceof CallCapture) return capture.current;
+    capture.current?.stop();
+    const cap = new CallCapture();
+    capture.current = cap;
+    return cap;
+  };
   /** A Privat recording started on this page: its summary page once it ends. */
   const privatMeetingId = useRef<string | null>(null);
 
@@ -267,7 +326,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
    * keeps the page here with a retry instead of navigating away from unsent work.
    */
   const endOnServer = useCallback(
-    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false, answers: TaskAnswer[] = []) => {
+    async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false, answers: TaskAnswer[] = [], stats?: EndStats) => {
       endStarted.current = true;
       setPhase("ending");
       setStoppedAt((t) => t ?? Date.now());
@@ -285,8 +344,11 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           const res = await fetch(`/api/meetings/${id}/end`, {
             method: "POST",
             signal: AbortSignal.timeout(END_TIMEOUT_MS),
-            // The Avsluta dialog's Vem / När / Klart när: the final pass writes them to the Doc.
-            ...(answers.length ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers }) } : {}),
+            // The Avsluta dialog's Vem / När / Klart när (the final pass writes them to the Doc),
+            // and how the dialog was met (counts only), sent even when nothing was filled in.
+            ...(answers.length || stats
+              ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ answers, ...(stats ? { stats } : {}) }) }
+              : {}),
           });
           if (res.ok && answers.length) {
             const body = (await res.json().catch(() => null)) as { answers?: string } | null;
@@ -367,7 +429,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   );
 
   const runStream = useCallback(
-    async (m: LiveMeetingInfo, cap: MicCapture) => {
+    async (m: LiveMeetingInfo, cap: MicCapture | CallCapture) => {
       const s = new LiveStream({
         meetingId: m.id,
         audio: cap,
@@ -402,6 +464,16 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       s.on("pending", setPendingRuns);
       // The consent check's meter hands over to the stream's level (throttled for React).
       cap.stopCheck();
+      if (cap instanceof CallCapture) {
+        // The call tab was closed or "Sluta dela" pressed: pause (nothing half-heard is sent) and ask.
+        cap.onCallEnded = () => {
+          setCallLost(true);
+          setReshareNoAudio(false);
+          // Paused for the lost tab, unless the user had already paused: then it stays theirs.
+          pausedForCall.current = !userPaused.current;
+          s.pause();
+        };
+      }
       let lastLevelAt = 0;
       s.on("level", (level) => {
         const t = Date.now();
@@ -420,6 +492,70 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return "mic-missing";
   };
 
+  /** A share result's error for the start screen, or null when there is nothing to say. */
+  const shareError = (r: ShareResult): CallShareError | null =>
+    r.ok || r.reason === "cancelled" || r.reason === "mic" ? null : r.reason;
+
+  /** "Välj mötesfliken": the picker opens from this click; then the meters. */
+  const onShare = () => {
+    const cap = callCapture();
+    setSharing(true);
+    setCallError(null);
+    setStartError(null);
+    let lastAt = 0;
+    cap.onLevels = (l) => {
+      const t = Date.now();
+      if (t - lastAt < 150) return;
+      lastAt = t;
+      setCallLevels(l);
+    };
+    // Sharing stopped before Start ("Sluta dela", the tab closed): Start waits for a tab again.
+    // runStream replaces this with the live meeting's pause once the meeting starts.
+    cap.onCallEnded = () => {
+      if (capture.current !== cap) return;
+      setCallShared(false);
+      setCallLevels(null);
+      setCallError("stopped");
+    };
+    void cap.share().then((r) => {
+      if (capture.current !== cap) return;
+      setSharing(false);
+      setCallShared(cap.sharing);
+      setCallError(shareError(r));
+      if (!r.ok && r.reason === "mic") setStartError(micProblem(r.error));
+    });
+  };
+
+  /** "Var hålls mötet?" changed: let go of whatever was opened for the other choice. */
+  const onSourceChange = (s: CaptureSource) => {
+    capture.current?.stop();
+    capture.current = null;
+    setMicLevel(null);
+    setCallShared(false);
+    setSharing(false);
+    setCallLevels(null);
+    setCallError(null);
+    setStartError(null);
+    setSource(s);
+  };
+
+  /** Live: "Dela fliken igen" (from the click), then carry on where the pause left off. */
+  const onReshare = () => {
+    const cap = capture.current;
+    if (!(cap instanceof CallCapture)) return;
+    void cap.share().then((r) => {
+      if (r.ok) {
+        setCallLost(false);
+        setReshareNoAudio(false);
+        // Only undo our own pause: a pause the user chose stays until they press Fortsätt.
+        if (pausedForCall.current && !userPaused.current) stream.current?.resume();
+        pausedForCall.current = false;
+      } else if (r.reason === "no-audio" || r.reason === "not-tab") {
+        setReshareNoAudio(true);
+      }
+    });
+  };
+
   /** Consent step: Starta mötet. The mic is asked for first, straight from the click. */
   const onStart = () => {
     const cap = mic();
@@ -430,6 +566,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     setStartErrorCode(null);
     const choice = agendaRef.current;
     const privatStart = props.privat ? privatChoice : null;
+    const foretagStart = props.foretag ? foretagChoice : null;
+    const groupStart = props.groups ? groupChoice : null;
     void (async () => {
       try {
         await opened;
@@ -451,7 +589,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         const res = await fetch("/api/meetings", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : {
+          body: JSON.stringify({
+            // Which consent was given: a video call (0058) is recorded as such.
+            ...(source === "call" ? { captureSource: "call" } : {}),
+            ...(privatStart ? { orgId: props.orgId, consent: true, contextId: privatStart.contextId, withDoc: privatStart.withDoc } : foretagStart ? { orgId: props.orgId, consent: true, groupId: foretagStart.groupId, private: foretagStart.private, ...(foretagStart.calendarEventId ? { calendarEventId: foretagStart.calendarEventId, attendeeIds: foretagStart.attendeeIds } : {}) } : {
             orgId: props.orgId,
             consent: true,
             agendaDocId: choice?.agendaDocId ?? null,
@@ -462,6 +603,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             ...(!choice?.agendaDocId && choice?.goalIds?.length ? { goalIds: choice.goalIds } : {}),
             // The server reads the event again with the starter's own grant.
             ...(props.calendarEvent ? { calendarEventId: props.calendarEvent.id } : {}),
+            // A förening with groups: who the meeting is for.
+            ...(groupStart ? { groupId: groupStart.groupId, private: groupStart.private } : {}),
+          }),
           }),
         });
         const json = (await res.json().catch(() => null)) as ({ message?: string; error?: string } & Partial<typeof created>) | null;
@@ -494,6 +638,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         resumable: true,
         lastTickOkAt: null,
         docPaused: false,
+        captureSource: source,
       };
       setMeeting(m);
       if (privatStart) privatMeetingId.current = m.id;
@@ -511,14 +656,22 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   /** "Fortsätt mötet": back to live on the server, then the mic (from the click) and a new session. */
   const onResumeMeeting = () => {
     if (!meeting) return;
-    const cap = mic();
-    const opened = cap.open();
+    // A video call: the call tab is picked again from this click (it can't survive a reload).
+    const callCap = meeting.captureSource === "call" && callSupport === "ok" ? callCapture() : null;
+    const cap = callCap ?? mic();
+    const opened: Promise<ShareResult | void> = callCap ? callCap.share() : cap.open();
     setBusy(true);
     setStartError(null);
     setStartErrorText(null);
     void (async () => {
       try {
-        await opened;
+        const r = await opened;
+        if (r && !r.ok) {
+          setBusy(false);
+          if (r.reason === "mic") setStartError(micProblem(r.error));
+          else if (r.reason !== "cancelled") setStartError(`call-${r.reason}`);
+          return;
+        }
       } catch (e) {
         setStartError(micProblem(e));
         setBusy(false);
@@ -599,12 +752,12 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [tasks, setTasks] = useState<TaskView[] | undefined>(undefined);
   const tasksUrl = meeting ? `/api/meetings/${meeting.id}/tasks` : null;
   const fetchTasks = useCallback(
-    async (timeoutMs?: number): Promise<{ mode: TaskMode; tasks: TaskView[] } | null> => {
+    async (timeoutMs?: number): Promise<{ mode: TaskMode; tasks: TaskView[]; admin?: boolean } | null> => {
       if (!tasksUrl) return null;
       try {
         const res = await fetch(tasksUrl, { cache: "no-store", ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}) });
         if (!res.ok) return null;
-        const v = (await res.json()) as { mode: TaskMode; tasks: TaskView[] };
+        const v = (await res.json()) as { mode: TaskMode; tasks: TaskView[]; admin?: boolean };
         setTasks(v.tasks);
         return v;
       } catch {
@@ -621,10 +774,31 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
     return () => clearInterval(t);
   }, [tasksPolling, tasksUrl, fetchTasks]);
   /** Avsluta: the incomplete tasks to ask about, fresh; none when the förening doesn't require them or the read fails. */
-  const askTasks = useCallback(async (): Promise<TaskView[]> => {
+  const meetingId = meeting?.id;
+  const orgId = props.orgId;
+  /** Admins: "Fråga inte igen i den här föreningen" (false) and its Ångra (true), logged with this meeting. */
+  const setAsking = useCallback(
+    async (on: boolean): Promise<boolean> => {
+      try {
+        const res = await fetch(`/api/orgs/${orgId}/task-fields`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ on, meetingId }),
+          signal: AbortSignal.timeout(TASK_SETTING_TIMEOUT_MS),
+        });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    },
+    [orgId, meetingId],
+  );
+  const askTasks = useCallback(async (): Promise<EndAsk> => {
     const v = await fetchTasks(TASKS_ASK_TIMEOUT_MS);
-    return v?.mode === "require" ? v.tasks.filter((x) => x.missing.length > 0) : [];
-  }, [fetchTasks]);
+    if (v?.mode !== "require") return { tasks: [] };
+    const owners = [...new Set(people.map((x) => x.name.trim()).filter(Boolean))];
+    return { tasks: v.tasks.filter((x) => x.missing.length > 0), owners, ...(v.admin ? { setAsking } : {}) };
+  }, [fetchTasks, people, setAsking]);
 
   /** "Klar": read the names now (the server only fills voices nobody has named). */
   const onNameRoundDone = () => {
@@ -676,18 +850,20 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
 
   /** The Avsluta dialog's answers, kept for "Försök igen" after a failed POST /end. */
   const endAnswers = useRef<TaskAnswer[]>([]);
-  const onStop = (answers?: TaskAnswer[]) => {
+  const endStats = useRef<EndStats | undefined>(undefined);
+  const onStop = (answers?: TaskAnswer[], stats?: EndStats) => {
     const s = stream.current;
     if (!meeting || endStarted.current) return;
     endStarted.current = true;
     endAnswers.current = answers ?? [];
+    endStats.current = stats;
     userStopped.current = true;
     setPhase("ending");
     setBusy(true);
     void (async () => {
       await s?.stop();
       capture.current?.stop();
-      await endOnServer(meeting.id, false, undefined, false, answers);
+      await endOnServer(meeting.id, false, undefined, false, answers, stats);
     })();
   };
 
@@ -695,14 +871,14 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const onRetryEnd = () => {
     if (!meeting) return;
     setBusy(true);
-    void endOnServer(meeting.id, autoStopped, limitReason, false, endAnswers.current);
+    void endOnServer(meeting.id, autoStopped, limitReason, false, endAnswers.current, endStats.current);
   };
 
   /** Signed out: end with what the server has; the unsent lines are given up (R3). */
   const onEndWithoutUnsent = () => {
     if (!meeting) return;
     setBusy(true);
-    void endOnServer(meeting.id, autoStopped, limitReason, true, endAnswers.current);
+    void endOnServer(meeting.id, autoStopped, limitReason, true, endAnswers.current, endStats.current);
   };
 
   const onEndUnfinished = () => {
@@ -738,6 +914,13 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   // Silent failures the status line doesn't cover: say what happened and what to do.
   const notice: LiveNotice | null = !["live", "paused", "error", "name-round"].includes(phase)
     ? null
+    : callLost && phase !== "error"
+      ? {
+          tone: phase === "paused" ? "danger" : "warning",
+          title: tCall("lostTitle"),
+          text: reshareNoAudio ? tCall("lostNoAudio") : phase === "paused" ? tCall("lostPaused") : tCall("lostLive"),
+          action: { label: tCall("reshare"), onClick: onReshare },
+        }
     : refusal === "meeting_gone"
       ? {
           tone: "danger",
@@ -801,7 +984,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   if (superseded) {
     return (
       <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
-        <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="superseded-title">
+        <section data-card className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="superseded-title">
           <div className="flex flex-col gap-2">
             <h1 id="superseded-title" className="text-2xl">
               {t("supersededTitle")}
@@ -866,7 +1049,9 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
           : null
       }
       agenda={
-        props.meeting === null && props.privat ? (
+        props.meeting === null && props.foretag ? (
+          <GroupPicker groups={props.foretag.groups} initialGroupId={props.foretag.initialGroupId} event={props.foretag.event ?? null} onChange={setForetagChoice} disabled={phase === "starting"} />
+        ) : props.meeting === null && props.privat ? (
           <ContextPicker
             contexts={props.privat.contexts ?? []}
             initialId={props.privat.initialContextId ?? null}
@@ -875,22 +1060,34 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             disabled={phase === "starting"}
           />
         ) : props.meeting === null ? (
-          <AgendaStep
-            key={agendaKey}
-            orgId={props.orgId}
-            formats={props.formats ?? NO_FORMATS}
-            pickerEnabled={props.pickerEnabled ?? false}
-            shareTranscript={props.shareTranscript}
-            startWithNewDoc={agendaKey > 0}
-            initialFormat={keptFormat}
-            disabled={phase === "starting"}
-            onChange={setAgenda}
-            goals={props.goals}
-            eventTitle={props.calendarEvent?.title ?? null}
-          />
+          <div className="flex flex-col gap-6">
+            {props.groups && (
+              <GroupPicker
+                space="forening"
+                groups={props.groups.groups}
+                initialGroupId={props.groups.initialGroupId}
+                event={null}
+                onChange={setGroupChoice}
+                disabled={phase === "starting"}
+              />
+            )}
+            <AgendaStep
+              key={agendaKey}
+              orgId={props.orgId}
+              formats={props.formats ?? NO_FORMATS}
+              pickerEnabled={props.pickerEnabled ?? false}
+              shareTranscript={props.shareTranscript}
+              startWithNewDoc={agendaKey > 0}
+              initialFormat={keptFormat}
+              disabled={phase === "starting"}
+              onChange={setAgenda}
+              goals={props.goals}
+              eventTitle={props.calendarEvent?.title ?? null}
+            />
+          </div>
         ) : undefined
       }
-      agendaConfirmed={props.meeting === null ? (props.privat ? privatChoice !== null : agenda?.confirmed === true) : true}
+      agendaConfirmed={props.meeting === null ? (props.foretag ? foretagChoice !== null : props.privat ? privatChoice !== null : agenda?.confirmed === true && (!props.groups || groupChoice !== null)) : true}
       agendaDoc={agenda?.agendaDocId ? { transcriptInDoc: agenda.transcriptInDoc } : null}
       onNewDocInstead={
         startError === "start-failed" && startErrorCode?.startsWith("agenda_")
@@ -906,9 +1103,10 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       }
       micLevel={micLevel}
       eventTitle={props.calendarEvent?.title ?? null}
-      onMicCheck={() => {
+      onMicCheck={tabCapture ? undefined : () => {
         setStartError(null);
         const cap = mic();
+        if (!(cap instanceof MicCapture)) return;
         cap
           .check(setMicLevel)
           // Unticked while the mic was still opening: let go of it once it is open.
@@ -925,11 +1123,38 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         capture.current = null;
         setMicLevel(null);
       }}
+      source={props.meeting === null ? source : undefined}
+      onSourceChange={props.meeting === null ? onSourceChange : undefined}
+      foretag={Boolean(props.foretag)}
+      callReady={source !== "call" || (callSupport === "ok" ? callShared : micOnly)}
+      callHint={callSupport === "ok" ? undefined : tCall("micOnlyFirst")}
+      callSetup={
+        <CallSetup
+          support={callSupport}
+          micOnly={micOnly}
+          onMicOnly={() => setMicOnly(true)}
+          shared={callShared}
+          sharing={sharing}
+          error={callError}
+          levels={callLevels}
+          onShare={onShare}
+          disabled={phase === "starting"}
+        />
+      }
+      resumeCall={meeting?.captureSource === "call" && callSupport === "ok"}
       busy={busy}
       autoStopped={autoStopped}
       onStart={onStart}
-      onPause={() => stream.current?.pause()}
-      onResume={() => stream.current?.resume()}
+      onPause={() => {
+        userPaused.current = true;
+        pausedForCall.current = false;
+        stream.current?.pause();
+      }}
+      onResume={() => {
+        userPaused.current = false;
+        pausedForCall.current = false;
+        stream.current?.resume();
+      }}
       onStop={onStop}
       answersLost={props.answersLost}
       tasks={tasks}

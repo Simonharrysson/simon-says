@@ -12,6 +12,23 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 const cmp = (a: string, b: string) => a.localeCompare(b, "sv", { numeric: true });
 
 /**
+ * The tree (Företag 0050, a förening with groups 0054): tasks carry only between meetings with the
+ * same audience, i.e. the same group (or the whole org, `groupId` null), never from a Privat möte.
+ * Null: no tree, every meeting of the org (as before).
+ */
+export type CarryScope = { groupId: string | null } | null;
+
+/** `query` narrowed to `scope` (unchanged without one). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function inScope<Q>(query: Q, scope: CarryScope | undefined): Q {
+  // A Privat möte is never a source, with or without the tree (it outlives a förening's groups).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const q = (query as any).eq("private", false);
+  if (!scope) return q as Q;
+  return (scope.groupId ? q.eq("group_id", scope.groupId) : q.is("group_id", null)) as Q;
+}
+
+/**
  * Open tasks of one meeting, ordered by raw owner text then position (carriedItems does the label
  * grouping). Locked rows keep human text only. A primary whose tasks-section copy (`<id>-t`) is
  * done counts as done: "✓ klart" set through the copy lands only on the copy when the primary is
@@ -163,13 +180,12 @@ export async function previousMeetingOfKinds(
   before: Date,
   kinds: (string | null)[],
   db: SupabaseClient = supabaseAdmin(),
+  scope?: CarryScope,
 ): Promise<{ id: string; startedAt?: string } | null> {
-  const { data, error } = await db
-    .from("meetings")
-    .select("id, started_at, format_profile_id")
-    .eq("org_id", orgId)
-    .eq("is_test", false)
-    .eq("status", "done")
+  const { data, error } = await inScope(
+    db.from("meetings").select("id, started_at, format_profile_id").eq("org_id", orgId).eq("is_test", false).eq("status", "done"),
+    scope,
+  )
     .lt("started_at", before.toISOString())
     .order("started_at", { ascending: false })
     .limit(50);
@@ -196,13 +212,12 @@ export async function previousOnDoc(
   docId: string,
   before: Date,
   db: SupabaseClient = supabaseAdmin(),
+  scope?: CarryScope,
 ): Promise<{ id: string; startedAt: string } | null> {
-  const { data, error } = await db
-    .from("meetings")
-    .select("id, started_at")
-    .eq("doc_id", docId)
-    .eq("org_id", orgId)
-    .eq("is_test", isTest)
+  const { data, error } = await inScope(
+    db.from("meetings").select("id, started_at").eq("doc_id", docId).eq("org_id", orgId).eq("is_test", isTest),
+    scope,
+  )
     .in("status", ["done", "abandoned"])
     .lt("started_at", before.toISOString())
     .order("started_at", { ascending: false })
@@ -223,8 +238,9 @@ export async function previousMeeting(
   before: Date,
   db: SupabaseClient = supabaseAdmin(),
   agendaDoc?: boolean,
+  scope?: CarryScope,
 ): Promise<{ id: string; startedAt?: string } | null> {
-  let query = db.from("meetings").select("id, started_at").eq("org_id", orgId).eq("is_test", isTest).eq("status", "done");
+  let query = inScope(db.from("meetings").select("id, started_at").eq("org_id", orgId).eq("is_test", isTest).eq("status", "done"), scope);
   if (isTest && agendaDoc !== undefined) query = query.eq("agenda_doc", agendaDoc);
   const { data, error } = await query
     .lt("started_at", before.toISOString())

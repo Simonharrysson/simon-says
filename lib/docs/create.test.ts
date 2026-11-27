@@ -5,6 +5,8 @@ const g = vi.hoisted(() => ({
   list: vi.fn(),
   filesCreate: vi.fn(),
   permCreate: vi.fn(),
+  permList: vi.fn(),
+  permDelete: vi.fn(),
   filesGet: vi.fn(),
   get: vi.fn(),
   batchUpdate: vi.fn(),
@@ -12,11 +14,11 @@ const g = vi.hoisted(() => ({
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
   docsApi: () => ({ documents: { get: g.get, batchUpdate: g.batchUpdate } }),
-  driveApi: () => ({ files: { list: g.list, create: g.filesCreate, get: g.filesGet }, permissions: { create: g.permCreate } }),
+  driveApi: () => ({ files: { list: g.list, create: g.filesCreate, get: g.filesGet }, permissions: { create: g.permCreate, list: g.permList, delete: g.permDelete } }),
 }));
 
 import { TEST_DOC_SUFFIX } from "@/lib/agenda/candidates";
-import { createMeetingDoc, INITIAL_HEADER, meetingTitle } from "./create";
+import { createMeetingDoc, INITIAL_HEADER, meetingTitle, revokeLegacyShare, revokePermission, shareWith } from "./create";
 
 const auth = {} as OAuth2Client;
 const M = "11111111-2222-3333-4444-555555555555";
@@ -170,6 +172,7 @@ describe("createMeetingDoc", () => {
       place: "own_folder",
       shared: ["a@x.se", "b@x.se"],
       shareFailed: [],
+      grants: {},
     });
   });
 
@@ -226,7 +229,7 @@ describe("createFormatDoc", () => {
       return { data: {} };
     });
     const res = await createFormatDoc(auth, { ...input, profile: VECKOMOTE });
-    expect(res).toEqual({ docId: "doc1", tabId: "t.0", transcriptTabId: "t.1", place: "own_folder", shared: ["a@x.se"], shareFailed: ["b@x.se"] });
+    expect(res).toEqual({ docId: "doc1", tabId: "t.0", transcriptTabId: "t.1", place: "own_folder", shared: ["a@x.se"], shareFailed: ["b@x.se"], grants: {} });
     expect(g.filesCreate.mock.calls[0][0].requestBody.name).toBe("2026-11-24 Möte – LiU AI Society");
     expect(g.filesCreate.mock.calls[0][0].requestBody.writersCanShare).toBe(false);
     expect(g.get).toHaveBeenCalledTimes(2);
@@ -240,5 +243,45 @@ describe("createFormatDoc", () => {
     expect(cells).toEqual([["Datum", ""], ["Tid", ""], ["Närvarande", ""], ["Sekreterare", ""]]);
     expect(g.permCreate).toHaveBeenCalledTimes(2);
     expect(g.permCreate.mock.calls[0][0]).toMatchObject({ fileId: "doc1", sendNotificationEmail: false, requestBody: { role: "writer", type: "user" } });
+  });
+});
+
+describe("only the permission Simon Says created is ours (0053)", () => {
+  it("a new share returns the permission id Drive created", async () => {
+    g.permCreate.mockResolvedValue({ data: { id: "p1" } });
+    expect(await shareWith(auth, "doc1", "a@x.se")).toEqual({ permissionId: "p1", preexisting: false });
+    expect(g.permList).not.toHaveBeenCalled();
+  });
+
+  it("an address that already has access (shared by hand) is left alone and marked preexisting", async () => {
+    g.permList.mockResolvedValue({ data: { permissions: [{ id: "hand", emailAddress: "A@x.se", role: "writer" }] } });
+    expect(await shareWith(auth, "doc1", "a@x.se", { checkExisting: true })).toEqual({ permissionId: null, preexisting: true });
+    expect(g.permCreate).not.toHaveBeenCalled();
+  });
+
+  it("revoking removes exactly that permission id; already gone is fine; other errors throw", async () => {
+    g.permDelete.mockResolvedValue({});
+    await revokePermission(auth, "doc1", "p1");
+    expect(g.permDelete).toHaveBeenCalledWith({ fileId: "doc1", permissionId: "p1", supportsAllDrives: true });
+    expect(g.permList).not.toHaveBeenCalled();
+    g.permDelete.mockRejectedValueOnce(Object.assign(new Error("Permission not found"), { code: 404 }));
+    await expect(revokePermission(auth, "doc1", "p1")).resolves.toBeUndefined();
+    g.permDelete.mockRejectedValueOnce(Object.assign(new Error("backend"), { code: 500 }));
+    await expect(revokePermission(auth, "doc1", "p1")).rejects.toThrow("backend");
+  });
+
+  it("a share from before 0053 falls back to the address's non-owner permission", async () => {
+    g.permList.mockResolvedValue({
+      data: {
+        permissions: [
+          { id: "own", emailAddress: "a@x.se", role: "owner" },
+          { id: "w", emailAddress: "a@x.se", role: "writer" },
+          { id: "other", emailAddress: "b@x.se", role: "writer" },
+        ],
+      },
+    });
+    g.permDelete.mockResolvedValue({});
+    await revokeLegacyShare(auth, "doc1", "A@x.se");
+    expect(g.permDelete.mock.calls.map((c) => (c[0] as { permissionId: string }).permissionId)).toEqual(["w"]);
   });
 });

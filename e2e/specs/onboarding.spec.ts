@@ -60,8 +60,15 @@ test("a new user signs in, creates a förening and goes through Kom igång @phon
 
   await expect(page.getByRole("heading", { level: 1 })).toContainText(orgName);
   await expect(page.getByText("Du är admin")).toBeVisible();
-  // The board person is on the förening's board list (Inställningar).
+  // The board person is on the förening's board list (Inställningar → Styrelsen och medlemmar).
   await page.getByRole("navigation", { name: "Föreningens vyer" }).getByRole("link", { name: "Inställningar" }).click();
+  await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Styrelsen och medlemmar" }).click();
   await expect(page.getByRole("list", { name: "Styrelsen" })).toContainText("Anna Berg");
   await expectAccessible(page);
+
+  // Kom igång is done, so its card is gone; Föreningen offers it again as a checklist.
+  await page.getByRole("navigation", { name: "Inställningarnas delar" }).getByRole("link", { name: "Föreningen" }).click();
+  await page.getByRole("button", { name: "Visa Kom igång igen" }).click();
+  await expect(page).toHaveURL(/\/kom-igang/);
+  await expect(page.getByRole("heading", { name: "Nu är ni redo" })).toBeVisible();
 });

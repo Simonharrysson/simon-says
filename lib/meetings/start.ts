@@ -4,7 +4,7 @@ import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkAgendaDoc } from "@/lib/agenda/access";
 import { AgendaShapeError, anchorAgenda, cleanupLosingAnchor, type AnchorResult } from "@/lib/agenda/anchor";
-import { carriedForMeeting, previousMeeting, previousMeetingOfKinds, previousOnDoc } from "@/lib/agenda/followup";
+import { carriedForMeeting, previousMeeting, previousMeetingOfKinds, previousOnDoc, type CarryScope } from "@/lib/agenda/followup";
 import { preparedSkipsMeetings } from "@/lib/prepare/carry-source";
 import { missingRequired } from "@/lib/agenda/scan";
 import { addTranscriptTab, createFormatDoc, createMeetingDoc, meetingTitle, trashDoc, type DocPlace } from "@/lib/docs/create";
@@ -12,7 +12,7 @@ import { planFormatRender } from "@/lib/docs/format-render";
 import { itemSpan, readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
 import { logEvent } from "@/lib/db/events";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
-import { recordDocShares } from "@/lib/docs/access";
+import { recordDocShares, type ShareDetail } from "@/lib/docs/access";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { CheckinWindow, ItemRole, MeetingEventKind, MeetingRow, NoteItemRow } from "@/lib/db/types";
 import { meetingRoles, parseProfile, type FormatProfile } from "@/lib/formats/schema";
@@ -36,11 +36,15 @@ import { calendarSnapshotForStart } from "@/lib/calendar/load";
 import { isUuid } from "@/lib/db/ids";
 import { privatTitle } from "@/lib/privat/format";
 import { isPrivat } from "@/lib/privat/space";
+import { planForetagStart, saveAttendees, type ForetagStart } from "@/lib/foretag/start";
+import { hasTree } from "@/lib/foretag/tree";
 
 export type { StandardKind } from "@/lib/formats/standard";
 import type { StandardKind } from "@/lib/formats/standard";
 
 export interface StartOptions {
+  /** Recorded from a video call (0058; the consent differs). Absent: the room. */
+  captureSource?: "room" | "call";
   /** Agenda mode: the förening's own agenda Doc (picked by the starter). Absent: a new Doc (fallback). */
   agendaDocId?: string | null;
   /** A format_profiles row of this org (the start screen's override). */
@@ -70,6 +74,16 @@ export interface StartOptions {
    */
   contextId?: string | null;
   withDoc?: boolean;
+  /**
+   * The tree only (a Företag 0050, a förening with groups 0054): the group the meeting is for (null
+   * = the whole org) and "Privat möte" (only attendees and admins see it). A new Doc is shared with
+   * exactly the viewers (a Företag: always Enkel; a förening keeps its format, and its own agenda
+   * Doc only for a meeting of the whole förening).
+   */
+  groupId?: string | null;
+  private?: boolean;
+  /** A Företag only: colleagues the starter ticked as attending the confirmed calendar event (`calendarEventId`). */
+  attendeeIds?: string[];
 }
 
 export type StartResult =
@@ -150,6 +164,8 @@ interface DocSetup {
   shareFailed: number;
   /** Members (user ids) the new Doc was shared with. */
   sharedWith: string[];
+  /** Per shared member: the Drive permission Simon Says created (0053). */
+  shareDetails?: Record<string, ShareDetail>;
   place: DocPlace | "agenda";
   title: string;
   /** Format layout: the anchoring result. Null for a v1 Doc. */
@@ -184,14 +200,43 @@ export async function startMeeting(
   if ((await myRole(supabase, orgId)) === null) {
     return failed("not_member", 403, "Du är inte medlem i föreningen.");
   }
+  // Kept apart: the Privat and Företag branches below replace `opts`.
+  const captureSource = opts.captureSource === "call" ? "call" : "room";
   // Privat (0045): a context of this space is required; a new Doc only when asked for (Enkel), else none.
   const privat = isPrivat(org) ? await privatContext(orgId, opts.contextId) : null;
   if (isPrivat(org) && !privat) return failed("bad_context", 400, "Välj vad inspelningen gäller och försök igen.");
   if (privat) opts = { formatKind: "enkel", isTest: opts.isTest, contextId: privat.id, withDoc: opts.withDoc === true };
   const docless = privat !== null && !opts.withDoc;
+  // The tree (Företag 0050, a förening with groups 0054): the group, Privat möte, attendees, the
+  // Doc's share list; a Företag also its customer. A förening keeps its formats and agenda Docs,
+  // but a Doc shared outside Simon Says (its own agenda, a prepared one) only for a meeting of the
+  // whole förening: a group's or a Privat möte's notes never go into a Doc everyone already has.
+  let foretag: ForetagStart | null = null;
+  const company = org.kind === "foretag";
+  if (hasTree(org)) {
+    const planned = await planForetagStart({
+      orgId,
+      user,
+      groupId: opts.groupId,
+      private: opts.private,
+      calendarEventId: company ? (opts.calendarEventId ?? null) : null,
+      attendeeIds: company ? (opts.attendeeIds ?? []) : [],
+      readCalendar: company && eventKind === "started",
+    });
+    if (!planned.ok) return failed("bad_group", 400, "Gruppen finns inte längre. Ladda om sidan och välj igen.");
+    foretag = planned.plan;
+    if (company) opts = { formatKind: "enkel", isTest: opts.isTest };
+    else if ((foretag.groupId || foretag.private) && opts.agendaDocId) {
+      return failed("agenda_restricted", 400, "Ett möte för en grupp eller ett privat möte får ett nytt dokument. Välj ”Skapa nytt dokument”, eller ”Hela föreningen”.");
+    }
+  }
 
   // F14: the org's live meeting and the starter's limits are checked before any Doc is touched.
-  const { data: active, error: activeError } = await supabase
+  // A Företag runs several meetings at once (0050): only the starter's own limit applies there.
+  // A förening (with groups too) keeps one at a time.
+  const { data: active, error: activeError } = company
+    ? { data: [], error: null }
+    : await supabase
     .from("meetings")
     .select("id")
     .eq("org_id", orgId)
@@ -251,10 +296,12 @@ export async function startMeeting(
     orgId,
     // Privat: the Doc and its folder are named after the context ("Simon Says – TDDE15").
     orgName: privat ? privat.name : org.name,
-    meetingFolderId: org.meeting_folder_id ?? null,
+    // The tree: the starter's own folder, never a shared one (it would bypass who may see the meeting).
+    meetingFolderId: foretag ? null : (org.meeting_folder_id ?? null),
     isTest,
     user,
-    eventTitle: calendarEvent?.title || null,
+    eventTitle: (company ? foretag?.eventTitle : calendarEvent?.title) || null,
+    shareTo: foretag ? foretag.viewers : null,
   };
 
   const setup = docless
@@ -295,13 +342,17 @@ export async function startMeeting(
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
       ...(privat ? { context_id: privat.id } : {}),
+      ...(foretag ? { group_id: foretag.groupId, private: foretag.private, context_id: foretag.customerId } : {}),
   };
   // 0030: Simon Says only ever shares a Doc it created.
   const appCreated = !agendaMode || opts.agendaCreatedByApp === true || prepared !== null;
-  let { error: insertError } = await supabaseAdmin().from("meetings").insert({ ...row, app_created_doc: appCreated });
+  // capture_source only when it isn't the default, so a database without 0058 still takes room meetings.
+  let { error: insertError } = await supabaseAdmin()
+    .from("meetings")
+    .insert({ ...row, app_created_doc: appCreated, ...(captureSource === "call" ? { capture_source: captureSource } : {}) });
   // A database without 0030 (deploy order): the row without the column.
   if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703")) {
-    console.warn("meetings: app_created_doc missing (0030 not applied)");
+    console.warn("meetings: app_created_doc or capture_source missing (0030/0058 not applied)");
     ({ error: insertError } = await supabaseAdmin().from("meetings").insert(row));
   }
   // A refused start never leaves a new, empty Doc in the förening's folder (an agenda Doc is theirs).
@@ -374,11 +425,12 @@ export async function startMeeting(
   }
 
   if (calendarEvent) await saveCalendarEvent(meetingId, calendarEvent);
+  if (foretag) await saveAttendees(meetingId, foretag.attendees);
 
   const missedMeetingFolder = setup.place === "own_folder" && Boolean(org.meeting_folder_id);
   // Who got the Doc (the org page shows "Dokument" only to them and the starter). Best effort.
   // A prepared agenda was shared with the members when it was made (through the preparer's grant).
-  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])]);
+  await recordDocShares(meetingId, [...new Set([...setup.sharedWith, ...(prepared?.shared_with ?? [])])], { ...preparedShareDetails(prepared?.share_grants), ...(setup.shareDetails ?? {}) });
 
   const log = (kind: MeetingEventKind, detail: Record<string, unknown>) =>
     logEvent(meetingId, kind, detail).catch((e: Error) => console.error(`meetings: logEvent: ${e.message}`));
@@ -425,6 +477,8 @@ export async function startMeeting(
         agendaDoc: agendaMode,
         startedAt,
         prepared,
+        // The tree: only the same group's (or the whole förening's) earlier meetings, never into or out of a Privat möte.
+        scope: foretag ? (foretag.private ? "none" : { groupId: foretag.groupId }) : null,
         log,
       });
     } catch (err) {
@@ -536,12 +590,16 @@ interface SetupCtx {
   user: { id: string; email?: string | null };
   /** The matched calendar event's title (todo #14), for the Doc's name. */
   eventTitle?: string | null;
+  /** The tree (0050, 0054): share the new Doc only with these accounts (the meeting's viewers). Null: every member. */
+  shareTo?: Set<string> | null;
 }
 
 /** The org's other members with an email (the starter owns the Doc). */
 async function otherMembers(ctx: SetupCtx): Promise<OrgMember[]> {
   const me = (ctx.user.email ?? "").toLowerCase();
-  return (await orgMemberList(ctx.orgId)).filter((m) => m.userId !== ctx.user.id && m.email && m.email.toLowerCase() !== me);
+  return (await orgMemberList(ctx.orgId)).filter(
+    (m) => m.userId !== ctx.user.id && m.email && m.email.toLowerCase() !== me && (!ctx.shareTo || ctx.shareTo.has(m.userId)),
+  );
 }
 
 /** The user ids of `members` whose email is in `shared`. */
@@ -549,6 +607,23 @@ const sharedIds = (members: OrgMember[], shared: string[]) => {
   const ok = new Set(shared.map((e) => e.toLowerCase()));
   return members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => m.userId);
 };
+
+/** Per member the new Doc was shared with: the permission we created (a new Doc: never preexisting). */
+const shareDetails = (members: OrgMember[], grants: Record<string, string> | undefined): Record<string, ShareDetail> =>
+  Object.fromEntries(
+    members.flatMap((m) => {
+      const id = grants?.[m.email.toLowerCase()];
+      return id ? [[m.userId, { email: m.email, permissionId: id, preexisting: false }] as const] : [];
+    }),
+  );
+
+/** A prepared agenda's shares (0053): made on a new Doc of ours, so never preexisting. */
+const preparedShareDetails = (grants: Record<string, { email: string; permission_id: string | null }> | null | undefined): Record<string, ShareDetail> =>
+  Object.fromEntries(
+    Object.entries(grants ?? {}).flatMap(([userId, g]) =>
+      g?.permission_id && g.email ? [[userId, { email: g.email, permissionId: g.permission_id, preexisting: false }] as const] : [],
+    ),
+  );
 
 /** The new Doc's file name: date and time, "Mötesprotokoll", the förening; a Testmöte marked. */
 const docTitle = (ctx: SetupCtx) => meetingTitle(ctx.orgName, ctx.startedAt, { test: ctx.isTest, eventTitle: ctx.eventTitle });
@@ -673,6 +748,7 @@ async function v1Setup(ctx: SetupCtx, profile: FormatProfile, shareTranscript: b
       sectionRanges: doc.sectionRanges,
       shareFailed: doc.shareFailed.length,
       sharedWith: sharedIds(members, doc.shared),
+      shareDetails: shareDetails(members, doc.grants),
       place: doc.place,
       title,
       anchor: null,
@@ -718,6 +794,7 @@ async function formatSetup(ctx: SetupCtx, profile: FormatProfile, shareTranscrip
       sectionRanges: anchor.sectionRanges,
       shareFailed: doc.shareFailed.length,
       sharedWith: sharedIds(members, doc.shared),
+      shareDetails: shareDetails(members, doc.grants),
       place: doc.place,
       title,
       anchor,
@@ -762,6 +839,8 @@ async function prefill(input: {
   startedAt: Date;
   /** The prepared agenda this Doc holds (Förbered möte): its carried lines are adopted. */
   prepared?: PreparedAgenda | null;
+  /** The tree (0050, 0054): which earlier meetings may carry tasks in; "none" for a Privat möte. Null: every one (no tree). */
+  scope?: CarryScope | "none";
   log: (kind: MeetingEventKind, detail: Record<string, unknown>) => Promise<unknown>;
 }): Promise<number> {
   const { auth, meeting, profile } = input;
@@ -774,7 +853,8 @@ async function prefill(input: {
   let people: RolePerson[] = [];
   // An agenda Testmöte: the fixture's fictional people, no people rows read or referenced (Ruling 38).
   const fictional = usesTestPeople({ is_test: input.isTest, agenda_doc: input.agendaDoc });
-  if (followup) {
+  const scope = input.scope ?? null;
+  if (followup && scope !== "none") {
     // Testmöten pull only from Testmöten, real meetings only from real ones (answer 7); an agenda
     // Testmöte only from agenda Testmöten. A prepared agenda: the previous meeting of its kind,
     // as the prepare drew from.
@@ -784,11 +864,11 @@ async function prefill(input: {
     const prev = prepared
       ? preparedSkipsMeetings(prepared)
         ? null
-        : await previousMeetingOfKinds(meeting.org_id, input.startedAt, kindsOfType(prepared.kind), db)
-      : await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc);
+        : await previousMeetingOfKinds(meeting.org_id, input.startedAt, kindsOfType(prepared.kind), db, scope)
+      : await previousMeeting(meeting.org_id, input.isTest, input.startedAt, db, input.agendaDoc, scope);
     // A false start on this same Doc (done or abandoned, after `prev`): its carried lines are
     // already in the Doc, so they are taken over, never written twice (final review R1/R2).
-    const onDoc = await previousOnDoc(meeting.org_id, input.isTest, meeting.doc_id, input.startedAt, db);
+    const onDoc = await previousOnDoc(meeting.org_id, input.isTest, meeting.doc_id, input.startedAt, db, scope);
     const sameDoc = onDoc && (!prev || onDoc.id === prev.id || !prev.startedAt || onDoc.startedAt >= prev.startedAt) ? onDoc : null;
     // No meeting on the Doc yet: the prepared lines are the ones in it.
     const fromPrepared = !onDoc && prepared && prepared.carried.length > 0 ? prepared : null;

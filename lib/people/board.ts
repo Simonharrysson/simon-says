@@ -11,6 +11,7 @@ export interface BoardPerson {
   email?: string | null;
   member_user_id: string | null;
   voice_consent_at?: string | null;
+  self_linked_at?: string | null;
 }
 
 export interface BoardMember {
@@ -32,9 +33,20 @@ export interface BoardRow {
   /** The linked (or unnamed) member's account. */
   member: BoardMember | null;
   voiceConsent: boolean;
+  /** The member linked themselves to this name within SELF_LINK_RECENT_DAYS (0051): "Nyss kopplad". */
+  selfLinkedAt?: string | null;
 }
 
-export function boardRows(people: BoardPerson[], members: BoardMember[]): BoardRow[] {
+/** How long the admins' list marks a self link "Nyss kopplad" (with "Det stämmer inte"). */
+export const SELF_LINK_RECENT_DAYS = 14;
+
+function recentSelfLink(at: string | null | undefined, now: number): string | null {
+  if (!at) return null;
+  const t = Date.parse(at);
+  return Number.isFinite(t) && now - t < SELF_LINK_RECENT_DAYS * 86_400_000 ? at : null;
+}
+
+export function boardRows(people: BoardPerson[], members: BoardMember[], now: number = Date.now()): BoardRow[] {
   const byUser = new Map(members.map((m) => [m.userId, m]));
   const linked = new Set<string>();
   const rows: BoardRow[] = people.map((p) => {
@@ -49,11 +61,12 @@ export function boardRows(people: BoardPerson[], members: BoardMember[]): BoardR
       status: member ? "account" : p.email ? "invited" : "name",
       member,
       voiceConsent: Boolean(p.voice_consent_at),
+      selfLinkedAt: member ? recentSelfLink(p.self_linked_at, now) : null,
     };
   });
   const unnamed: BoardRow[] = members
     .filter((m) => !linked.has(m.userId))
-    .map((m) => ({ personId: null, name: null, role: null, email: m.email || null, status: "account", member: m, voiceConsent: false }));
+    .map((m) => ({ personId: null, name: null, role: null, email: m.email || null, status: "account", member: m, voiceConsent: false, selfLinkedAt: null }));
   return [...rows, ...unnamed];
 }
 

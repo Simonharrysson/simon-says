@@ -5,6 +5,8 @@ import { AppNav } from "@/components/views/AppNav";
 import { RefreshOnBack } from "@/components/views/RefreshOnBack";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 import { SiteHeader } from "@/components/ui/SiteHeader";
+import { myForetagIds } from "@/lib/db/foretag";
+import { canCreateForetag } from "@/lib/foretag/gate";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +18,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  // Företag (0050) is its own section, shown to a company's members and to those who may create one.
+  const companyIds = await myForetagIds(supabase, user.id).catch(() => []);
+  const showForetag = companyIds.length > 0 || canCreateForetag(user.email);
 
   return (
     <>
-      <SiteHeader homeHref="/hem" nav={<AppNav email={user.email ?? ""} signOut={signOut} />} />
+      <SiteHeader
+        homeHref="/hem"
+        wideNav={showForetag}
+        nav={<AppNav email={user.email ?? ""} signOut={signOut} showForetag={showForetag} companyIds={companyIds} />}
+      />
       {/* Link navigations (AppLink tags them "nav") crossfade the page under a still header.
           Tab switches ("tab") don't animate here: their panel swap is a sync render, so
           OrgTabsShell fades the panel with CSS. Refreshes, server actions and back/forward don't

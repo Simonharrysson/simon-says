@@ -19,6 +19,7 @@ import { ensureStandardRow, formatById, orgDefaultFormat } from "@/lib/formats/s
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/docs";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
+import { hasTree } from "@/lib/foretag/tree";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { docUrl } from "@/lib/ui/meetings";
 import { followupSource, importedCarried, type ImportedItem } from "./carry-source";
@@ -127,8 +128,12 @@ async function sources(userDb: SupabaseClient, orgId: string, type: MeetingType,
   const { id: formatId, profile } = await formatForType(orgId, type);
   const groupBy = profile.tasksSection?.groupBy ?? "role";
   const hasFollowup = profile.fixedAgendaItems.some((i) => i.role === "followup");
+  // The tree (0054): the prepared Doc is the whole förening's, so it draws only from meetings for the whole förening.
+  const { data: org, error: orgError } = await db.from("orgs").select("*").eq("id", orgId).maybeSingle();
+  if (orgError) throw new Error(`prepare: org: ${orgError.message}`);
+  const scope = hasTree(org) ? { groupId: null } : null;
   const [prev, protocol, ppl] = await Promise.all([
-    hasFollowup ? previousMeetingOfKinds(orgId, now, kindsOfType(type), db) : Promise.resolve(null),
+    hasFollowup ? previousMeetingOfKinds(orgId, now, kindsOfType(type), db, scope) : Promise.resolve(null),
     hasFollowup ? latestProtocol(orgId, date) : Promise.resolve(null),
     db.from("people").select("id, name, role").eq("org_id", orgId),
   ]);
@@ -382,6 +387,10 @@ async function create(
   });
   const ok = new Set(doc.shared.map((e) => e.toLowerCase()));
   const sharedWith = members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => m.userId);
+  // 0053: the permission we created per member, carried to the meeting's shares at its start.
+  const shareGrants = Object.fromEntries(
+    members.filter((m) => ok.has(m.email.toLowerCase())).map((m) => [m.userId, { email: m.email.toLowerCase(), permission_id: doc.grants[m.email.toLowerCase()] ?? null }]),
+  );
   try {
     const lines = await guarded(auth, doc.docId, doc.tabId, (tab) => {
       const r = planItemRanges(tab, src.profile, key, items);
@@ -404,6 +413,7 @@ async function create(
       dropped,
       source_meeting_id: src.prevId,
       shared_with: sharedWith,
+      share_grants: shareGrants,
       prepared_by: user.id,
     });
     if (error) {

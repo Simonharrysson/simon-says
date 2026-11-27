@@ -3,6 +3,8 @@
 import { AppLink } from "@/components/ui/AppLink";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Presence, PresenceLi } from "@/components/motion/Presence";
+import { useFlip } from "@/components/motion/useFlip";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -200,7 +202,7 @@ function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
             <label
               key={mt.type}
               className={cn(
-                "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4 transition-colors duration-120",
+                "press lift flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4",
                 checked ? "border-ink" : "border-line hover:border-control",
               )}
             >
@@ -260,8 +262,11 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
   const types = useTranslations("formats.meetingTypes");
   const locale = useLocale();
   const [adding, setAdding] = useState("");
+  // Points added, removed and moved: they open, close and slide (components/motion).
+  const agendaRef = useRef<HTMLOListElement>(null);
   const addRef = useRef<HTMLInputElement>(null);
   const on = p.items.filter((i) => i.on);
+  useFlip(agendaRef, on.map((i) => i.id));
   // "Mål att ta upp" (todo #12): the goals Simon Says suggests, apart from the other points.
   const offGoals = p.items.filter((i) => !i.on && isGoalItem(i));
   const off = p.items.filter((i) => !i.on && !isGoalItem(i));
@@ -318,21 +323,23 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
         <p className={cn("-mt-2 px-6 pb-4", hintClass)}>
           {t("agendaHint")}
         </p>
-        <ol className="flex flex-col border-t border-line" aria-labelledby={`${p.uid}-agenda`}>
-          {on.map((item, i) => (
-            <AgendaRow
-              key={item.id}
-              item={item}
-              n={i + 1}
-              first={i === 0}
-              last={i === on.length - 1}
-              lock={lock}
-              onRename={(label) => p.onItems(renameItem(p.items, item.id, label))}
-              onMove={(dir) => p.onItems(moveItem(p.items, item.id, dir))}
-              onRemove={() => p.onItems(removeItem(p.items, item.id))}
-              onTask={(source, v) => p.onItems(setTask(p.items, item.id, source, v))}
-            />
-          ))}
+        <ol ref={agendaRef} className="flex flex-col border-t border-line" aria-labelledby={`${p.uid}-agenda`}>
+          <Presence>
+            {on.map((item, i) => (
+              <AgendaRow
+                key={item.id}
+                item={item}
+                n={i + 1}
+                first={i === 0}
+                last={i === on.length - 1}
+                lock={lock}
+                onRename={(label) => p.onItems(renameItem(p.items, item.id, label))}
+                onMove={(dir) => p.onItems(moveItem(p.items, item.id, dir))}
+                onRemove={() => p.onItems(removeItem(p.items, item.id))}
+                onTask={(source, v) => p.onItems(setTask(p.items, item.id, source, v))}
+              />
+            ))}
+          </Presence>
         </ol>
         <form className="flex flex-wrap items-end gap-3 border-t border-line px-6 py-4" onSubmit={add}>
           <div className="flex min-w-[12rem] flex-1 flex-col gap-2">
@@ -361,18 +368,24 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
             </h2>
             <p className={hintClass}>{t("goalsHint")}</p>
           </div>
-          <ul className="flex flex-col gap-2">
-            {offGoals.map((item) => (
-              <li key={item.id} className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-rail px-4 py-2">
-                <span className="flex flex-col">
-                  <span className="wrap-anywhere">{item.label}</span>
-                  <span className={hintClass}>{item.reason ?? t("goalFallback")}</span>
-                </span>
-                <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
-                  {t("add")}
-                </Button>
-              </li>
-            ))}
+          <ul className="flex flex-col">
+            <Presence>
+              {offGoals.map((item) => (
+                <PresenceLi key={item.id}>
+                  <div className="pb-2 [li:last-child>&]:pb-0">
+                    <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-rail px-4 py-2">
+                      <span className="flex flex-col">
+                        <span className="wrap-anywhere">{item.label}</span>
+                        <span className={hintClass}>{item.reason ?? t("goalFallback")}</span>
+                      </span>
+                      <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
+                        {t("add")}
+                      </Button>
+                    </div>
+                  </div>
+                </PresenceLi>
+              ))}
+            </Presence>
           </ul>
         </section>
       )}
@@ -382,20 +395,26 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
           <h2 id={`${p.uid}-more`} className="text-lg">
             {t("moreItems")}
           </h2>
-          <ul className="flex flex-col gap-2">
-            {off.map((item) => (
-              <li key={item.id} className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-rail px-4 py-2">
-                <span className="flex flex-col">
-                  <span className="wrap-anywhere">{item.label}</span>
-                  <span className={hintClass}>
-                    {item.source === "suggested" ? t("raisedAt", { count: item.meetings ?? 2 }) : t("removed")}
-                  </span>
-                </span>
-                <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
-                  {t("add")}
-                </Button>
-              </li>
-            ))}
+          <ul className="flex flex-col">
+            <Presence>
+              {off.map((item) => (
+                <PresenceLi key={item.id}>
+                  <div className="pb-2 [li:last-child>&]:pb-0">
+                    <div className="flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-rail px-4 py-2">
+                      <span className="flex flex-col">
+                        <span className="wrap-anywhere">{item.label}</span>
+                        <span className={hintClass}>
+                          {item.source === "suggested" ? t("raisedAt", { count: item.meetings ?? 2 }) : t("removed")}
+                        </span>
+                      </span>
+                      <Button size="sm" variant="secondary" icon={<IconPlus />} onClick={() => p.onItems(addBack(p.items, item.id))} disabled={lock}>
+                        {t("add")}
+                      </Button>
+                    </div>
+                  </div>
+                </PresenceLi>
+              ))}
+            </Presence>
           </ul>
         </section>
       )}
@@ -449,64 +468,66 @@ function AgendaRow(props: {
       <span className={hintClass}>{t("tagAdded")}</span>
     );
   return (
-    <li className="flex flex-col gap-3 border-b border-line px-6 py-4 last:border-b-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="w-6 flex-none text-right font-mono text-sm text-ink-3" aria-hidden>
-          {n}.
-        </span>
-        <label htmlFor={inputId} className="sr-only">
-          {t("itemN", { n })}
-        </label>
-        <Input
-          id={inputId}
-          className="min-w-[10rem] flex-1"
-          value={item.label}
-          maxLength={120}
-          onChange={(e) => props.onRename(e.target.value)}
-          // "Från förra veckan" keeps its name: the meeting finds last week's tasks by it.
-          readOnly={Boolean(item.tasks)}
-          disabled={props.lock}
-        />
-        <div className="ml-auto flex items-center gap-1">
-          {tag}
-          <Button variant="ghost" size="sm" aria-label={t("moveUpItem", { label: item.label })} title={t("moveUp")} disabled={props.lock || props.first} onClick={() => props.onMove(-1)}>
-            ↑
-          </Button>
-          <Button variant="ghost" size="sm" aria-label={t("moveDownItem", { label: item.label })} title={t("moveDown")} disabled={props.lock || props.last} onClick={() => props.onMove(1)}>
-            ↓
-          </Button>
-          <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash />} title={t("removeItem", { label: item.label })} disabled={props.lock} onClick={props.onRemove}>
-            {t("removeItem", { label: item.label })}
-          </Button>
+    <PresenceLi data-flip={item.id}>
+      <div className="flex flex-col gap-3 border-b border-line px-6 py-4 [li:last-child>&]:border-b-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="w-6 flex-none text-right font-mono text-sm text-ink-3" aria-hidden>
+            {n}.
+          </span>
+          <label htmlFor={inputId} className="sr-only">
+            {t("itemN", { n })}
+          </label>
+          <Input
+            id={inputId}
+            className="min-w-[10rem] flex-1"
+            value={item.label}
+            maxLength={120}
+            onChange={(e) => props.onRename(e.target.value)}
+            // "Från förra veckan" keeps its name: the meeting finds last week's tasks by it.
+            readOnly={Boolean(item.tasks)}
+            disabled={props.lock}
+          />
+          <div className="ml-auto flex items-center gap-1">
+            {tag}
+            <Button variant="ghost" size="sm" aria-label={t("moveUpItem", { label: item.label })} title={t("moveUp")} disabled={props.lock || props.first} onClick={() => props.onMove(-1)}>
+              ↑
+            </Button>
+            <Button variant="ghost" size="sm" aria-label={t("moveDownItem", { label: item.label })} title={t("moveDown")} disabled={props.lock || props.last} onClick={() => props.onMove(1)}>
+              ↓
+            </Button>
+            <Button variant="danger-ghost" size="sm" iconOnly icon={<IconTrash />} title={t("removeItem", { label: item.label })} disabled={props.lock} onClick={props.onRemove}>
+              {t("removeItem", { label: item.label })}
+            </Button>
+          </div>
         </div>
+        {item.tasks && (
+          <div className="ml-9 flex flex-col gap-2">
+            {item.tasks.length === 0 ? (
+              <p className={hintClass}>{followupNote(item.origin, locale)}</p>
+            ) : (
+              <>
+                <p className={hintClass}>
+                  {followupFrom(item.origin, locale)} {t("untick")}
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {item.tasks.map((t) => {
+                    const tid = `${inputId}-${t.source.replace(/[^a-z0-9]/gi, "-")}`;
+                    return (
+                      <li key={t.source} className="flex min-h-11 items-start gap-3">
+                        <Checkbox id={tid} className="mt-1" checked={t.on} onCheckedChange={(v) => props.onTask(t.source, v === true)} disabled={props.lock} />
+                        <label htmlFor={tid} className={cn("cursor-pointer text-sm wrap-anywhere", !t.on && "text-ink-3 line-through")}>
+                          {t.line}
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
       </div>
-      {item.tasks && (
-        <div className="ml-9 flex flex-col gap-2">
-          {item.tasks.length === 0 ? (
-            <p className={hintClass}>{followupNote(item.origin, locale)}</p>
-          ) : (
-            <>
-              <p className={hintClass}>
-                {followupFrom(item.origin, locale)} {t("untick")}
-              </p>
-              <ul className="flex flex-col gap-1">
-                {item.tasks.map((t) => {
-                  const tid = `${inputId}-${t.source.replace(/[^a-z0-9]/gi, "-")}`;
-                  return (
-                    <li key={t.source} className="flex min-h-11 items-start gap-3">
-                      <Checkbox id={tid} className="mt-1" checked={t.on} onCheckedChange={(v) => props.onTask(t.source, v === true)} disabled={props.lock} />
-                      <label htmlFor={tid} className={cn("cursor-pointer text-sm wrap-anywhere", !t.on && "text-ink-3 line-through")}>
-                        {t.line}
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
-    </li>
+    </PresenceLi>
   );
 }
 

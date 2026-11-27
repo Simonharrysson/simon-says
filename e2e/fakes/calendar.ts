@@ -10,6 +10,7 @@ export interface FakeCalendarEvent {
   status?: string;
   allDay?: boolean;
   description?: string;
+  organizer?: { email: string };
   attendees?: { email?: string; displayName?: string; responseStatus?: string }[];
 }
 
@@ -47,7 +48,9 @@ export class CalendarFake {
     }
     let m: RegExpMatchArray | null;
     if ((m = rest.match(/^calendars\/([^/]+)\/events(?:\/([^/]+))?$/))) {
-      const calendarId = decodeURIComponent(m[1]);
+      // "primary" is the user's own primary calendar, as at Google (a Företag start reads it).
+      const asked = decodeURIComponent(m[1]);
+      const calendarId = asked === "primary" ? (mine.find((c) => c.primary)?.id ?? asked) : asked;
       if (!mine.some((c) => c.id === calendarId)) return { status: 404, body: { error: { code: 404, message: "Not Found" } } };
       const all = this.events.get(calendarId) ?? [];
       if (m[2]) {
@@ -76,6 +79,7 @@ export class CalendarFake {
       summary: e.summary,
       start: e.allDay ? { date: e.start.slice(0, 10) } : { dateTime: e.start },
       end: e.allDay ? { date: e.end.slice(0, 10) } : { dateTime: e.end },
+      ...(e.organizer ? { organizer: e.organizer } : {}),
       ...(e.attendees ? { attendees: e.attendees } : {}),
     };
   }

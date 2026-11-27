@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { startFakeElevenLabs } from "@/scripts/fake-elevenlabs";
 import { ClaudeFake } from "./claude";
 import { GoogleFake, readBody, send } from "./google";
+import { handleWebsite } from "./website";
 
 // One process for every external service the e2e app talks to (see docs/testing.md "E2E"):
 //
@@ -10,6 +11,7 @@ import { GoogleFake, readBody, send } from "./google";
 //   http://127.0.0.1:<port>/anthropic/…  Claude messages, streamed         (ANTHROPIC_BASE_URL)
 //   http://127.0.0.1:<port>/__e2e/…      control API for the specs (seed files, read Docs, calls)
 //   http://127.0.0.1:<port>/resend/emails  mail, Resend-shaped          (E2E_MAIL_URL)
+//   http://127.0.0.1:<port>/web/<host>/…  a fictional förening's website  (E2E_WEB_ROOT)
 //   ws://127.0.0.1:<port+1>/v1/speech-to-text/realtime   scripts/fake-elevenlabs.ts (ELEVENLABS_WS_URL)
 
 export async function startFakes(port: number, opts: { segmentSeconds?: number; quiet?: boolean } = {}) {
@@ -35,6 +37,7 @@ export async function startFakes(port: number, opts: { segmentSeconds?: number; 
     if (path.startsWith("anthropic/")) return void claude.handle(req, res, path.slice("anthropic/".length));
     if (path.startsWith("__e2e/")) return void control(req, res, path.slice("__e2e/".length), url);
     if (path === "resend/emails" && req.method === "POST") return void resend(req, res);
+    if (path.startsWith("web/")) return void handleWebsite(req, res, path.slice("web/".length) + url.search);
     // Google at the root: googleapis resolves its paths against rootUrl's origin.
     log(`[fake-google] ${req.method} ${url.pathname}`);
     return void google.handle(req, res, path, url);

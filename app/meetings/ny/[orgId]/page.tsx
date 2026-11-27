@@ -12,11 +12,15 @@ import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { goalLabel } from "@/lib/prepare/goals";
 import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { orgEvent } from "@/lib/calendar/load";
+import { foretagEventNow, orgEvent } from "@/lib/calendar/load";
+import { orgMemberList } from "@/lib/db/members";
+import { customerDomain, ownDomains } from "@/lib/foretag/customers";
 import { createContextAction } from "@/app/(app)/privat/actions";
 import { suggestedContext } from "@/lib/privat/contexts";
 import { listContexts } from "@/lib/privat/contexts-db";
 import { isPrivat, privatHref } from "@/lib/privat/space";
+import { listTeams } from "@/lib/foretag/teams";
+import { hasTree, treeRows } from "@/lib/foretag/tree";
 
 export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
@@ -71,12 +75,9 @@ export default async function NewMeetingPage({
   const org = await getOrg(db, orgId);
   if (!org || (await myRole(db, orgId)) === null) notFound();
 
-  const { data: active, error } = await db
-    .from("meetings")
-    .select("id, started_by")
-    .eq("org_id", orgId)
-    .in("status", ["live", "ending"])
-    .limit(1);
+  // A Företag runs several meetings at once (0050): only the user's own running meeting sends them there.
+  const busy = db.from("meetings").select("id, started_by").eq("org_id", orgId).in("status", ["live", "ending"]);
+  const { data: active, error } = await (org.kind === "foretag" ? busy.eq("started_by", user.id) : busy).limit(1);
   if (error) throw new Error(`new meeting page: ${error.message}`);
   const running = active?.[0];
   if (running) redirect(running.started_by === user.id ? `/meetings/${running.id}` : `/orgs/${orgId}`);
@@ -106,14 +107,66 @@ export default async function NewMeetingPage({
     );
   }
 
+  // Företag (0050): "Möte för" (the starter's own group preselected) and Privat möte; always a new Enkel Doc.
+  if (org.kind === "foretag") {
+    const [groups, mine, event, members, people] = await Promise.all([
+      listTeams(db, orgId),
+      db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
+      foretagEventNow(user.id),
+      orgMemberList(orgId),
+      db.from("people").select("name, member_user_id").eq("org_id", orgId),
+    ]);
+    // The event happening now in the starter's own calendar, offered, never attached by itself:
+    // colleagues on its guest list (accepted ones pre-ticked) and, for the customer, its outside domain.
+    const names = new Map(((people.data ?? []) as { name: string; member_user_id: string | null }[]).flatMap((p) => (p.member_user_id ? [[p.member_user_id, p.name] as const] : [])));
+    const byEmail = new Map(members.map((m) => [m.email.toLowerCase(), m.userId]));
+    const offered = event
+      ? {
+          id: event.id,
+          title: event.title,
+          colleagues: event.guests.flatMap((g) => {
+            const id = byEmail.get(g.email.toLowerCase());
+            return id && id !== user.id
+              ? [{ userId: id, name: names.get(id) ?? g.name ?? g.email, accepted: g.response === "accepted", declined: g.response === "declined" }]
+              : [];
+          }),
+          customerDomain: customerDomain(event.guests.map((g) => g.email), ownDomains(members.map((m) => m.email))),
+        }
+      : null;
+    return (
+      <main id="innehall">
+        <LiveMeetingController
+          orgId={org.id}
+          orgName={org.name}
+          orgHref={`/orgs/${org.id}`}
+          shareTranscript={org.share_transcript}
+          meeting={null}
+          foretag={{
+            groups: treeRows(groups).map(({ group, depth }) => ({ id: group.id, name: group.name, depth })),
+            initialGroupId: ((mine.data ?? [])[0] as { group_id: string } | undefined)?.group_id ?? null,
+            event: offered,
+          }}
+        />
+      </main>
+    );
+  }
+
   // "Starta" on a calendar event (todo #14): its title for the consent step, read with the
   // starter's own grant (the start reads it again; nothing is taken from the URL but the id).
-  const [def, rows, goals, picked] = await Promise.all([
+  // A förening with groups (0054): "Möte för" (the starter's own group preselected) and Privat möte.
+  const [def, rows, goals, picked, tree] = await Promise.all([
     orgDefaultFormat(db, orgId),
     listOrgFormats(db, orgId),
     goalSuggestionsFor(db, orgId),
     event ? orgEvent(user.id, org, event) : Promise.resolve(null),
+    hasTree(org)
+      ? Promise.all([
+          listTeams(db, orgId),
+          db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
+        ])
+      : Promise.resolve(null),
   ]);
+  const groupRows = tree ? treeRows(tree[0]) : [];
 
   return (
     <main id="innehall">
@@ -127,6 +180,14 @@ export default async function NewMeetingPage({
         pickerEnabled={pickerEnabled(getEnv())}
         goals={goals.map((g) => ({ id: g.goalId, label: goalLabel(g.title), reason: g.reason }))}
         calendarEvent={picked ? { id: picked.id, title: picked.title } : null}
+        groups={
+          tree && groupRows.length
+            ? {
+                groups: groupRows.map(({ group, depth }) => ({ id: group.id, name: group.name, depth })),
+                initialGroupId: ((tree[1].data ?? [])[0] as { group_id: string } | undefined)?.group_id ?? null,
+              }
+            : undefined
+        }
       />
     </main>
   );

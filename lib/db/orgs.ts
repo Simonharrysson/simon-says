@@ -30,9 +30,9 @@ export async function listMyOrgs(db: Db): Promise<(OrgRow & { role: OrgMemberRow
     .eq("org_members.user_id", user.id)
     .order("created_at");
   if (error) fail("listMyOrgs", error);
-  // Föreningar only: the Privat space (0045) has its own page. Filtered here, not in the query, so
-  // this works on a database before 0045 too.
-  return (data ?? []).filter((org) => (org as OrgRow).kind !== "privat" && (org as OrgRow).kind !== "foretag").map(({ org_members, ...org }) => ({
+  // Föreningar only: the Privat space (0045) and companies (0050, /foretag) have their own pages.
+  // Filtered here, not in the query, so this works on a database before 0045 too (no kind = förening).
+  return (data ?? []).filter((org) => ((org as OrgRow).kind ?? "forening") === "forening").map(({ org_members, ...org }) => ({
     ...(org as OrgRow),
     role: (org_members as { role: OrgMemberRow["role"] }[])[0].role,
   }));
@@ -133,6 +133,27 @@ function cleanName(name: string): string | null {
   return validName(name);
 }
 
+/** The signed-in member links themselves to an unlinked person (0051). ok | taken | already | forbidden. */
+export async function claimPerson(db: Db, personId: string): Promise<string> {
+  const { data, error } = await db.rpc("claim_person", { p_person_id: personId });
+  if (error) fail("claimPerson", error);
+  return String(data);
+}
+
+/** "Jag finns inte med": adds the signed-in member as a person linked to them (0051). */
+export async function addSelfPerson(db: Db, orgId: string, name: string, role: string | null): Promise<string> {
+  const { data, error } = await db.rpc("add_self_person", { p_org_id: orgId, p_name: name, p_role: role ?? "" });
+  if (error) fail("addSelfPerson", error);
+  return String((data as { result?: string } | null)?.result ?? "forbidden");
+}
+
+/** Is the user linked to a person of this förening? (RLS: members read their org's people.) */
+export async function isLinkedIn(db: Db, orgId: string, userId: string): Promise<boolean> {
+  const { data, error } = await db.from("people").select("id").eq("org_id", orgId).eq("member_user_id", userId).limit(1);
+  if (error) fail("isLinkedIn", error);
+  return (data ?? []).length > 0;
+}
+
 export async function addPerson(db: Db, orgId: string, name: string): Promise<boolean> {
   const clean = cleanName(name);
   if (!clean) return false;
@@ -167,10 +188,11 @@ export async function deletePerson(db: Db, personId: string): Promise<boolean> {
 export async function listMeetings(
   db: Db,
   orgId: string,
-): Promise<Pick<MeetingRow, "id" | "status" | "started_at" | "ended_at" | "doc_id" | "started_by" | "agenda_doc">[]> {
+): Promise<(Pick<MeetingRow, "id" | "status" | "started_at" | "ended_at" | "doc_id" | "started_by" | "agenda_doc"> & { group_id: string | null; private: boolean })[]> {
+  // group_id and private (0050): who a meeting is for, in a förening with groups (0054).
   const { data, error } = await db
     .from("meetings")
-    .select("id, status, started_at, ended_at, doc_id, started_by, agenda_doc")
+    .select("id, status, started_at, ended_at, doc_id, started_by, agenda_doc, group_id, private")
     .eq("org_id", orgId)
     .order("started_at", { ascending: false });
   if (error) fail("listMeetings", error);

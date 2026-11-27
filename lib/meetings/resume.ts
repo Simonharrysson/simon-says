@@ -27,15 +27,20 @@ export async function resumeMeeting(meetingId: string, now = new Date()): Promis
   if (m.status !== "abandoned") return "not_resumable";
   if (!canResume(m, now.getTime())) return "too_old";
 
-  const { data: others, error: oe } = await db
-    .from("meetings")
-    .select("id")
-    .eq("org_id", m.org_id)
-    .in("status", ["live", "ending"])
-    .neq("id", meetingId)
-    .limit(1);
-  if (oe) throw new Error(`resume: org: ${oe.message}`);
-  if (others?.length) return "org_busy";
+  // One running meeting per förening; a Företag runs several at once (0050).
+  const { data: org, error: ke } = await db.from("orgs").select("kind").eq("id", m.org_id).maybeSingle();
+  if (ke) throw new Error(`resume: org kind: ${ke.message}`);
+  if ((org as { kind?: string } | null)?.kind !== "foretag") {
+    const { data: others, error: oe } = await db
+      .from("meetings")
+      .select("id")
+      .eq("org_id", m.org_id)
+      .in("status", ["live", "ending"])
+      .neq("id", meetingId)
+      .limit(1);
+    if (oe) throw new Error(`resume: org: ${oe.message}`);
+    if (others?.length) return "org_busy";
+  }
 
   const cutoff = new Date(now.getTime() - RESUME_WINDOW_MS).toISOString();
   const { data: updated, error: ue } = await db

@@ -1,7 +1,7 @@
 {
   "metaTitle": "Privacy",
   "metaDescription": "How Simon Says handles audio, text and accounts: no audio is stored, what is stored and for how long, and your rights under GDPR.",
-  "updated": "26 November 2026",
+  "updated": "27 November 2026",
   "draft": "Draft · updated {date} · legal review pending",
   "title": "Privacy",
   "lead": "Simon Says listens to your meetings. Here is what that means: what is sent where, what is stored, and how you remove it.",
@@ -9,6 +9,7 @@
   "toc": {
     "kort": "In short",
     "rummet": "In the room",
+    "videosamtal": "In a video call",
     "sparas": "What is stored",
     "mejl": "E-mail",
     "vem": "Who processes data",
@@ -49,7 +50,8 @@
     "notAudio": "The audio from the meeting.",
     "notDrive": "Nothing else in your Google Drive, and not the names of folders and documents shown when an admin imports old minutes.",
     "notCalendar": "Anything else from your calendar: other calendars, events that don't become meetings, descriptions and locations.",
-    "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first."
+    "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first.",
+    "foretag": "Business (in testing, invite only): a company's meetings are seen only by those the company's tree of groups allows (your own group, the groups below it and admins). When a meeting starts, the event happening now in the starter's own calendar is read: invited colleagues are stored as attendees (as ids), and for guests from other companies only the e-mail domain (for example acme.se) is stored as the customer, never addresses or names. A task for someone who may not see the meeting is sent only after the meeting's starter or an admin has approved its wording."
   },
   "mail": "You decide which e-mails Simon Says sends you. Under Account you can turn off each kind of e-mail separately, or choose No e-mail at all. At the bottom of every e-mail there is a link to the same choices that works without signing in, even if you don't have an account. We only store your choices (and, if you have no account, the address they apply to) as long as the service runs, so that a no keeps applying. E-mail us if you want us to delete them.",
   "processors": {
@@ -99,5 +101,10 @@
   },
   "statusTitle": "The status page",
   "status": "The public status page shows the number of meetings in progress, the number of meetings and minutes transcribed in the last week, and whether the service works. An association is shown by name only if an admin has ticked that in the settings.",
-  "contact": "Questions, or want to know what we have stored about you? Write to Harrysson & Company AB at <mail>simon@harrysson.co</mail>."
+  "contact": "Questions, or want to know what we have stored about you? Write to Harrysson & Company AB at <mail>simon@harrysson.co</mail>.",
+  "call": {
+    "what": "A meeting in a video call (e.g. Google Meet) is recorded from the browser of the person who starts it: the call tab's audio and that person's microphone. No bot joins the call. The tab's video is never used or stored, and as in the room no audio recording is stored: the audio becomes text as you speak.",
+    "processing": "What everyone in the call says is transcribed and processed the same way as in a meeting in the room: the same services, the same notes, and the same storage and deletion.",
+    "responsibility": "The person recording is responsible for having the right to record the call. In an association the person starting confirms that everyone in the call knows the meeting is transcribed; in Företag and Privat the person starting confirms that they take part in the call themselves. The confirmation, and that the meeting was a video call, are stored with the meeting."
+  }
 }

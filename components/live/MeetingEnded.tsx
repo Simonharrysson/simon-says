@@ -73,7 +73,7 @@ export function MeetingEnded({
         ? t("sharedWith")
         : "";
   return (
-    <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="ended-title" aria-live="polite">
+    <section data-card className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="ended-title" aria-live="polite">
       <h1 id="ended-title" className="text-2xl" ref={heading} tabIndex={-1}>
         {finalizing ? t("finalizing") : t("ended")}
       </h1>
@@ -144,19 +144,27 @@ export function MeetingEnded({
             : t("done", { duration: formatDuration(durationSeconds, locale), shared })}
       </p>
       <div className="flex flex-wrap items-center gap-3">
+        {/* A förening's meeting: its page in the app is the result (decisions, tasks); the Doc is secondary. */}
+        {!privat && meetingHref && !finalizing && (
+          <ButtonLink href={meetingHref} variant="primary" size="lg">
+            {t("toMeeting")}
+          </ButtonLink>
+        )}
         {docUrl && (
-          <ButtonLink href={docUrl} target="_blank" rel="noopener noreferrer" variant="primary" size="lg" icon={<IconExternal size={18} />}>
+          <ButtonLink
+            href={docUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant={!privat && meetingHref && !finalizing ? "secondary" : "primary"}
+            size="lg"
+            icon={<IconExternal size={18} />}
+          >
             {t("openDoc")}
           </ButtonLink>
         )}
         {privat?.summaryHref && !finalizing && (
           <ButtonLink href={privat.summaryHref} variant={docUrl ? "secondary" : "primary"} size="lg">
             {tp("toSummary")}
-          </ButtonLink>
-        )}
-        {!privat && meetingHref && !finalizing && (
-          <ButtonLink href={meetingHref} variant={docUrl ? "secondary" : "primary"} size="lg">
-            {t("toMeeting")}
           </ButtonLink>
         )}
         <ButtonLink href={orgHref} variant="ghost" size="lg">

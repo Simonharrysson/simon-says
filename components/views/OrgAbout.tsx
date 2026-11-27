@@ -7,7 +7,7 @@ import { hasProfile, websiteLabel, type OrgProfile } from "@/lib/orgs/profile";
  * "Om oss" (todo #13) in the förening page's header: the short text and small icon links to the
  * website, Facebook and Instagram (new tab). Nothing at all when none is set.
  */
-export function OrgAbout({ profile }: { profile: Partial<OrgProfile> }) {
+export function OrgAbout({ profile, label }: { profile: Partial<OrgProfile>; /** The links' list name (default "Föreningen på nätet"). */ label?: string }) {
   const t = useTranslations("profile");
   if (!hasProfile(profile)) return null;
   const links = [
@@ -20,7 +20,7 @@ export function OrgAbout({ profile }: { profile: Partial<OrgProfile> }) {
     <div className="flex max-w-[68ch] flex-col gap-2">
       {profile.about && <p className="whitespace-pre-line text-ink-2 wrap-anywhere">{profile.about}</p>}
       {links.length > 0 && (
-        <ul className="-ml-2 flex flex-wrap items-center gap-1" aria-label={t("onlineLabel")}>
+        <ul className="-ml-2 flex flex-wrap items-center gap-1" aria-label={label ?? t("onlineLabel")}>
           {links.map((l) => (
             <li key={l.href}>
               <ButtonLink variant="ghost" iconOnly icon={l.icon} href={l.href} target="_blank" rel="noopener noreferrer" title={l.label} className="text-ink-3">

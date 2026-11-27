@@ -15,8 +15,8 @@ const buttonCva = cva(
   [
     "relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border px-3 min-h-10 max-md:min-h-11",
     "text-sm leading-none font-medium whitespace-nowrap no-underline select-none hover:no-underline",
-    "transition-[background-color,border-color,color,box-shadow,transform] duration-120 ease-out active:scale-[0.98]",
-    "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
+    "press",
+    "disabled:cursor-not-allowed disabled:opacity-50",
     "aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
     "data-[loading=true]:cursor-progress data-[loading=true]:opacity-100 [&_svg]:shrink-0",
   ],

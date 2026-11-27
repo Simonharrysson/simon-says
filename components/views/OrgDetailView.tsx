@@ -1,8 +1,9 @@
+import { CountUp } from "@/components/motion/CountUp";
+import { Presence, PresenceLi } from "@/components/motion/Presence";
 import { AppLink } from "@/components/ui/AppLink";
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
-import { Banner } from "@/components/ui/Banner";
 import { ButtonLink, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,12 +22,14 @@ import type { Notice } from "@/lib/ui/messages";
 import { DocAccessButton } from "./DocAccessButton";
 import { NoticeBanner } from "./NoticeBanner";
 import type { DocAccess } from "@/lib/docs/access-state";
-import { OrgSettingsForm } from "./OrgSettingsForm";
+import { OrgSettings } from "@/components/settings/OrgSettings";
+import { settingsHref, type SettingsSectionId } from "@/lib/orgs/tabs";
 import { OrgTabsShell } from "./OrgTabsShell";
 import { PersonRow } from "./PersonRow";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
 import type { OrgProfile } from "@/lib/orgs/profile";
 import { OrgAbout } from "./OrgAbout";
+import { NextMeetingHero } from "./NextMeetingHero";
 import type { MeetingListInfo } from "@/lib/meetings/list";
 
 export interface OrgDetailMeeting {
@@ -36,6 +39,10 @@ export interface OrgDetailMeeting {
   ended_at: string | null;
   doc_id: string;
   started_by: string | null;
+  /** A förening with groups (0054): who the meeting is for ("Utveckling", "Hela föreningen"); absent without groups. */
+  forGroup?: string | null;
+  /** A Privat möte (0054): only the starter and admins see it. */
+  private?: boolean;
 }
 
 export interface OrgDetailViewProps {
@@ -51,10 +58,12 @@ export interface OrgDetailViewProps {
   /** Per meeting id: title, Testmöte, decision and task counts (`loadMeetingList`). Missing: the date only. */
   meetingInfo?: Record<string, MeetingListInfo>;
   /**
-   * Admins, Inställningar: the one board list (`OrgBoard`, Kom igång's Styrelsen list), given each
-   * member's account controls by user id. Omitted: the plain people list.
+   * Admins, Inställningar: the one board list (`OrgBoard`, also Kom igång's step 2), given each
+   * member's account controls by user id and the invite link's "Skapa ny länk".
    */
-  boardList?: (memberControls: Record<string, ReactNode>) => ReactNode;
+  boardList?: (memberControls: Record<string, ReactNode>, linkActions: ReactNode) => ReactNode;
+  /** Admins: the Inställningar section the page notice is about (`sectionForCode`, lib/orgs/tabs.ts); `?del=` wins. */
+  settingsSection?: SettingsSectionId;
   /** The förening's logo (0035), shown next to its name; null: the first letter. */
   logoUrl?: string | null;
   /** The "Kom igång" card (admins, onboarding not done), above everything else. */
@@ -64,7 +73,7 @@ export interface OrgDetailViewProps {
   /** Per meeting id; a meeting not in the map is `open` (e.g. the /design gallery). */
   docAccess?: Record<string, DocAccess>;
   notice: Notice | null;
-  /** The "Starta möte" form, shown while no meeting is running. Omitted: no start panel. */
+  /** The Nästa möte card (`NextMeetingHero`) while no meeting is running. Omitted: no card. */
   startMeeting?: ReactNode;
   /** Link to start a meeting (Task 7). Hidden until the live page exists. */
   startMeetingHref?: string;
@@ -72,12 +81,20 @@ export interface OrgDetailViewProps {
   inviteByEmail?: ReactNode;
   /** The meeting-format card (`FormatCard`), shown above the people panel. */
   formatCard?: ReactNode;
-  /** Admins: "Sammanfattning efter mötet" (`SummarySettingsForm`, 0037), in Inställningar. */
+  /** Admins: "Sammanfattning efter mötet" (`SummarySettingsForm`, 0037), Inställningar → Efter mötet. */
   summarySettings?: ReactNode;
-  /** Admins: "Om oss" (`OrgProfileForm`, 0044), in Inställningar. */
-  profileSettings?: ReactNode;
-  /** Admins: "Mötenas kalender" (`OrgCalendarForm`, 0046), in Inställningar. */
+  /** Admins: name, logo and "Om oss" (`OrgDetailsForm`), Inställningar → Föreningen. */
+  detailsSettings?: ReactNode;
+  /** Admins, Kom igång hidden or done: "Visa Kom igång igen" (`ReopenKomIgang`), under Föreningen. */
+  reopenKomIgang?: ReactNode;
+  /** Admins: the meeting folder (`MeetingFolderSetting`), Inställningar → Möten. */
+  folderSettings?: ReactNode;
+  /** Admins: voices (`VoicesSetting`), Inställningar → Möten. */
+  voiceSettings?: ReactNode;
+  /** Admins: "Mötenas kalender" (`OrgCalendarForm`, 0046), Inställningar → Möten. */
   calendarSettings?: ReactNode;
+  /** Inställningar → Styrelsen och medlemmar: Grupper (0054, admins), right after the board. */
+  groupSettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
    * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
@@ -242,7 +259,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
   const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const t = useTranslations("org");
   const tc = useTranslations("common");
-  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  // A live meeting wins over one whose notes are still being finished.
+  const active = meetings.find((m) => m.status === "live") ?? meetings.find((m) => m.status === "ending");
   // Any member may continue the running meeting from their own device (Meet-like presence).
   const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
   // Without tabs (older callers) everything an admin has shows on the one page, as before.
@@ -317,13 +335,14 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <Badge tone={isAdmin ? "info" : "neutral"}>{isAdmin ? t("youAreAdmin") : t("youAreMember")}</Badge>
-              <span className="text-sm text-ink-3">{t("counts", { people: peopleCount, meetings: meetings.length })}</span>
+              <CountUp className="text-sm text-ink-3" text={t("counts", { people: peopleCount, meetings: meetings.length })} />
             </div>
             <OrgAbout profile={org} />
           </div>
         }
         actions={
-          running && liveMeetingHref ? (
+          // On Möten the Nästa möte card has "Fortsätt mötet"; elsewhere the header keeps it.
+          running && liveMeetingHref && !(tabs && tab === "moten") ? (
             <ButtonLink href={liveMeetingHref(running.id)} variant="primary" size="lg" icon={<IconPlay size={18} />}>
               {t("resume")}
             </ButtonLink>
@@ -342,6 +361,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           active={tab}
           label={t("tabsLabel")}
           loadingLabel={tc("loading")}
+          settingsNav={isAdmin}
           tabs={TABS.filter((x) => isAdmin || !x.adminOnly).map((x) => ({ id: x.id, label: t(x.label), href: tabs.href(x.id) }))}
           between={
             <>
@@ -365,12 +385,12 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
 /** Möten and Inställningar of OrgDetailView (split out so the tab shell can hold them). */
 function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: ReactNode; memberControls: Record<string, ReactNode> }) {
-  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, notice, startMeeting, formatCard, summarySettings, profileSettings, calendarSettings, boardList, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
+  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, startMeeting, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => props.docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
-  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
-  const nameError = notice?.code === "namn" ? notice.text : undefined;
+  // A live meeting wins over one whose notes are still being finished.
+  const active = meetings.find((m) => m.status === "live") ?? meetings.find((m) => m.status === "ending");
   const settingsHere = isAdmin && (!tabs || tab === "installningar");
   const meetingsHere = !tabs || tab === "moten";
   return (
@@ -379,40 +399,43 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
         <div className={isAdmin ? "flex flex-col gap-6" : "grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]"}>
           <div className="flex flex-col gap-6">
             {active ? (
-              <Banner tone="info" title={t("activeTitle")} live={false}>
-                {access(active) !== "open" && active.started_by !== userId ? (
-                  <div className="flex flex-col items-start gap-2">
+              // The Nästa möte card's running states: live ("Fortsätt mötet") or the notes being finished.
+              <NextMeetingHero
+                orgId={org.id}
+                state={active.status === "live" ? { kind: "live", meetingId: active.id } : { kind: "ending", meetingId: active.id }}
+                meeting={{ id: active.id, title: null, startedAt: active.started_at, endedAt: active.ended_at, decisions: 0, tasks: 0 }}
+                continueHref={active.status === "live" && userId !== null && liveMeetingHref ? liveMeetingHref(active.id) : null}
+                liveDoc={
+                  access(active) !== "open" && active.started_by !== userId ? (
+                    <div className="flex flex-col items-start gap-2">
+                      <p>
+                        {t("activeText")}
+                        {t("activeAutoEnd")}
+                      </p>
+                      <DocAccessButton
+                        meetingId={active.id}
+                        docHref={docUrl(active.doc_id)}
+                        starter={starter(active)}
+                        email={viewerEmail}
+                        askOnly={access(active) === "ask"}
+                      />
+                    </div>
+                  ) : (
                     <p>
-                      {t("activeText")}
-                      {active.status === "live" && t("activeAutoEnd")}
+                      {t.rich("activeTextLink", {
+                        link: (chunks) => (
+                          <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
+                            {chunks}
+                          </a>
+                        ),
+                      })}
+                      {t("activeAutoEnd")}
                     </p>
-                    <DocAccessButton
-                      meetingId={active.id}
-                      docHref={docUrl(active.doc_id)}
-                      starter={starter(active)}
-                      email={viewerEmail}
-                      askOnly={access(active) === "ask"}
-                    />
-                  </div>
-                ) : (
-                  <p>
-                    {t.rich("activeTextLink", {
-                      link: (chunks) => (
-                        <a href={docUrl(active.doc_id)} target="_blank" rel="noopener noreferrer">
-                          {chunks}
-                        </a>
-                      ),
-                    })}
-                    {active.status === "live" && t("activeAutoEnd")}
-                  </p>
-                )}
-              </Banner>
+                  )
+                }
+              />
             ) : (
-              startMeeting && (
-                <Panel title={t("startPanel")} titleId="start-title">
-                  {startMeeting}
-                </Panel>
-              )
+              startMeeting
             )}
             <MeetingsPanel
               meetings={meetings}
@@ -455,61 +478,24 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
       )}
 
       {settingsHere && (
-        <div className="flex flex-col gap-6">
-          <Panel sunk title={t("boardTitle")} titleId="board-title" id="styrelsen" className="scroll-mt-6" actions={<span className="text-sm text-ink-3">{peopleTotal(people, members)}</span>}>
-            <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
-            {boardList ? boardList(memberControls) : <PeoplePanel orgId={org.id} people={people} members={members} isAdmin actions={actions} />}
-          </Panel>
-
-          {invitePanel}
-
-          {formatCard}
-
-          <Panel title={t("generalTitle")} titleId="settings-title" id="installningar" className="scroll-mt-6">
-            <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
-            {profileSettings && (
-              <div id="om-oss" className="mt-6 scroll-mt-6 border-t border-line pt-6">
-                {profileSettings}
-              </div>
-            )}
-            {calendarSettings && (
-              <div id="kalender" className="mt-6 scroll-mt-6 border-t border-line pt-6">
-                {calendarSettings}
-              </div>
-            )}
-            {summarySettings && (
-              <div id="sammanfattning" className="mt-6 scroll-mt-6 border-t border-line pt-6">
-                {summarySettings}
-              </div>
-            )}
-            <p className="mt-6 border-t border-line pt-4 text-sm text-ink-3">
-              {t.rich("settingsMore", { link: (chunks) => <AppLink href={`/orgs/${org.id}/kom-igang`}>{chunks}</AppLink> })}
-            </p>
-          </Panel>
-
-          <Panel title={t("deleteOrgTitle")} titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm text-ink-3 max-w-[68ch]">{t("deleteOrgText")}</p>
-              <ConfirmAction
-                action={actions.deleteOrg}
-                hidden={{ orgId: org.id }}
-                trigger={t("deleteOrg")}
-                triggerVariant="danger"
-                triggerSize="md"
-                triggerIcon={<IconTrash size={18} />}
-                title={t("deleteOrgConfirmTitle", { org: org.name })}
-                description={t("deleteOrgConfirmText")}
-                requireText={{
-                  name: "confirmName",
-                  value: org.name,
-                  label: <>{t.rich("deleteOrgType", { org: org.name, strong: (chunks) => <strong>{chunks}</strong> })}</>,
-                }}
-                confirmLabel={t("deleteForever")}
-                pendingLabel={t("deleting")}
-              />
-            </div>
-          </Panel>
-        </div>
+        <OrgSettings
+          {...props}
+          memberControls={memberControls}
+          rotateInvite={
+            <ConfirmAction
+              action={actions.rotateInvite}
+              hidden={{ orgId: org.id }}
+              trigger={t("newLink")}
+              triggerVariant="ghost"
+              triggerIcon={<IconRefresh size={18} />}
+              title={t("newLinkTitle")}
+              description={t("newLinkText")}
+              confirmLabel={t("newLink")}
+              confirmVariant="primary"
+              pendingLabel={t("creating")}
+            />
+          }
+        />
       )}
     </>
   );
@@ -548,7 +534,7 @@ function MeetingsPanel(props: MeetingsPanelProps) {
   const { meetings, info, viewerEmail } = props;
   const t = useTranslations("org");
   const { shown, more, tests } = splitMeetings(meetings, info);
-  const rows = (list: OrgDetailMeeting[]) => list.map((m) => <MeetingRow key={m.id} meeting={m} {...props} />);
+  const rows = (list: OrgDetailMeeting[]) => <Presence>{list.map((m) => <MeetingRow key={m.id} meeting={m} {...props} />)}</Presence>;
   const fold = "group border-t border-line [&[open]>summary_svg]:rotate-180";
   const summary =
     "flex min-h-11 cursor-pointer list-none items-center gap-2 px-6 py-2 text-sm font-medium text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden";
@@ -606,6 +592,7 @@ function MeetingRow({
   viewerEmail,
 }: MeetingsPanelProps & { meeting: OrgDetailMeeting }) {
   const t = useTranslations("org");
+  const tg = useTranslations("foretag.picker");
   const common = useTranslations("common");
   const locale = useLocale();
   const state = meetingDeleteState(meeting, { isAdmin, userId });
@@ -617,7 +604,7 @@ function MeetingRow({
   const counts =
     about && (about.decisions > 0 || about.tasks > 0) ? t("itemCounts", { decisions: about.decisions, tasks: about.tasks }) : null;
   return (
-    <li id={`mote-${meeting.id}`} className="scroll-mt-6">
+    <PresenceLi id={`mote-${meeting.id}`} className="scroll-mt-6">
       <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0 max-[30rem]:flex-wrap">
         <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
           {meeting.status === "done" ? (
@@ -633,7 +620,17 @@ function MeetingRow({
           <span className="mt-[0.15rem] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
             {about?.isTest && <Badge tone="neutral">{t("testMeeting")}</Badge>}
             {meeting.status !== "done" && <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>}
-            <span>{[about?.title ? date : null, duration, counts].filter(Boolean).join(" · ")}</span>
+            {meeting.private && <Badge tone="neutral">{tg("private")}</Badge>}
+            {meeting.forGroup && <span className="font-medium text-ink-2">{meeting.forGroup}</span>}
+            <span>
+              {[about?.title ? date : null, duration].filter(Boolean).join(" · ")}
+              {counts && (
+                <>
+                  {about?.title || duration ? " · " : ""}
+                  <CountUp text={counts} />
+                </>
+              )}
+            </span>
           </span>
         </span>
         <span className="flex flex-none items-center gap-1 max-[30rem]:w-full">
@@ -691,7 +688,7 @@ function MeetingRow({
           )}
         </span>
       </div>
-    </li>
+    </PresenceLi>
   );
 }
 
@@ -724,13 +721,13 @@ function PeoplePanel({
   const t = useTranslations("org");
   const unnamed = (members ?? []).filter((m) => !people.some((p) => p.member_user_id === m.userId));
   return (
-    <Panel flush title={t("peopleTitle")} titleId="people-title" actions={<span className="text-sm text-ink-3">{people.length + unnamed.length}</span>}>
+    <Panel flush title={t("peopleTitle")} titleId="people-title" actions={<CountUp className="text-sm text-ink-3" text={String(people.length + unnamed.length)} />}>
       <p className="text-sm text-ink-3 -mt-2 px-6 pb-4">
         {t("peopleText")}
         {isAdmin && (
           <>
             {" "}
-            {t.rich("peopleBoardLink", { link: (chunks) => <AppLink href={`/orgs/${orgId}/kom-igang?steg=2`}>{chunks}</AppLink> })}
+            {t.rich("peopleBoardLink", { link: (chunks) => <AppLink href={settingsHref(orgId, "styrelsen")}>{chunks}</AppLink> })}
           </>
         )}
       </p>
@@ -754,33 +751,35 @@ function PeoplePanel({
         </div>
       ) : (
         <ul aria-labelledby="people-title">
-          {people.map((person) => (
-            <PersonRow
-              key={person.id}
-              orgId={orgId}
-              person={person}
-              status={personStatus(person, members, t)}
-              renamePerson={actions.renamePerson}
-              setPersonRole={isAdmin ? actions.setPersonRole : undefined}
-              deletePerson={actions.deletePerson}
-            />
-          ))}
-          {unnamed.map((m) => (
-            <li key={m.userId}>
-              <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
-                <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
-                <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
-                  <span className="font-medium wrap-anywhere">{m.email}</span>
-                  <span className="text-sm text-ink-3">{t("unnamedMember")}</span>
-                </span>
-                {isAdmin && (
-                  <a className={buttonVariants({ size: "sm" })} href={`/orgs/${orgId}/kom-igang?steg=2`}>
-                    {t("linkToName")}
-                  </a>
-                )}
-              </div>
-            </li>
-          ))}
+          <Presence>
+            {people.map((person) => (
+              <PersonRow
+                key={person.id}
+                orgId={orgId}
+                person={person}
+                status={personStatus(person, members, t)}
+                renamePerson={actions.renamePerson}
+                setPersonRole={isAdmin ? actions.setPersonRole : undefined}
+                deletePerson={actions.deletePerson}
+              />
+            ))}
+            {unnamed.map((m) => (
+              <PresenceLi key={m.userId}>
+                <div className="flex min-h-14 items-center gap-3 border-t border-line px-6 py-3 [li:first-child>&]:border-t-0">
+                  <span className="grid size-8 flex-none place-items-center rounded-full bg-sunk text-2xs font-semibold text-ink-3" aria-hidden="true">?</span>
+                  <span className="flex min-w-0 flex-1 flex-col gap-[0.1rem]">
+                    <span className="font-medium wrap-anywhere">{m.email}</span>
+                    <span className="text-sm text-ink-3">{t("unnamedMember")}</span>
+                  </span>
+                  {isAdmin && (
+                    <a className={buttonVariants({ size: "sm" })} href={settingsHref(orgId, "styrelsen")}>
+                      {t("linkToName")}
+                    </a>
+                  )}
+                </div>
+              </PresenceLi>
+            ))}
+          </Presence>
         </ul>
       )}
     </Panel>
