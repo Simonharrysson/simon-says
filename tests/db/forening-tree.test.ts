@@ -209,11 +209,19 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       expect(place.error?.message).toMatch(/permission denied/i);
       expect((await u.jonas.db.rpc("set_group", { p_org_id: orgId, p_id: null, p_name: "Hack", p_parent: null })).data).toBeNull();
       expect((await u.jonas.db.rpc("set_person_group", { p_person_id: await personId(orgId, "Jonas"), p_group_id: g.styrelsen })).data).toBe(false);
-      // An unplaced row stays a member's to edit, and linking yourself to one gives no place.
-      const add = await u.olle.db.from("people").insert({ org_id: orgId, name: "Olle", member_user_id: u.olle.id }).select("id").single();
+      // An unplaced name stays a member's to add and rename, but only an admin links it to an
+      // account (else placing "Karin" could place whoever linked themself to her name).
+      const linkSelf = await u.olle.db.from("people").insert({ org_id: orgId, name: "Olle", member_user_id: u.olle.id }).select("id");
+      expect(linkSelf.error?.message).toMatch(/only an admin links/);
+      const add = await u.olle.db.from("people").insert({ org_id: orgId, name: "Karin" }).select("id").single();
       expect(add.error).toBeNull();
+      const id = (add.data as { id: string }).id;
+      expect((await u.olle.db.from("people").update({ name: "Karin K" }).eq("id", id).select("id")).data).toEqual([{ id }]);
+      const claim = await u.olle.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("id");
+      expect(claim.error?.message).toMatch(/only an admin links/);
+      expect((await u.anna.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("id")).data).toEqual([{ id }]);
       expect(await seen("olle")).toEqual([]);
-      must("cleanup", await adminClient().from("people").delete().eq("id", (add.data as { id: string }).id));
+      must("cleanup", await adminClient().from("people").delete().eq("id", id));
     });
 
     it("the last group is kept while groups are on", async () => {

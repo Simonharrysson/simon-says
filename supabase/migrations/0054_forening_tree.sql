@@ -20,8 +20,9 @@
 --
 -- Also: in a förening, any member may edit the person list (0002); a member relinking a PLACED
 -- person row to their own account would inherit its place in the tree. Placed rows are now written
--- by admins only (a Företag's people were admin-only already, 0050). Security-definer paths (join
--- linking by an invited e-mail, leaving) are unaffected.
+-- by admins only (a Företag's people were admin-only already, 0050), and while groups are on only an
+-- admin links any row to an account. Security-definer paths (join linking by an invited e-mail,
+-- leaving) are unaffected.
 
 alter table public.orgs add column groups_enabled boolean not null default false;
 -- No client grant: only set_org_groups() writes it. Clients read it (orgs_select) like any column.
@@ -273,6 +274,31 @@ create policy people_delete on public.people for delete to authenticated
     and (not public.org_is_foretag(org_id) or public.is_org_admin(org_id))
     and (group_id is null or public.is_org_admin(org_id))
   );
+
+-- While the tree is on, who a person row stands for (member_user_id) is set only by an admin or by
+-- the database's own functions (join by an invited e-mail, link by e-mail, leaving): otherwise a
+-- member could link an unplaced name to some account, and the admin who then places that name
+-- would place the account. Security invoker, so current_user tells a client's own write
+-- ('authenticated') from a security-definer function's.
+create function public.people_link_guard()
+returns trigger
+language plpgsql set search_path = ''
+as $$
+begin
+  if current_user = 'authenticated'
+    and ((tg_op = 'INSERT' and new.member_user_id is not null)
+      or (tg_op = 'UPDATE' and new.member_user_id is distinct from old.member_user_id))
+    and public.org_has_tree(new.org_id)
+    and not public.is_org_admin(new.org_id) then
+    raise exception 'people: only an admin links a person to an account while groups are on' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger people_link_guard
+  before insert or update of member_user_id on public.people
+  for each row execute function public.people_link_guard();
 
 -- ---------------------------------------------------------------------------------------------
 -- Handoffs (0053's body) for any org with the tree. `p_owners` may carry each task's `text` as the

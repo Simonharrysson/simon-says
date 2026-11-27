@@ -57,10 +57,13 @@ export function GroupTree({ orgId, isAdmin, userId, groups, people, members, act
   const canArchive = !keepLastGroup || rows.length > 1;
   const extra = Object.entries(hidden).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />);
 
+  const emails = new Map(members.map((m) => [m.userId, m.email]));
   const personLine = (p: TreePerson) => (
     <li key={p.id} className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line py-2 first:border-t-0">
-      <span className="flex min-w-0 items-center gap-2">
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <span className="font-medium wrap-anywhere">{p.name}</span>
+        {/* The account a place gives access to: who is placed, not just a name. */}
+        {p.member_user_id && emails.get(p.member_user_id) && <span className="text-sm text-ink-3 wrap-anywhere">{emails.get(p.member_user_id)}</span>}
         {p.member_user_id === userId && <span className="text-sm text-ink-3">({t("you")})</span>}
         {p.member_user_id && admins.has(p.member_user_id) && <Badge tone="info">{t("admin")}</Badge>}
       </span>

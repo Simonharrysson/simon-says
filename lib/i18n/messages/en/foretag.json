@@ -156,7 +156,7 @@
     "turnOn": "Organise in groups",
     "turnOnTitle": "Organise {org} in groups?",
     "turnOnText": "Everyone in the list with an account goes into the top group and sees everything as before. Nothing changes until you move someone further down.",
-    "turnOnUnplaced": "{count, plural, one {# member has no name in the list and only sees meetings they start or attend until you place them.} other {# members have no name in the list and only see meetings they start or attend until you place them.}}",
+    "turnOnUnplaced": "{count, plural, one {# member has no name in the list. They then only see meetings they start or attend, and lose access to meeting documents Simon Says shared, until you place them.} other {# members have no name in the list. They then only see meetings they start or attend, and lose access to meeting documents Simon Says shared, until you place them.}}",
     "turningOn": "Turning on…",
     "onNow": "On: everyone sees their group's meetings and every meeting in the groups below. At Start, you choose who the meeting is for.",
     "turnOff": "Stop using groups",
