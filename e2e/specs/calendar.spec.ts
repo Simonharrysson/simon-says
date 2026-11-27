@@ -68,6 +68,12 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
   await expect(card).toContainText("från kalendern");
   await expect(adminPage.getByText("Lunch")).toHaveCount(0);
   await expect(card.getByRole("link", { name: "Starta möte" })).toHaveAttribute("href", `/meetings/ny/${org.id}?event=${now.id}`);
+  // The meetings after it can be prepared too ("Senare i kalendern"); Starta only for one happening now.
+  const later = card.getByRole("list", { name: "Senare i kalendern" });
+  await expect(later.getByRole("listitem")).toHaveCount(1);
+  await expect(later.getByRole("listitem").first()).toContainText("Styrelsemöte");
+  await expect(later.getByRole("link", { name: "Förbered Styrelsemöte" })).toHaveAttribute("href", new RegExp(`/orgs/${org.id}/forbered\\?datum=.*&event=${board.id}$`));
+  await expect(later.getByRole("link", { name: "Starta Styrelsemöte" })).toHaveCount(0);
   await expectAccessible(adminPage);
 
   // Förbered: the event's date, time and title.

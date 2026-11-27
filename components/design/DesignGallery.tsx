@@ -985,17 +985,24 @@ const render: Record<string, () => ReactNode> = {
     <HeroOrgDemo
       state={{ kind: "unprepared", event: { id: "ev1", title: "Styrelsemöte", date: "2026-12-01", time: "18:00", now: false }, day: { type: "weekday", weekday: 2 } }}
       calendar={{ state: "ok", events: [{ id: "ev1", title: "Styrelsemöte", date: "2026-12-01", time: "18:00", now: false }] }}
+      hero={{
+        later: [
+          { id: "ev3", title: "Medlemsmöte", date: "2026-12-03", time: "18:30", now: false },
+          { id: "ev4", title: "Styrelsemöte", date: "2026-12-08", time: "18:00", now: false },
+        ],
+      }}
     />
   ),
   "org-calendar-prepared": () => (
     <HeroOrgDemo
       state={{ kind: "prepared", prepared: { date: "2026-12-01", time: "18:00", kind: "styrelsemote", docUrl: "#" }, event: null, day: { type: "weekday", weekday: 2 } }}
       calendar={{ state: "ok", events: [{ id: "ev2", title: "Styrelsemöte med valberedningen", date: "2026-12-08", time: "18:00", now: false }] }}
+      hero={{ later: [{ id: "ev2", title: "Styrelsemöte med valberedningen", date: "2026-12-08", time: "18:00", now: false }] }}
     />
   ),
   "org-calendar-disconnected": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "disconnected", connect: noopAction }} />,
   "org-calendar-unavailable": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "unavailable" }} />,
-  "org-calendar-loading": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} calendar={{ state: "loading" }} />,
+  "org-calendar-loading": () => <HeroOrgDemo state={{ kind: "unprepared", event: null, day: null }} hero={{ pending: true }} />,
   "org-ending": () => (
     <HeroOrgDemo list={[{ ...meetings[0], status: "ending" }, ...meetings.slice(1)]} />
   ),

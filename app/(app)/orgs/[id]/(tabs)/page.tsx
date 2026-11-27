@@ -297,7 +297,7 @@ export default async function OrgPage({
     // Only "not prepared" and "prepared" can change with the calendar; the card holds its size meanwhile.
     hero =
       me && org.calendar_id && (state.kind === "prepared" || state.kind === "unprepared") ? (
-        <Suspense fallback={<NextMeetingHero {...heroProps} state={state} calendar={{ state: "loading" }} />}>
+        <Suspense fallback={<NextMeetingHero {...heroProps} state={state} pending />}>
           <HeroCalendarSlot org={org} userId={me} input={input} hero={heroProps} />
         </Suspense>
       ) : (

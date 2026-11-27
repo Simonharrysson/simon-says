@@ -42,6 +42,10 @@ export async function OrgCalendarSlot({ orgId, userId, org }: { orgId: string; u
  */
 export async function HeroCalendarSlot({ org, userId, input, hero }: { org: OrgCalendar; userId: string; input: HeroInput; hero: Omit<NextMeetingHeroProps, "state" | "calendar"> }) {
   const calendar = startCalendar(await orgUpcoming(userId, org)) ?? { state: "unavailable" as const };
-  const state = nextMeetingState({ ...input, events: calendar.state === "ok" ? calendar.events : undefined });
-  return <NextMeetingHero {...hero} state={state} calendar={calendar} />;
+  const events = calendar.state === "ok" ? calendar.events : [];
+  const state = nextMeetingState({ ...input, events });
+  // The card's own event is its headline; the next few after it can be prepared from the list.
+  const own = state.kind === "prepared" || state.kind === "unprepared" ? state.event?.id : undefined;
+  const later = events.filter((e) => e.id !== own && e.date >= input.today).slice(0, 3);
+  return <NextMeetingHero {...hero} state={state} calendar={calendar} later={later} />;
 }

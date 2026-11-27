@@ -259,7 +259,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
   const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const t = useTranslations("org");
   const tc = useTranslations("common");
-  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  // A live meeting wins over one whose notes are still being finished.
+  const active = meetings.find((m) => m.status === "live") ?? meetings.find((m) => m.status === "ending");
   // Any member may continue the running meeting from their own device (Meet-like presence).
   const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
   // Without tabs (older callers) everything an admin has shows on the one page, as before.
@@ -388,7 +389,8 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => props.docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
-  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  // A live meeting wins over one whose notes are still being finished.
+  const active = meetings.find((m) => m.status === "live") ?? meetings.find((m) => m.status === "ending");
   const settingsHere = isAdmin && (!tabs || tab === "installningar");
   const meetingsHere = !tabs || tab === "moten";
   return (

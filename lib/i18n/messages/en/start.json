@@ -51,7 +51,7 @@
     "more": "More",
     "moreLabel": "More ways to start",
     "calendarSame": "From the calendar: {title}",
-    "calendarLater": "Then in the calendar: {title}, {when}",
-    "calendarWhen": "{when} · from the calendar"
+    "calendarWhen": "{when} · from the calendar",
+    "announceEnded": "The meeting has ended."
   }
 }

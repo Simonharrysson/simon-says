@@ -51,7 +51,7 @@
     "more": "Mer",
     "moreLabel": "Fler sätt att starta",
     "calendarSame": "Från kalendern: {title}",
-    "calendarLater": "Sedan i kalendern: {title}, {when}",
-    "calendarWhen": "{when} · från kalendern"
+    "calendarWhen": "{when} · från kalendern",
+    "announceEnded": "Mötet är avslutat."
   }
 }

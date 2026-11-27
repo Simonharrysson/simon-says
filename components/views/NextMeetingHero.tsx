@@ -63,8 +63,8 @@ export interface HeroMeetingInfo {
   tasks: number;
 }
 
-/** The calendar's part: `loading` while Google answers (the card keeps its size). Absent: no calendar. */
-export type HeroCalendar = StartCalendar | { state: "loading" };
+/** The calendar's part. Absent: no calendar. */
+export type HeroCalendar = StartCalendar;
 
 export interface NextMeetingHeroProps {
   orgId: string;
@@ -77,6 +77,13 @@ export interface NextMeetingHeroProps {
   /** Live: where the notes are written (the Doc link, or "ask for access"). */
   liveDoc?: ReactNode;
   calendar?: HeroCalendar;
+  /** The calendar's next events after the card's own (at most 3): "Senare i kalendern" with Förbered / Starta. */
+  later?: CalendarEventLink[];
+  /**
+   * The calendar is still being read and may change which meeting is next: the card holds its
+   * place with neutral placeholders instead of words that would swap when it answers.
+   */
+  pending?: boolean;
   /** The quiet "Mer" menu (service admins: Testmöte). */
   more?: ReactNode;
   /** A Företag: "Starta möte" goes straight to the start screen (no Förbered there). */
@@ -110,14 +117,7 @@ export function NextMeetingHero(props: NextMeetingHeroProps) {
     const cal = props.calendar;
     if (!cal || (state.kind !== "prepared" && state.kind !== "unprepared")) return null;
     let line: ReactNode = null;
-    if (cal.state === "loading")
-      line = (
-        <>
-          <Skeleton className="h-4 w-56 max-w-full" aria-hidden="true" />
-          <span className="sr-only">{t("calendarLoading")}</span>
-        </>
-      );
-    else if (cal.state === "unavailable") line = <span className="min-w-0 wrap-anywhere">{tCal("unavailable")}</span>;
+    if (cal.state === "unavailable") line = <span className="min-w-0 wrap-anywhere">{tCal("unavailable")}</span>;
     else if (cal.state === "disconnected")
       line = (
         <>
@@ -128,13 +128,12 @@ export function NextMeetingHero(props: NextMeetingHeroProps) {
     else if (state.kind === "prepared")
       line = state.event ? (
         <span className="min-w-0 wrap-anywhere">{t("calendarSame", { title: state.event.title || tCal("untitled") })}</span>
-      ) : cal.events[0] ? (
-        <span className="min-w-0 wrap-anywhere">{t("calendarLater", { title: cal.events[0].title || tCal("untitled"), when: nextMeetingWhen(cal.events[0].date, cal.events[0].time, locale) })}</span>
-      ) : (
+      ) : cal.events.length ? null : (
         <span className="min-w-0 wrap-anywhere">{tCal("nothingUpcoming")}</span>
       );
     else if (!state.event) line = <span className="min-w-0 wrap-anywhere">{tCal("nothingUpcoming")}</span>;
     else line = <span className="min-w-0 wrap-anywhere">{t("calendarWhen", { when: nextMeetingWhen(state.event.date, state.event.time, locale) })}</span>;
+    if (!line) return null;
     return <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">{line}</div>;
   };
 
@@ -271,8 +270,41 @@ export function NextMeetingHero(props: NextMeetingHeroProps) {
     }
   }
 
+  // Read out when the card changes state in place (live → ending → ended), never on a page load.
+  const announce = state.kind === "live" ? t("liveTitle") : state.kind === "ending" ? t("endingTitle") : state.kind === "ended" ? t("announceEnded") : "";
+  const later = props.later ?? [];
+
+  if (props.pending)
+    return (
+      <section data-slot="card" data-hero="pending" className={cn(cardClass, "p-6")} aria-labelledby="next-meeting-title" aria-busy="true">
+        <div className="flex flex-col gap-4">
+          <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-sm font-medium text-ink-3">{t("label")}</p>
+            {more}
+          </div>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 id="next-meeting-title" className="text-xl tracking-[-0.02em]">
+              <span className="sr-only">{t("calendarLoading")}</span>
+              <Skeleton className="my-1 h-5 w-52 max-w-full" aria-hidden="true" />
+            </h2>
+            <Skeleton className="my-1 h-4 w-72 max-w-full" aria-hidden="true" />
+          </div>
+          <div className="flex min-h-8 items-center">
+            <Skeleton className="h-4 w-40 max-w-full" aria-hidden="true" />
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row" aria-hidden="true">
+            <Skeleton className="h-12 w-full sm:w-52" />
+            <Skeleton className="h-12 w-full sm:w-56" />
+          </div>
+        </div>
+      </section>
+    );
+
   return (
     <section data-slot="card" data-hero={state.kind} className={cn(cardClass, "p-6")} aria-labelledby="next-meeting-title">
+      <p className="sr-only" aria-live="polite" aria-atomic="true">
+        {announce}
+      </p>
       <Enter key={state.kind}>
         <div data-enter-item className="flex flex-col gap-4">
           <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -287,6 +319,35 @@ export function NextMeetingHero(props: NextMeetingHeroProps) {
           </div>
           {extra}
           {actions && <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">{actions}</div>}
+          {later.length > 0 && (state.kind === "prepared" || state.kind === "unprepared") && (
+            <div className="flex flex-col gap-1 border-t border-line pt-3">
+              <p className="text-sm text-ink-3" id="calendar-later">
+                {tCal("laterLabel")}
+              </p>
+              <ul aria-labelledby="calendar-later" className="divide-y divide-line">
+                {later.map((e) => {
+                  const name = e.title || tCal("untitled");
+                  return (
+                    <li key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-sm">
+                      <span className="min-w-0 wrap-anywhere">
+                        <span className="text-ink-2">{nextMeetingWhen(e.date, e.time, locale)}</span> · <span className="font-medium">{name}</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        {e.now && (
+                          <ButtonLink href={`/meetings/ny/${orgId}?event=${encodeURIComponent(e.id)}`} variant="ghost" size="sm" aria-label={tCal("startLabel", { title: name })}>
+                            {tCal("start")}
+                          </ButtonLink>
+                        )}
+                        <ButtonLink href={`/orgs/${orgId}/forbered?datum=${e.date}&event=${encodeURIComponent(e.id)}`} variant="ghost" size="sm" aria-label={tCal("prepareLabel", { title: name })}>
+                          {tCal("prepare")}
+                        </ButtonLink>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </div>
       </Enter>
     </section>
