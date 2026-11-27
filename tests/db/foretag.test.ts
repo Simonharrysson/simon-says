@@ -211,6 +211,18 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect(write.error?.message).toMatch(/permission denied/i);
   });
 
+  it("deleting a company cascades through its tree, meetings and held tasks", async () => {
+    const admin = adminClient();
+    const id = must("create", await admin.rpc("create_foretag", { p_user: u.olle.id, p_name: "Raderas AB", p_root_name: "VD", p_person_name: "Olle" })) as string;
+    const root = (must("root", await admin.from("groups").select("id").eq("org_id", id).single()) as { id: string }).id;
+    const child = (must("child", await admin.from("groups").insert({ org_id: id, name: "Team", parent_group_id: root }).select("id").single()) as { id: string }).id;
+    must("meeting", await admin.from("meetings").insert({ org_id: id, started_by: u.olle.id, doc_id: "doc", notes_tab_id: "t.0", status: "done", group_id: child }));
+    const del = await u.olle.db.from("orgs").delete().eq("id", id).select("id");
+    expect(del.error).toBeNull();
+    expect(del.data).toEqual([{ id }]);
+    expect((await admin.from("groups").select("id").eq("org_id", id)).data).toEqual([]);
+  });
+
   it("föreningar are unchanged: every member sees every meeting", async () => {
     const { data } = await forening.member.db.from("meetings").select("id").eq("org_id", forening.id);
     expect(data).toEqual([{ id: forening.meeting }]);

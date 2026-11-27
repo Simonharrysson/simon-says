@@ -29,7 +29,8 @@ create table public.groups (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.orgs (id) on delete cascade,
   name text not null check (length(btrim(name)) between 1 and 40 and position(chr(10) in name) = 0),
-  parent_group_id uuid references public.groups (id) on delete restrict,
+  -- No action (checked at the end of the statement), so deleting the company cascades through the tree.
+  parent_group_id uuid references public.groups (id),
   depth int not null default 0 check (depth between 0 and 20),
   position int not null default 0,
   archived_at timestamptz,
@@ -105,7 +106,8 @@ alter table public.people add column group_id uuid references public.groups (id)
 create index people_group_idx on public.people (group_id) where group_id is not null;
 
 alter table public.meetings
-  add column group_id uuid references public.groups (id) on delete restrict,
+  -- No action, not restrict: a company delete cascades to both groups and meetings in one statement.
+  add column group_id uuid references public.groups (id),
   add column private boolean not null default false;
 create index meetings_group_idx on public.meetings (group_id, started_at desc) where group_id is not null;
 
