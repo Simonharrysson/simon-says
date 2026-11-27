@@ -20,7 +20,8 @@ import { PartialStrip } from "./PartialStrip";
 import { ResumeMeeting } from "./ResumeMeeting";
 import { SpeakerList } from "./SpeakerList";
 import { TasksPanel } from "./TasksPanel";
-import type { TaskAnswer, TaskView } from "@/lib/notes/tasks";
+import type { EndStats, TaskAnswer, TaskView } from "@/lib/notes/tasks";
+import type { EndAsk } from "./EndTasksDialog";
 import type { ConnectionState, LivePhase, PersonOption, Speaker, SpeakerChoice, SpeakerKey } from "./types";
 
 export interface LiveMeetingProps {
@@ -93,13 +94,13 @@ export interface LiveMeetingProps {
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
-  onStop: (answers?: TaskAnswer[]) => void;
+  onStop: (answers?: TaskAnswer[], stats?: EndStats) => void;
   /** The Avsluta answers arrived after the meeting had already ended elsewhere: not saved. */
   answersLost?: boolean;
   /** This meeting's tasks ("Uppgifter"); undefined: not loaded yet (no panel). */
   tasks?: TaskView[];
   /** Avsluta asks about these first (the förening requires Vem, När, Klart när). */
-  askTasks?: () => Promise<TaskView[]>;
+  askTasks?: () => Promise<EndAsk>;
   onReLogin: () => void;
   onAssignSpeaker: (speaker: SpeakerKey, choice: SpeakerChoice) => void;
   onNameRoundDone: () => void;

@@ -305,16 +305,73 @@ export function endReady(tasks: TaskView[], handled: Record<string, EndHandled |
   });
 }
 
-/** The answers POST /end carries: completed tasks only, the missing fields as typed. */
-export function endAnswers(tasks: TaskView[], handled: Record<string, EndHandled | undefined>): TaskAnswer[] {
+/** What a row has typed but not saved (Spara): still sent, so "Avsluta ändå" never drops it. */
+export type EndDrafts = Record<string, Partial<Record<TaskField, string>> | undefined>;
+
+/**
+ * The answers POST /end carries: completed tasks, and the typed-but-unsaved fields of a task not
+ * left as it is (never a locked one), the missing fields only, as typed.
+ */
+export function endAnswers(tasks: TaskView[], handled: Record<string, EndHandled | undefined>, drafts: EndDrafts = {}): TaskAnswer[] {
   return tasks.flatMap((t) => {
     const h = handled[t.id];
-    if (h?.kind !== "completed") return [];
+    if (h?.kind === "dismissed") return [];
+    const values = h?.kind === "completed" ? h.values : t.locked ? undefined : drafts[t.id];
+    if (!values) return [];
     const a: TaskAnswer = { id: t.id };
     for (const f of t.missing) {
-      const v = h.values[f]?.trim();
+      const v = values[f]?.trim();
       if (v) a[f] = v;
     }
-    return [a];
+    return Object.keys(a).length > 1 ? [a] : [];
   });
+}
+
+// ---------------------------------------------------------------------------------------------
+// What the Avsluta dialog was met with (meeting_events 'end_tasks', 0052): counts only, never
+// task text. Read with the SQL in docs/superpowers/specs/2026-11-26-concrete-tasks-design.md.
+
+export interface EndStats {
+  /** Incomplete tasks the dialog showed. */
+  incomplete: number;
+  /** Tasks with something filled in (sent as answers). */
+  filled: number;
+  /** Tasks left as they are ("Lämna som det är"). */
+  dismissed: number;
+  /** Tasks nobody touched. */
+  untouched: number;
+  /** Ended with "Avsluta ändå" before every task was handled. */
+  skipped: boolean;
+}
+
+/** The dialog's counts at the moment it ends the meeting. */
+export function endStats(tasks: TaskView[], handled: Record<string, EndHandled | undefined>, answers: TaskAnswer[]): EndStats {
+  const filled = new Set(answers.map((a) => a.id));
+  const dismissed = tasks.filter((t) => handled[t.id]?.kind === "dismissed").length;
+  return {
+    incomplete: tasks.length,
+    filled: tasks.filter((t) => filled.has(t.id)).length,
+    dismissed,
+    untouched: tasks.filter((t) => !filled.has(t.id) && handled[t.id]?.kind !== "dismissed").length,
+    skipped: !endReady(tasks, handled),
+  };
+}
+
+const MAX_COUNT = 500;
+const count = (v: unknown): number | null => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= MAX_COUNT ? (v as number) : null);
+
+/**
+ * POST /end's `stats`, checked: whole counts 0–500 and a boolean, nothing else kept. `filled` is
+ * what the server parsed from the answers, not what the browser says. Null when it isn't valid.
+ */
+export function parseEndStats(value: unknown, answers: TaskAnswer[]): EndStats | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const o = value as Record<string, unknown>;
+  const incomplete = count(o.incomplete);
+  const dismissed = count(o.dismissed);
+  const untouched = count(o.untouched);
+  if (incomplete === null || incomplete === 0 || dismissed === null || untouched === null || typeof o.skipped !== "boolean") return null;
+  const filled = Math.min(answers.length, incomplete);
+  if (filled + dismissed + untouched > incomplete) return null;
+  return { incomplete, filled, dismissed, untouched, skipped: o.skipped };
 }
