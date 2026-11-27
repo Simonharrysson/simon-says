@@ -20,8 +20,8 @@ import { briefsForUser, type BriefDeps, type BriefHistory, type BriefScope, type
 // narrowed to the recipient by hand: their memberships, and brief_visible_meetings, the RLS
 // predicate), the user's own calendar grant, Claude (pick only) and the mail gate.
 
-/** Earlier meetings read per scope before the visibility filter. */
-const READ_MEETINGS = 60;
+/** Earlier meeting ids read per scope before the visibility filter. */
+const READ_MEETINGS = 500;
 /** Sent-log rows older than this are deleted. */
 export const SENDS_KEEP_DAYS = 30;
 
@@ -86,14 +86,19 @@ export async function loadBriefUser(userId: string, db: SupabaseClient = supabas
  */
 export async function loadBriefHistory(user: BriefUser, scope: BriefScope, startsAt: string, db: SupabaseClient = supabaseAdmin()): Promise<BriefHistory> {
   const orgId = scope.org.id;
-  let q = db.from("meetings").select("*").eq("org_id", orgId).eq("status", "done").eq("is_test", false);
+  // Ids first (many), then the visibility filter, then the newest visible rows in full: a member
+  // deep in a busy company still finds their own meetings among the company's.
+  let q = db.from("meetings").select("id").eq("org_id", orgId).eq("status", "done").eq("is_test", false);
   if (scope.kind === "customer") q = q.eq("context_id", scope.customer.id);
   else if (scope.org.kind === "foretag") q = q.is("context_id", null);
-  const all = must("meetings", await q.order("started_at", { ascending: false }).limit(READ_MEETINGS)) as HomeMeeting[];
-  const visibleIds = all.length
-    ? new Set(must("visible", await db.rpc("brief_visible_meetings", { p_user: user.id, p_ids: all.map((m) => m.id) })) as string[])
+  const candidates = (must("meetings", await q.order("started_at", { ascending: false }).limit(READ_MEETINGS)) as { id: string }[]).map((m) => m.id);
+  const visibleIds = candidates.length
+    ? new Set(must("visible", await db.rpc("brief_visible_meetings", { p_user: user.id, p_ids: candidates })) as string[])
     : new Set<string>();
-  const meetings = all.filter((m) => visibleIds.has(m.id)).slice(0, BRIEF_MEETINGS);
+  const keep = candidates.filter((id) => visibleIds.has(id)).slice(0, BRIEF_MEETINGS);
+  const meetings = keep.length
+    ? (must("visible meetings", await db.from("meetings").select("*").in("id", keep)) as HomeMeeting[]).sort((a, b) => b.started_at.localeCompare(a.started_at))
+    : [];
   const ids = meetings.map((m) => m.id);
   const [rows, people, agenda] = await Promise.all([
     ids.length
@@ -172,14 +177,19 @@ export interface BriefRunResult {
 }
 
 /** The cron's run: every user with a calendar grant, within `budgetMs`. Counts only. */
-export async function runBriefs(opts: { budgetMs?: number; deps?: BriefDeps; db?: SupabaseClient } = {}): Promise<BriefRunResult> {
+export async function runBriefs(opts: { budgetMs?: number; deps?: BriefDeps; db?: SupabaseClient; now?: Date } = {}): Promise<BriefRunResult> {
   const db = opts.db ?? supabaseAdmin();
   const deps = opts.deps ?? briefDeps({ db });
   const started = Date.now();
   const out: BriefRunResult = { users: 0, sent: 0, skipped: 0, failed: 0, left: 0 };
-  const ids = await calendarUserIds(db);
+  // Start at a different place every run (by the 5-minute slot), so a list longer than one run's
+  // budget never starves the same tail.
+  const all = await calendarUserIds(db);
+  const slot = Math.floor((opts.now ?? new Date()).getTime() / 300_000);
+  const from = all.length ? slot % all.length : 0;
+  const ids = [...all.slice(from), ...all.slice(0, from)];
   for (let i = 0; i < ids.length; i++) {
-    if (Date.now() - started > (opts.budgetMs ?? 50_000)) {
+    if (Date.now() - started > (opts.budgetMs ?? 25_000)) {
       out.left = ids.length - i;
       break;
     }

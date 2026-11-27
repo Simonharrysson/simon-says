@@ -15,8 +15,12 @@ test("Inför möten: opt in under Konto, one brief before the förening's meetin
   const org = await seedOrg({ members: [member], people: [{ name: "Karin Sjö", email: member }, "Erik Lund"] });
   await seedMeeting(db, org, {
     daysAgo: 7,
+    // Four decisions: more than the mail shows, so Claude (the fake) picks; it picks the last three.
     items: [
+      { section: "decision", text: "Medlemsavgiften höjs till 150 kr" },
       { section: "decision", text: "Hackathonet blir den 14 februari" },
+      { section: "decision", text: "Vi byter bank" },
+      { section: "decision", text: "Sittningen flyttas till mars" },
       { section: "action", text: "Boka Kårallen", owner: "Erik Lund" },
     ],
   });
@@ -53,7 +57,14 @@ test("Inför möten: opt in under Konto, one brief before the förening's meetin
   const [mail] = await fake.mail(member);
   expect(mail.subject).toBe(`Inför Styrelsemöte kl ${stockholmDateTime(event.start).time.replace(":", ".")}`);
   expect(mail.text).toContain("SENAST NI SÅGS");
-  expect(mail.text).toContain("Hackathonet blir den 14 februari");
+  const decisions = mail.text.split("BESLUT ATT HA I HUVUDET\n")[1].split("\n\n")[0];
+  expect(decisions.split("\n").map((l) => l.replace(/ \(från mötet .*$/, ""))).toEqual([
+    "- Sittningen flyttas till mars",
+    "- Vi byter bank",
+    "- Hackathonet blir den 14 februari",
+  ]);
+  // Claude only got ids, dates and the stored text; the mail shows the stored text as is.
+  expect((await fake.claudeCalls("brief", "Medlemsavgiften höjs till 150 kr")).length).toBe(1);
   expect(mail.text).toContain("Erik Lund: Boka Kårallen");
   expect(mail.text).toContain(`/orgs/${org.id}/mote/`);
   expect(mail.headers?.["List-Unsubscribe"]).toContain("k=meeting_brief");
