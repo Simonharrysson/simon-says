@@ -17,6 +17,7 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
   useReactFlow,
   type Connection,
   type Edge,
@@ -103,6 +104,18 @@ function Canvas({ data, api }: { data: CanvasData; api: CanvasApi }) {
   const tt = useTranslations("foretag.teams");
   const locale = useLocale();
   const flow = useReactFlow<CanvasNode, ReportEdge>();
+  // The cards stay hidden until the first fit has placed them: never a frame with a card on the
+  // canvas's edge (a double border) or a jump from where they were drawn first.
+  const measured = useNodesInitialized();
+  const [fitted, setFitted] = useState(false);
+  useEffect(() => {
+    if (!measured || fitted) return;
+    let live = true;
+    void Promise.resolve(flow.fitView({ ...FIT, duration: 0 })).finally(() => live && setFitted(true));
+    return () => {
+      live = false;
+    };
+  }, [measured, fitted, flow]);
   const { orgId, isAdmin } = data;
 
   // A local copy, optimistic; replaced when the server sends new props (after revalidation).
@@ -408,6 +421,7 @@ function Canvas({ data, api }: { data: CanvasData; api: CanvasApi }) {
         aria-label={t("region")}
         aria-describedby="tree-canvas-help"
         data-saving={pending > 0 ? "1" : "0"}
+        data-fitted={fitted ? "1" : undefined}
         onKeyDownCapture={onKeyDownCapture}
         onFocusCapture={onFocusCapture}
       >
@@ -439,8 +453,6 @@ function Canvas({ data, api }: { data: CanvasData; api: CanvasApi }) {
           snapGrid={[GRID, GRID]}
           fitView
           fitViewOptions={FIT}
-          // Before fitView has measured the cards, start already inset by FIT's padding: a card
-          // never sits on the canvas's frame, even for the first frames (no double border).
           defaultViewport={{ x: 264, y: 84, zoom: 1 }}
           minZoom={0.2}
           maxZoom={1.75}
