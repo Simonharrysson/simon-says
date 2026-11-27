@@ -15,5 +15,6 @@
   "signedInAgainMetaTitle": "Inloggad igen",
   "signedInAgainTitle": "Du är inloggad igen",
   "signedInAgainText": "Stäng den här fliken. Mötet fortsätter i den andra fliken, och det som väntade skickas nu.",
-  "sendingToGoogle": "Skickar dig till Google…"
+  "sendingToGoogle": "Skickar dig till Google…",
+  "metaDescription": "Logga in på Simon Says med ditt Google-konto. Vi får bara skapa och redigera de dokument Simon Says själv skapar."
 }

@@ -10,7 +10,7 @@ test("a new user signs in, creates a förening and goes through Kom igång @phon
   const orgName = `Testföreningen ${Date.now().toString(36)}`;
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Logga in med Google" }).first().click();
+  await page.getByRole("button", { name: "Kom igång med Google" }).first().click();
   await expect(page).toHaveURL(/\/orgs$/);
   await expect(page.getByRole("heading", { name: "Föreningar" })).toBeVisible();
   await expect(page.getByText("Du är inte med i någon förening än")).toBeVisible();

@@ -192,14 +192,13 @@
   --animate-step-in: step-in 280ms var(--ease-out) both;
   --animate-step-back: step-back 280ms var(--ease-out) both;
 
+  /* Clip only, no fade: the text keeps full contrast while it is written. */
   @keyframes write {
     from {
       clip-path: inset(0 100% 0 0);
-      opacity: 0.4;
     }
     to {
       clip-path: inset(0 0 0 0);
-      opacity: 1;
     }
   }
   @keyframes caret-blink {
@@ -243,6 +242,24 @@
   @keyframes shimmer {
     to {
       background-position: -200% 0;
+    }
+  }
+}
+
+/* Landing: a block rises in as it scrolls into view (CSS scroll-driven, no JS). Only with motion
+   allowed and support; never on the hero, so the first paint is never held back. */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1.25rem);
+  }
+}
+@utility reveal {
+  @media (prefers-reduced-motion: no-preference) {
+    @supports (animation-timeline: view()) {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 35%;
     }
   }
 }
