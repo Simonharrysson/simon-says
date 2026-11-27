@@ -10,6 +10,7 @@ import type { BoardRow } from "@/lib/people/board";
 import {
   addBoardPersonAction,
   removeBoardPersonAction,
+  undoSelfLinkAction,
   updateBoardPersonAction,
   type ActionResult,
 } from "@/app/(app)/orgs/[id]/kom-igang/actions";
@@ -99,6 +100,7 @@ export function OrgBoard({
       }
       onUpdate={(id, input) => done(updateBoardPersonAction(orgId, id, input))}
       onRemove={(id) => done(removeBoardPersonAction(orgId, id))}
+      onUndoSelfLink={(id) => done(undoSelfLinkAction(orgId, id))}
     />
   );
 }

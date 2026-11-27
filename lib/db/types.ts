@@ -109,6 +109,8 @@ export interface PersonRow {
   /** 0035: voice consent recorded for the coming voice feature (when, by whom). */
   voice_consent_at?: string | null;
   voice_consent_by?: string | null;
+  /** 0051: when the member linked themselves to this person ("Nyss kopplad" for the admins). */
+  self_linked_at?: string | null;
   /** 0037: ticked for summary_mode 'selected' (only through set_summary_settings). */
   summary_selected?: boolean;
   /** 0037: set when the linked member was removed (or deleted their account); no e-mail by the old address. */

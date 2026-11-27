@@ -11,5 +11,39 @@
   "joining": "Joining…",
   "join": "Join {org}",
   "joiningAs": "You're joining as <strong>{email}</strong>.",
-  "switchAccount": "Switch account"
+  "switchAccount": "Switch account",
+  "whoami": {
+    "metaTitle": "Who are you?",
+    "eyebrow": "You're in {org}",
+    "title": "Which one is you?",
+    "text": "Tap your name. Your tasks then find their way to you, and the notes know who's speaking.",
+    "listLabel": "Names in {org} without an account yet",
+    "linking": "Linking…",
+    "notListed": "I'm not on the list",
+    "noneTitle": "Add yourself",
+    "noneText": "Everyone on the list already has an account. Type your name and we'll add you.",
+    "notListedText": "Type your name and we'll add you to the list.",
+    "nameLabel": "Your name",
+    "nameHint": "First and last name, as it should appear in the minutes.",
+    "roleLabel": "Role (optional)",
+    "roleHint": "For example Treasurer or Board member.",
+    "add": "Add me",
+    "adding": "Adding…",
+    "later": "Do it later",
+    "error": {
+      "upptagen": "Someone else already has that name. Pick another one, or ask an admin for help.",
+      "redan": "You're already linked to a name here. An admin can change it under Settings.",
+      "namn": "Type your name using letters, four words at most.",
+      "roll": "Keep the role to four words at most, for example Treasurer.",
+      "fel": "That didn't work just now. Try again."
+    }
+  },
+  "welcome": {
+    "title": "Welcome to {org}!",
+    "youAre": "You're on the list as <strong>{name}</strong>.",
+    "nextMeeting": "Next meeting: <strong>{when}</strong>",
+    "tasks": "Your tasks from meetings show up under <link>Home</link>.",
+    "docs": "Meeting notes are shared with your Google account and live under the Meetings tab.",
+    "close": "Close the welcome"
+  }
 }

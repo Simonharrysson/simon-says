@@ -37,4 +37,15 @@ describe("cleanEmail", () => {
     expect(cleanEmail("a b@c.se")).toBeNull();
     expect(cleanEmail(3)).toBeNull();
   });
+
+  it("marks a recent self link on a linked row only (0051)", () => {
+    const now = Date.parse("2026-12-01T12:00:00Z");
+    const members = [{ userId: "u1", email: "anna@example.com", role: "member" as const }];
+    const [fresh] = boardRows([{ id: "p1", name: "Anna", member_user_id: "u1", self_linked_at: "2026-11-27T10:00:00Z" }], members, now);
+    expect(fresh.selfLinkedAt).toBe("2026-11-27T10:00:00Z");
+    const [old] = boardRows([{ id: "p1", name: "Anna", member_user_id: "u1", self_linked_at: "2026-11-01T10:00:00Z" }], members, now);
+    expect(old.selfLinkedAt).toBeNull();
+    const [gone] = boardRows([{ id: "p1", name: "Anna", member_user_id: null, self_linked_at: "2026-11-30T10:00:00Z" }], members, now);
+    expect(gone.selfLinkedAt).toBeNull();
+  });
 });

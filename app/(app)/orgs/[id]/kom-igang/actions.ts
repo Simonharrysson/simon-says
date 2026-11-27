@@ -145,6 +145,28 @@ export async function removeBoardPersonAction(orgId: string, personId: string): 
   return OK;
 }
 
+/**
+ * "Det stämmer inte" on a "Nyss kopplad" row (0051): the admin undoes a member's self link. Only a
+ * self link (self_linked_at set); the trigger clears self_linked_at with the link. The person stays.
+ */
+export async function undoSelfLinkAction(orgId: string, personId: string): Promise<ActionResult> {
+  const t = await copy();
+  const db = await adminDb(orgId);
+  if (!db) return fail(t("adminOnly"));
+  if (!isUuid(personId)) return fail(t("gone"));
+  const { data, error } = await db
+    .from("people")
+    .update({ member_user_id: null })
+    .eq("id", personId)
+    .eq("org_id", orgId)
+    .not("self_linked_at", "is", null)
+    .select("id");
+  if (error) return fail(t("adminOnly"));
+  if ((data ?? []).length === 0) return fail(t("gone"));
+  refresh(orgId);
+  return OK;
+}
+
 /** Step 6: records (or withdraws) that a person has said yes to having their voice learned later. */
 export async function voiceConsentAction(orgId: string, personId: string, consent: boolean): Promise<ActionResult> {
   const t = await copy();

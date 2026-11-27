@@ -6,9 +6,14 @@ import { redirect } from "next/navigation";
 import { getEnv } from "@/lib/env";
 import { isAdminEmail } from "@/lib/testmeeting/admin";
 import { isUuid } from "@/lib/db/ids";
+import { validName } from "@/lib/names/validate";
+import { afterJoinPath, welcomePath, whoamiError } from "@/lib/people/whoami";
 import {
   addPerson,
+  addSelfPerson,
+  claimPerson,
   createOrg,
+  isLinkedIn,
   deleteMeeting,
   deleteOrg,
   deletePerson,
@@ -61,21 +66,52 @@ export async function createOrgAction(form: FormData): Promise<void> {
 
 export async function joinOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
-  const orgId = await joinOrg(db, field(form, "code"));
-  if (orgId) {
+  const code = field(form, "code");
+  // Already a member (RLS shows a förening's row to its members only): reopening the invite
+  // link is no new join, so no welcome and no Doc sharing again.
+  const { data: existing } = code ? await db.from("orgs").select("id").eq("invite_code", code).maybeSingle() : { data: null };
+  const wasMember = Boolean(existing);
+  const orgId = await joinOrg(db, code);
+  if (!orgId) redirect("/orgs?fel=inbjudan");
+  const { data } = await db.auth.getUser();
+  const user = data.user;
+  const org = await getOrg(db, orgId);
+  // Företag (0050): admins place people; no "Vem av dessa är du?" (0051 is föreningar only).
+  if (org?.kind === "foretag") redirect(`/orgs/${orgId}`);
+  if (user?.email && !wasMember) {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
-    const { data } = await db.auth.getUser();
-    const user = data.user;
-    // Företag (0050): a new member is unplaced and sees no group's meetings, so no Docs either.
-    const org = user?.email ? await getOrg(db, orgId) : null;
-    if (user?.email && org?.kind !== "foretag") {
-      const member = { id: user.id, email: user.email };
-      after(() =>
-        shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
-      );
-    }
+    // (Företag returned above: a new member is unplaced and sees no group's meetings, so no Docs.)
+    const member = { id: user.id, email: user.email };
+    after(() =>
+      shareOrgDocsWithNewMember(orgId, member).catch((e: Error) => console.error(`join share: ${e.message}`)),
+    );
   }
-  redirect(orgId ? `/orgs/${orgId}` : "/orgs?fel=inbjudan");
+  // The join trigger (0035) already linked them when an admin wrote their e-mail at their name;
+  // otherwise "Vem av dessa är du?" (0051).
+  const linked = user ? await isLinkedIn(db, orgId, user.id) : false;
+  redirect(wasMember && linked ? `/orgs/${orgId}` : afterJoinPath(orgId, linked));
+}
+
+/** "Vem av dessa är du?": the member taps their name (0051 checks: a member, an unlinked person, only themselves). */
+export async function claimPersonAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const personId = field(form, "personId");
+  const db = await createSupabaseServerClient();
+  const error = whoamiError(isUuid(personId) ? await claimPerson(db, personId) : "forbidden");
+  redirect(error ? `/orgs/${orgId}/vem?fel=${error}` : welcomePath(orgId));
+}
+
+/** "Jag finns inte med": the member adds their own name (+ optional role), linked to them. */
+export async function addSelfAction(form: FormData): Promise<void> {
+  const orgId = orgIdFrom(form);
+  const name = validName(field(form, "name"));
+  if (!name) redirect(`/orgs/${orgId}/vem?fel=namn&ny=1`);
+  const rawRole = field(form, "role");
+  const role = validRole(rawRole);
+  if (rawRole.trim() !== "" && role === null) redirect(`/orgs/${orgId}/vem?fel=roll&ny=1`);
+  const db = await createSupabaseServerClient();
+  const error = whoamiError(await addSelfPerson(db, orgId, name, role));
+  redirect(error ? `/orgs/${orgId}/vem?fel=${error}&ny=1` : welcomePath(orgId));
 }
 
 export async function updateOrgAction(form: FormData): Promise<void> {
