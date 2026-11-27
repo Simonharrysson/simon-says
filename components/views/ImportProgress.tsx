@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProgressFill } from "@/components/motion/ProgressFill";
 import { Banner } from "@/components/ui/Banner";
 import { Button, Spinner } from "@/components/ui/button";
 import { IconAlert, IconCheck, IconClock, IconRefresh } from "@/components/ui/icons";
@@ -298,7 +299,7 @@ export function ImportProgress({
           aria-valuemax={p.total}
           aria-valuenow={p.finished}
         >
-          <div className="h-full rounded-full bg-ink-2 transition-[width] duration-300" style={{ width: `${pct}%` }} />
+          <ProgressFill pct={pct} className="h-full w-full rounded-full bg-ink-2" />
         </div>
         {detail && <p className="text-sm text-ink-2 max-w-[68ch]">{detail}</p>}
       </div>

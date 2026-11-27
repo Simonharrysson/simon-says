@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, startTransition, useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEntrance } from "@/components/motion/Enter";
+import { useSlider } from "@/components/motion/Slider";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Föreningar: moten | oversikt | installningar. Företag (0050): moten | kunder | personer | installningar. */
@@ -25,10 +27,11 @@ const KEPT_MS = 5 * 60_000;
  * - hovering, focusing or touching a tab prefetches it in full, so a first visit is usually
  *   instant too. Nothing is prefetched without intent: a page view costs one render, as before.
  *
- * The panel fades in (CSS `tab-in`, app/globals.css): the optimistic swap is a sync render, which
- * React never runs as a view transition, so the animation lives on the panel itself. It replays
- * whenever <Activity> shows a panel again (display: none restarts it) and stays off until the
- * first switch, so a page load doesn't fade.
+ * Motion: the underline slides to the tab (and a hover pill follows the mouse) on the app's spring
+ * (components/motion/Slider.tsx). The panel's cards rise in with a short stagger
+ * (components/motion/Enter.tsx): the optimistic swap is a sync render, which React never runs as a
+ * view transition, so the entrance lives on the panel itself. It replays whenever <Activity> shows
+ * a panel again, and a page load (hydration) never runs it.
  */
 export function OrgTabsShell({
   active,
@@ -82,9 +85,15 @@ export function OrgTabsShell({
     }
   }, [active, router]);
 
+  const slider = useSlider<HTMLElement>(shown);
+
   return (
     <>
-      <nav aria-label={label} className="-mt-2 flex gap-1 border-b border-line">
+      <nav ref={slider.ref} aria-label={label} className="relative -mt-2 flex gap-1 border-b border-line" data-slider={slider.ready || undefined} {...slider.hoverProps}>
+        <span aria-hidden="true" data-slider-mark="hover" className="pointer-events-none absolute top-0 left-0 rounded-md bg-sunk" style={slider.hoverStyle} />
+        <span aria-hidden="true" data-slider-mark="active" className="pointer-events-none absolute top-0 left-0" style={slider.activeStyle}>
+          <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-ink" />
+        </span>
         {tabs.map((tab) => (
           <Link
             key={tab.id}
@@ -93,6 +102,7 @@ export function OrgTabsShell({
             scroll={false}
             transitionTypes={["tab"]}
             aria-current={tab.id === shown ? "page" : undefined}
+            data-slider-key={tab.id}
             onMouseEnter={() => warm(tab)}
             onFocus={() => warm(tab)}
             onTouchStart={() => warm(tab)}
@@ -102,7 +112,7 @@ export function OrgTabsShell({
               setSwitched(true);
               startTransition(() => setShown(tab.id));
             }}
-            className="relative -mb-px inline-flex min-h-10 flex-none items-center rounded-t-md px-3 text-sm font-medium text-ink-3 no-underline transition-colors duration-150 ease-out after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-ink after:transition-transform after:duration-200 after:ease-out hover:text-ink hover:no-underline focus-visible:outline-offset-[-2px] aria-[current=page]:text-ink aria-[current=page]:after:scale-x-100 max-md:min-h-11"
+            className="press relative -mb-px inline-flex min-h-10 flex-none items-center rounded-t-md px-3 text-sm font-medium text-ink-3 no-underline after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:origin-center after:scale-x-0 after:rounded-full after:bg-ink after:transition-transform after:duration-200 after:ease-out hover:text-ink hover:no-underline focus-visible:outline-offset-[-2px] aria-[current=page]:text-ink aria-[current=page]:after:scale-x-100 max-md:min-h-11"
           >
             {tab.label}
           </Link>
@@ -117,25 +127,35 @@ export function OrgTabsShell({
         const stale = panel !== undefined && tab.id === shown && (shown !== active || refreshing || refreshFor.current === tab.id);
         return (
           <Activity key={tab.id} mode={tab.id === shown ? "visible" : "hidden"}>
-            <div className="contents" data-tab-in={switched || undefined}>
-              {panel === undefined ? (
-                <TabSkeleton tab={tab.id} label={loadingLabel} settingsNav={settingsNav} />
-              ) : (
-                <div
-                  data-panel
-                  className="contents [&>*]:transition-opacity [&>*]:duration-200 [&[data-stale]>*]:opacity-60 [&[data-stale]>*]:delay-200"
-                  data-stale={stale || undefined}
-                  inert={stale}
-                  aria-busy={stale || undefined}
-                >
-                  {panel}
-                </div>
-              )}
-            </div>
+            {panel === undefined ? (
+              <TabSkeleton tab={tab.id} label={loadingLabel} settingsNav={settingsNav} />
+            ) : (
+              <TabPanel stale={stale} replay={switched}>
+                {panel}
+              </TabPanel>
+            )}
           </Activity>
         );
       })}
     </>
+  );
+}
+
+/** A tab's content. Its cards rise in when it arrives after a click, and each time it is shown again. */
+function TabPanel({ stale, replay, children }: { stale: boolean; replay: boolean; children: ReactNode }) {
+  const ref = useEntrance<HTMLDivElement>(replay);
+  return (
+    <div
+      ref={ref}
+      data-panel
+      data-tab-in=""
+      className="contents [&>*]:transition-opacity [&>*]:duration-200 [&[data-stale]>*]:opacity-60 [&[data-stale]>*]:delay-200"
+      data-stale={stale || undefined}
+      inert={stale}
+      aria-busy={stale || undefined}
+    >
+      {children}
+    </div>
   );
 }
 
