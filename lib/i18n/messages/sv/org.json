@@ -51,7 +51,6 @@
   "membersTitle": "Medlemmar",
   "membersText": "Kan logga in, starta möten och får tillgång till nya mötesdokument.",
   "settingsTitle": "Inställningar",
-  "settingsMore": "Logga, stadgar och röster ändrar du i <link>Kom igång</link>.",
   "deleteOrgTitle": "Radera föreningen",
   "deleteOrgText": "Tar bort föreningen med alla möten, transkriptioner, anteckningar och personer här. Det går inte att ångra. Google-dokumenten ligger kvar i Drive.",
   "deleteOrg": "Radera föreningen",
@@ -85,7 +84,7 @@
   "invited": "Inbjuden · {email}",
   "peopleTitle": "Personer",
   "peopleText": "Alla som brukar vara med på mötena. Namnen används för att känna igen vem som talar. De behöver inget konto.",
-  "peopleBoardLink": "<link>Bjud in med e-post och sätt roller under Styrelsen</link>.",
+  "peopleBoardLink": "<link>Bjud in med e-post och sätt roller under Styrelsen och medlemmar</link>.",
   "newPersonLabel": "Namn på ny person",
   "newPersonPlaceholder": "Namn, t.ex. Anna Berg",
   "adding": "Lägger till…",
@@ -126,5 +125,24 @@
   "testMeetings": "Testmöten",
   "testMeeting": "Testmöte",
   "itemCounts": "{decisions, plural, one {# beslut} other {# beslut}} · {tasks, plural, one {# uppgift} other {# uppgifter}}",
-  "titleAnd": "och"
+  "titleAnd": "och",
+  "settings": {
+    "navLabel": "Inställningarnas delar",
+    "sections": {
+      "foreningen": "Föreningen",
+      "styrelsen": "Styrelsen och medlemmar",
+      "moten": "Möten",
+      "efter-motet": "Efter mötet",
+      "radera": "Radera"
+    },
+    "detailsTitle": "Namn, logga och om oss",
+    "visibilityTitle": "Statussidan",
+    "folderTitle": "Mötesmapp",
+    "duringTitle": "Under mötet",
+    "voicesTitle": "Röster",
+    "save": "Spara",
+    "saving": "Sparar…",
+    "saved": "Sparat",
+    "saveFailed": "Det gick inte att spara. Försök igen."
+  }
 }

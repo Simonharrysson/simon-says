@@ -21,20 +21,17 @@ import { formatLabel, formatName } from "@/lib/formats/standard";
 import type { FormatKind, FormatProfile } from "@/lib/formats/schema";
 import { LearnFormatView, useFormatFlow } from "./FormatEditor";
 import { StadgarArsmote, useStadgarArsmote } from "./StadgarArsmote";
-import { useMeetingFolderPicker } from "./useMeetingFolderPicker";
 
 export interface FormatCardProps {
   orgId: string;
   /** The org default: its row id (null for Enkel without a row) and profile. */
   current: { kind: FormatKind; name: string; id?: string | null; profile?: FormatProfile };
   isAdmin: boolean;
-  /** The förening's meeting folder; `name` as picked (null for one picked before 0030). */
-  meetingFolder: { id: string | null; name?: string | null };
   /** Versions saved for this org; custom ones (learned, or with the stadgar's items) can be re-adopted. */
   formats: { id: string; kind: FormatKind; isDefault: boolean; createdAt: string; custom?: boolean; requiredCount?: number; name?: string }[];
   /** Admins: hidden `orgId`, `choice` = a standard kind or `id:<profile id>`. */
   changeFormat?: FormAction;
-  /** The Google Picker is configured: admins can pick the meeting folder. */
+  /** The Google Picker is configured: admins can learn a format or read the stadgar from Drive. */
   pickerEnabled?: boolean;
 }
 
@@ -43,12 +40,12 @@ const STANDARD_KINDS = ["veckomote", "styrelseprotokoll", "enkel"] as const;
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
- * The förening's meeting format. Everyone sees the state (format, its version, the meeting folder,
+ * The förening's meeting format. Everyone sees the state (format, its version,
  * the stadgar's items behind a disclosure); admins get one "Ändra" menu that starts each change:
- * switch format, adjust it, learn one (B2), the årsmöte from the stadgar (todo #15), the meeting folder. The
- * switcher, the flows' progress, errors and editor and the folder's result show in the card.
+ * switch format, adjust it, learn one (B2), the årsmöte from the stadgar (todo #15). The switcher and
+ * the flows' progress, errors and editor show in the card. (The meeting folder has its own editor.)
  */
-export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
+export function FormatCard({ orgId, current, isAdmin, formats, changeFormat, pickerEnabled = false }: FormatCardProps) {
   // Custom versions (a learned format, a Styrelseprotokoll with the stadgar's items, an adjusted
   // standard) are offered by id: choosing the bare standard would drop what makes them theirs (R3-I2).
   const t = useTranslations("formatEditor");
@@ -68,12 +65,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const version = currentRow
     ? t(currentRow.kind === "learned" ? "card.versionLearned" : "card.versionCustom", { date: currentRow.createdAt.slice(0, 10) })
     : null;
-  const folderLine = meetingFolder.id
-    ? meetingFolder.name
-      ? t("card.folderNamed", { name: meetingFolder.name })
-      : t("card.folderChosen")
-    : t("card.noFolder");
-  const meta = capitalize([version, folderLine].filter(Boolean).join(" · "));
+  const meta = version ? capitalize(version) : null;
 
   const flow = useFormatFlow(orgId, current.profile);
   // The stadgar → the årsmöte's agenda (todo #15); shown in the card while it runs.
@@ -83,7 +75,6 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
     stadgar.cancel();
     setStadgarOpen(false);
   };
-  const folder = useMeetingFolderPicker(orgId);
   const [changing, setChanging] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -106,7 +97,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
   const menu = isAdmin && (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button ref={triggerRef} variant="secondary" size="sm" loading={folder.busy} data-format-menu="">
+        <Button ref={triggerRef} variant="secondary" size="sm" data-format-menu="">
           {t("card.change")}
           <IconChevronDown size={16} className="ml-1 inline-block align-[-0.2em] text-ink-2" />
         </Button>
@@ -169,10 +160,6 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
             >
               {stadgarCopy("start")}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem hint={t("card.folderHint")} onSelect={() => void folder.pick()}>
-              {meetingFolder.id ? t("card.changeFolder") : t("card.pickFolder")}
-            </DropdownMenuItem>
           </>
         )}
         {!pickerEnabled && <DropdownMenuNote>{t("card.pickerOff")}</DropdownMenuNote>}
@@ -185,12 +172,7 @@ export function FormatCard({ orgId, current, isAdmin, meetingFolder, formats, ch
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <p className="text-base font-medium text-ink">{name}</p>
-          <p className="text-sm text-ink-3">{meta}</p>
-          {isAdmin && (
-            <p className="text-sm text-ink-2" aria-live="polite">
-              {folder.message ?? ""}
-            </p>
-          )}
+          {meta && <p className="text-sm text-ink-3">{meta}</p>}
         </div>
 
         {required.length> 0 && (

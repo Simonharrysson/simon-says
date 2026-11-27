@@ -32,3 +32,42 @@ export function orgTab(input: {
 export function orgTabHref(orgId: string, tab: OrgTabId): string {
   return tab === "moten" ? `/orgs/${orgId}` : `/orgs/${orgId}?flik=${tab}`;
 }
+
+// Inställningar's sections (`?flik=installningar&del=`): every setting of the förening lives in
+// exactly one of them. Without `del`, a settings form's message picks the section it is about.
+
+export const SETTINGS_SECTIONS = ["foreningen", "styrelsen", "moten", "efter-motet", "radera"] as const;
+export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number];
+
+export const isSettingsSection = (v: unknown): v is SettingsSectionId => typeof v === "string" && (SETTINGS_SECTIONS as readonly string[]).includes(v);
+
+/** The section a `?fel=` / `?klart=` code belongs to (null: none in particular). */
+export function sectionForCode(code: string | null | undefined): SettingsSectionId | null {
+  if (!code) return null;
+  if (code === "namn") return "foreningen";
+  if (code === "sammanfattning") return "efter-motet";
+  if (code === "kalender" || code.startsWith("kalender-")) return "moten";
+  if (code.startsWith("org-")) return "radera";
+  if (["personnamn", "rollnamn", "roll-admin", "medlem"].includes(code) || /^(medlem|admin)-/.test(code)) return "styrelsen";
+  return null;
+}
+
+export function settingsSection(input: { del?: string | null; noticeCode?: string | null }): SettingsSectionId {
+  if (isSettingsSection(input.del)) return input.del;
+  return sectionForCode(input.noticeCode) ?? "foreningen";
+}
+
+/** The link to one section of Inställningar. */
+export function settingsHref(orgId: string, section: SettingsSectionId): string {
+  return `${orgTabHref(orgId, "installningar")}&del=${section}`;
+}
+
+/** Old anchors of the one long page (summary e-mails link `#sammanfattning`) → their section. */
+export const HASH_SECTIONS: Record<string, SettingsSectionId> = {
+  "#installningar": "foreningen",
+  "#om-oss": "foreningen",
+  "#styrelsen": "styrelsen",
+  "#bjud-in": "styrelsen",
+  "#kalender": "moten",
+  "#sammanfattning": "efter-motet",
+};

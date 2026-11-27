@@ -21,7 +21,8 @@ import type { Notice } from "@/lib/ui/messages";
 import { DocAccessButton } from "./DocAccessButton";
 import { NoticeBanner } from "./NoticeBanner";
 import type { DocAccess } from "@/lib/docs/access-state";
-import { OrgSettingsForm } from "./OrgSettingsForm";
+import { OrgSettings } from "@/components/settings/OrgSettings";
+import { settingsHref, type SettingsSectionId } from "@/lib/orgs/tabs";
 import { OrgTabsShell } from "./OrgTabsShell";
 import { PersonRow } from "./PersonRow";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
@@ -51,10 +52,12 @@ export interface OrgDetailViewProps {
   /** Per meeting id: title, Testmöte, decision and task counts (`loadMeetingList`). Missing: the date only. */
   meetingInfo?: Record<string, MeetingListInfo>;
   /**
-   * Admins, Inställningar: the one board list (`OrgBoard`, Kom igång's Styrelsen list), given each
-   * member's account controls by user id. Omitted: the plain people list.
+   * Admins, Inställningar: the one board list (`OrgBoard`, also Kom igång's step 2), given each
+   * member's account controls by user id and the invite link's "Skapa ny länk".
    */
-  boardList?: (memberControls: Record<string, ReactNode>) => ReactNode;
+  boardList?: (memberControls: Record<string, ReactNode>, linkActions: ReactNode) => ReactNode;
+  /** Admins: the Inställningar section to open (`settingsSection`, lib/orgs/tabs.ts). */
+  settingsSection?: SettingsSectionId;
   /** The förening's logo (0035), shown next to its name; null: the first letter. */
   logoUrl?: string | null;
   /** The "Kom igång" card (admins, onboarding not done), above everything else. */
@@ -72,11 +75,15 @@ export interface OrgDetailViewProps {
   inviteByEmail?: ReactNode;
   /** The meeting-format card (`FormatCard`), shown above the people panel. */
   formatCard?: ReactNode;
-  /** Admins: "Sammanfattning efter mötet" (`SummarySettingsForm`, 0037), in Inställningar. */
+  /** Admins: "Sammanfattning efter mötet" (`SummarySettingsForm`, 0037), Inställningar → Efter mötet. */
   summarySettings?: ReactNode;
-  /** Admins: "Om oss" (`OrgProfileForm`, 0044), in Inställningar. */
-  profileSettings?: ReactNode;
-  /** Admins: "Mötenas kalender" (`OrgCalendarForm`, 0046), in Inställningar. */
+  /** Admins: name, logo and "Om oss" (`OrgDetailsForm`), Inställningar → Föreningen. */
+  detailsSettings?: ReactNode;
+  /** Admins: the meeting folder (`MeetingFolderSetting`), Inställningar → Möten. */
+  folderSettings?: ReactNode;
+  /** Admins: voices (`VoicesSetting`), Inställningar → Möten. */
+  voiceSettings?: ReactNode;
+  /** Admins: "Mötenas kalender" (`OrgCalendarForm`, 0046), Inställningar → Möten. */
   calendarSettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
@@ -365,12 +372,11 @@ export function OrgDetailView(props: OrgDetailViewProps) {
 
 /** Möten and Inställningar of OrgDetailView (split out so the tab shell can hold them). */
 function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: ReactNode; memberControls: Record<string, ReactNode> }) {
-  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, notice, startMeeting, formatCard, summarySettings, profileSettings, calendarSettings, boardList, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
+  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, startMeeting, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
   const t = useTranslations("org");
   const access = (m: OrgDetailMeeting): DocAccess => props.docAccess?.[m.id] ?? "open";
   const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
-  const nameError = notice?.code === "namn" ? notice.text : undefined;
   const settingsHere = isAdmin && (!tabs || tab === "installningar");
   const meetingsHere = !tabs || tab === "moten";
   return (
@@ -455,61 +461,24 @@ function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: React
       )}
 
       {settingsHere && (
-        <div className="flex flex-col gap-6">
-          <Panel sunk title={t("boardTitle")} titleId="board-title" id="styrelsen" className="scroll-mt-6" actions={<span className="text-sm text-ink-3">{peopleTotal(people, members)}</span>}>
-            <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
-            {boardList ? boardList(memberControls) : <PeoplePanel orgId={org.id} people={people} members={members} isAdmin actions={actions} />}
-          </Panel>
-
-          {invitePanel}
-
-          {formatCard}
-
-          <Panel title={t("generalTitle")} titleId="settings-title" id="installningar" className="scroll-mt-6">
-            <OrgSettingsForm org={org} updateOrg={actions.updateOrg} nameError={nameError} />
-            {profileSettings && (
-              <div id="om-oss" className="mt-6 scroll-mt-6 border-t border-line pt-6">
-                {profileSettings}
-              </div>
-            )}
-            {calendarSettings && (
-              <div id="kalender" className="mt-6 scroll-mt-6 border-t border-line pt-6">
-                {calendarSettings}
-              </div>
-            )}
-            {summarySettings && (
-              <div id="sammanfattning" className="mt-6 scroll-mt-6 border-t border-line pt-6">
-                {summarySettings}
-              </div>
-            )}
-            <p className="mt-6 border-t border-line pt-4 text-sm text-ink-3">
-              {t.rich("settingsMore", { link: (chunks) => <AppLink href={`/orgs/${org.id}/kom-igang`}>{chunks}</AppLink> })}
-            </p>
-          </Panel>
-
-          <Panel title={t("deleteOrgTitle")} titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <p className="text-sm text-ink-3 max-w-[68ch]">{t("deleteOrgText")}</p>
-              <ConfirmAction
-                action={actions.deleteOrg}
-                hidden={{ orgId: org.id }}
-                trigger={t("deleteOrg")}
-                triggerVariant="danger"
-                triggerSize="md"
-                triggerIcon={<IconTrash size={18} />}
-                title={t("deleteOrgConfirmTitle", { org: org.name })}
-                description={t("deleteOrgConfirmText")}
-                requireText={{
-                  name: "confirmName",
-                  value: org.name,
-                  label: <>{t.rich("deleteOrgType", { org: org.name, strong: (chunks) => <strong>{chunks}</strong> })}</>,
-                }}
-                confirmLabel={t("deleteForever")}
-                pendingLabel={t("deleting")}
-              />
-            </div>
-          </Panel>
-        </div>
+        <OrgSettings
+          {...props}
+          memberControls={memberControls}
+          rotateInvite={
+            <ConfirmAction
+              action={actions.rotateInvite}
+              hidden={{ orgId: org.id }}
+              trigger={t("newLink")}
+              triggerVariant="ghost"
+              triggerIcon={<IconRefresh size={18} />}
+              title={t("newLinkTitle")}
+              description={t("newLinkText")}
+              confirmLabel={t("newLink")}
+              confirmVariant="primary"
+              pendingLabel={t("creating")}
+            />
+          }
+        />
       )}
     </>
   );
@@ -730,7 +699,7 @@ function PeoplePanel({
         {isAdmin && (
           <>
             {" "}
-            {t.rich("peopleBoardLink", { link: (chunks) => <AppLink href={`/orgs/${orgId}/kom-igang?steg=2`}>{chunks}</AppLink> })}
+            {t.rich("peopleBoardLink", { link: (chunks) => <AppLink href={settingsHref(orgId, "styrelsen")}>{chunks}</AppLink> })}
           </>
         )}
       </p>
@@ -774,7 +743,7 @@ function PeoplePanel({
                   <span className="text-sm text-ink-3">{t("unnamedMember")}</span>
                 </span>
                 {isAdmin && (
-                  <a className={buttonVariants({ size: "sm" })} href={`/orgs/${orgId}/kom-igang?steg=2`}>
+                  <a className={buttonVariants({ size: "sm" })} href={settingsHref(orgId, "styrelsen")}>
                     {t("linkToName")}
                   </a>
                 )}

@@ -152,11 +152,18 @@ function TabSkeleton({ tab, label }: { tab: OrgTabId; label: string }) {
           <Skeleton className="h-56 rounded-lg" />
         </>
       ) : tab === "installningar" ? (
-        <>
-          <Skeleton className="h-72 rounded-lg" />
-          <Skeleton className="h-48 rounded-lg" />
-          <Skeleton className="h-40 rounded-lg" />
-        </>
+        // The sub-nav (chips, a sidebar from 1024 px) beside the first section's panels.
+        <div className="grid items-start gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-8">
+          <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-1">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-10 w-24 rounded-full max-md:h-11 lg:h-9 lg:w-full lg:rounded-md" />
+            ))}
+          </div>
+          <div className="flex flex-col gap-6">
+            <Skeleton className="h-96 rounded-lg" />
+            <Skeleton className="h-32 rounded-lg" />
+          </div>
+        </div>
       ) : (
         <>
           <Skeleton className="h-44 rounded-lg" />

@@ -76,7 +76,9 @@
     "next": "Fortsätt",
     "skip": "Hoppa över",
     "back": "Tillbaka",
-    "finish": "Klar"
+    "finish": "Klar",
+    "doneNote": "Klart. Det här ändrar du när som helst under <link>Inställningar → {section}</link>.",
+    "importNote": "Fler protokoll läser du in när som helst under <link>Tidigare protokoll</link>."
   },
   "logo": {
     "saveFailed": "Loggan kunde inte sparas. Försök igen.",
@@ -122,7 +124,7 @@
     "inviteByEmail": "Bjud in via mejl",
     "inviteText": "Simon Says skickar ett mejl med föreningens länk till adresserna. Den som loggar in med adressen ni skrev kopplas till sitt namn här.",
     "orShare": "Eller dela länken själv",
-    "shareText": "Dela länken med dem, t.ex. i styrelsens chatt. Den som loggar in med adressen ni skrev kopplas till sitt namn här.",
+    "shareText": "Dela länken, t.ex. i styrelsens chatt. Den som öppnar den och loggar in med Google blir medlem; med en adress från listan kopplas hen till sitt namn.",
     "inviteLink": "Inbjudningslänk",
     "hasAccount": "Har konto",
     "you": " · du",
@@ -142,7 +144,9 @@
     "rolePlaceholder": "Kassör",
     "email": "E-post",
     "emailOptional": "(valfritt – bjuder in)",
-    "editExisting": "Ändra {name}"
+    "editExisting": "Ändra {name}",
+    "sendInvite": "Skicka inbjudan",
+    "shareLink": "Dela länk"
   },
   "folder": {
     "fallbackName": "Mötesmappen",
@@ -201,7 +205,8 @@
     "doNow": "Gör nu",
     "open": "Öppna",
     "prepare": "Förbered första mötet →",
-    "toOrg": "Till föreningen"
+    "toOrg": "Till föreningen",
+    "change": "Ändra"
   },
   "actions": {
     "adminOnly": "Bara administratörer kan ändra det här.",

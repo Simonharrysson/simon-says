@@ -1,14 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Banner } from "@/components/ui/Banner";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { Field } from "@/components/ui/Field";
-import { IconCheck } from "@/components/ui/icons";
+import { Button } from "@/components/ui/button";
+import { SaveState, useSaveState } from "@/components/settings/SaveState";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ConnectCalendarButton } from "./CalendarConnect";
 
 export interface CalendarOption {
@@ -37,12 +37,20 @@ export function OrgCalendarForm({
   connect: FormAction;
 }) {
   const t = useTranslations("calendar");
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    if (!saved) return;
-    const timer = setTimeout(() => setSaved(false), 3000);
-    return () => clearTimeout(timer);
-  }, [saved]);
+  const { status, run } = useSaveState();
+  // The settings' save model: the calendar saves when chosen; the title filter (text) with Spara.
+  // A choice sends the *saved* filter, never a half-typed one.
+  const [calendarId, setCalendarId] = useState(current.id ?? "");
+  const [savedFilter, setSavedFilter] = useState(current.filter ?? "");
+  const send = (id: string, filter: string) =>
+    run(async () => {
+      const form = new FormData();
+      form.set("orgId", orgId);
+      form.set("calendar_id", id);
+      form.set("calendar_filter", filter);
+      await save(form);
+      setSavedFilter(filter);
+    });
 
   const options = calendars ? [...calendars] : [];
   // The chosen calendar stays choosable even when it is not in this admin's list.
@@ -67,18 +75,24 @@ export function OrgCalendarForm({
       ) : (
         <form
           className="flex flex-col gap-4"
-          action={async (form) => {
-            setSaved(false);
-            await save(form);
-            setSaved(true);
+          onSubmit={(e) => {
+            e.preventDefault();
+            void send(calendarId, String(new FormData(e.currentTarget).get("calendar_filter") ?? ""));
           }}
-          onChange={() => setSaved(false)}
         >
-          <input type="hidden" name="orgId" value={orgId} />
           {options.length === 0 && <p className="text-sm text-ink-3">{t("orgNoShared")}</p>}
           <div className="flex flex-col gap-2">
             <Label htmlFor="org-calendar">{t("calendarLabel")}</Label>
-            <NativeSelect id="org-calendar" name="calendar_id" defaultValue={current.id ?? ""} className="w-full">
+            <NativeSelect
+              id="org-calendar"
+              name="calendar_id"
+              value={calendarId}
+              onChange={(e) => {
+                setCalendarId(e.target.value);
+                void send(e.target.value, savedFilter);
+              }}
+              className="w-full"
+            >
               <option value="">{t("none")}</option>
               {options.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -96,16 +110,11 @@ export function OrgCalendarForm({
             maxLength={60}
             autoComplete="off"
           />
-          <div className="flex items-center gap-3">
-            <SubmitButton variant="secondary" pendingLabel={t("saving")}>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" variant="secondary" loading={status.state === "saving"}>
               {t("save")}
-            </SubmitButton>
-            {saved && (
-              <span role="status" className="inline-flex items-center gap-1 text-sm text-green">
-                <IconCheck size={16} />
-                {t("saved")}
-              </span>
-            )}
+            </Button>
+            <SaveState status={status} />
           </div>
         </form>
       )}

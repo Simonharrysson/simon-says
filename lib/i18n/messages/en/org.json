@@ -51,7 +51,6 @@
   "membersTitle": "Members",
   "membersText": "Can sign in, start meetings and get access to new meeting documents.",
   "settingsTitle": "Settings",
-  "settingsMore": "Change the logo, statutes and voices in <link>Get started</link>.",
   "deleteOrgTitle": "Delete the association",
   "deleteOrgText": "Removes the association with all meetings, transcripts, notes and people here. It can't be undone. The Google Docs stay in Drive.",
   "deleteOrg": "Delete the association",
@@ -85,7 +84,7 @@
   "invited": "Invited · {email}",
   "peopleTitle": "People",
   "peopleText": "Everyone who usually attends the meetings. The names are used to recognise who is speaking. They don't need an account.",
-  "peopleBoardLink": "<link>Invite by e-mail and set roles under The board</link>.",
+  "peopleBoardLink": "<link>Invite by e-mail and set roles under Board and members</link>.",
   "newPersonLabel": "Name of new person",
   "newPersonPlaceholder": "Name, e.g. Anna Berg",
   "adding": "Adding…",
@@ -126,5 +125,24 @@
   "testMeetings": "Test meetings",
   "testMeeting": "Test meeting",
   "itemCounts": "{decisions, plural, one {# decision} other {# decisions}} · {tasks, plural, one {# task} other {# tasks}}",
-  "titleAnd": "and"
+  "titleAnd": "and",
+  "settings": {
+    "navLabel": "Settings sections",
+    "sections": {
+      "foreningen": "The association",
+      "styrelsen": "Board and members",
+      "moten": "Meetings",
+      "efter-motet": "After the meeting",
+      "radera": "Delete"
+    },
+    "detailsTitle": "Name, logo and about",
+    "visibilityTitle": "Status page",
+    "folderTitle": "Meeting folder",
+    "duringTitle": "During the meeting",
+    "voicesTitle": "Voices",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Couldn't save. Try again."
+  }
 }
