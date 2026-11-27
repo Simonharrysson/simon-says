@@ -89,6 +89,7 @@ export default async function MeetingPage({
           title: context ? privatTitle(context.name, m.started_at) : meetingTitle(org.name, new Date(m.started_at)),
           currentElSessionId: m.current_el_session_id,
           resumable: canResume({ status, ended_at: m.ended_at }),
+          captureSource: m.capture_source === "call" ? "call" : "room",
           lastTickOkAt: m.last_tick_ok_at,
           docPaused: m.doc_paused_at !== null,
           // Another tab (maybe another member's laptop) is recording it right now.

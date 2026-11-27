@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cleanOff, type EmailPrefs } from "@/lib/email/categories";
 import { saveMyEmailPrefs } from "@/lib/email/prefs";
+import { saveMyBriefForeningar } from "@/lib/brief/prefs";
 import { isLocale, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from "@/lib/i18n/config";
 import { saveMyLocale } from "@/lib/i18n/user-locale";
 import { isUuid } from "@/lib/db/ids";
@@ -21,6 +22,17 @@ export async function saveEmailPrefsAction(prefs: EmailPrefs): Promise<boolean> 
   } = await db.auth.getUser();
   if (!user) return false;
   return saveMyEmailPrefs(db, { allOff: prefs.allOff, off: cleanOff(prefs.off) });
+}
+
+/** Konto → Mejl → "Även inför föreningsmöten" (Inför möten, 0059): the user's own opt-in. */
+export async function saveBriefForeningarAction(on: boolean): Promise<boolean> {
+  if (typeof on !== "boolean") return false;
+  const db = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await db.auth.getUser();
+  if (!user) return false;
+  return saveMyBriefForeningar(db, on);
 }
 
 /**

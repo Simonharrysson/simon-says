@@ -14,7 +14,8 @@ import { loadConnections } from "@/lib/mcp/account";
 import { mcpConfigured } from "@/lib/mcp/deps";
 import { resourceUri } from "@/lib/mcp/oauth";
 import { appOrigin } from "@/lib/origin";
-import { revokeConnectionAction, saveEmailPrefsAction, saveLocaleAction } from "./actions";
+import { loadMyBriefForeningar } from "@/lib/brief/prefs";
+import { revokeConnectionAction, saveBriefForeningarAction, saveEmailPrefsAction, saveLocaleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,11 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     data: { user },
   } = await db.auth.getUser();
   if (!user) redirect("/login");
-  const [emailPrefs, { fel, kalender }, calendarConnected, ai] = await Promise.all([
+  const [emailPrefs, { fel, kalender }, calendarConnected, briefForeningar, ai] = await Promise.all([
     loadEmailPrefs({ userId: user.id }),
     searchParams,
     safeCalendarConnected(user.id),
+    loadMyBriefForeningar(db, user.id),
     loadConnections(db),
   ]);
   // Kopplade AI-assistenter: for everyone while MCP is on, and for anyone who still has a connection.
@@ -42,6 +44,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       signOut={signOut}
       emailPrefs={emailPrefs}
       saveEmailPrefs={saveEmailPrefsAction}
+      briefForeningar={{ initial: briefForeningar, save: saveBriefForeningarAction }}
       saveLocale={saveLocaleAction}
       localeFailed={fel === "sprak"}
       ai={

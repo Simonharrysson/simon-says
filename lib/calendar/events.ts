@@ -9,6 +9,8 @@ export interface CalendarEvent {
   start: string;
   end: string;
   attendees: CalendarAttendee[];
+  /** The organiser's address (lower case), when Google gives one. Set only when present. */
+  organizer?: string;
 }
 
 export interface CalendarAttendee {
@@ -65,6 +67,7 @@ export function parseEvent(raw: unknown): CalendarEvent | null {
     summary?: unknown;
     start?: { dateTime?: unknown };
     end?: { dateTime?: unknown };
+    organizer?: { email?: unknown };
     attendees?: { email?: unknown; displayName?: unknown; responseStatus?: unknown; resource?: unknown }[];
   } | null;
   if (!e || typeof e.id !== "string" || e.status === "cancelled") return null;
@@ -78,7 +81,15 @@ export function parseEvent(raw: unknown): CalendarEvent | null {
       name: typeof a.displayName === "string" && a.displayName.trim() ? cleanTitle(a.displayName) : null,
       response: typeof a.responseStatus === "string" ? a.responseStatus : null,
     }));
-  return { id: e.id, title: cleanTitle(e.summary), start: new Date(start).toISOString(), end: new Date(Math.max(end, start)).toISOString(), attendees };
+  const organizer = typeof e.organizer?.email === "string" && e.organizer.email.includes("@") ? e.organizer.email.trim().toLowerCase() : null;
+  return {
+    id: e.id,
+    title: cleanTitle(e.summary),
+    start: new Date(start).toISOString(),
+    end: new Date(Math.max(end, start)).toISOString(),
+    attendees,
+    ...(organizer ? { organizer } : {}),
+  };
 }
 
 /** Is the event "now" (from 30 minutes before its start until its end)? */

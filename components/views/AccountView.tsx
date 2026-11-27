@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { EmailPrefs } from "@/lib/email/categories";
-import { EmailPrefsForm, type SaveEmailPrefs } from "./EmailPrefsForm";
+import { EmailPrefsForm, type BriefForeningarPref, type SaveEmailPrefs } from "./EmailPrefsForm";
 import { LanguageSelect } from "./LanguageSelect";
 
 export function AccountView({
@@ -16,6 +16,7 @@ export function AccountView({
   signOut,
   emailPrefs,
   saveEmailPrefs,
+  briefForeningar,
   saveLocale,
   localeFailed,
   calendar,
@@ -26,6 +27,8 @@ export function AccountView({
   /** null: the choices could not be loaded (the panel says so instead of guessing). */
   emailPrefs: EmailPrefs | null;
   saveEmailPrefs: SaveEmailPrefs;
+  /** Inför möten for föreningar (opt-in, 0059); absent: not offered. */
+  briefForeningar?: BriefForeningarPref;
   /** Saves the language (form field `locale`): the account's row and the `lang` cookie. */
   saveLocale: FormAction;
   /** The last save reached the cookie but not the account (`?fel=sprak`). */
@@ -71,7 +74,7 @@ export function AccountView({
         <div className="flex flex-col gap-4">
           <p className="text-ink-2 max-w-[68ch]">{t("mailIntro")}</p>
           {emailPrefs ? (
-            <EmailPrefsForm initial={emailPrefs} save={saveEmailPrefs} idPrefix="account-mail" />
+            <EmailPrefsForm initial={emailPrefs} save={saveEmailPrefs} idPrefix="account-mail" briefForeningar={briefForeningar} />
           ) : (
             <Banner tone="warning" title={t("mailLoadErrorTitle")}>
               {t("mailLoadErrorText")}
