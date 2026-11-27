@@ -5,7 +5,8 @@ import { expect, test } from "../fixtures";
 // (app/(app)/layout.tsx). The suite runs with reduced motion, so these specs turn it off and
 // check that the animation is actually started, not only that the content swaps.
 
-type Recorded = { anims: { name: string; inSettings: boolean }[]; vts: string[][] };
+type Anim = { name: string; inSettings: boolean; boxed: boolean; duration: string };
+type Recorded = { anims: Anim[]; vts: string[][] };
 
 test.describe("transitions", () => {
   test.use({ contextOptions: { reducedMotion: "no-preference" } });
@@ -16,7 +17,14 @@ test.describe("transitions", () => {
       (window as unknown as { __motion: Recorded }).__motion = rec;
       document.addEventListener("animationstart", (e) => {
         const el = e.target as Element;
-        rec.anims.push({ name: e.animationName, inSettings: Boolean(el.closest?.("[data-tab-in]")?.textContent?.includes("Radera föreningen")) });
+        const style = getComputedStyle(el);
+        rec.anims.push({
+          name: e.animationName,
+          inSettings: Boolean(el.closest?.("[data-tab-in]")?.textContent?.includes("Radera föreningen")),
+          // A real box (display: contents or an empty element would fade nothing visible).
+          boxed: style.display !== "contents" && el.getBoundingClientRect().height > 0,
+          duration: style.animationDuration,
+        });
       });
       const start = document.startViewTransition?.bind(document);
       if (start) {
@@ -29,10 +37,14 @@ test.describe("transitions", () => {
   });
 
   const motion = (page: import("@playwright/test").Page) => page.evaluate(() => (window as unknown as { __motion: Recorded }).__motion);
+  const fade = (a: Anim) => a.name === "tab-in" && a.boxed && a.duration === "0.18s";
+  const noReducedMotion = async (page: import("@playwright/test").Page) =>
+    expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(false);
 
   test("a tab switch fades the panel in; a page load doesn't", async ({ page, seedOrg }) => {
     const org = await seedOrg();
     await page.goto(org.url);
+    await noReducedMotion(page);
     const tabs = page.getByRole("navigation", { name: "Föreningens vyer" });
     await expect(tabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
     await expect(page.locator("[data-tab-in]")).toHaveCount(0);
@@ -40,22 +52,23 @@ test.describe("transitions", () => {
 
     await tabs.getByRole("link", { name: "Inställningar" }).click();
     await expect(page.getByRole("heading", { name: "Radera föreningen", exact: true })).toBeVisible();
-    await expect.poll(async () => (await motion(page)).anims.some((a) => a.name === "tab-in" && a.inSettings)).toBe(true);
+    await expect.poll(async () => (await motion(page)).anims.some((a) => fade(a) && a.inSettings)).toBe(true);
 
     // Back to a kept tab: it fades in again (no new server content needed).
-    const before = (await motion(page)).anims.filter((a) => a.name === "tab-in").length;
+    const before = (await motion(page)).anims.filter(fade).length;
     await tabs.getByRole("link", { name: "Möten" }).click();
     await expect(tabs.getByRole("link", { name: "Möten" })).toHaveAttribute("aria-current", "page");
-    await expect.poll(async () => (await motion(page)).anims.filter((a) => a.name === "tab-in").length).toBeGreaterThan(before);
+    await expect.poll(async () => (await motion(page)).anims.filter(fade).length).toBeGreaterThan(before);
   });
 
   test("a link between pages runs a view transition", async ({ page }) => {
     await page.goto("/hem");
+    await noReducedMotion(page);
     const rail = page.getByRole("navigation", { name: "Huvudmeny" });
-    await rail.getByRole("link", { name: "Föreningar" }).click();
+    await rail.getByRole("link", { name: "Föreningar", exact: true }).click();
     await expect(page).toHaveURL(/\/orgs$/);
     await expect.poll(async () => (await motion(page)).vts.some((types) => types.includes("nav"))).toBe(true);
-    await rail.getByRole("link", { name: "Hem" }).click();
+    await rail.getByRole("link", { name: "Hem", exact: true }).click();
     await expect(page).toHaveURL(/\/hem$/);
     await expect.poll(async () => (await motion(page)).vts.filter((types) => types.includes("nav")).length).toBeGreaterThanOrEqual(2);
   });

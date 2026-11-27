@@ -49,7 +49,7 @@ describe("suite scorecard", () => {
     expect(by.safety).toMatchObject({ passed: 0, pass: false });
   });
 
-  it("paid: notes-eval's bars (churn ≤ 15 %, ≤ $1.50/h, every score bar); a missing fixture fails; voices has none", () => {
+  it("paid: notes-eval's bars (churn ≤ 15 %, ≤ $1.75/h, every score bar); a missing fixture fails; voices has none", () => {
     expect(evalRunPasses({ name: "a", medianChurn: 0.1, perHour: 1.2, score: score() })).toBe(true);
     expect(evalRunPasses({ name: "a", medianChurn: null, perHour: 1.2, score: score() })).toBe(false);
     expect(evalRunPasses({ name: "a", medianChurn: 0, perHour: 1.76, score: score() })).toBe(false);

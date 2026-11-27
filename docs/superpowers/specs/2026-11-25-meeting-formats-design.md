@@ -228,7 +228,7 @@ later item.)
   bullets), render under items, human paragraphs untouched, new item mid-meeting, missing sections appended.
 - Eval (extend `scripts/notes-eval`): fictional agenda + transcript fixtures → placement accuracy (each expected
   point under its expected agenda item), roles in tasks, Från förra veckan content, zero Må-runda content, all
-  existing bars (churn ≤ 15 %, recall 100 %, ≤ $1.50/h). Budget ≤ $5.
+  existing bars (churn ≤ 15 %, recall 100 %, ≤ $1.75/h). Budget ≤ $5.
 - Testmöte: an agenda-mode Testmöte — the admin-only feeder first creates a fictional Veckomöte agenda Doc in the
   förening's meeting folder (or uses one picked), then replays a fictional transcript that follows that agenda (incl.
   a Må-runda and a "Från förra veckan" round); a second run pre-fills Från förra veckan from the first.
