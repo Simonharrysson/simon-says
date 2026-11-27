@@ -30,6 +30,8 @@ const orgsTones: Record<string, Notice["tone"]> = {
   raderad: "success",
   lamnat: "success",
   foretag: "danger",
+  "foretag-raderat": "success",
+  "foretag-lamnat": "success",
 };
 
 const orgTones: Record<string, Notice["tone"]> = {
