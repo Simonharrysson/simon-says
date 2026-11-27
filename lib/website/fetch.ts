@@ -61,6 +61,8 @@ export interface SafeFetchOptions {
   timeoutMs?: number;
   resolve?: Resolver;
   transport?: Transport;
+  /** Aborts this fetch too (the caller's overall deadline). */
+  signal?: AbortSignal;
   /**
    * e2e only (lib/e2e/guard.ts `e2eWebRoot`): a loopback origin that stands in for every host.
    * The address checks are skipped because nothing leaves the machine; URL rules still apply.
@@ -159,6 +161,10 @@ export async function safeFetch(raw: string | URL, opts: SafeFetchOptions): Prom
   const transport = opts.transport ?? (opts.e2eRoot ? e2eTransport(opts.e2eRoot) : httpsTransport);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? FETCH_TIMEOUT_MS);
+  const outer = opts.signal;
+  const onOuter = () => controller.abort();
+  if (outer?.aborted) controller.abort();
+  else outer?.addEventListener("abort", onOuter, { once: true });
   let url = checkUrl(raw);
   try {
     for (let hop = 0; ; hop++) {
@@ -234,5 +240,6 @@ export async function safeFetch(raw: string | URL, opts: SafeFetchOptions): Prom
     return { ok: false, reason: controller.signal.aborted ? "timeout" : "network" };
   } finally {
     clearTimeout(timer);
+    outer?.removeEventListener("abort", onOuter);
   }
 }

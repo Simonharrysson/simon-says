@@ -23,7 +23,7 @@ const NAMED: Record<string, string> = {
 };
 
 export function decodeEntities(s: string): string {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, code: string) => {
+  return s.replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{1,10});/gi, (all, code: string) => {
     if (code[0] === "#") {
       const n = code[1] === "x" || code[1] === "X" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
       return n > 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : "";
@@ -32,19 +32,93 @@ export function decodeEntities(s: string): string {
   });
 }
 
-const BLOCK = /<\/?(p|div|br|li|ul|ol|tr|td|th|table|h[1-6]|section|article|header|footer|figure|figcaption|dd|dt|dl|blockquote|address|hr)\b[^>]*>/gi;
+/** Only the first 200 KB of a page is read (the start page's links and a board fit easily). */
+export const HTML_MAX_CHARS = 200_000;
+const ATTRS_MAX = 2_000;
+const LABEL_MAX = 200;
+
+type Token = { kind: "text"; text: string } | { kind: "open"; name: string; attrs: string } | { kind: "close"; name: string };
+
+/** Elements whose content is never visible text: skipped up to their end tag. */
+const RAW = new Set(["script", "style", "noscript", "template", "svg", "iframe", "title", "textarea", "object"]);
+const TAG_NAME = /\/?[a-zA-Z][a-zA-Z0-9-]*/y;
+
+/**
+ * A forgiving, linear HTML tokenizer: every search starts where the last one ended, so the work
+ * is proportional to the input (no backtracking regexes over the document). An unclosed comment,
+ * tag or <script> ends the document there.
+ */
+export function* htmlTokens(html: string): Generator<Token> {
+  const doc = html.length > HTML_MAX_CHARS ? html.slice(0, HTML_MAX_CHARS) : html;
+  const lower = doc.toLowerCase();
+  let i = 0;
+  while (i < doc.length) {
+    const lt = doc.indexOf("<", i);
+    if (lt < 0) {
+      yield { kind: "text", text: doc.slice(i) };
+      return;
+    }
+    if (lt > i) yield { kind: "text", text: doc.slice(i, lt) };
+    if (doc.startsWith("<!--", lt)) {
+      const end = doc.indexOf("-->", lt + 4);
+      if (end < 0) return;
+      i = end + 3;
+      continue;
+    }
+    TAG_NAME.lastIndex = lt + 1;
+    const m = TAG_NAME.exec(doc);
+    if (!m) {
+      if (doc[lt + 1] === "!" || doc[lt + 1] === "?") {
+        // <!doctype …>, <?xml …?>
+        const gt = doc.indexOf(">", lt + 2);
+        if (gt < 0) return;
+        i = gt + 1;
+      } else {
+        // A lone "<" ("a < b") is text.
+        yield { kind: "text", text: "<" };
+        i = lt + 1;
+      }
+      continue;
+    }
+    const gt = doc.indexOf(">", lt + 1 + m[0].length);
+    if (gt < 0) return;
+    i = gt + 1;
+    if (m[0][0] === "/") {
+      yield { kind: "close", name: m[0].slice(1).toLowerCase() };
+      continue;
+    }
+    const name = m[0].toLowerCase();
+    const attrs = doc.slice(lt + 1 + m[0].length, Math.min(gt, lt + 1 + m[0].length + ATTRS_MAX));
+    yield { kind: "open", name, attrs };
+    if (RAW.has(name) && !attrs.endsWith("/")) {
+      const end = lower.indexOf(`</${name}`, i);
+      if (end < 0) return;
+      const close = doc.indexOf(">", end);
+      if (close < 0) return;
+      i = close + 1;
+    }
+  }
+}
+
+const BLOCK = new Set(["p", "div", "br", "li", "ul", "ol", "tr", "td", "th", "table", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "header", "footer", "nav", "main", "figure", "figcaption", "dd", "dt", "dl", "blockquote", "address", "hr"]);
+
+function attr(attrs: string, name: string): string | null {
+  const m = attrs.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, "i"));
+  return m ? decodeEntities(m[1] ?? m[2] ?? m[3] ?? "") : null;
+}
 
 /** What a visitor reads: no scripts, styles or markup; one line per block; spaces collapsed. */
 export function pageText(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<(script|style|noscript|template|svg|iframe|head)\b[\s\S]*?<\/\1\s*>/gi, " ")
-      .replace(/<img\b[^>]*\balt\s*=\s*"([^"]*)"[^>]*>/gi, " $1 ")
-      .replace(BLOCK, "\n")
-      .replace(/<[^>]*>/g, " "),
-  )
-    .replace(/[ \t \f\v]+/g, " ")
+  const parts: string[] = [];
+  for (const t of htmlTokens(html)) {
+    if (t.kind === "text") parts.push(decodeEntities(t.text));
+    else if (BLOCK.has(t.name)) parts.push("\n");
+    else if (t.kind === "open" && t.name === "img") parts.push(` ${attr(t.attrs, "alt") ?? ""} `);
+    else parts.push(" ");
+  }
+  return parts
+    .join("")
+    .replace(/[ \t\u00a0\f\v\r]+/g, " ")
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
@@ -52,8 +126,8 @@ export function pageText(html: string): string {
 }
 
 const KEYWORDS: [RegExp, number][] = [
-  [/styrelse|board|styrelsen|ledning|förtroendevalda|fortroendevalda/i, 10],
-  [/om[-_ ]?oss|about|om[-_ ]?föreningen|om[-_ ]?foreningen|föreningen|foreningen|organisation|vilka[-_ ]?är[-_ ]?vi|vilka-ar-vi/i, 5],
+  [/styrelse|board|ledning|förtroendevalda|fortroendevalda/i, 10],
+  [/om[-_ ]?oss|about|föreningen|foreningen|organisation|vilka[-_ ]?är[-_ ]?vi|vilka-ar-vi/i, 5],
   [/kontakt|contact/i, 3],
 ];
 
@@ -65,11 +139,21 @@ const sameSite = (a: URL, b: URL) => a.hostname.replace(/^www\./, "") === b.host
 
 /** Up to `max` links on the same site that most likely lead to the board, best first. */
 export function boardLinks(html: string, base: URL, max = 2): URL[] {
+  const anchors: { href: string; label: string }[] = [];
+  let open: { href: string; label: string } | null = null;
+  for (const t of htmlTokens(html)) {
+    if (t.kind === "open" && t.name === "a") {
+      const href = attr(t.attrs, "href");
+      open = href === null ? null : { href, label: "" };
+      if (open) anchors.push(open);
+    } else if (t.kind === "close" && t.name === "a") open = null;
+    else if (t.kind === "text" && open && open.label.length < LABEL_MAX) open.label += decodeEntities(t.text).slice(0, LABEL_MAX);
+  }
+
   const found = new Map<string, { url: URL; score: number; order: number }>();
   let order = 0;
-  for (const m of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi)) {
-    const href = m[1].match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
-    const raw = decodeEntities((href?.[1] ?? href?.[2] ?? href?.[3] ?? "").trim());
+  for (const a of anchors) {
+    const raw = a.href.trim();
     if (!raw || raw.startsWith("#") || /^(mailto|tel|javascript):/i.test(raw)) continue;
     let url: URL;
     try {
@@ -81,14 +165,13 @@ export function boardLinks(html: string, base: URL, max = 2): URL[] {
     if (/\.(pdf|jpe?g|png|gif|webp|svg|zip|docx?|xlsx?)$/i.test(url.pathname)) continue;
     url.hash = "";
     if (url.href === base.href) continue;
-    const label = decodeEntities(m[2].replace(/<[^>]*>/g, " "));
     let path = url.pathname;
     try {
       path = decodeURIComponent(path);
     } catch {
       // keep it encoded
     }
-    const s = Math.max(score(path), score(label));
+    const s = Math.max(score(path), score(a.label));
     if (s === 0) continue;
     const prev = found.get(url.href);
     if (!prev || prev.score < s) found.set(url.href, { url, score: s, order: prev?.order ?? order++ });

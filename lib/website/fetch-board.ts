@@ -5,7 +5,7 @@ import { CHEAP_MODEL, oneShot } from "@/lib/notes/oneshot";
 import { BOARD_JSON_SCHEMA, BOARD_SYSTEM_PROMPT, BoardOutput, buildBoardUserText, filterBoard, type BoardSuggestion } from "./board";
 import { checkUrl, ROBOTS_TOKEN, safeFetch, type FetchFailure, type SafeFetchOptions } from "./fetch";
 import { boardLinks, decodeHtml, pageText } from "./html";
-import { robotsAllows, robotsRules } from "./robots";
+import { ROBOTS_MAX_BYTES, robotsAllows, robotsRules } from "./robots";
 
 // "Hämta styrelsen från webbplatsen" end to end: robots.txt, the start page, at most two likely
 // subpages (Styrelse, Om oss, Kontakt), then one cheap Claude call (Haiku 5.5, effort low,
@@ -13,7 +13,9 @@ import { robotsAllows, robotsRules } from "./robots";
 // never logs page text, names or URLs.
 
 export const MAX_SUBPAGES = 2;
-export const BOARD_TIMEOUT_MS = 20_000;
+/** Hard wall-clock budget for reading the site (robots, pages, parsing); Claude has its own. */
+export const SITE_BUDGET_MS = 10_000;
+export const BOARD_TIMEOUT_MS = 15_000;
 
 export type BoardOutcome = FetchFailure | "robots" | "no_text" | "claude" | "spend";
 
@@ -25,21 +27,33 @@ export interface BoardDeps {
   client?: NotesClient;
 }
 
-export async function boardFromWebsite(website: string, opts: { orgId: string; existingNames: string[]; deps?: BoardDeps }): Promise<BoardFromWebsite> {
+export async function boardFromWebsite(website: string, opts: { orgId: string; existingNames: string[]; deps?: BoardDeps; budgetMs?: number }): Promise<BoardFromWebsite> {
   const start = checkUrl(website);
   if (!start) return { ok: false, reason: "bad_url" };
-  const net: Pick<SafeFetchOptions, "resolve" | "transport" | "e2eRoot"> = opts.deps?.fetch ?? { e2eRoot: e2eWebRoot() };
+  // Every fetch shares one deadline: past it, whatever is in flight is aborted and we stop.
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), opts.budgetMs ?? SITE_BUDGET_MS);
+  try {
+    const pages = await readSite(start, { ...(opts.deps?.fetch ?? { e2eRoot: e2eWebRoot() }), signal: deadline.signal });
+    if (deadline.signal.aborted) return { ok: false, reason: "timeout" };
+    if (!pages.ok) return pages;
+    return await askClaude(pages.texts, opts);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
+async function readSite(start: URL, net: Pick<SafeFetchOptions, "resolve" | "transport" | "e2eRoot" | "signal">): Promise<{ ok: true; texts: string[] } | { ok: false; reason: BoardOutcome }> {
   // robots.txt per origin (a redirect can move us from exempel.se to www.exempel.se).
   const robots = new Map<string, Promise<ReturnType<typeof robotsRules> | null>>();
   const rulesFor = (url: URL) => {
     let p = robots.get(url.origin);
     if (!p) {
-      p = safeFetch(`${url.origin}/robots.txt`, { ...net, accept: ["text/plain"], maxBytes: 512 * 1024 }).then((r) => {
+      p = safeFetch(`${url.origin}/robots.txt`, { ...net, accept: ["text/plain"], maxBytes: ROBOTS_MAX_BYTES }).then((r) => {
         if (r.ok) return robotsRules(new TextDecoder().decode(r.bytes), ROBOTS_TOKEN);
-        // No usable robots.txt (missing, an HTML page, too big): no rules. A server error or no
-        // answer at all: don't read the site (RFC 9309 says to assume "disallow" then).
-        if ((r.reason === "http_status" && (r.status ?? 0) < 500) || r.reason === "content_type" || r.reason === "too_large") return [];
+        // No robots.txt (missing, or an HTML page in its place): no rules. A server error, no
+        // answer, or one too big to read: don't read the site (RFC 9309: assume "disallow").
+        if ((r.reason === "http_status" && (r.status ?? 0) < 500) || r.reason === "content_type") return [];
         return null;
       });
       robots.set(url.origin, p);
@@ -69,9 +83,12 @@ export async function boardFromWebsite(website: string, opts: { orgId: string; e
     }),
   );
   // Board pages first: they matter most when the text is cut.
-  const pages = [...subpages.filter((t): t is string => Boolean(t)), pageText(homeHtml)].filter((t) => t.length > 0);
-  if (pages.join("").length < 20) return { ok: false, reason: "no_text" };
+  const texts = [...subpages.filter((t): t is string => Boolean(t)), pageText(homeHtml)].filter((t) => t.length > 0);
+  if (texts.join("").length < 20) return { ok: false, reason: "no_text" };
+  return { ok: true, texts };
+}
 
+async function askClaude(pages: string[], opts: { orgId: string; existingNames: string[]; deps?: BoardDeps }): Promise<BoardFromWebsite> {
   const user = buildBoardUserText(pages);
   const res = await oneShot({
     label: "website board",

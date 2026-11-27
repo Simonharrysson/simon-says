@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { boardLinks, decodeEntities, decodeHtml, pageText } from "./html";
+import { boardLinks, decodeEntities, decodeHtml, HTML_MAX_CHARS, pageText } from "./html";
 
 // A fictional förening's start page (lib/website/fixtures): no real association or person.
 const HOME = readFileSync(new URL("./fixtures/forening-home.html", import.meta.url), "utf8");
@@ -58,5 +58,41 @@ describe("decodeHtml", () => {
 
   it("falls back to UTF-8, also for an unknown label", () => {
     expect(decodeHtml(Buffer.from("<p>Åsa</p>"), "x-bogus")).toBe("<p>Åsa</p>");
+  });
+});
+
+describe("hostile pages stay cheap (linear work, first 200 KB only)", () => {
+  const timed = (fn: () => unknown) => {
+    const start = performance.now();
+    fn();
+    return performance.now() - start;
+  };
+
+  it("200k unclosed <a x>", () => {
+    const html = "<a x>".repeat(200_000);
+    expect(timed(() => boardLinks(html, BASE))).toBeLessThan(200);
+    expect(timed(() => pageText(html))).toBeLessThan(200);
+  });
+
+  it("200k unclosed <script>", () => {
+    const html = "<script>".repeat(200_000);
+    expect(timed(() => pageText(html))).toBeLessThan(200);
+    expect(timed(() => boardLinks(html, BASE))).toBeLessThan(200);
+  });
+
+  it("many lone < and unclosed comments and tags", () => {
+    for (const html of ["a < ".repeat(200_000), "<!--".repeat(200_000), "<a href='".repeat(200_000), `<a href="/styrelse">${"x".repeat(1_000_000)}`]) {
+      expect(timed(() => pageText(html))).toBeLessThan(200);
+      expect(timed(() => boardLinks(html, BASE))).toBeLessThan(200);
+    }
+  });
+
+  it("ignores everything after the first 200 KB", () => {
+    const html = `${"<p>x</p>".repeat(HTML_MAX_CHARS / 8)}<a href="/styrelse">Styrelse</a>`;
+    expect(boardLinks(html, BASE)).toEqual([]);
+  });
+
+  it("keeps a < that isn't a tag as text", () => {
+    expect(pageText("<p>3 < 5 och 7 > 2</p>")).toBe("3 < 5 och 7 > 2");
   });
 });

@@ -115,6 +115,25 @@ describe("boardFromWebsite", () => {
     expect(c.bodies).toHaveLength(0);
   });
 
+  it("keeps to one overall time budget even when each request is within its own timeout", async () => {
+    // Every answer comes after 40 ms: robots + start page + two subpages would take 160 ms.
+    const s = site({
+      "/robots.txt": { body: "" },
+      "/": { type: "text/html", body: HOME },
+      "/styrelse": { type: "text/html", body: BOARD },
+      "/om": { type: "text/html", body: "<p>Vi seglar.</p>" },
+    });
+    const slow: typeof s.deps.transport = (req) =>
+      new Promise((resolve, reject) => {
+        const t = setTimeout(() => resolve(s.deps.transport(req)), 40);
+        req.signal.addEventListener("abort", () => (clearTimeout(t), reject(new Error("aborted"))));
+      });
+    const c = claude({ board: [] });
+    const r = await boardFromWebsite(`https://${HOST}/`, { orgId: "o", existingNames: [], budgetMs: 70, deps: { fetch: { ...s.deps, transport: slow }, client: c.client as never } });
+    expect(r).toEqual({ ok: false, reason: "timeout" });
+    expect(c.bodies).toHaveLength(0);
+  });
+
   it("refuses a website that isn't https", async () => {
     expect(await boardFromWebsite(`http://${HOST}/`, { orgId: "o", existingNames: [] })).toEqual({ ok: false, reason: "bad_url" });
   });

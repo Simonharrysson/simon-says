@@ -13,10 +13,13 @@ export const maxDuration = 60;
 // "Hämta styrelsen från webbplatsen" (föreningar, admins): reads the förening's SAVED website and
 // returns suggested board members. Saves nothing: the admin confirms each person, who is then
 // added with the normal board action. A route, not a server action, so a slow site never holds
-// up the page's other actions. Limited per förening (claim_website_fetch, 0057).
+// up the page's other actions. Limited per förening and per user (claim_website_fetch, 0057).
 
 const HOUR_LIMIT = 5;
 const DAY_LIMIT = 20;
+/** Per user across every förening they are admin of. */
+const USER_HOUR_LIMIT = 10;
+const USER_DAY_LIMIT = 30;
 
 const noStore = { "cache-control": "no-store" };
 const fail = (error: string, status: number, message: string) => NextResponse.json({ error, message }, { status, headers: noStore });
@@ -39,7 +42,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Service role only after the admin check above.
   const admin = supabaseAdmin();
-  const { data: claim, error: claimError } = await admin.rpc("claim_website_fetch", { p_org_id: id, p_hour_limit: HOUR_LIMIT, p_day_limit: DAY_LIMIT });
+  const { data: claim, error: claimError } = await admin.rpc("claim_website_fetch", {
+    p_org_id: id,
+    p_user_id: user.id,
+    p_hour_limit: HOUR_LIMIT,
+    p_day_limit: DAY_LIMIT,
+    p_user_hour_limit: USER_HOUR_LIMIT,
+    p_user_day_limit: USER_DAY_LIMIT,
+  });
   if (claimError) {
     console.error(`website board: claim: ${claimError.message}`.slice(0, 200));
     return fail("unavailable", 503, t("api.websiteBoard.failed"));

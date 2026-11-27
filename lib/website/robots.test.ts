@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { robotsAllows, robotsRules } from "./robots";
+import { globMatch, ROBOTS_MAX_RULES, robotsAllows, robotsRules } from "./robots";
 
 const TOKEN = "simonsaysbot";
 
@@ -30,5 +30,39 @@ describe("robots.txt", () => {
 
   it("no rules: everything allowed", () => {
     expect(robotsAllows(robotsRules("", TOKEN), "/x")).toBe(true);
+  });
+
+  it("caps the number and length of rules", () => {
+    const many = `User-agent: *\n${Array.from({ length: ROBOTS_MAX_RULES + 50 }, (_, i) => `Disallow: /p${i}`).join("\n")}\n`;
+    expect(robotsRules(many, TOKEN)).toHaveLength(ROBOTS_MAX_RULES);
+    expect(robotsRules(`User-agent: *\nDisallow: /${"x".repeat(600)}\n`, TOKEN)).toHaveLength(0);
+  });
+});
+
+describe("globMatch", () => {
+  it.each([
+    ["/a*b", "/axxb", true],
+    ["/a*b", "/ab", true],
+    ["/a*b", "/axx", false],
+    ["/a*b$", "/axxb", true],
+    ["/a*b$", "/axxbc", false],
+    ["/a*b$", "/abab", true],
+    ["/*.pdf$", "/x.pdf", true],
+    ["/*.pdf$", "/x.pdfx", false],
+    ["/x$", "/x", true],
+    ["/x$", "/xy", false],
+    ["/a*a$", "/a", false],
+    ["*", "/anything", true],
+    ["/a**b", "/ab", true],
+  ])("%s on %s → %s", (pattern, path, want) => expect(globMatch(pattern, path)).toBe(want));
+
+  it("stays fast on a pathological rule", () => {
+    const pattern = `/${"*a".repeat(200)}*b`;
+    const path = `/${"a".repeat(100_000)}`;
+    const start = performance.now();
+    for (let i = 0; i < 10; i++) expect(globMatch(pattern, path)).toBe(false);
+    const text = `User-agent: *\n${Array.from({ length: 500 }, () => `Disallow: ${pattern}`).join("\n")}\n`;
+    expect(robotsAllows(robotsRules(text, TOKEN), path)).toBe(true);
+    expect(performance.now() - start).toBeLessThan(50);
   });
 });
