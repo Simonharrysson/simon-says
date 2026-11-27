@@ -11,7 +11,7 @@
   "visibility": {
     "admin": "You're an admin and see every meeting in the company.",
     "placed": "You see meetings for {group}, every group below it and the whole company.",
-    "unplaced": "You don't have a place in the company yet. You see whole-company meetings and the meetings you attend. An admin places you under People & groups."
+    "unplaced": "You don't have a place in the company yet. You only see meetings you start or attend. An admin places you under People."
   },
   "start": {
     "title": "Start a meeting",
@@ -80,7 +80,7 @@
     "moving": "Moving…",
     "noPlace": "No place",
     "unplacedTitle": "Without a place",
-    "unplacedText": "They only see whole-company meetings and the meetings they attend.",
+    "unplacedText": "They only see meetings they start or attend.",
     "membersTitle": "Accounts without a place",
     "membersText": "Joined through an invite but not in the tree yet.",
     "admin": "Admin",
@@ -116,11 +116,19 @@
     "label": "Meeting for",
     "whole": "Whole company",
     "private": "Private meeting",
-    "privateHint": "Only you, the people invited in the calendar and admins see the meeting.",
+    "privateHint": "Only you, the attendees you tick and admins see the meeting.",
     "sees": "Who sees it: {who}",
-    "seesWhole": "Who sees it: everyone in the company.",
-    "seesPrivate": "Who sees it: you, the people invited in the calendar and admins.",
-    "seesGroup": "Who sees it: {group}, the groups above it and admins."
+    "seesWhole": "Who sees it: everyone in the company with a place in the tree.",
+    "seesPrivate": "Who sees it: you, the attendees you tick and admins.",
+    "seesGroup": "Who sees it: {group}, the groups above it and admins.",
+    "eventLink": "Connect to the calendar event “{title}”?",
+    "eventHint": "The meeting then gets the event's name, and the colleagues you tick below count as attendees and see the meeting, even a private one.",
+    "attendeesLabel": "Attending",
+    "noColleagues": "No colleagues are invited to the event.",
+    "accepted": "Has accepted",
+    "notAccepted": "Hasn't accepted",
+    "customer": "Customer: the guests from {domain}",
+    "seesAttendees": "{count, plural, one {Plus # attendee you ticked.} other {Plus # attendees you ticked.}}"
   },
   "orgs": {
     "yours": "Your companies",

@@ -12,7 +12,9 @@ import { listOrgFormats, orgDefaultFormat } from "@/lib/formats/store";
 import { goalLabel } from "@/lib/prepare/goals";
 import { goalSuggestionsFor } from "@/lib/prepare/goals-load";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { orgEvent } from "@/lib/calendar/load";
+import { foretagEventNow, orgEvent } from "@/lib/calendar/load";
+import { orgMemberList } from "@/lib/db/members";
+import { customerDomain, ownDomains } from "@/lib/foretag/customers";
 import { createContextAction } from "@/app/(app)/privat/actions";
 import { suggestedContext } from "@/lib/privat/contexts";
 import { listContexts } from "@/lib/privat/contexts-db";
@@ -107,10 +109,28 @@ export default async function NewMeetingPage({
 
   // Företag (0050): "Möte för" (the starter's own group preselected) and Privat möte; always a new Enkel Doc.
   if (org.kind === "foretag") {
-    const [groups, mine] = await Promise.all([
+    const [groups, mine, event, members, people] = await Promise.all([
       listGroups(db, orgId),
       db.from("people").select("group_id").eq("org_id", orgId).eq("member_user_id", user.id).not("group_id", "is", null).limit(1),
+      foretagEventNow(user.id),
+      orgMemberList(orgId),
+      db.from("people").select("name, member_user_id").eq("org_id", orgId),
     ]);
+    // The event happening now in the starter's own calendar, offered, never attached by itself:
+    // colleagues on its guest list (accepted ones pre-ticked) and, for the customer, its outside domain.
+    const names = new Map(((people.data ?? []) as { name: string; member_user_id: string | null }[]).flatMap((p) => (p.member_user_id ? [[p.member_user_id, p.name] as const] : [])));
+    const byEmail = new Map(members.map((m) => [m.email.toLowerCase(), m.userId]));
+    const offered = event
+      ? {
+          id: event.id,
+          title: event.title,
+          colleagues: event.guests.flatMap((g) => {
+            const id = byEmail.get(g.email.toLowerCase());
+            return id && id !== user.id ? [{ userId: id, name: names.get(id) ?? g.name ?? g.email, accepted: g.response === "accepted" }] : [];
+          }),
+          customerDomain: customerDomain(event.guests.map((g) => g.email), ownDomains(members.map((m) => m.email))),
+        }
+      : null;
     return (
       <main id="innehall">
         <LiveMeetingController
@@ -122,6 +142,7 @@ export default async function NewMeetingPage({
           foretag={{
             groups: treeRows(groups).map(({ group, depth }) => ({ id: group.id, name: group.name, depth })),
             initialGroupId: ((mine.data ?? [])[0] as { group_id: string } | undefined)?.group_id ?? null,
+            event: offered,
           }}
         />
       </main>

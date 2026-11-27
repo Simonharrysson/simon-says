@@ -77,6 +77,8 @@ export interface StartOptions {
    */
   groupId?: string | null;
   private?: boolean;
+  /** A Företag only: colleagues the starter ticked as attending the confirmed calendar event (`calendarEventId`). */
+  attendeeIds?: string[];
 }
 
 export type StartResult =
@@ -199,7 +201,15 @@ export async function startMeeting(
   // Företag (0050): the group, Privat möte, attendees, customer and the Doc's share list.
   let foretag: ForetagStart | null = null;
   if (org.kind === "foretag") {
-    const planned = await planForetagStart({ orgId, user, groupId: opts.groupId, private: opts.private, readCalendar: eventKind === "started" });
+    const planned = await planForetagStart({
+      orgId,
+      user,
+      groupId: opts.groupId,
+      private: opts.private,
+      calendarEventId: opts.calendarEventId ?? null,
+      attendeeIds: opts.attendeeIds ?? [],
+      readCalendar: eventKind === "started",
+    });
     if (!planned.ok) return failed("bad_group", 400, "Gruppen finns inte längre. Ladda om sidan och välj igen.");
     foretag = planned.plan;
     opts = { formatKind: "enkel", isTest: opts.isTest };

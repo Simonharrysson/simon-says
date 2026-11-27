@@ -11,7 +11,7 @@
   "visibility": {
     "admin": "Du är admin och ser alla möten i företaget.",
     "placed": "Du ser möten för {group}, alla grupper under den och hela företaget.",
-    "unplaced": "Du har ingen plats i företaget än. Du ser möten för hela företaget och de möten du själv är med på. En admin placerar dig under Personer & grupper."
+    "unplaced": "Du har ingen plats i företaget än. Du ser bara möten du själv startar eller är med på. En admin placerar dig under Personer."
   },
   "start": {
     "title": "Starta ett möte",
@@ -80,7 +80,7 @@
     "moving": "Flyttar…",
     "noPlace": "Ingen plats",
     "unplacedTitle": "Utan plats",
-    "unplacedText": "Ser bara möten för hela företaget och möten de själva är med på.",
+    "unplacedText": "Ser bara möten de själva startar eller är med på.",
     "membersTitle": "Konton utan plats",
     "membersText": "Har gått med via inbjudan men sitter inte i trädet än.",
     "admin": "Admin",
@@ -116,11 +116,19 @@
     "label": "Möte för",
     "whole": "Hela företaget",
     "private": "Privat möte",
-    "privateHint": "Bara du, de som är bjudna i kalendern och admins ser mötet.",
+    "privateHint": "Bara du, de deltagare du kryssar i och admins ser mötet.",
     "sees": "Ser mötet: {who}",
-    "seesWhole": "Ser mötet: alla i företaget.",
-    "seesPrivate": "Ser mötet: du, de bjudna i kalendern och admins.",
-    "seesGroup": "Ser mötet: {group}, grupperna ovanför och admins."
+    "seesWhole": "Ser mötet: alla i företaget som har en plats i trädet.",
+    "seesPrivate": "Ser mötet: du, de du kryssar i som deltagare och admins.",
+    "seesGroup": "Ser mötet: {group}, grupperna ovanför och admins.",
+    "eventLink": "Koppla till kalenderhändelsen ”{title}”?",
+    "eventHint": "Då får mötet händelsens namn, och de kolleger du kryssar i nedan räknas som deltagare och ser mötet, även ett privat möte.",
+    "attendeesLabel": "Deltar",
+    "noColleagues": "Inga kolleger är bjudna till händelsen.",
+    "accepted": "Har tackat ja",
+    "notAccepted": "Har inte tackat ja",
+    "customer": "Kund: gästerna från {domain}",
+    "seesAttendees": "{count, plural, one {Plus # deltagare du kryssat i.} other {Plus # deltagare du kryssat i.}}"
   },
   "orgs": {
     "yours": "Dina företag",

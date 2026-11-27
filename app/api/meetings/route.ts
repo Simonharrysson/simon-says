@@ -41,7 +41,11 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
   if (groupId !== undefined && groupId !== null && (typeof groupId !== "string" || !isUuid(groupId))) return null;
   const priv = opt("private");
   if (priv !== undefined && typeof priv !== "boolean") return null;
+  // Företag: the colleagues the starter confirmed as attending (checked against the event's guests).
+  const attendeeIds = opt("attendeeIds");
+  if (attendeeIds !== undefined && (!Array.isArray(attendeeIds) || attendeeIds.length > 100 || !attendeeIds.every((a) => typeof a === "string" && isUuid(a)))) return null;
   return {
+    ...(attendeeIds !== undefined ? { attendeeIds: attendeeIds as string[] } : {}),
     ...(groupId !== undefined ? { groupId: groupId as string | null } : {}),
     ...(priv !== undefined ? { private: priv as boolean } : {}),
     ...(calendarEventId !== undefined ? { calendarEventId: calendarEventId as string } : {}),

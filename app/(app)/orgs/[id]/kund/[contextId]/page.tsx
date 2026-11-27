@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 import { CustomerView } from "@/components/foretag/CustomerView";
 import { isUuid } from "@/lib/db/ids";
-import { getOrg } from "@/lib/db/orgs";
+import { getOrg, myRole } from "@/lib/db/orgs";
 import { listGroups } from "@/lib/db/foretag";
 import { loadCustomerPage } from "@/lib/foretag/page";
 import type { Locale } from "@/lib/i18n/config";
@@ -28,7 +28,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   if (!user) redirect(`/login?next=/orgs/${id}/kund/${contextId}`);
   const org = await getOrg(db, id);
   if (!org || org.kind !== "foretag") notFound();
-  const [page, groups] = await Promise.all([loadCustomerPage(db, id, contextId), listGroups(db, id)]);
+  const [page, groups, role] = await Promise.all([loadCustomerPage(db, id, contextId), listGroups(db, id), myRole(db, id)]);
   if (!page) notFound();
   const locale = (await getLocale()) as Locale;
   return (
@@ -39,7 +39,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       openTasks={page.openTasks}
       groups={groups}
       notice={orgNotice(fel, undefined, locale)}
-      rename={renameCustomerAction}
+      rename={role === "admin" ? renameCustomerAction : null}
     />
   );
 }

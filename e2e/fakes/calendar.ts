@@ -47,7 +47,9 @@ export class CalendarFake {
     }
     let m: RegExpMatchArray | null;
     if ((m = rest.match(/^calendars\/([^/]+)\/events(?:\/([^/]+))?$/))) {
-      const calendarId = decodeURIComponent(m[1]);
+      // "primary" is the user's own primary calendar, as at Google (a Företag start reads it).
+      const asked = decodeURIComponent(m[1]);
+      const calendarId = asked === "primary" ? (mine.find((c) => c.primary)?.id ?? asked) : asked;
       if (!mine.some((c) => c.id === calendarId)) return { status: 404, body: { error: { code: 404, message: "Not Found" } } };
       const all = this.events.get(calendarId) ?? [];
       if (m[2]) {

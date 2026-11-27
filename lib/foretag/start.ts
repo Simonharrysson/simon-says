@@ -1,5 +1,5 @@
 import "server-only";
-import { foretagEventForStart } from "@/lib/calendar/load";
+import { foretagEventById } from "@/lib/calendar/load";
 import { audienceIds, customerForDomain } from "@/lib/db/foretag";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -7,9 +7,14 @@ import { customerDomain, customerName, ownDomains } from "./customers";
 import { attendeeIdsFor } from "./attendees";
 
 // The Företag part of a meeting start (0050): which group the meeting is for, whether it is a
-// Privat möte, who attends (the starter, colleagues on the calendar event), the customer (from the
-// guests' domains), and who the new Doc may be shared with (exactly the accounts that will see the
-// meeting). Nothing from the calendar is stored but the customer's domain.
+// Privat möte, who attends, the customer, and who the new Doc may be shared with (exactly the
+// accounts that will see the meeting).
+//
+// Attendees give access (even to a Privat möte), so nothing is attached automatically: only when
+// the starter confirmed the calendar event ("Koppla till kalenderhändelsen?") is it read again,
+// and only the colleagues they ticked who are really on its guest list (and members) attend. No
+// confirmed event: no title, no attendees, no customer. A Privat möte never gets a customer.
+// Nothing from the calendar is stored but the customer's domain.
 
 export interface ForetagStart {
   groupId: string | null;
@@ -30,6 +35,10 @@ export async function planForetagStart(input: {
   user: { id: string; email?: string | null };
   groupId: string | null | undefined;
   private: boolean | undefined;
+  /** The calendar event the starter confirmed (their primary calendar), if any. */
+  calendarEventId?: string | null;
+  /** The colleagues the starter ticked as attending (must be on the event's guest list). */
+  attendeeIds?: string[];
   /** Testmöte and other server starts skip the calendar. */
   readCalendar: boolean;
 }): Promise<ForetagStartResult> {
@@ -45,20 +54,20 @@ export async function planForetagStart(input: {
     if (error) throw new Error(`foretag start: group: ${error.message}`);
     if (!data) return { ok: false, error: "bad_group" };
   }
+  const priv = input.private === true;
   const [members, event] = await Promise.all([
     orgMemberList(input.orgId),
-    input.readCalendar ? foretagEventForStart({ userId: input.user.id }) : Promise.resolve(null),
+    input.readCalendar && input.calendarEventId ? foretagEventById(input.user.id, input.calendarEventId) : Promise.resolve(null),
   ]);
-  const emails = event?.emails ?? [];
+  const guests = event ? event.guests.map((g) => g.email) : [];
+  const onEvent = new Set(attendeeIdsFor(guests, members));
+  const ticked = new Set(input.attendeeIds ?? []);
   const attendees: ForetagStart["attendees"] = [
     { userId: input.user.id, source: "starter" },
-    ...attendeeIdsFor(emails, members)
-      .filter((id) => id !== input.user.id)
-      .map((userId) => ({ userId, source: "calendar" as const })),
+    ...[...onEvent].filter((id) => id !== input.user.id && ticked.has(id)).map((userId) => ({ userId, source: "calendar" as const })),
   ];
-  const domain = customerDomain(emails, ownDomains(members.map((m) => m.email)));
+  const domain = event && !priv ? customerDomain(guests, ownDomains(members.map((m) => m.email))) : null;
   const customerId = domain ? await customerForDomain(input.orgId, domain, customerName(domain)) : null;
-  const priv = input.private === true;
   const viewers = new Set(
     await audienceIds(
       input.orgId,

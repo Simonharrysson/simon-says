@@ -34,7 +34,8 @@ export function CustomerView({
   openTasks: { meeting_id: string; id: string; text: string; owner: string | null; due: string | null }[];
   groups: GroupRow[];
   notice: Notice | null;
-  rename: FormAction;
+  /** Admins only (0050: customers are renamed by admins). */
+  rename: FormAction | null;
 }) {
   const t = useTranslations("foretag.customers");
   const tm = useTranslations("foretag.meetings");
@@ -98,6 +99,7 @@ export function CustomerView({
         </Panel>
       )}
 
+      {rename && (
       <Panel title={t("rename")} titleId="rename-title">
         <form action={rename} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="orgId" value={orgId} />
@@ -108,6 +110,7 @@ export function CustomerView({
           </SubmitButton>
         </form>
       </Panel>
+      )}
     </div>
   );
 }
