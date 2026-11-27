@@ -12,6 +12,11 @@
 /* Light/dark follows the operating system, as before (no theme toggle). */
 @custom-variant dark (@media (prefers-color-scheme: dark));
 
+/* Inside a card (a Panel/Card, `data-slot="card"`, or an ad-hoc sheet marked `data-card`): never a
+   second frame (docs/ui.md "No double borders"). Shared pieces drop their ring/border here and use
+   a tint or row dividers instead. */
+@custom-variant in-card (&:where([data-slot="card"] *, [data-card] *));
+
 /* ---------- Tokens ---------- */
 
 :root {

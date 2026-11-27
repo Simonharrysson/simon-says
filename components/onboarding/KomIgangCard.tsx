@@ -17,7 +17,7 @@ export function KomIgangCard({ orgId, state, onDismiss }: { orgId: string; state
   const nextTitle = next ? t(`steps.${next}.title`) : null;
   const href = `/orgs/${orgId}/kom-igang${next ? `?steg=${stepNumber(next)}` : "?steg=klart"}`;
   return (
-    <section aria-labelledby="kom-igang-title" className="flex flex-col gap-4 rounded-lg bg-surface p-6 shadow-panel">
+    <section data-card aria-labelledby="kom-igang-title" className="flex flex-col gap-4 rounded-lg bg-surface p-6 shadow-panel">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="kom-igang-title" className="text-lg">
           {t("card.title")} <span className="font-normal text-ink-3">{n}/{STEPS.length}</span>

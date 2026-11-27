@@ -279,7 +279,7 @@ export function BoardStep(p: BoardStepProps) {
           <p>{t("emptyText")}</p>
         </EmptyState>
       ) : (
-        <ul className="flex flex-col rounded-lg bg-surface shadow-panel" aria-label={t("listLabel")}>
+        <ul className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-6 in-card:bg-transparent in-card:shadow-none" aria-label={t("listLabel")}>
           {p.rows.map((row) => {
             const key = row.personId ?? `m:${row.member?.userId}`;
             return (
@@ -317,7 +317,7 @@ export function BoardStep(p: BoardStepProps) {
         </ul>
       )}
 
-      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-rail p-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-rail p-4 in-card:border-0 in-card:bg-sunk/60">
         <span className="text-sm font-medium">{t("addSomeone")}</span>
         <PersonForm uid={`${id}-new`} rolesList={`${id}-roles`} initial={{ name: "", role: "", email: "" }} submitLabel={t("add")} onSubmit={(input) => p.onAdd(input)} onEditExisting={setEditing} resetOnSuccess />
       </div>
@@ -351,7 +351,7 @@ function InviteArea({ inviteUrl, inviteEmail, linkActions }: { inviteUrl: string
         </Button>
       </div>
       {inviteEmail && mailShown && (
-        <section id={`${id}-mail`} aria-labelledby={`${id}-mail-h`} className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel animate-notice-in">
+        <section id={`${id}-mail`} aria-labelledby={`${id}-mail-h`} className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel animate-notice-in in-card:bg-sunk/60 in-card:shadow-none">
           <h3 id={`${id}-mail-h`} className="text-sm font-semibold">
             {t("inviteByEmail")}
           </h3>
@@ -360,7 +360,7 @@ function InviteArea({ inviteUrl, inviteEmail, linkActions }: { inviteUrl: string
         </section>
       )}
       {link && (
-        <div id={`${id}-link`} className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel animate-notice-in">
+        <div id={`${id}-link`} className="flex flex-col gap-3 rounded-lg bg-surface p-4 shadow-panel animate-notice-in in-card:bg-sunk/60 in-card:shadow-none">
           <p className="text-sm text-ink-2">{t("shareText")}</p>
           <CopyField id={`${id}-invite`} value={inviteUrl} label={t("inviteLink")} />
           {linkActions && <div>{linkActions}</div>}
@@ -428,7 +428,7 @@ function BoardRowView({
   const display = row.name ?? row.email ?? t("unknown");
   const canInvite = Boolean(onInvite && row.status === "invited" && row.email && !invite);
   return (
-    <div className="flex flex-col gap-1 px-4 py-3">
+    <div className="flex flex-col gap-1 px-4 py-3 in-card:px-6">
       <div className="grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3">
         <span className="mt-0.5 grid size-9 flex-none place-items-center rounded-full bg-sunk text-sm font-medium text-ink-2" aria-hidden="true">
           {(row.name ?? "?").trim().charAt(0).toUpperCase()}
@@ -576,7 +576,7 @@ function PersonForm({
     }
   };
   return (
-    <form onSubmit={submit} className={cn("flex flex-col gap-3", onCancel && "bg-board px-4 py-4")} noValidate>
+    <form onSubmit={submit} className={cn("flex flex-col gap-3", onCancel && "bg-board px-4 py-4 in-card:px-6")} noValidate>
       <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-3 max-[36rem]:grid-cols-1">
         <div className="flex flex-col gap-2">
           <Label htmlFor={`${uid}-name`}>{t("name")}</Label>
@@ -636,8 +636,8 @@ export function FolderStep(p: FolderStepProps) {
   return (
     <div className="flex flex-col gap-6">
       {p.folderSet ? (
-        <div className="flex items-center gap-4 rounded-lg bg-surface p-4 shadow-panel">
-          <span className="grid size-11 flex-none place-items-center rounded-md bg-sunk text-ink-2">
+        <div className="flex items-center gap-4 rounded-lg bg-surface p-4 shadow-panel in-card:bg-sunk/60 in-card:shadow-none">
+          <span className="grid size-11 flex-none place-items-center rounded-md bg-sunk text-ink-2 in-card:bg-surface">
             <IconFolder size={22} />
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
@@ -729,7 +729,7 @@ export function VoicesStep(p: VoicesStepProps) {
   const id = useId();
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel">
+      <div className="flex flex-col gap-3 rounded-lg bg-surface p-5 shadow-panel in-card:bg-sunk/60 in-card:shadow-none">
         <p className="font-medium">{t("soon")}</p>
         <p className="text-sm text-ink-2">{t("idea")}</p>
         <p className="text-sm text-ink-3">{t("notYet")}</p>
@@ -741,9 +741,9 @@ export function VoicesStep(p: VoicesStepProps) {
       ) : (
         <fieldset className="flex flex-col gap-1">
           <legend className="mb-3 text-sm font-medium">{t("legend")}</legend>
-          <ul className="flex flex-col rounded-lg bg-surface shadow-panel">
+          <ul className="flex flex-col rounded-lg bg-surface shadow-panel in-card:-mx-6 in-card:bg-transparent in-card:shadow-none">
             {p.people.map((person) => (
-              <li key={person.personId} className="border-t border-line px-4 py-3 first:border-t-0">
+              <li key={person.personId} className="border-t border-line px-4 py-3 first:border-t-0 in-card:px-6">
                 <Check
                   id={`${id}-${person.personId}`}
                   title={

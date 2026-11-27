@@ -11,7 +11,7 @@ export function WelcomeCard({ orgId, orgName, name, nextMeeting }: { orgId: stri
   const t = useTranslations("join.welcome");
   const strong = (chunks: ReactNode) => <strong className="font-medium text-ink wrap-anywhere">{chunks}</strong>;
   return (
-    <section aria-labelledby="welcome-title" className="relative flex flex-col gap-3 rounded-lg bg-surface p-6 pr-14 shadow-panel">
+    <section data-card aria-labelledby="welcome-title" className="relative flex flex-col gap-3 rounded-lg bg-surface p-6 pr-14 shadow-panel">
       <h2 id="welcome-title" className="text-lg wrap-anywhere">
         {t("title", { org: orgName })}
       </h2>

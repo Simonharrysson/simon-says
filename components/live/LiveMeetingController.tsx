@@ -984,7 +984,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   if (superseded) {
     return (
       <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-gutter pt-[clamp(1.5rem,8vh,5rem)] pb-12">
-        <section className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="superseded-title">
+        <section data-card className="flex flex-col gap-6 rounded-lg bg-surface p-[clamp(1.5rem,4vw,2.5rem)] shadow-panel" aria-labelledby="superseded-title">
           <div className="flex flex-col gap-2">
             <h1 id="superseded-title" className="text-2xl">
               {t("supersededTitle")}

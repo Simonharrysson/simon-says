@@ -56,7 +56,7 @@ export function WhoamiView({ orgId, orgName, people, adding, error, suggestedNam
       )}
 
       {showForm ? (
-        <section aria-labelledby="whoami-add" className="flex flex-col gap-4 rounded-lg bg-surface p-6 shadow-panel">
+        <section data-card aria-labelledby="whoami-add" className="flex flex-col gap-4 rounded-lg bg-surface p-6 shadow-panel">
           <div className="flex flex-col gap-1">
             <h2 id="whoami-add" className="text-lg">
               {people.length === 0 ? t("noneTitle") : t("notListed")}

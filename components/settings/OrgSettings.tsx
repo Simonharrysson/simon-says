@@ -42,7 +42,7 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
           ),
           styrelsen: (
             <>
-              <Panel sunk title={t("boardTitle")} titleId="board-title">
+              <Panel title={t("boardTitle")} titleId="board-title">
                 <p className="-mt-2 mb-4 max-w-[68ch] text-sm text-ink-3">{t("boardText")}</p>
                 {boardList?.(memberControls, rotateInvite)}
               </Panel>

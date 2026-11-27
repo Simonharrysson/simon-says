@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { Checkbox } from "@/components/ui/checkbox";
 import { hintClass } from "@/components/ui/Field";
+import { tileClass, tileOnClass } from "@/components/ui/tile";
 import { SaveState, useSavedValue } from "@/components/settings/SaveState";
 import { saveSummaryAction, type SettingResult } from "@/app/(app)/orgs/settings-actions";
 import type { SummaryMode } from "@/lib/db/types";
@@ -48,8 +49,8 @@ export function SummarySettingsForm({
   const save = (nextMode: SummaryMode, nextPeople: string[]) => setting.change({ mode: nextMode, people: nextPeople });
 
   return (
-    <div className="flex max-w-[40rem] flex-col gap-5">
-      <fieldset className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
+      <fieldset className="flex max-w-[40rem] flex-col gap-3">
         <legend className="mb-1 font-medium">{t("legend")}</legend>
         <p className="mb-2 text-sm text-ink-2">{t("intro")}</p>
         {MODES.map((m) => {
@@ -59,8 +60,9 @@ export function SummarySettingsForm({
             <label
               key={o.mode}
               className={cn(
-                "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4 transition-colors duration-120",
-                checked ? "border-ink" : "border-line hover:border-control",
+                // Tiles on the card, no frames (docs/ui.md "No double borders"): a tint, darker when chosen.
+                "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg p-4 transition-colors duration-120",
+                checked ? tileOnClass : tileClass,
               )}
             >
               <input
@@ -86,13 +88,13 @@ export function SummarySettingsForm({
           {people.length === 0 ? (
             <p className="text-sm text-ink-3">{t("emptyList")}</p>
           ) : (
-            <ul className="flex flex-col rounded-lg border border-line bg-surface">
+            <ul className="-mx-6 flex flex-col">
               {people.map((p) => {
                 const id = `summary-person-${p.id}`;
                 const note = !p.hasEmail ? t("noEmail") : null;
                 return (
                   <li key={p.id} className="border-t border-line first:border-t-0">
-                    <label htmlFor={id} className={cn("flex min-h-11 items-center gap-3 px-4 py-2", p.hasEmail ? "cursor-pointer" : "cursor-not-allowed")}>
+                    <label htmlFor={id} className={cn("flex min-h-11 items-center gap-3 px-6 py-2", p.hasEmail ? "cursor-pointer" : "cursor-not-allowed")}>
                       <Checkbox
                         id={id}
                         checked={chosen.includes(p.id)}
@@ -115,7 +117,7 @@ export function SummarySettingsForm({
         </fieldset>
       ) : (
         mode !== "off" && (
-          <p className="text-sm text-ink-3">
+          <p className="max-w-[40rem] text-sm text-ink-3">
             {withEmail === 0 ? t("noneWithEmail") : t("withEmail", { count: withEmail })}
           </p>
         )
