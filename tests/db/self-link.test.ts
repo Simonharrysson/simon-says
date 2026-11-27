@@ -73,8 +73,9 @@ describe.skipIf(!hasLocalSupabase)("self link (0051)", () => {
 
     it("an admin still links and unlinks through the table", async () => {
       const p = await person(orgId, "Admin Andersson");
-      expect((await admin.db.from("people").update({ member_user_id: outsider.id }).eq("id", p)).error).toBeNull();
-      expect(await linkOf(p)).toBe(outsider.id);
+      // (0002 RLS: the link target must be a member of the förening.)
+      expect((await admin.db.from("people").update({ member_user_id: second.id }).eq("id", p)).error).toBeNull();
+      expect(await linkOf(p)).toBe(second.id);
       expect((await admin.db.from("people").update({ member_user_id: null }).eq("id", p)).error).toBeNull();
       expect(await linkOf(p)).toBeNull();
     });
