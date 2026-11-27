@@ -27,9 +27,18 @@ test("Inför möten: opt in under Konto, one brief before the förening's meetin
   const shared = `c_${randomUUID().slice(0, 8)}@group.calendar.google.com`;
   const start = new Date(Date.now() + 10 * 60_000);
   start.setUTCSeconds(0, 0);
-  const event = { id: `ev${randomUUID().slice(0, 8)}`, summary: "Styrelsemöte", start: start.toISOString(), end: new Date(start.getTime() + 3_600_000).toISOString() };
+  // The member is on the invite (a shared calendar's event briefs only those invited).
+  const event = {
+    id: `ev${randomUUID().slice(0, 8)}`,
+    summary: "Styrelsemöte",
+    start: start.toISOString(),
+    end: new Date(start.getTime() + 3_600_000).toISOString(),
+    attendees: [{ email: member, responseStatus: "accepted" }],
+  };
+  // Not invited: never a brief, even though it is on the same calendar at the same time.
+  const other = { id: `ev${randomUUID().slice(0, 8)}`, summary: "Valberedningsmöte", start: start.toISOString(), end: event.end, attendees: [{ email: "erik@e2e.test", responseStatus: "accepted" }] };
   await fake.calendar(member, { id: member, summary: "Min kalender", primary: true });
-  await fake.calendar(member, { id: shared, summary: "Föreningens kalender" }, [event]);
+  await fake.calendar(member, { id: shared, summary: "Föreningens kalender" }, [event, other]);
   // The admin chose the förening's calendar (as in calendar.spec.ts, here written directly).
   await db.from("orgs").update({ calendar_id: shared, calendar_name: "Föreningens kalender", calendar_filter: "möte" }).eq("id", org.id);
 
@@ -73,4 +82,5 @@ test("Inför möten: opt in under Konto, one brief before the förening's meetin
   expect((await cron(request)).status()).toBe(200);
   expect((await cron(request)).status()).toBe(200);
   expect(await fake.mail(member)).toHaveLength(1);
+  expect((await fake.mail(member)).some((m) => m.subject.includes("Valberedningsmöte"))).toBe(false);
 });

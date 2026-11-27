@@ -186,7 +186,7 @@ export const fake = {
     return (await (await fetch(`${FAKE_URL}/__e2e/mail${q}`)).json()) as { to: string[]; subject: string; text: string; html?: string; reply_to?: string; headers?: Record<string, string> }[];
   },
   /** Give `email` a Google calendar (and events) in the fake Calendar API. */
-  async calendar(email: string, calendar: { id: string; summary: string; primary?: boolean }, events: { id: string; summary: string; start: string; end: string; attendees?: { email?: string; displayName?: string; responseStatus?: string }[] }[] = []) {
+  async calendar(email: string, calendar: { id: string; summary: string; primary?: boolean }, events: { id: string; summary: string; start: string; end: string; organizer?: { email: string }; attendees?: { email?: string; displayName?: string; responseStatus?: string }[] }[] = []) {
     const res = await fetch(`${FAKE_URL}/__e2e/google/calendar`, { method: "POST", body: JSON.stringify({ email, calendar, events }) });
     if (!res.ok) throw new Error(`fake calendar: ${res.status}`);
   },

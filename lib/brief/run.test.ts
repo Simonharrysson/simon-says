@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CalendarEvent } from "@/lib/calendar/events";
 import { briefsForUser, eligibleSpaces, type BriefDeps, type BriefHistory, type BriefMail, type BriefScope, type BriefSpace, type BriefState, type BriefUser } from "./run";
-import { briefEventKey, declinedBy, inBriefWindow } from "./window";
+import { briefEventKey, declinedBy, inBriefWindow, invitedTo } from "./window";
 
 const NOW = new Date("2026-11-27T12:50:00Z");
 const at = (min: number) => new Date(NOW.getTime() + min * 60_000).toISOString();
@@ -13,6 +13,7 @@ const company: BriefSpace = { id: "c1", name: "Bolaget AB", kind: "foretag", cal
 const user = (over: Partial<BriefUser> = {}): BriefUser => ({
   id: "u1",
   email: "anna@bolaget.se",
+  emails: [],
   name: "Anna Berg",
   locale: "sv",
   briefForeningar: true,
@@ -20,7 +21,8 @@ const user = (over: Partial<BriefUser> = {}): BriefUser => ({
   ...over,
 });
 
-const event = (id: string, title: string, startMin: number, attendees: CalendarEvent["attendees"] = []): CalendarEvent => ({
+const ME = { email: "anna@bolaget.se", name: null, response: "accepted" };
+const event = (id: string, title: string, startMin: number, attendees: CalendarEvent["attendees"] = [ME]): CalendarEvent => ({
   id,
   title,
   start: at(startMin),
@@ -152,6 +154,25 @@ describe("briefsForUser", () => {
     expect(no.deps.calendar).not.toHaveBeenCalled();
   });
 
+  it("a shared calendar's event: only for those invited (organiser or a guest who has not declined)", async () => {
+    expect(invitedTo({ attendees: [], organizer: "anna@bolaget.se" }, ["anna@bolaget.se"])).toBe(true);
+    expect(invitedTo({ attendees: [{ email: "anna@forening.se", name: null, response: "needsAction" }] }, ["anna@bolaget.se", "anna@forening.se"])).toBe(true);
+    expect(invitedTo({ attendees: [{ email: "anna@bolaget.se", name: null, response: "declined" }] }, ["anna@bolaget.se"])).toBe(false);
+    const f = fakeDeps({
+      events: {
+        [SHARED]: [
+          event("not-invited", "Styrelsemöte", 10, [{ email: "erik@forening.se", name: null, response: "accepted" }]),
+          event("no-guests", "Medlemsmöte", 11, []),
+        ],
+      },
+    });
+    expect((await briefsForUser(user(), f.deps)).sent).toBe(0);
+    expect(f.claims).toEqual([]);
+    // Listed in the förening with another address: invited.
+    const g = fakeDeps({ events: { [SHARED]: [event("other-address", "Styrelsemöte", 10, [{ email: "anna@forening.se", name: null, response: "accepted" }])] } });
+    expect((await briefsForUser(user({ emails: ["anna@forening.se"] }), g.deps)).sent).toBe(1);
+  });
+
   it("the förening's title filter and the window apply; started and later meetings wait or are skipped", async () => {
     const f = fakeDeps({
       events: { [SHARED]: [event("lunch", "Lunch", 10), event("later", "Styrelsemöte", 40), event("started", "Medlemsmöte", -5), event("now", "Medlemsmöte", 12)] },
@@ -180,7 +201,7 @@ describe("briefsForUser", () => {
   });
 
   it("the same meeting on the shared calendar and in the user's own: one brief, as the group's", async () => {
-    const both = event("same", "Styrelsemöte", 10, [{ email: "kim@acme.se", name: null, response: null }]);
+    const both = event("same", "Styrelsemöte", 10, [ME, { email: "kim@acme.se", name: null, response: null }]);
     const f = fakeDeps({ events: { [SHARED]: [both], primary: [both] }, customers: { "acme.se": { id: "ctx1", name: "Acme" } } });
     expect((await briefsForUser(user({ spaces: [forening, company] }), f.deps)).sent).toBe(1);
     expect(f.historyCalls.map((s) => s.kind)).toEqual(["org"]);

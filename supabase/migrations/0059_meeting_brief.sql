@@ -9,10 +9,12 @@
 --   0039; "Inga mejl alls" and the unsubscribe link turn it off);
 -- * user_settings.brief_foreningar (default false): briefs for FÖRENING meetings are opt-in on top
 --   of the category (Konto → Mejl). Företag briefs need only the category;
--- * meeting_brief_sends: the sent-log, one row per (user, calendar event), claimed BEFORE anything
---   is built or mailed, so two cron runs never mail (or pay Claude) twice;
--- * brief_visible_meetings(): which of a set of meetings a user may see, by the same predicate RLS
---   uses (foretag_can_see, 0050), for the cron that reads with the service role.
+-- * meeting_brief_sends: the sent-log, one row per (user, calendar event), claimed under a lease
+--   BEFORE anything is built or mailed, so two cron runs never mail (or pay Claude) twice, and a
+--   run killed mid-brief (function timeout) leaves a claim a later run may take over;
+-- * meeting_brief_checks: when the cron last looked at each user, so every run starts with the
+--   longest-waiting users and nobody starves behind the time budget.
+-- The recipient's visibility is 0054's visible_meeting_ids() (the RLS predicate for a user).
 
 -- ---------------------------------------------------------------------------------------------
 -- E-mail category (0039): replace the one list.
@@ -51,9 +53,11 @@ grant execute on function public.set_my_brief_foreningar(boolean) to authenticat
 
 -- ---------------------------------------------------------------------------------------------
 -- meeting_brief_sends: one row per user and calendar event (event_key = sha256 of the Google event
--- id: never the id, title or guests themselves). Inserted as 'claimed' before the brief is built;
--- then the outcome. A row means "never again" for that event, whatever the outcome (at most once,
--- like the summaries). Service role only; kept 30 days (the cron deletes older rows).
+-- id: never the id, title or guests themselves). Claimed (state 'claimed', lease_until) through
+-- claim_meeting_brief() before the brief is built; then the outcome, which is final ("never
+-- again" for that event). A claim whose lease ran out (the function died) may be taken over, at
+-- most 3 attempts; the mail's Idempotency-Key keeps a retry from delivering twice. Service role
+-- only; kept 30 days (the cron deletes older rows).
 
 create table public.meeting_brief_sends (
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -64,6 +68,8 @@ create table public.meeting_brief_sends (
     check (state in ('claimed', 'sent', 'skipped', 'opted_out', 'failed', 'uncertain')),
   -- Claude picked the decisions (true), or the template did (false); null until built.
   picked boolean,
+  lease_until timestamptz,
+  attempts int not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (user_id, event_key)
@@ -74,17 +80,31 @@ alter table public.meeting_brief_sends enable row level security;
 revoke all on table public.meeting_brief_sends from anon, authenticated, service_role;
 grant select, insert, update, delete on table public.meeting_brief_sends to service_role;
 
--- ---------------------------------------------------------------------------------------------
--- The recipient's visibility for the cron (service role, so RLS does not apply): exactly the
--- meetings_select predicate (can_see_meeting = foretag_can_see(auth.uid(), id)), for p_user.
-
-create function public.brief_visible_meetings(p_user uuid, p_ids uuid[])
-returns setof uuid
-language sql stable security definer set search_path = ''
+-- Claim (or take over an expired claim of) one user's brief for one event. True: the caller owns
+-- it until the lease ends. False: done, or another run holds it, or out of attempts.
+create function public.claim_meeting_brief(p_user uuid, p_key text, p_start timestamptz, p_scope text, p_lease_seconds int)
+returns boolean
+language sql volatile security definer set search_path = ''
 as $$
-  select i.id from unnest(coalesce(p_ids, '{}'::uuid[])) as i(id)
-  where public.foretag_can_see(p_user, i.id);
+  insert into public.meeting_brief_sends as s (user_id, event_key, event_start, scope, lease_until)
+  values (p_user, p_key, p_start, p_scope, now() + make_interval(secs => p_lease_seconds))
+  on conflict (user_id, event_key) do update
+    set lease_until = excluded.lease_until, attempts = s.attempts + 1, updated_at = now()
+    where s.state = 'claimed' and s.lease_until < now() and s.attempts < 3
+  returning true;
 $$;
 
-revoke all on function public.brief_visible_meetings(uuid, uuid[]) from public, anon, authenticated;
-grant execute on function public.brief_visible_meetings(uuid, uuid[]) to service_role;
+revoke all on function public.claim_meeting_brief(uuid, text, timestamptz, text, int) from public, anon, authenticated;
+grant execute on function public.claim_meeting_brief(uuid, text, timestamptz, text, int) to service_role;
+
+-- ---------------------------------------------------------------------------------------------
+-- meeting_brief_checks: when the cron last looked at a user (oldest first next run). Service role.
+
+create table public.meeting_brief_checks (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  checked_at timestamptz not null default now()
+);
+
+alter table public.meeting_brief_checks enable row level security;
+revoke all on table public.meeting_brief_checks from anon, authenticated, service_role;
+grant select, insert, update, delete on table public.meeting_brief_checks to service_role;

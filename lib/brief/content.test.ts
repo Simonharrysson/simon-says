@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HomeMeeting, HomeNoteRow, HomePerson } from "@/lib/home/tasks";
-import { agendaLabels, briefContent, chooseDecisions, OPEN_MAX, type BriefInput } from "./content";
+import { agendaLabels, briefContent, chooseDecisions, OPEN_MAX, pickAgenda, type BriefInput } from "./content";
 
 const ORG = "org1";
 const meeting = (id: string, at: string, extra: Partial<HomeMeeting> = {}): HomeMeeting => ({ id, org_id: ORG, started_at: at, status: "done", is_test: false, title: null, ...extra });
@@ -132,5 +132,16 @@ describe("agendaLabels", () => {
       "Budget 2027",
     ]);
     expect(agendaLabels(null)).toEqual([]);
+  });
+});
+
+describe("pickAgenda", () => {
+  const a = (meeting_time: string | null) => ({ meeting_time });
+  it("same day: the closest time within two hours; untimed only when no timed one fits", () => {
+    expect(pickAgenda([a("09:00"), a("18:00"), a("17:30")], "18:15")).toEqual(a("18:00"));
+    expect(pickAgenda([a("09:00")], "18:15")).toBeNull();
+    expect(pickAgenda([a("09:00"), a(null)], "18:15")).toEqual(a(null));
+    expect(pickAgenda([a(null)], "18:15")).toEqual(a(null));
+    expect(pickAgenda([], "18:15")).toBeNull();
   });
 });

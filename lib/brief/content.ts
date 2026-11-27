@@ -13,7 +13,7 @@ import {
 } from "@/lib/home/tasks";
 
 // Inför möten (0059): what one brief says, from rows the caller already narrowed to the
-// RECIPIENT's visibility (meetings: brief_visible_meetings, the RLS predicate; rows: only those
+// RECIPIENT's visibility (meetings: visible_meeting_ids, the RLS predicate; rows: only those
 // meetings'). Pure. Every rule is the app's own (lib/home/tasks.ts): finished real meetings only,
 // no Må-runda or info rows, nothing a human deleted, a carried task shown once as its latest copy,
 // done on the row or its tasks copy, and a row a human edited (locked) keeps only its text.
@@ -181,4 +181,28 @@ export function agendaLabels(items: unknown, max = 8): string[] {
     .map((i) => clean(i.label))
     .filter((l): l is string => Boolean(l))
     .slice(0, max);
+}
+
+/** How far a prepared agenda's time may be from the event's start and still be its agenda. */
+export const AGENDA_TIME_SLACK_MIN = 120;
+
+const minutes = (hhmm: string) => {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+
+/**
+ * The prepared agenda for an event (same day): the one whose time is closest to the event's start
+ * (HH:MM, Stockholm), within two hours; one without a time only when no timed one fits.
+ */
+export function pickAgenda<T extends { meeting_time: string | null }>(rows: T[], eventTime: string): T | null {
+  const at = minutes(eventTime);
+  let best: { row: T; diff: number } | null = null;
+  for (const row of rows) {
+    const t = row.meeting_time ? minutes(row.meeting_time) : null;
+    if (t === null || at === null) continue;
+    const diff = Math.abs(t - at);
+    if (diff <= AGENDA_TIME_SLACK_MIN && (!best || diff < best.diff)) best = { row, diff };
+  }
+  return best?.row ?? rows.find((r) => !r.meeting_time) ?? null;
 }

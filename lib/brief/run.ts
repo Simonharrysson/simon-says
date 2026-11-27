@@ -6,7 +6,7 @@ import type { Locale } from "@/lib/i18n/config";
 import { briefContent, chooseDecisions, BRIEF_DECISIONS, type BriefAgenda } from "./content";
 import { renderBriefEmail, type BriefEmailInput } from "./email";
 import type { PickFn } from "./pick";
-import { BRIEF_LEAD_MS, briefEventKey, declinedBy, guestEmails, inBriefWindow } from "./window";
+import { BRIEF_LEAD_MS, briefEventKey, declinedBy, guestEmails, inBriefWindow, invitedTo } from "./window";
 
 // Inför möten (0059): one user's briefs for one cron run. The I/O is injected (BriefDeps; the
 // real one is lib/brief/store.ts), so the order of checks, the visibility and the sent-log are
@@ -19,10 +19,13 @@ import { BRIEF_LEAD_MS, briefEventKey, declinedBy, guestEmails, inBriefWindow } 
 // 2. the gate (may_email 'meeting_brief': the category, "Inga mejl alls", unsubscribes); no →
 //    done, Google is never asked;
 // 3. the user's calendars, with the user's OWN grant: each eligible space's shared calendar (its
-//    title filter applied), and their own primary calendar when they are in a Företag (customer
+//    title filter applied; only events the user is invited to: organiser or a guest who has not
+//    declined), and their own primary calendar when they are in a Företag (customer
 //    meetings, by the guests' e-mail domain: an existing customer only, never created);
 // 4. per event starting within 15 minutes (not declined, not already in the sent-log): CLAIM the
-//    sent-log row first, then build from the user's own visibility, then mail (or mark skipped).
+//    sent-log row first (a lease: a run killed mid-brief leaves it to a later run, at most 3
+//    tries, the mail's Idempotency-Key keeping a retry from delivering twice), then build from the
+//    user's own visibility, then mail (or mark skipped).
 // Logs: counts only (no titles, names, addresses or ids).
 
 export interface BriefSpace {
@@ -36,6 +39,8 @@ export interface BriefSpace {
 export interface BriefUser {
   id: string;
   email: string | null;
+  /** Every address of the account (sign-in + the addresses spaces list for it), for the invite check. */
+  emails: string[];
   name: string | null;
   locale: Locale;
   /** Opted in to förening briefs (Konto → Mejl). */
@@ -48,7 +53,7 @@ export type BriefScope =
   | { kind: "customer"; org: BriefSpace; customer: { id: string; name: string } };
 
 export interface BriefHistory {
-  /** Meetings in scope that the user can see (brief_visible_meetings), finished, newest first. */
+  /** Meetings in scope that the user can see (visible_meeting_ids), finished, newest first. */
   meetings: HomeMeeting[];
   rows: HomeNoteRow[];
   people: HomePerson[];
@@ -75,7 +80,7 @@ export interface BriefDeps {
   customerByDomain(orgId: string, domain: string): Promise<{ id: string; name: string } | null>;
   /** Which of these sent-log keys exist for the user. */
   sentKeys(userId: string, keys: string[]): Promise<Set<string>>;
-  /** Insert the sent-log row; false when it already existed (another run has it). */
+  /** Claim the sent-log row under a lease (or take over an expired claim); false: done, held or out of attempts. */
   claim(userId: string, key: string, startsAt: string, scope: BriefScope["kind"]): Promise<boolean>;
   finish(userId: string, key: string, state: BriefState, picked: boolean | null): Promise<void>;
   history(user: BriefUser, scope: BriefScope, startsAt: string): Promise<BriefHistory>;
@@ -128,11 +133,12 @@ export async function briefsForUser(user: BriefUser, deps: BriefDeps): Promise<U
 
   // Shared calendars first: a meeting there is the group's, even when it is also in the user's own calendar.
   const byKey = new Map<string, Candidate>();
-  const soon = (e: CalendarEvent) => inBriefWindow(e, now) && !declinedBy(e, [email]);
+  const emails = [email, ...user.emails];
+  const soon = (e: CalendarEvent) => inBriefWindow(e, now) && !declinedBy(e, emails);
   for (const space of calendars) {
     const events = await api.listEvents(space.calendarId!, from, to, 50).catch(() => [] as CalendarEvent[]);
     for (const e of events) {
-      if (!soon(e) || !matchesFilter(e.title, space.calendarFilter)) continue;
+      if (!soon(e) || !matchesFilter(e.title, space.calendarFilter) || !invitedTo(e, emails)) continue;
       const key = briefEventKey(e.id);
       if (!byKey.has(key)) byKey.set(key, { event: e, key, scope: { kind: "org", org: space } });
     }
@@ -142,7 +148,7 @@ export async function briefsForUser(user: BriefUser, deps: BriefDeps): Promise<U
     for (const e of events) {
       const key = briefEventKey(e.id);
       if (!soon(e) || byKey.has(key)) continue;
-      const guests = guestEmails(e, [email]);
+      const guests = guestEmails(e, emails);
       if (!guests.length) continue;
       for (const org of foretag) {
         const domain = customerDomain(guests, await deps.ownDomains(org.id));

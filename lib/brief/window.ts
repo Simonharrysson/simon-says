@@ -38,3 +38,14 @@ export function guestEmails(event: Pick<CalendarEvent, "attendees">, own: string
   const mine = new Set(own.map((e) => e.trim().toLowerCase()));
   return event.attendees.flatMap((a) => (a.email && !mine.has(a.email) && a.response !== "declined" && domainOf(a.email) ? [a.email] : []));
 }
+
+/**
+ * Is the user invited to this event: its organiser, or a guest who has not declined (any of the
+ * user's addresses)? A shared calendar holds the whole group's meetings; only the people on the
+ * invite get a brief, never every member for every event.
+ */
+export function invitedTo(event: Pick<CalendarEvent, "attendees" | "organizer">, emails: string[]): boolean {
+  const mine = new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean));
+  if (event.organizer && mine.has(event.organizer)) return true;
+  return event.attendees.some((a) => a.email && mine.has(a.email) && a.response !== "declined");
+}

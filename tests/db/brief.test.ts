@@ -3,7 +3,7 @@ import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/
 import type { CalendarEvent } from "@/lib/calendar/events";
 import type { MailMessage, Mailer } from "@/lib/mail";
 
-// 0059 Inför möten against the real schema: the cron's visibility (brief_visible_meetings) is
+// 0059 Inför möten against the real schema: the cron's visibility (visible_meeting_ids) is
 // exactly what RLS shows each user in a Företag tree (Privat möte included), a customer brief is
 // built from the recipient's own visibility only (never a task handoff), the sent-log claims once,
 // the category gate and the förening opt-in. Fake calendar and mailer: nothing leaves.
@@ -16,7 +16,7 @@ vi.mock("@/lib/env", async (importOriginal) => {
   return { ...mod, getEnv: () => env };
 });
 
-const { briefDeps, loadBriefUser } = await import("@/lib/brief/store");
+const { briefDeps, loadBriefUser, usersByLastCheck } = await import("@/lib/brief/store");
 const { briefsForUser } = await import("@/lib/brief/run");
 const { briefEventKey } = await import("@/lib/brief/window");
 const { saveMyBriefForeningar } = await import("@/lib/brief/prefs");
@@ -104,16 +104,16 @@ describe.skipIf(!hasLocalSupabase)("Inför möten (0059)", () => {
     );
   });
 
-  it("brief_visible_meetings is exactly what RLS shows each user (the tree, Privat möte)", async () => {
+  it("visible_meeting_ids (0054) is exactly what RLS shows each user (the tree, Privat möte)", async () => {
     const admin = adminClient();
     const ids = Object.values(m);
     for (const n of NAMES) {
       const rls = ((must("rls", await u[n].db.from("meetings").select("id").in("id", ids)) as { id: string }[]).map((r) => r.id)).sort();
-      const fn = ((must("fn", await admin.rpc("brief_visible_meetings", { p_user: u[n].id, p_ids: ids })) as string[]) ?? []).sort();
+      const fn = ((must("fn", await admin.rpc("visible_meeting_ids", { p_user: u[n].id, p_ids: ids })) as string[]) ?? []).sort();
       expect(fn, n).toEqual(rls);
     }
     // Not callable by a signed-in user (it takes any user id).
-    const { error } = await u.jonas.db.rpc("brief_visible_meetings", { p_user: u.anna.id, p_ids: ids });
+    const { error } = await u.jonas.db.rpc("visible_meeting_ids", { p_user: u.anna.id, p_ids: ids });
     expect(error).not.toBeNull();
   });
 
@@ -168,6 +168,47 @@ describe.skipIf(!hasLocalSupabase)("Inför möten (0059)", () => {
     const deps = briefDeps({ db: adminClient() });
     expect(await deps.claim(u.jonas.id, briefEventKey(id), startsAt, "customer")).toBe(false);
     expect(await deps.claim(u.jonas.id, briefEventKey(`${id}-new`), startsAt, "customer")).toBe(true);
+  });
+
+  it("a claim is a lease: held claims are refused, an expired one is taken over (at most 3 attempts)", async () => {
+    const admin = adminClient();
+    const deps = briefDeps({ db: admin });
+    const key = briefEventKey(`ev-lease-${Date.now()}`);
+    expect(await deps.claim(u.anna.id, key, startsAt, "org")).toBe(true);
+    expect(await deps.claim(u.anna.id, key, startsAt, "org")).toBe(false);
+    expect((await deps.sentKeys(u.anna.id, [key])).has(key)).toBe(true);
+    const expire = () => admin.from("meeting_brief_sends").update({ lease_until: new Date(Date.now() - 1000).toISOString() }).eq("user_id", u.anna.id).eq("event_key", key);
+    must("expire", await expire());
+    // The run died: open again, and a later run takes it over.
+    expect((await deps.sentKeys(u.anna.id, [key])).has(key)).toBe(false);
+    expect(await deps.claim(u.anna.id, key, startsAt, "org")).toBe(true);
+    must("expire", await expire());
+    expect(await deps.claim(u.anna.id, key, startsAt, "org")).toBe(true);
+    must("expire", await expire());
+    // Third attempt used: never again.
+    expect(await deps.claim(u.anna.id, key, startsAt, "org")).toBe(false);
+    expect((await deps.sentKeys(u.anna.id, [key])).has(key)).toBe(true);
+    // A finished row is final, lease or not.
+    const done = briefEventKey(`ev-done-${Date.now()}`);
+    expect(await deps.claim(u.anna.id, done, startsAt, "org")).toBe(true);
+    await deps.finish(u.anna.id, done, "sent", false);
+    must("expire", await admin.from("meeting_brief_sends").update({ lease_until: new Date(Date.now() - 1000).toISOString() }).eq("user_id", u.anna.id).eq("event_key", done));
+    expect(await deps.claim(u.anna.id, done, startsAt, "org")).toBe(false);
+  });
+
+  it("users are taken longest-waiting first (never checked, then oldest check)", async () => {
+    const admin = adminClient();
+    for (const n of ["jonas", "maja"] as Name[]) {
+      must("token", await admin.from("google_calendar_tokens").upsert({ user_id: u[n].id, refresh_token_enc: "x", scope: "calendar.readonly" }));
+    }
+    must("check", await admin.from("meeting_brief_checks").upsert({ user_id: u.jonas.id, checked_at: new Date().toISOString() }));
+    must("check", await admin.from("meeting_brief_checks").upsert({ user_id: u.maja.id, checked_at: new Date(Date.now() - 3_600_000).toISOString() }));
+    const order = await usersByLastCheck(admin);
+    expect(order.indexOf(u.maja.id)).toBeLessThan(order.indexOf(u.jonas.id));
+    must("uncheck", await admin.from("meeting_brief_checks").delete().eq("user_id", u.jonas.id));
+    const again = await usersByLastCheck(admin);
+    expect(again.indexOf(u.jonas.id)).toBeLessThan(again.indexOf(u.maja.id));
+    must("cleanup", await admin.from("google_calendar_tokens").delete().in("user_id", [u.jonas.id, u.maja.id]));
   });
 
   it("the unsubscribe link (meeting_brief off) stops it before the calendar is read", async () => {
