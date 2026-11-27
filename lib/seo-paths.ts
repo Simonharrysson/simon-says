@@ -12,6 +12,7 @@ export const PRIVATE_PREFIXES = [
   "/auth/",
   "/hem",
   "/orgs",
+  "/foretag",
   "/privat",
   "/installningar",
   "/meetings",

@@ -90,7 +90,7 @@ export function orgPageId(pathname: string): string | null {
 
 /** The pages of app/(app) (its layout requires a user). */
 export function isSignedInArea(pathname: string): boolean {
-  return /^\/(orgs|installningar)(\/|$)/.test(pathname);
+  return /^\/(orgs|foretag|installningar)(\/|$)/.test(pathname);
 }
 
 export const config = {
