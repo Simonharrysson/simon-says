@@ -45,7 +45,7 @@ export function LoginView({ error, next, signIn, joining }: LoginViewProps) {
           </li>
           <li className="grid grid-cols-[auto_1fr] gap-3">
             <IconCheck size={18} className="mt-[0.15rem] text-green" />
-            <span>{t("onlyStarter")}</span>
+            <span>{t("roomNoAccount")}</span>
           </li>
         </ul>
         <p className="text-sm text-ink-3">

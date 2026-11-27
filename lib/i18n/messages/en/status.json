@@ -1,5 +1,6 @@
 {
   "metaTitle": "Status",
+  "metaDescription": "How Simon Says is doing right now: uptime, meetings and usage.",
   "title": "Status",
   "intro": "Simon Says writes meeting notes live in Google Docs for associations in Linköping. This shows what is happening right now. Associations are shown by name only if they have chosen to be.",
   "unavailableTitle": "The numbers can't be loaded right now",

@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { PublicShell } from "@/components/views/PublicShell";
+import { toLocale } from "@/lib/i18n/config";
+import { publicMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: (await getTranslations("privacy"))("metaTitle") };
+  const t = await getTranslations("privacy");
+  return publicMetadata({ title: t("metaTitle"), description: t("metaDescription"), path: "/integritet", locale: toLocale(await getLocale()) });
 }
 
 // Plain-language privacy text for a free service (lib/i18n/messages/*/privacy.json). Update

@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { PublicShell } from "@/components/views/PublicShell";
 import { StatusView, type StatusData } from "@/components/views/StatusView";
 import { getEnv } from "@/lib/env";
 import { loadStatus } from "@/lib/status";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { toLocale } from "@/lib/i18n/config";
+import { publicMetadata } from "@/lib/seo";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: (await getTranslations("status"))("metaTitle") };
+  const t = await getTranslations("status");
+  return publicMetadata({ title: t("metaTitle"), description: t("metaDescription"), path: "/status", locale: toLocale(await getLocale()) });
 }
 
 // Public, no auth. The page renders per request (the root layout reads the language cookie), so

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { appOrigin } from "@/lib/origin";
+import { SITE_NAME } from "@/lib/seo";
 import "./globals.css";
 
 // Fonts are downloaded at build time and served from our own domain (no Google request
@@ -13,9 +15,18 @@ const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", dis
 // Instrument Serif (OFL): the wordmark only. Body text stays Geist.
 const display = Instrument_Serif({ subsets: ["latin"], variable: "--font-wordmark", display: "swap", weight: "400" });
 
+// Public pages add their canonical URL and share cards (lib/seo.ts); the share image and icons
+// are files next to this layout (opengraph-image, icon, apple-icon, manifest).
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("common");
-  return { title: { default: t("metaTitle"), template: "%s · Simon Says" }, description: t("metaDescription") };
+  return {
+    metadataBase: new URL(appOrigin()),
+    applicationName: SITE_NAME,
+    title: { default: t("metaTitle"), template: "%s · Simon Says" },
+    description: t("metaDescription"),
+    openGraph: { type: "website", siteName: SITE_NAME },
+    twitter: { card: "summary_large_image" },
+  };
 }
 
 export const viewport: Viewport = {
