@@ -1,3 +1,4 @@
+import { refuseForetag } from "@/lib/foretag/guard";
 import { NextResponse, type NextRequest } from "next/server";
 import { apiT } from "@/lib/i18n/api";
 import { isUuid } from "@/lib/db/ids";
@@ -16,6 +17,9 @@ const fail = (error: string, status: number, message: string) => NextResponse.js
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -48,6 +52,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const t = apiT(request);
   const { id } = await params;
+  // Förening only: never for a Företag (0050, lib/foretag/guard.ts).
+  const foretagRefusal = await refuseForetag(id);
+  if (foretagRefusal) return foretagRefusal;
   const db = await createSupabaseServerClient();
   const {
     data: { user },

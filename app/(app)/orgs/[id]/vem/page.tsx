@@ -29,6 +29,8 @@ export default async function WhoamiPage({ params, searchParams }: { params: Pro
   const org = await getOrg(db, id);
   if (!org) notFound();
   if (org.kind === "privat") redirect("/privat");
+  // Företag (0050): admins place people; the picker is föreningar only (0051).
+  if (org.kind === "foretag") redirect(`/orgs/${id}`);
   if ((await myRole(db, id)) === null) notFound();
   const people = await listPeople(db, id);
   if (isLinked(people, user.id)) redirect(`/orgs/${id}`);

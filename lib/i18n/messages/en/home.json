@@ -65,5 +65,24 @@
     "adminTickHint": "As an admin you can tick off every task here."
   },
   "openCount": "{count, plural, one {# open task} other {# open tasks}}",
-  "overdueCount": "{count} overdue"
+  "overdueCount": "{count} overdue",
+  "fromPerson": "From {name}",
+  "fromColleague": "From a colleague",
+  "approvals": {
+    "title": "Waiting for your approval",
+    "intro": "These tasks came up in meetings their owner can't see. Read the wording and rewrite it if needed: the owner sees only the task, never the meeting.",
+    "to": "To {name}",
+    "toUnknown": "To a colleague",
+    "dueText": "When: {due}",
+    "meeting": "The meeting",
+    "textLabel": "The task {name} will see",
+    "approve": "Approve and send",
+    "approving": "Sending…",
+    "drop": "Don't send",
+    "dropping": "Removing…",
+    "approved": "Sent to {name}.",
+    "dropped": "The task won't be sent.",
+    "failed": "Couldn't save. Try again.",
+    "empty": "Write the task before sending it."
+  }
 }

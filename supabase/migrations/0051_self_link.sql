@@ -18,6 +18,9 @@
 --   a person linked to someone else. The definer functions (above, set_person_email,
 --   add_board_person, the join trigger, leave/remove) run as their owner and are not affected.
 --
+-- Föreningar only: a Företag's people list is admin-only (0050), since a placed person carries a
+-- place in the group tree (and what meetings that account sees); Privat has no list to pick from.
+--
 -- Backward compatible: the deployed code never writes member_user_id through the table as a
 -- member (only the admin-side functions and the service role do). No unique index on
 -- (org_id, member_user_id): the functions check it instead, so the migration can't fail on data.
@@ -54,7 +57,7 @@ create trigger people_guard_link
 
 -- Links the caller to an unlinked person of a förening they belong to.
 -- Returns ok | taken (someone else has that person) | already (you are linked to another person
--- there) | forbidden (not signed in, not a member, no such person, or not a förening).
+-- there) | forbidden (not signed in, not a member, no such person, or not a förening: Privat, Företag).
 create function public.claim_person(p_person_id uuid)
 returns text
 language plpgsql volatile security definer set search_path = ''
@@ -69,7 +72,7 @@ begin
     return 'forbidden';
   end if;
   select p.org_id, lower(btrim(p.email)) into v_org, v_email from public.people p
-  join public.orgs o on o.id = p.org_id and o.kind <> 'privat'
+  join public.orgs o on o.id = p.org_id and o.kind = 'forening'
   where p.id = p_person_id;
   if v_org is null or not public.is_org_member(v_org) then
     return 'forbidden';
@@ -115,7 +118,7 @@ declare
   v_claim text;
 begin
   if v_user is null or not public.is_org_member(p_org_id)
-    or not exists (select 1 from public.orgs o where o.id = p_org_id and o.kind <> 'privat') then
+    or not exists (select 1 from public.orgs o where o.id = p_org_id and o.kind = 'forening') then
     return jsonb_build_object('result', 'forbidden');
   end if;
   if length(v_name) not between 1 and 100 or (v_role is not null and length(v_role) not between 1 and 40) then

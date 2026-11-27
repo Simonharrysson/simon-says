@@ -26,7 +26,12 @@ export type TickState =
 export type SaveTick = (task: MyTask, opts: { keepalive: boolean }) => Promise<{ ok: true; doc: DocOutcome } | { ok: false; code: "save" | "forbidden" | "not_open" }>;
 
 export const postTick: SaveTick = async (task, { keepalive }) => {
-  const body = task.kind === "note" ? { kind: "note", meetingId: task.meetingId, itemId: task.itemId } : { kind: "privat", taskId: task.itemId };
+  const body =
+    task.kind === "note"
+      ? { kind: "note", meetingId: task.meetingId, itemId: task.itemId }
+      : task.kind === "handoff"
+        ? { kind: "handoff", handoffId: task.itemId }
+        : { kind: "privat", taskId: task.itemId };
   try {
     const res = await fetch("/api/mina-uppgifter/klart", {
       method: "POST",
@@ -285,7 +290,13 @@ function TaskRow({
   const overdue = isOverdue(task, today) && !checked;
   const when = whenLabel(t, { ...task, done: checked }, today, locale);
   const space = task.spaceKind === "privat" ? (task.contextName ? `${t("privat")} · ${task.contextName}` : t("privat")) : task.spaceName;
-  const from = t(task.kind === "privat" ? "fromRecording" : "fromMeeting", { day: meetingDayLabel(task.meetingAt, locale) });
+  // A reviewed Företag task (0050) names only its giver: never the meeting, its day or a link.
+  const from =
+    task.kind === "handoff"
+      ? task.fromName
+        ? t("fromPerson", { name: task.fromName })
+        : t("fromColleague")
+      : t(task.kind === "privat" ? "fromRecording" : "fromMeeting", { day: meetingDayLabel(task.meetingAt, locale) });
   const locked = task.done || (state !== undefined && state.kind !== "pending" && state.kind !== "error");
 
   return (

@@ -127,5 +127,6 @@
   "libAgendaHeld": "Mötet har redan hållits i den här dagordningen. Välj ett annat datum för nästa möte.",
   "libAgendaBusy": "Någon annan uppdaterar dagordningen just nu. Försök igen om en liten stund.",
   "futureDate": "Ange ett datum som inte ligger i framtiden.",
-  "protocolNotFound": "Protokollet finns inte."
+  "protocolNotFound": "Protokollet finns inte.",
+  "libBadGroup": "Gruppen finns inte längre. Ladda om sidan och välj igen."
 }

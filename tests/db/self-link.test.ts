@@ -142,6 +142,21 @@ describe.skipIf(!hasLocalSupabase)("self link (0051)", () => {
       expect(await claimPerson(outsider.db, mine)).toBe("forbidden");
       expect(await linkOf(p)).toBeNull();
     });
+
+    it("forbidden in a Företag (0050): a placed person carries a place in the group tree", async () => {
+      const db = adminClient();
+      const { data: ftg, error } = await db.rpc("create_foretag", { p_user: admin.id, p_name: "Självlänk AB", p_root_name: "VD", p_person_name: "Chef Chefsson" });
+      if (error) throw new Error(error.message);
+      const ftgId = ftg as string;
+      const root = (await db.from("groups").select("id").eq("org_id", ftgId).single()).data!.id as string;
+      const u = await createTestUser("sl-ftg");
+      expect((await db.from("org_members").insert({ org_id: ftgId, user_id: u.id, role: "member" })).error).toBeNull();
+      const placed = await person(ftgId, "Placerad Persson", { group_id: root });
+      expect(await claimPerson(u.db, placed)).toBe("forbidden");
+      expect(await linkOf(placed)).toBeNull();
+      expect(await addSelfPerson(u.db, ftgId, "Placerad Persson", null)).toBe("forbidden");
+      expect(await addSelfPerson(u.db, ftgId, "Ny Anställd", null)).toBe("forbidden");
+    });
   });
 
   describe("self_linked_at (Nyss kopplad)", () => {

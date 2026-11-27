@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { meetingDayLabel, type MyTask, type RecentMeeting } from "@/lib/home/tasks";
 import { MyTasks, type SaveTick, type TickState } from "./MyTasks";
+import { HandoffApprovals } from "./HandoffApprovals";
+import type { PendingHandoff } from "@/lib/home/tasks";
 
 /**
  * /hem, the page after sign-in: the user's own open tasks across every förening and Privat
@@ -24,6 +26,7 @@ export function HomeView({
   initialStates,
   initialShowDone,
   bare,
+  approvals = [],
 }: {
   tasks: MyTask[];
   recent: RecentMeeting[];
@@ -35,11 +38,15 @@ export function HomeView({
   initialShowDone?: boolean;
   /** Only the content under the title, for a page that renders the title itself (/hem). */
   bare?: boolean;
+  /** Företag (0050): tasks waiting for this user's approval before their owner sees them. */
+  approvals?: PendingHandoff[];
 }) {
   const t = useTranslations("home");
   const locale = useLocale() === "en" ? "en" : "sv";
   const meetingHrefs: Record<string, string> = {};
   for (const task of tasks) {
+    // A reviewed Företag task (0050) has no meeting to link.
+    if (task.kind === "handoff") continue;
     meetingHrefs[task.meetingId] = task.kind === "privat" ? `/privat/mote/${task.meetingId}` : `/orgs/${task.spaceId}/mote/${task.meetingId}`;
   }
   const names = new Intl.ListFormat(locale === "en" ? "en-GB" : "sv-SE", { type: "conjunction" }).format(unlinked.map((u) => u.name));
@@ -74,6 +81,7 @@ export function HomeView({
             )}
           </Banner>
         )}
+        {approvals.length > 0 && <HandoffApprovals items={approvals} />}
         <section aria-labelledby="my-tasks-title" className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
             <h2 id="my-tasks-title" className="text-lg tracking-[-0.02em]">

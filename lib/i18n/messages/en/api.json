@@ -127,5 +127,6 @@
   "libAgendaHeld": "The meeting has already been held in this agenda. Choose another date for the next meeting.",
   "libAgendaBusy": "Someone else is updating the agenda right now. Try again in a little while.",
   "futureDate": "Enter a date that isn't in the future.",
-  "protocolNotFound": "The minutes don't exist."
+  "protocolNotFound": "The minutes don't exist.",
+  "libBadGroup": "That group no longer exists. Reload the page and choose again."
 }

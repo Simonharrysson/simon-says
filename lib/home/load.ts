@@ -6,13 +6,17 @@ import {
   countsMeeting,
   meetingCounts,
   myForeningTasks,
+  myHandoffTasks,
   myPrivatTasks,
+  pendingHandoffs,
   sortTasks,
+  type HandoffRow,
   type HomeMeeting,
   type HomeNoteRow,
   type HomePerson,
   type HomeSpace,
   type MyTask,
+  type PendingHandoff,
   type PrivatTaskRow,
   type RecentMeeting,
 } from "./tasks";
@@ -39,6 +43,8 @@ async function chunked<T>(ids: string[], read: (part: string[]) => PromiseLike<{
   return out;
 }
 
+const KIND_ORDER = { forening: 0, foretag: 1, privat: 2 } as const;
+
 export interface HomeData {
   spaces: HomeSpace[];
   tasks: MyTask[];
@@ -50,6 +56,8 @@ export interface HomeData {
   unlinked: { id: string; name: string }[];
   /** The Doc of each förening meeting a task came from (for "Öppna dokumentet"). */
   docs: Record<string, string>;
+  /** Företag (0050): tasks for people who can't see their meeting, waiting for this user's approval. */
+  approvals: PendingHandoff[];
 }
 
 export async function loadHome(db: SupabaseClient, userId: string): Promise<HomeData> {
@@ -57,14 +65,21 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
   if (e1) fail("members", e1);
   const roleOf = new Map((memberships ?? []).map((m) => [m.org_id as string, m.role as string]));
   const orgIds = [...roleOf.keys()];
-  if (!orgIds.length) return { spaces: [], tasks: [], recent: [], brandNew: true, unlinked: [], docs: {} };
+  if (!orgIds.length) return { spaces: [], tasks: [], recent: [], brandNew: true, unlinked: [], docs: {}, approvals: [] };
 
   const { data: orgs, error: e2 } = await db.from("orgs").select("id, name, kind").in("id", orgIds);
   if (e2) fail("orgs", e2);
   const spaces: HomeSpace[] = ((orgs ?? []) as { id: string; name: string; kind: string }[])
-    .map((o) => ({ id: o.id, name: o.name, kind: o.kind === "privat" ? ("privat" as const) : ("forening" as const), isAdmin: roleOf.get(o.id) === "admin" }))
-    .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "sv") : a.kind === "forening" ? -1 : 1));
-  const foreningIds = spaces.filter((s) => s.kind === "forening").map((s) => s.id);
+    .map((o) => ({
+      id: o.id,
+      name: o.name,
+      kind: o.kind === "privat" ? ("privat" as const) : o.kind === "foretag" ? ("foretag" as const) : ("forening" as const),
+      isAdmin: roleOf.get(o.id) === "admin",
+    }))
+    .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, "sv") : KIND_ORDER[a.kind] - KIND_ORDER[b.kind]));
+  // Föreningar and Företag share the note-row path (RLS narrows a Företag to what the user may see).
+  const foreningIds = spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => s.id);
+  const foretagIds = spaces.filter((s) => s.kind === "foretag").map((s) => s.id);
   const privat = spaces.find((s) => s.kind === "privat") ?? null;
 
   // Finished meetings per space, newest first (a förening's `title` once 0048 is there: select *).
@@ -123,7 +138,25 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
     }
   }
 
-  const tasks = sortTasks([...myForeningTasks({ userId, spaces, meetings: foreningMeetings, rows, people }), ...privatTasks]);
+  // Företag (0050): reviewed tasks from meetings the user can't see, and those waiting for their approval.
+  const handoffs = foretagIds.length
+    ? await chunked<HandoffRow>(
+        foretagIds,
+        (part) =>
+          db
+            .from("task_handoffs")
+            .select("id, org_id, meeting_id, owner_person_id, text, due, due_date, from_name, status, done, created_at")
+            .in("org_id", part)
+            .in("status", ["pending", "approved"]),
+        "task_handoffs",
+      )
+    : [];
+  const tasks = sortTasks([
+    ...myForeningTasks({ userId, spaces, meetings: foreningMeetings, rows, people }),
+    ...myHandoffTasks({ userId, spaces, handoffs, people }),
+    ...privatTasks,
+  ]);
+  const approvals = pendingHandoffs({ spaces, handoffs, people });
 
   const spaceOf = new Map(spaces.map((s) => [s.id, s]));
   const recent: RecentMeeting[] = [...foreningMeetings, ...privatMeetings]
@@ -155,5 +188,5 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
     .map((s) => ({ id: s.id, name: s.name }));
   const docs: Record<string, string> = {};
   for (const m of foreningMeetings) if (m.doc_id) docs[m.id] = docUrl(m.doc_id);
-  return { spaces, tasks, recent, brandNew, unlinked, docs };
+  return { spaces, tasks, recent, brandNew, unlinked, docs, approvals };
 }
