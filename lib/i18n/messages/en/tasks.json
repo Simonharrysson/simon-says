@@ -39,7 +39,8 @@
       "Friday",
       "In a week",
       "In two weeks"
-    ]
+    ],
+    "stillMissing": "Fill in {fields} too, or leave it as it is."
   },
   "summary": {
     "doneWhen": "done when: {text}",

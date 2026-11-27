@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { IconStop } from "@/components/ui/icons";
@@ -20,6 +20,13 @@ import {
   type TaskView,
 } from "@/lib/notes/tasks";
 import { taskText } from "./TasksPanel";
+
+/** Typed and handled so far in the dialog; kept across Esc / Fortsätt mötet. */
+export interface EndProgress {
+  handled: Record<string, Handled | undefined>;
+  drafts: EndDrafts;
+}
+export const NO_PROGRESS: EndProgress = { handled: {}, drafts: {} };
 
 /** What Avsluta asks about (GET /api/meetings/[id]/tasks), for a förening that asks. */
 export interface EndAsk {
@@ -44,6 +51,8 @@ export function EndTasksDialog({
   tasks,
   owners = [],
   setAsking,
+  progress,
+  onProgress,
   onConfirm,
 }: {
   open: boolean;
@@ -51,14 +60,25 @@ export function EndTasksDialog({
   tasks: TaskView[];
   owners?: string[];
   setAsking?: (on: boolean) => Promise<boolean>;
+  /** What is typed and handled so far, kept by the parent so closing and reopening keeps it. */
+  progress: EndProgress;
+  onProgress: (update: (cur: EndProgress) => EndProgress) => void;
   onConfirm: (answers: TaskAnswer[], stats: EndStats) => void;
 }) {
   const t = useTranslations("tasks.end");
   const listId = useId();
-  const [handled, setHandled] = useState<Record<string, Handled | undefined>>({});
-  const [drafts, setDrafts] = useState<EndDrafts>({});
+  const { handled, drafts } = progress;
   const [asking, setAskingState] = useState<"on" | "off" | "busy">("on");
   const [askFailed, setAskFailed] = useState(false);
+  // After a change of the setting, focus follows it: to Ångra once off, back to the link once on.
+  const moved = useRef(false);
+  const undoRef = useRef<HTMLButtonElement>(null);
+  const offRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!moved.current || asking === "busy") return;
+    moved.current = false;
+    (asking === "off" ? undoRef : offRef).current?.focus();
+  }, [asking]);
   const ready = endReady(tasks, handled);
   const whenSuggestions = t.raw("whenSuggestions") as string[];
 
@@ -67,6 +87,7 @@ export function EndTasksDialog({
     setAskingState("busy");
     setAskFailed(false);
     const ok = await setAsking(on).catch(() => false);
+    moved.current = ok;
     setAskFailed(!ok);
     setAskingState(ok === on ? "on" : "off");
   };
@@ -95,22 +116,27 @@ export function EndTasksDialog({
                 listId={listId}
                 handled={handled[task.id]}
                 values={drafts[task.id] ?? {}}
-                onValues={(v) => setDrafts((cur) => ({ ...cur, [task.id]: v }))}
-                onHandled={(h) => setHandled((cur) => ({ ...cur, [task.id]: h }))}
+                onValues={(v) => onProgress((cur) => ({ ...cur, drafts: { ...cur.drafts, [task.id]: v } }))}
+                onHandled={(h) => onProgress((cur) => ({ ...cur, handled: { ...cur.handled, [task.id]: h } }))}
               />
             ))}
           </ul>
           {setAsking && (
-            <div className="mt-3 text-sm" role="status" aria-live="polite">
+            <div className="mt-3 text-sm">
+              {/* The live region holds only the message; the buttons stay outside it. */}
+              <p className="sr-only" role="status" aria-live="polite">
+                {askFailed ? t("turnOffFailed") : asking === "off" ? t("turnedOff") : ""}
+              </p>
               {asking === "off" ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-sunk px-3 py-2">
-                  <span>{t("turnedOff")}</span>
-                  <Button size="sm" variant="ghost" onClick={() => void changeAsking(true)}>
+                  <span aria-hidden="true">{t("turnedOff")}</span>
+                  <Button ref={undoRef} size="sm" variant="ghost" onClick={() => void changeAsking(true)}>
                     {t("turnOn")}
                   </Button>
                 </div>
               ) : (
                 <button
+                  ref={offRef}
                   type="button"
                   className="text-ink-2 underline underline-offset-2 hover:text-ink disabled:opacity-60"
                   disabled={asking === "busy"}
@@ -119,7 +145,11 @@ export function EndTasksDialog({
                   {t("turnOff")}
                 </button>
               )}
-              {askFailed && <p className="mt-1 text-ink-2">{t("turnOffFailed")}</p>}
+              {askFailed && (
+                <p className="mt-1 text-ink-2" aria-hidden="true">
+                  {t("turnOffFailed")}
+                </p>
+              )}
             </div>
           )}
         </DialogBody>
@@ -166,6 +196,10 @@ function TaskRow({
   const hints: Record<TaskField, string> = { owner: t("whoHint"), due: t("whenHint"), doneWhen: t("doneWhenHint") };
   const lists: Partial<Record<TaskField, string>> = { owner: `${listId}-owner`, due: `${listId}-due` };
   const complete = task.missing.every((f) => values[f]?.trim());
+  const empty = task.missing.filter((f) => !values[f]?.trim());
+  // Set by a save with fields still empty: they are marked and named, never a silent nothing.
+  const [tried, setTried] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const text = taskText(task);
 
   return (
@@ -194,8 +228,11 @@ function TaskRow({
           className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            if (complete) onHandled({ kind: "completed", values });
+            if (complete) return onHandled({ kind: "completed", values });
+            setTried(true);
+            formRef.current?.querySelector<HTMLInputElement>(`#${CSS.escape(`${id}-${empty[0]}`)}`)?.focus();
           }}
+          ref={formRef}
         >
           {task.missing.map((f) => (
             <div key={f} className="flex flex-col gap-1">
@@ -208,12 +245,19 @@ function TaskRow({
                 list={lists[f]}
                 autoComplete="off"
                 enterKeyHint="done"
+                aria-invalid={tried && !values[f]?.trim() ? true : undefined}
+                aria-describedby={tried && empty.length ? `${id}-missing` : undefined}
                 onChange={(event) => onValues({ ...values, [f]: event.target.value })}
               />
             </div>
           ))}
+          {tried && empty.length > 0 && (
+            <p id={`${id}-missing`} className="text-sm text-ink-2" role="status">
+              {t("stillMissing", { fields: empty.map((f) => labels[f].toLowerCase()).join(", ") })}
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" size="sm" variant="primary" disabled={!complete}>
+            <Button type="submit" size="sm" variant="primary">
               {t("save")}
             </Button>
             <Button type="button" size="sm" onClick={() => onHandled({ kind: "dismissed" })}>

@@ -65,8 +65,17 @@ test("incomplete tasks → Avsluta asks: complete one inline, leave one → ends
 
   const first = dialog.getByRole("listitem", { name: fika });
   await first.getByLabel("När", { exact: true }).fill("torsdag");
+  // Enter with a field still empty names it and moves there, never a silent nothing.
+  await first.getByLabel("När", { exact: true }).press("Enter");
+  await expect(first.getByRole("status")).toContainText("klart när");
+  await expect(first.getByLabel("Klart när", { exact: true })).toBeFocused();
+  // Fortsätt mötet and back: what was typed is still there.
+  await dialog.getByRole("button", { name: "Fortsätt mötet" }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole("button", { name: "Avsluta", exact: true }).click();
+  await expect(first.getByLabel("När", { exact: true })).toHaveValue("torsdag");
   await first.getByLabel("Klart när", { exact: true }).fill("fikat är köpt");
-  await first.getByRole("button", { name: "Spara" }).click();
+  await first.getByLabel("Klart när", { exact: true }).press("Enter");
   await expect(first).toContainText("Skrivs in i dokumentet");
   await dialog.getByRole("listitem", { name: plan }).getByRole("button", { name: "Lämna som det är" }).click();
   // Every task handled: the button says so.
@@ -108,6 +117,7 @@ test("an admin turns the question off from the dialog, Ångra turns it back on; 
   const dialog = page.getByRole("dialog", { name: "Avsluta mötet?" });
   await dialog.getByRole("button", { name: "Fråga inte igen i den här föreningen" }).click();
   await expect(dialog.getByRole("status")).toContainText("Vi frågar inte igen i den här föreningen.");
+  await expect(dialog.getByRole("button", { name: "Ångra" })).toBeFocused();
   await expect.poll(asks).toBe(false);
   await expectAccessible(page);
 

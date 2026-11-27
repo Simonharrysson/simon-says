@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { IconPause, IconPlay, IconStop } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import type { EndStats, TaskAnswer } from "@/lib/notes/tasks";
-import { EndTasksDialog, type EndAsk } from "./EndTasksDialog";
+import { EndTasksDialog, NO_PROGRESS, type EndAsk, type EndProgress } from "./EndTasksDialog";
 import { LiveDialog, type LiveDialogHandle } from "./LiveDialog";
 
 /**
@@ -41,12 +41,20 @@ export function MeetingControls({
   const t = useTranslations("live");
   const dialog = useRef<LiveDialogHandle>(null);
   const ending = status === "ending";
+  // Read after awaits: the render's `ending` is stale once askTasks resolves.
+  const endingRef = useRef(ending);
+  useEffect(() => {
+    endingRef.current = ending;
+  }, [ending]);
   const [ask, setAsk] = useState<EndAsk | null>(null);
+  // Typed and handled answers survive Esc / Fortsätt mötet, so reopening shows them.
+  const [progress, setProgress] = useState<EndProgress>(NO_PROGRESS);
   const [checking, setChecking] = useState(false);
   // The meeting stopped on its own (a cap, another tab) while a dialog was open: close it, so it
   // can't end the meeting a second time.
   useEffect(() => {
     if (!ending) return;
+    endingRef.current = true;
     setAsk(null);
     dialog.current?.close();
   }, [ending]);
@@ -55,7 +63,7 @@ export function MeetingControls({
     setChecking(true);
     const open = await askTasks();
     setChecking(false);
-    if (ending) return;
+    if (endingRef.current) return;
     if (open.tasks.length) setAsk(open);
     else dialog.current?.showModal();
   };
@@ -97,7 +105,7 @@ export function MeetingControls({
         confirmLabel={t("controls.confirmEnd")}
         confirmIcon={<IconStop size={16} />}
         onConfirm={() => {
-          if (!ending) onStop();
+          if (!endingRef.current) onStop();
         }}
       >
         {t("stopCopy")}
@@ -108,11 +116,13 @@ export function MeetingControls({
           tasks={ask.tasks}
           owners={ask.owners}
           setAsking={ask.setAsking}
+          progress={progress}
+          onProgress={setProgress}
           onOpenChange={(o) => {
             if (!o) setAsk(null);
           }}
           onConfirm={(answers, stats) => {
-            if (!ending) onStop(answers, stats);
+            if (!endingRef.current) onStop(answers, stats);
           }}
         />
       )}

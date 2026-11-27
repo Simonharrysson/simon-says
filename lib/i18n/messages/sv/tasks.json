@@ -39,7 +39,8 @@
       "Fredag",
       "Om en vecka",
       "Om två veckor"
-    ]
+    ],
+    "stillMissing": "Fyll i {fields} också, eller lämna raden som den är."
   },
   "summary": {
     "doneWhen": "klart när: {text}",
