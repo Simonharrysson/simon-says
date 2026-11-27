@@ -6,8 +6,14 @@ export const SPRING = { type: "spring", visualDuration: 0.3, bounce: 0 } as cons
 /** Leaving is quicker than arriving. */
 export const SPRING_EXIT = { type: "spring", visualDuration: 0.22, bounce: 0 } as const;
 
-/** Entrances (WAAPI): a short rise, 35 ms apart, never more than 245 ms of total delay. */
-export const ENTER = { rise: 8, stagger: 35, maxDelay: 245, duration: 550 } as const;
+/**
+ * Entrances (WAAPI): content that replaces its placeholder rises 14 px and comes into focus from a
+ * 4 px blur, 40 ms apart, never more than 280 ms of total delay, on EASE_ENTER.
+ */
+export const ENTER = { rise: 14, blur: 4, stagger: 40, maxDelay: 280, duration: 460 } as const;
+/** motion `spring({ visualDuration: 0.35, bounce: 0.1 })`, settles in 460 ms. */
+export const EASE_ENTER =
+  "linear(0, 0.0203, 0.0716, 0.1418, 0.2223, 0.3067, 0.3904, 0.4706, 0.5453, 0.6133, 0.6743, 0.7282, 0.7751, 0.8156, 0.8501, 0.8793, 0.9037, 0.924, 0.9406, 0.9542, 0.9652, 0.974, 0.9809, 0.9864, 0.9906, 0.9938, 0.9962, 0.998, 0.9993, 1.0002, 1.0008, 1.0012, 1)";
 /** The same spring as `--ease-spring` (motion `spring({ visualDuration: 0.3, bounce: 0.15 })`, settles in 550 ms). */
 export const EASE_SPRING =
   "linear(0, 0.038, 0.1281, 0.2432, 0.3653, 0.483, 0.5898, 0.6827, 0.7607, 0.8243, 0.8747, 0.9138, 0.9433, 0.965, 0.9804, 0.9911, 0.9981, 1.0025, 1.0049, 1.006, 1.0063, 1.006, 1.0054, 1.0047, 1.0039, 1.0032, 1.0025, 1.0019, 1.0015, 1.0011, 1.0008, 1.0005, 1)";

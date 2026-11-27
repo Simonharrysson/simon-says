@@ -458,7 +458,8 @@
     color 120ms ease,
     background-color 120ms ease,
     border-color 120ms ease,
-    box-shadow 120ms ease,
+    box-shadow 200ms var(--ease-out),
+    translate 200ms var(--ease-out),
     scale var(--dur-press) var(--ease-press);
   &:active:not(:disabled, [aria-disabled="true"], [data-loading="true"]) {
     scale: 0.98;
@@ -468,10 +469,31 @@
   transition:
     color 120ms ease,
     background-color 120ms ease,
+    box-shadow 200ms var(--ease-out),
+    translate 200ms var(--ease-out),
     scale var(--dur-press) var(--ease-press);
   &:active {
     scale: 0.99;
   }
+}
+/* Lift: a clickable row or card rises 1 px onto the lifted shadow under a mouse (never on touch,
+   which "hovers" on tap). Pair with `press` / `press-row`, whose transition list carries it. */
+@utility lift {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      position: relative;
+      z-index: 1;
+      translate: 0 -1px;
+      box-shadow: var(--shadow-lift);
+    }
+  }
+}
+
+/* Rows that close (components/motion/Presence.tsx): when the first row of a list closes, the
+   row under it is about to be first, so its separator fades now rather than vanishing after. */
+li:first-child[data-exiting] + li > :first-child {
+  border-top-color: transparent;
+  transition: border-top-color 150ms ease;
 }
 
 /* Sliders (components/motion/Slider.tsx): once the marker is measured, it carries the active
@@ -482,15 +504,6 @@
 }
 [data-slider] > [data-slider-key]::after {
   content: none;
-}
-
-/* Progress bars fill from empty when they first appear. */
-.bar-grow {
-  transform-origin: left center;
-  transition: transform 600ms var(--ease-out);
-  @starting-style {
-    transform: scaleX(0);
-  }
 }
 
 /* ---------- Reduced motion: every animation and transition off; content is always visible. ---------- */

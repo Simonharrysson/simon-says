@@ -87,7 +87,7 @@ export function HomeView({
         {approvals.length > 0 && <HandoffApprovals items={approvals} />}
         <section aria-labelledby="my-tasks-title" className="flex flex-col gap-4">
           <div data-enter-item className="flex flex-col gap-1">
-            <h2 id="my-tasks-title" className="text-lg tracking-[-0.02em]">
+            <h2 id="my-tasks-title" tabIndex={-1} className="text-lg tracking-[-0.02em] focus:outline-none">
               {t("tasksTitle")}
             </h2>
             <p className="max-w-[34rem] text-ink-2">{t("intro")}</p>

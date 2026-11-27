@@ -4,7 +4,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useLocale, useTranslations } from "next-intl";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
-import { Lazy } from "@/components/motion/Lazy";
+import { CountUp } from "@/components/motion/CountUp";
+import { Lazy, motionReady } from "@/components/motion/Lazy";
 import { PresenceDiv, PresenceLi } from "@/components/motion/Presence";
 import { useFlip } from "@/components/motion/useFlip";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,9 +88,19 @@ export function MyTasks({
   const [filter, setFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(initialShowDone);
   const { states, tick, undo } = useTicks(save, initialStates);
-  const settled = useSettled(states);
+  const listRef = useRef<HTMLUListElement>(null);
+  // A row about to close (or move to the done ones) that holds the focus hands it on first: to
+  // the next row's checkbox, else the one before, else the list's heading.
+  const settled = useSettled(states, (key) => {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>(`:scope > [data-flip="${CSS.escape(key)}"]`);
+    if (!list || !row || !row.contains(document.activeElement)) return;
+    const rows = [...list.querySelectorAll<HTMLElement>(":scope > li:not([data-exiting])")].filter((r) => r !== row);
+    const next = rows.find((r) => row.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING) ?? rows.at(-1);
+    const box = next?.querySelector<HTMLElement>('[role="checkbox"]:not([disabled])');
+    (box ?? document.getElementById("my-tasks-title"))?.focus();
+  });
   const switchId = useId();
-  const listRef = useFlip<HTMLUListElement>();
   // The list and its empty state crossfade (instant under reduced motion).
   const fade = useReducedMotion() ? { duration: 0 } : SPRING_EXIT;
 
@@ -121,6 +132,8 @@ export function MyTasks({
   const visible = [...stillOpen, ...(showDone ? [...settledHere, ...doneShown] : [])].filter(inFilter);
   const filterName = spaces.find((s) => s.id === filter)?.name ?? "";
   const hasDone = settledHere.length > 0 || tasks.some((x) => x.done);
+
+  useFlip(listRef, visible.map((x) => x.key));
 
   const shownOpen = openTasks.filter(inFilter);
   const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
@@ -180,7 +193,7 @@ export function MyTasks({
 
         {shownOpen.length > 0 && (
           <p data-enter-item className="text-sm text-ink-2" aria-live="polite">
-            {t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })}
+            <CountUp text={t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })} />
             {overdueCount > 0 && (
               <>
                 {" · "}
@@ -193,7 +206,7 @@ export function MyTasks({
           {visible.length === 0 ? (
             <m.div
               key="empty"
-              initial={{ opacity: 0 }}
+              initial={motionReady() ? { opacity: 0 } : false}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={fade}
@@ -286,15 +299,20 @@ export function useTicks(save: SaveTick, initialStates?: Record<string, TickStat
 }
 
 /** Keys of tasks ticked here that are done and need nothing more, SETTLE_MS after they were saved. */
-function useSettled(states: Record<string, TickState>): ReadonlySet<string> {
+function useSettled(states: Record<string, TickState>, beforeSettle: (key: string) => void): ReadonlySet<string> {
   const [settled, setSettled] = useState<ReadonlySet<string>>(() => new Set());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const before = useRef(beforeSettle);
+  before.current = beforeSettle;
   useEffect(() => {
     for (const [key, st] of Object.entries(states)) {
       if (st.kind !== "saved" || (st.doc !== "written" && st.doc !== "none") || timers.current.has(key)) continue;
       timers.current.set(
         key,
-        setTimeout(() => setSettled((s) => new Set(s).add(key)), SETTLE_MS),
+        setTimeout(() => {
+          before.current(key);
+          setSettled((s) => new Set(s).add(key));
+        }, SETTLE_MS),
       );
     }
   }, [states]);

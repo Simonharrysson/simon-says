@@ -3,7 +3,18 @@
 import { LazyMotion } from "motion/react";
 import type { ReactNode } from "react";
 
-const loadFeatures = () => import("./features").then((m) => m.default);
+let ready = false;
+const loadFeatures = () =>
+  import("./features").then((m) => {
+    ready = true;
+    return m.default;
+  });
+
+/**
+ * True once motion's animation features have loaded. Until then (or if the chunk never arrives)
+ * a new element must mount in its final, visible state: an `initial` would stay applied.
+ */
+export const motionReady = () => ready;
 
 /**
  * Motion for a subtree: `m` components only (`strict`), the animation features fetched in their

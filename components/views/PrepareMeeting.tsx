@@ -202,7 +202,7 @@ function TypeStep(p: PrepareMeetingViewProps & { uid: string }) {
             <label
               key={mt.type}
               className={cn(
-                "press flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4",
+                "press lift flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border bg-surface p-4",
                 checked ? "border-ink" : "border-line hover:border-control",
               )}
             >
@@ -263,9 +263,10 @@ function DraftStep(p: PrepareMeetingViewProps & { phase: Extract<PreparePhase, {
   const locale = useLocale();
   const [adding, setAdding] = useState("");
   // Points added, removed and moved: they open, close and slide (components/motion).
-  const agendaRef = useFlip<HTMLOListElement>();
+  const agendaRef = useRef<HTMLOListElement>(null);
   const addRef = useRef<HTMLInputElement>(null);
   const on = p.items.filter((i) => i.on);
+  useFlip(agendaRef, on.map((i) => i.id));
   // "Mål att ta upp" (todo #12): the goals Simon Says suggests, apart from the other points.
   const offGoals = p.items.filter((i) => !i.on && isGoalItem(i));
   const off = p.items.filter((i) => !i.on && !isGoalItem(i));

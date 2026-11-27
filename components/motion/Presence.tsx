@@ -1,10 +1,10 @@
 "use client";
 
-import { AnimatePresence, useReducedMotion } from "motion/react";
+import { AnimatePresence, useIsPresent, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import type { ComponentProps, ReactNode } from "react";
 import { SPRING, SPRING_EXIT } from "@/lib/motion";
-import { Lazy } from "./Lazy";
+import { Lazy, motionReady } from "./Lazy";
 
 /**
  * Rows that come and go: a new row opens to its height and fades in, a removed one fades and
@@ -33,14 +33,28 @@ const instantVariants = {
 
 type Props<T extends "li" | "div"> = Omit<ComponentProps<(typeof m)[T]>, "initial" | "animate" | "exit" | "variants">;
 
-/** A list row for <Presence> (or any AnimatePresence): an `li` with the open/close animation. */
+/**
+ * A list row for <Presence> (or any AnimatePresence): an `li` with the open/close animation.
+ * While it closes it carries `data-exiting`, so the row after it can drop its separator
+ * (app/globals.css "Rows that close"). Before motion's features load it mounts as it is.
+ */
 export function PresenceLi(props: Props<"li">) {
   const reduce = useReducedMotion();
-  return <m.li variants={reduce ? instantVariants : rowVariants} initial="out" animate="in" exit="gone" {...props} />;
+  const present = useIsPresent();
+  return (
+    <m.li
+      variants={reduce ? instantVariants : rowVariants}
+      initial={motionReady() ? "out" : false}
+      animate="in"
+      exit="gone"
+      data-exiting={present ? undefined : ""}
+      {...props}
+    />
+  );
 }
 
 /** The same for a block that appears and goes (inside an AnimatePresence). */
 export function PresenceDiv(props: Props<"div">) {
   const reduce = useReducedMotion();
-  return <m.div variants={reduce ? instantVariants : rowVariants} initial="out" animate="in" exit="gone" {...props} />;
+  return <m.div variants={reduce ? instantVariants : rowVariants} initial={motionReady() ? "out" : false} animate="in" exit="gone" {...props} />;
 }
