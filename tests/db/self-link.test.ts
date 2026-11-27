@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
+import { randomUUID } from "node:crypto";
+import { adminClient, clientAs, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import { addPerson, addSelfPerson, claimPerson, createOrg, isLinkedIn, joinOrg, renamePerson } from "@/lib/db/orgs";
 import { ensurePrivatSpace } from "@/lib/privat/space";
 
@@ -171,6 +172,25 @@ describe.skipIf(!hasLocalSupabase)("self link (0051)", () => {
       expect(await selfLinkedAt(p)).toBeNull();
     });
 
+  });
+
+  describe("unconfirmed address", () => {
+    it("an unconfirmed address doesn't count as your own invite e-mail", async () => {
+      // The auth server won't sign in an unconfirmed user, so the session is minted directly.
+      const email = `sl-unconf-${randomUUID()}@test.local`;
+      const { data, error } = await adminClient().auth.admin.createUser({ email, password: `pw-${randomUUID()}`, email_confirm: false });
+      if (error || !data.user) throw new Error(`createUser: ${error?.message}`);
+      expect(data.user.email_confirmed_at ?? null).toBeNull();
+      const db = clientAs(data.user.id, email);
+      expect(await joinOrg(db, await inviteCode(orgId))).toBe(orgId);
+      const p = await person(orgId, "Obekräftad Olsson", { email });
+      expect(await claimPerson(db, p)).toBe("taken");
+      expect(await linkOf(p)).toBeNull();
+      // The same session, a free row without an e-mail: the claim itself works.
+      const free = await person(orgId, "Obekräftad Fri");
+      expect(await claimPerson(db, free)).toBe("ok");
+      expect(await linkOf(free)).toBe(data.user.id);
+    });
   });
 
   describe("add_self_person", () => {
