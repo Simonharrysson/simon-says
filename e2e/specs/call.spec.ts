@@ -83,12 +83,18 @@ async function freshStarter(seedOrg: Fixtures["seedOrg"], signedIn: Fixtures["si
   return { org, page };
 }
 
-/** "Var hålls mötet?" → I ett videosamtal, retried until hydrated. */
+/**
+ * "Var hålls mötet?" → I ett videosamtal, retried until hydrated: a native radio ticks before
+ * hydration without React seeing it, so the choice only counts once the call steps show.
+ */
 async function chooseCall(page: Page) {
+  const room = page.getByRole("radio", { name: "Här i rummet" });
   const call = page.getByRole("radio", { name: "I ett videosamtal (Google Meet m.fl.)" });
   await expect(async () => {
+    await room.check({ timeout: 2000 });
     await call.check({ timeout: 2000 });
-  }).toPass({ timeout: 30_000 });
+    await expect(page.getByText("Tryck Välj mötesfliken här nedan.")).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 45_000 });
 }
 
 test("video call: tab audio + mic mixed into the transcription, share stopped → paused → shared again", async ({ seedOrg, signedIn, newEmail, db }) => {
