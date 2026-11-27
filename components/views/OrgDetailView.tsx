@@ -36,6 +36,10 @@ export interface OrgDetailMeeting {
   ended_at: string | null;
   doc_id: string;
   started_by: string | null;
+  /** A förening with groups (0054): who the meeting is for ("Utveckling", "Hela föreningen"); absent without groups. */
+  forGroup?: string | null;
+  /** A Privat möte (0054): only the starter and admins see it. */
+  private?: boolean;
 }
 
 export interface OrgDetailViewProps {
@@ -610,6 +614,7 @@ function MeetingRow({
   viewerEmail,
 }: MeetingsPanelProps & { meeting: OrgDetailMeeting }) {
   const t = useTranslations("org");
+  const tg = useTranslations("foretag.picker");
   const common = useTranslations("common");
   const locale = useLocale();
   const state = meetingDeleteState(meeting, { isAdmin, userId });
@@ -637,6 +642,8 @@ function MeetingRow({
           <span className="mt-[0.15rem] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
             {about?.isTest && <Badge tone="neutral">{t("testMeeting")}</Badge>}
             {meeting.status !== "done" && <Badge tone={statusTone[meeting.status]}>{t(`status.${meeting.status}`)}</Badge>}
+            {meeting.private && <Badge tone="neutral">{tg("private")}</Badge>}
+            {meeting.forGroup && <span className="font-medium text-ink-2">{meeting.forGroup}</span>}
             <span>{[about?.title ? date : null, duration, counts].filter(Boolean).join(" · ")}</span>
           </span>
         </span>

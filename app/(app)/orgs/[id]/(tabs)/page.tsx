@@ -171,6 +171,16 @@ async function loadGroupSettings(db: Awaited<ReturnType<typeof createSupabaseSer
   }
 }
 
+/** Group names by id (0054), read as the user; a failed read only leaves the names out. */
+async function safeGroupNames(db: Awaited<ReturnType<typeof createSupabaseServerClient>>, orgId: string): Promise<Map<string, string> | null> {
+  try {
+    return new Map((await listGroups(db, orgId)).map((g) => [g.id, g.name]));
+  } catch (err) {
+    console.error(`org page: group names: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 export default async function OrgPage({
   params,
   searchParams,
@@ -224,6 +234,12 @@ export default async function OrgPage({
   const tree = isAdmin && tab === "installningar" ? await loadGroupSettings(db, id) : null;
   // Who may open each Doc: the starter and recorded shares (no Drive call per page view).
   const [shared, flags] = await Promise.all([sharedMeetingIds(db), appCreatedFlags(db, id)]);
+  // A förening with groups (0054): each meeting's group by name ("Hela föreningen" without one).
+  const groupNames = org.groups_enabled && tab === "moten" ? await safeGroupNames(db, id) : null;
+  const tp = await getTranslations("foretag.picker.forening");
+  const listed = groupNames
+    ? meetings.map((m) => ({ ...m, forGroup: m.group_id ? (groupNames.get(m.group_id) ?? null) : tp("whole") }))
+    : meetings.map((m) => ({ ...m, private: false }));
   const docAccess = docAccessFor(
     meetings.map((m) => ({ ...m, app_created_doc: flags.get(m.id) ?? null })),
     me,
@@ -238,7 +254,7 @@ export default async function OrgPage({
       inviteUrl={inviteUrl}
       members={members}
       people={people}
-      meetings={meetings}
+      meetings={listed}
       meetingInfo={meetingInfo}
       logoUrl={logoUrl(org.id, org.logo_updated_at)}
       komIgang={

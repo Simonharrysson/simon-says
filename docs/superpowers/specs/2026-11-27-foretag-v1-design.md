@@ -110,3 +110,16 @@ AI-written task text from a restricted meeting can leak what the owner may not s
 - Search over history.
 - More than one live meeting per company at a time.
 - **Gate:** no company other than Harrysson & Company before a DPA (personuppgiftsbiträdesavtal), its subprocessor list and a legal review of /integritet and the terms **[decided 11-27]**.
+
+## Föreningar with groups (0054, Simon 2026-11-27)
+A förening may opt in to the same tree, with the same visibility rule and the same task delivery across visibility. It is off by default. A förening without groups behaves exactly as before, and its visibility check keeps the one-join fast path.
+- **Turning it on and off:** an admin uses Inställningar → Styrelsen och medlemmar → Grupper.
+  - *Organisera i grupper* creates the top group (default "Styrelsen") and places every linked person in it, so nobody linked sees less. Members without a name in the list are unplaced from then on, and the confirm says how many.
+  - *Sluta använda grupper* opens every meeting to every member again. Groups and places are kept for a later turn-on.
+- **Shared with Företag:** `orgs.groups_enabled` widens "is a Företag" to "has the tree" (`org_has_tree`) in the predicate and in the group, place and handoff functions. The tree editor (`components/groups/GroupTree`) and `GroupPicker` are shared too.
+- **Förening-specific:**
+  - Formats, agenda Docs and "kräv Vem/När/Klart när" stay. An agenda or prepared Doc can be used only for a meeting of the whole förening.
+  - There is one live meeting at a time, and no calendar attendees or customers.
+  - The summary keeps the förening's own mode, filtered to the viewers.
+  - "Från förra veckan" carries tasks only from the same group, and never from or into a Privat möte. Förbered möte, goal proposals and history digests draw only from meetings of the whole förening.
+  - A placed person row is written by admins only, so a member can't link themself into a place.

@@ -73,8 +73,10 @@ export interface StartOptions {
   contextId?: string | null;
   withDoc?: boolean;
   /**
-   * A Företag only (0050): the group the meeting is for (null = Hela företaget) and "Privat möte"
-   * (only attendees and admins see it). Always a new Enkel Doc, shared with exactly the viewers.
+   * The tree only (a Företag 0050, a förening with groups 0054): the group the meeting is for (null
+   * = the whole org) and "Privat möte" (only attendees and admins see it). A new Doc is shared with
+   * exactly the viewers (a Företag: always Enkel; a förening keeps its format, and its own agenda
+   * Doc only for a meeting of the whole förening).
    */
   groupId?: string | null;
   private?: boolean;

@@ -167,10 +167,11 @@ export async function deletePerson(db: Db, personId: string): Promise<boolean> {
 export async function listMeetings(
   db: Db,
   orgId: string,
-): Promise<Pick<MeetingRow, "id" | "status" | "started_at" | "ended_at" | "doc_id" | "started_by" | "agenda_doc">[]> {
+): Promise<(Pick<MeetingRow, "id" | "status" | "started_at" | "ended_at" | "doc_id" | "started_by" | "agenda_doc"> & { group_id: string | null; private: boolean })[]> {
+  // group_id and private (0050): who a meeting is for, in a förening with groups (0054).
   const { data, error } = await db
     .from("meetings")
-    .select("id, status, started_at, ended_at, doc_id, started_by, agenda_doc")
+    .select("id, status, started_at, ended_at, doc_id, started_by, agenda_doc, group_id, private")
     .eq("org_id", orgId)
     .order("started_at", { ascending: false });
   if (error) fail("listMeetings", error);
