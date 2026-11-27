@@ -19,8 +19,8 @@ export interface ForetagChoice {
 export interface ForetagEventOffer {
   id: string;
   title: string;
-  /** Colleagues (company members) on its guest list; accepted ones are pre-ticked. */
-  colleagues: { userId: string; name: string; accepted: boolean }[];
+  /** Colleagues (company members) on its guest list; accepted ones are pre-ticked, declined ones can't be ticked. */
+  colleagues: { userId: string; name: string; accepted: boolean; declined?: boolean }[];
   /** The outside guests' domain: the customer, if the event is confirmed (and not a Privat möte). */
   customerDomain: string | null;
 }
@@ -53,7 +53,7 @@ export function GroupPicker({
   const [group, setGroup] = useState<string>(initialGroupId && groups.some((g) => g.id === initialGroupId) ? initialGroupId : WHOLE);
   const [priv, setPriv] = useState(false);
   const [linked, setLinked] = useState(false);
-  const [ticked, setTicked] = useState<Set<string>>(() => new Set((event?.colleagues ?? []).filter((c) => c.accepted).map((c) => c.userId)));
+  const [ticked, setTicked] = useState<Set<string>>(() => new Set((event?.colleagues ?? []).filter((c) => c.accepted && !c.declined).map((c) => c.userId)));
 
   useEffect(() => {
     onChange({
@@ -101,8 +101,15 @@ export function GroupPicker({
                 <p className="text-sm text-ink-3">{t("noColleagues")}</p>
               ) : (
                 event.colleagues.map((c) => (
-                  <Check key={c.userId} id={`${id}-a-${c.userId}`} title={c.name} checked={ticked.has(c.userId)} onCheckedChange={(on) => toggle(c.userId, on === true)} disabled={disabled}>
-                    {c.accepted ? t("accepted") : t("notAccepted")}
+                  <Check
+                    key={c.userId}
+                    id={`${id}-a-${c.userId}`}
+                    title={c.name}
+                    checked={!c.declined && ticked.has(c.userId)}
+                    onCheckedChange={(on) => toggle(c.userId, on === true)}
+                    disabled={disabled || c.declined}
+                  >
+                    {c.declined ? t("declined") : c.accepted ? t("accepted") : t("notAccepted")}
                   </Check>
                 ))
               )}

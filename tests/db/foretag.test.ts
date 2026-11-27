@@ -247,6 +247,74 @@ describe.skipIf(!hasLocalSupabase)("Företag visibility (0050)", () => {
     expect(write.error?.message).toMatch(/permission denied/i);
   });
 
+  it("a withdrawn handoff comes back when its owner loses sight again; a human drop stays dropped (0053)", async () => {
+    const admin = adminClient();
+    const x = await meeting("jonas", g.dev);
+    const kim = (must("kim", await admin.from("people").select("id").eq("org_id", orgId).eq("name", "Kim").single()) as { id: string }).id;
+    must("note", await admin.from("note_items").insert({ meeting_id: x, id: "x1", section: "action", text: "Kim tar fram budgeten", owner_person_id: kim }));
+    const owners = [{ item_id: "x1", person_id: kim }];
+    const create = async () => must("create", await admin.rpc("create_task_handoffs", { p_meeting_id: x, p_owners: owners })) as number;
+    const rows = async () => must("rows", await admin.from("task_handoffs").select("id, status").eq("meeting_id", x)) as { id: string; status: string }[];
+    const moveKim = async (group: string) => must("move", await admin.from("people").update({ group_id: group }).eq("id", kim));
+    try {
+      // Ekonomi can't see Utveckling: held.
+      expect(await create()).toBe(1);
+      // Kim moves up into Ledning: sees the meeting, the pending handoff is withdrawn.
+      await moveKim(g.led);
+      expect(await create()).toBe(0);
+      expect(await rows()).toEqual([]);
+      // Back in Ekonomi: held again.
+      await moveKim(g.eko);
+      expect(await create()).toBe(1);
+      const [held] = await rows();
+      expect(held.status).toBe("pending");
+      // A human drop is a decision: it stays dropped through any later move.
+      expect((await u.jonas.db.rpc("drop_task_handoff", { p_id: held.id })).data).toBe(true);
+      await moveKim(g.led);
+      await create();
+      await moveKim(g.eko);
+      expect(await create()).toBe(0);
+      expect(await rows()).toEqual([{ id: held.id, status: "dropped" }]);
+    } finally {
+      await moveKim(g.eko);
+    }
+  });
+
+  it("changes outside the app queue a reconcile; a deleted account's Drive permission is queued by id (0053)", async () => {
+    const admin = adminClient();
+    const queued = async () => ((await admin.from("foretag_reconcile_queue").select("org_id").eq("org_id", orgId)).data ?? []).length === 1;
+    const clear = async () => must("clear", await admin.from("foretag_reconcile_queue").delete().eq("org_id", orgId));
+    // A person moved or relinked.
+    await clear();
+    must("rename", await admin.from("people").update({ name: "Jonas" }).eq("org_id", orgId).eq("name", "Jonas"));
+    expect(await queued()).toBe(false);
+    must("move", await admin.from("people").update({ group_id: g.dev }).eq("org_id", orgId).eq("name", "Lisa"));
+    expect(await queued()).toBe(false);
+    must("move", await admin.from("people").update({ group_id: g.com }).eq("org_id", orgId).eq("name", "Lisa"));
+    expect(await queued()).toBe(true);
+    must("back", await admin.from("people").update({ group_id: g.dev }).eq("org_id", orgId).eq("name", "Lisa"));
+
+    // An account's e-mail changed.
+    const gone = await createTestUser("ftg-gone");
+    must("join", await admin.from("org_members").insert({ org_id: orgId, user_id: gone.id, role: "member" }));
+    await clear();
+    expect((await admin.auth.admin.updateUserById(gone.id, { email: `ny-${gone.email}` })).error).toBeNull();
+    expect(await queued()).toBe(true);
+
+    // The account deleted: its share rows go with it, our permission on the Doc is queued by id.
+    const docId = `doc-${crypto.randomUUID()}`;
+    const shared = (must("m", await admin.from("meetings").insert({ org_id: orgId, started_by: u.anna.id, doc_id: docId, notes_tab_id: "t.0", status: "done", group_id: null }).select("id").single()) as { id: string }).id;
+    must("share", await admin.from("meeting_doc_shares").insert({ meeting_id: shared, user_id: gone.id, email: gone.email, permission_id: "perm-gone" }));
+    expect((await admin.auth.admin.deleteUser(gone.id)).error).toBeNull();
+    const revocations = must("rev", await admin.from("doc_share_revocations").select("doc_id, owner_user_id, permission_id").eq("doc_id", docId));
+    expect(revocations).toEqual([{ doc_id: docId, owner_user_id: u.anna.id, permission_id: "perm-gone" }]);
+    // A share removed while the account exists (our own revoke) queues nothing.
+    must("share2", await admin.from("meeting_doc_shares").insert({ meeting_id: shared, user_id: u.jonas.id, email: u.jonas.email, permission_id: "perm-jonas" }));
+    must("unshare", await admin.from("meeting_doc_shares").delete().eq("meeting_id", shared).eq("user_id", u.jonas.id));
+    expect((await admin.from("doc_share_revocations").select("permission_id").eq("doc_id", docId)).data).toEqual([{ permission_id: "perm-gone" }]);
+    must("cleanup", await admin.from("doc_share_revocations").delete().eq("doc_id", docId));
+  });
+
   it("placing a member account and archiving a group: admins only; archiving unplaces its people", async () => {
     const admin = adminClient();
     const extra = await createTestUser("ftg-extra");

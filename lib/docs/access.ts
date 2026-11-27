@@ -2,7 +2,7 @@ import "server-only";
 import type { OAuth2Client } from "google-auth-library";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { appCreatedDoc } from "@/lib/docs/access-state";
-import { shareWith } from "@/lib/docs/create";
+import { shareWith, type ShareGrant } from "@/lib/docs/create";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -22,10 +22,22 @@ export { appCreatedDoc };
 /** A table this database doesn't have yet (code deployed before 0030). */
 const missingTable = (code: string | undefined) => code === "42P01" || code === "PGRST205";
 
-/** Records that the meeting's Doc was shared with these members. Best effort: logged, never thrown. */
-export async function recordDocShares(meetingId: string, userIds: string[]): Promise<void> {
+/** How one member's share was made (0053): the address, our permission or that they already had access. */
+export type ShareDetail = ShareGrant & { email: string };
+
+/**
+ * Records that the meeting's Doc was shared with these members, with the Drive permission Simon
+ * Says created for each when known (`details`), so revoking removes only that (0053). Best effort:
+ * logged, never thrown.
+ */
+export async function recordDocShares(meetingId: string, userIds: string[], details: Record<string, ShareDetail> = {}): Promise<void> {
   if (!userIds.length) return;
-  const rows = userIds.map((user_id) => ({ meeting_id: meetingId, user_id }));
+  const rows = userIds.map((user_id) => {
+    const d = details[user_id];
+    return d
+      ? { meeting_id: meetingId, user_id, email: d.email.toLowerCase(), permission_id: d.permissionId, preexisting: d.preexisting }
+      : { meeting_id: meetingId, user_id };
+  });
   const { error } = await supabaseAdmin().from("meeting_doc_shares").upsert(rows, { onConflict: "meeting_id,user_id", ignoreDuplicates: true });
   if (error) {
     if (missingTable(error.code)) console.warn("meeting_doc_shares missing (0030 not applied); share not recorded");
@@ -71,14 +83,16 @@ export type ShareOutcome =
 
 /** One share through the starter's grant, recorded on success. */
 async function shareOne(auth: OAuth2Client, meeting: ShareableMeeting, user: { id: string; email: string }): Promise<ShareOutcome> {
+  let grant: ShareGrant;
   try {
-    await shareWith(auth, meeting.doc_id, user.email);
+    // A Doc that may already be shared: an address with access already is not ours to revoke later.
+    grant = await shareWith(auth, meeting.doc_id, user.email, { checkExisting: true });
   } catch (err) {
     if (err instanceof GoogleAuthLostError) return "starter_google_lost";
     console.error(`meetings ${meeting.id}: share with member ${user.id} failed: ${(err as Error).message}`);
     return "failed";
   }
-  await recordDocShares(meeting.id, [user.id]);
+  await recordDocShares(meeting.id, [user.id], { [user.id]: { ...grant, email: user.email } });
   return "shared";
 }
 

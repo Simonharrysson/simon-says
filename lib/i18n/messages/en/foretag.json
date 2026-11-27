@@ -127,6 +127,7 @@
     "noColleagues": "No colleagues are invited to the event.",
     "accepted": "Has accepted",
     "notAccepted": "Hasn't accepted",
+    "declined": "Declined, doesn't count as attending",
     "customer": "Customer: the guests from {domain}",
     "seesAttendees": "{count, plural, one {Plus # attendee you ticked.} other {Plus # attendees you ticked.}}"
   },

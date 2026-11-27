@@ -127,6 +127,7 @@
     "noColleagues": "Inga kolleger är bjudna till händelsen.",
     "accepted": "Har tackat ja",
     "notAccepted": "Har inte tackat ja",
+    "declined": "Tackade nej, räknas inte som deltagare",
     "customer": "Kund: gästerna från {domain}",
     "seesAttendees": "{count, plural, one {Plus # deltagare du kryssat i.} other {Plus # deltagare du kryssat i.}}"
   },

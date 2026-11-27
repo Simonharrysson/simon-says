@@ -309,7 +309,7 @@ describe("POST /api/meetings", () => {
     expect(input.memberEmails).toEqual(["b@x.se"]); // the starter is not shared with
     expect(input.title).toBe(json.title);
     expect(input.meetingFolderId).toBeNull();
-    expect(m.recordDocShares).toHaveBeenCalledWith(json.meetingId, ["u2"]);
+    expect(m.recordDocShares).toHaveBeenCalledWith(json.meetingId, ["u2"], expect.anything());
     const row = m.insert.mock.calls[0][0];
     expect(row).toMatchObject({
       id: json.meetingId,
@@ -917,7 +917,7 @@ describe("POST /api/meetings: agenda mode and format Docs (A10)", () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(insertedRow()).toMatchObject({ format_profile_id: "pv", app_created_doc: true, agenda_doc: true });
-    expect(m.recordDocShares).toHaveBeenCalledWith(json.meetingId, ["u2"]);
+    expect(m.recordDocShares).toHaveBeenCalledWith(json.meetingId, ["u2"], expect.anything());
     const inserted = m.noteInsert.mock.calls[0][0] as Record<string, unknown>[];
     expect(inserted.filter((r) => String(r.id).startsWith("c")).map((r) => [r.id, r.range_name, r.carried_from_meeting, r.carried_from_id, r.meeting_id === json.meetingId])).toEqual([
       ["c1", "ss-prep-p1-c1", "prev1", "n1", true],

@@ -117,6 +117,8 @@ export async function addPersonAction(form: FormData): Promise<void> {
   const orgId = orgIdFrom(form);
   const db = await createSupabaseServerClient();
   if (!(await addPerson(db, orgId, field(form, "name")))) redirect(`/orgs/${orgId}?fel=personnamn`);
+  // A Företag: a new person may be linked to an account on the way (by e-mail).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -144,6 +146,8 @@ export async function setPersonRoleAction(form: FormData): Promise<void> {
   if (!people.some((p) => p.id === personId) || !(await setPersonRole(db, personId, role))) {
     redirect(`/orgs/${orgId}?fel=rollnamn`);
   }
+  // A Företag: task owners are also found by role (handoffs are re-checked).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
@@ -152,6 +156,8 @@ export async function deletePersonAction(form: FormData): Promise<void> {
   const personId = field(form, "personId");
   const db = await createSupabaseServerClient();
   if (isUuid(personId)) await deletePerson(db, personId);
+  // A Företag: their account loses what the person row gave it (Doc access, tasks).
+  reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
 
