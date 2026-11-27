@@ -62,8 +62,12 @@ export function BoardFromWebsite({ orgId, website, autoStart = 0 }: { orgId: str
   }, [orgId, t]);
 
   // Spara saved a new website: read it at once (the parent bumps `autoStart`).
+  // Once per bump: a re-render (new `t` after router.refresh) must never fetch again.
+  const handled = useRef(0);
   useEffect(() => {
-    if (autoStart > 0) void fetchBoard();
+    if (autoStart <= handled.current) return;
+    handled.current = autoStart;
+    void fetchBoard();
   }, [autoStart, fetchBoard]);
 
   const update = (key: string, patch: Partial<Row>) =>

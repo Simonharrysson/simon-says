@@ -7,7 +7,7 @@ import { checkUrl, MAX_BYTES, safeFetch, type Address, type RawResponse, type Tr
 
 const HTML = ["text/html"];
 
-type Reply = { status?: number; headers?: Record<string, string>; body?: Uint8Array | string; chunks?: number; hang?: boolean };
+type Reply = { status?: number; headers?: Record<string, string>; body?: Uint8Array | string; chunks?: number; hang?: boolean; throwAfterFirst?: boolean };
 
 function net(dns: Record<string, string[]>, pages: Record<string, Reply>) {
   const seen: { url: string; address: string | null }[] = [];
@@ -23,10 +23,13 @@ function net(dns: Record<string, string[]>, pages: Record<string, Reply>) {
     const bytes = typeof r.body === "string" ? new TextEncoder().encode(r.body) : (r.body ?? new Uint8Array());
     const body: AsyncIterable<Uint8Array> = {
       async *[Symbol.asyncIterator]() {
+        if (r.hang && r.throwAfterFirst === false) yield bytes.subarray(0, 10);
         if (r.hang) {
           await new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("aborted"))));
         }
+        if (r.hang && r.throwAfterFirst === undefined) return;
         for (let i = 0; i < (r.chunks ?? 1); i++) yield bytes;
+        if (r.throwAfterFirst) throw new Error("ECONNRESET");
       },
     };
     const res: RawResponse = { status: r.status ?? 200, headers: { "content-type": "text/html; charset=utf-8", ...r.headers }, body, close() {} };
@@ -143,6 +146,16 @@ describe("safeFetch", () => {
     expect(bomb.byteLength).toBeLessThan(MAX_BYTES / 100);
     const n = net({ "klubb.example": [PUBLIC] }, { "https://klubb.example/": { headers: { "content-encoding": "gzip" }, body: bomb } });
     expect(await safeFetch("https://klubb.example/", { accept: HTML, ...n })).toEqual({ ok: false, reason: "too_large" });
+  });
+
+  it("a gzip body that stalls mid-way times out", async () => {
+    const n = net({ "klubb.example": [PUBLIC] }, { "https://klubb.example/": { headers: { "content-encoding": "gzip" }, body: gzipSync(Buffer.from("<p>".repeat(1000))), hang: true, throwAfterFirst: false } });
+    expect(await safeFetch("https://klubb.example/", { accept: HTML, timeoutMs: 50, ...n })).toEqual({ ok: false, reason: "timeout" });
+  });
+
+  it("a gzip body whose connection resets is a network failure", async () => {
+    const n = net({ "klubb.example": [PUBLIC] }, { "https://klubb.example/": { headers: { "content-encoding": "gzip" }, body: gzipSync(Buffer.from("<p>".repeat(1000))).subarray(0, 20), throwAfterFirst: true } });
+    expect(await safeFetch("https://klubb.example/", { accept: HTML, ...n })).toEqual({ ok: false, reason: "network" });
   });
 
   it("decodes a gzip page", async () => {

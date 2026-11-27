@@ -1,7 +1,7 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
-import { Readable } from "node:stream";
+import { pipeline, Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { isBlockedAddress } from "./ip";
 
@@ -88,10 +88,12 @@ const systemResolver: Resolver = async (host) => (await dnsLookup(host, { all: t
 /** The body after Content-Encoding (the size cap counts these bytes, so a zip bomb can't slip by). */
 function decoded(body: AsyncIterable<Uint8Array>, encoding: string | undefined): AsyncIterable<Uint8Array> {
   const enc = (encoding ?? "").toLowerCase().trim();
-  if (enc === "gzip" || enc === "x-gzip") return Readable.from(body).pipe(createGunzip());
-  if (enc === "deflate") return Readable.from(body).pipe(createInflate());
-  if (enc === "br") return Readable.from(body).pipe(createBrotliDecompress());
-  return body;
+  const unzip = enc === "gzip" || enc === "x-gzip" ? createGunzip() : enc === "deflate" ? createInflate() : enc === "br" ? createBrotliDecompress() : null;
+  if (!unzip) return body;
+  // pipeline (not .pipe): an error or abort in the source reaches the decoder, so the read loop
+  // ends with that error instead of waiting forever.
+  pipeline(Readable.from(body), unzip, () => {});
+  return unzip;
 }
 
 /** The real transport: TLS to the checked address, with the host name for SNI and certificate checks. */
