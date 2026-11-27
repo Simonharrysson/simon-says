@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { AppLink } from "@/components/ui/AppLink";
 import { useTranslations } from "next-intl";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { FormAction } from "@/components/ui/ConfirmAction";
@@ -19,18 +20,18 @@ export function AppNav({ email, signOut }: { email: string; signOut: FormAction 
   const current = (prefix: string) => (path === prefix || path.startsWith(`${prefix}/`) ? "page" : undefined);
   return (
     <>
-      <a className={navLinkClass} href="/hem" aria-current={current("/hem")}>
+      <AppLink prefetch="viewport" className={navLinkClass} href="/hem" aria-current={current("/hem")}>
         {t("home")}
-      </a>
-      <a className={navLinkClass} href="/privat" aria-current={current("/privat")}>
+      </AppLink>
+      <AppLink prefetch="viewport" className={navLinkClass} href="/privat" aria-current={current("/privat")}>
         {t("privat")}
-      </a>
-      <a className={navLinkClass} href="/orgs" aria-current={current("/orgs")}>
+      </AppLink>
+      <AppLink prefetch="viewport" className={navLinkClass} href="/orgs" aria-current={current("/orgs")}>
         {t("orgs")}
-      </a>
-      <a className={navLinkClass} href="/installningar" aria-current={current("/installningar")}>
+      </AppLink>
+      <AppLink prefetch="viewport" className={navLinkClass} href="/installningar" aria-current={current("/installningar")}>
         {t("account")}
-      </a>
+      </AppLink>
       {email && (
         <span className="max-w-[14rem] truncate text-xs text-ink-3 max-md:hidden" title={email}>
           {email}

@@ -1,18 +1,14 @@
-import { useTranslations } from "next-intl";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SkeletonHeader, SkeletonPage, SkeletonPanel } from "@/components/ui/PageSkeleton";
 
-/** Skeleton while a logged-in page reads its data. */
+/** Any signed-in page without a skeleton of its own, while it reads its data. */
 export default function Loading() {
-  const t = useTranslations("common");
   return (
-    <div className="mx-auto flex w-full max-w-page flex-col gap-6 px-gutter" aria-busy="true" aria-live="polite">
-      <span className="sr-only">{t("loading")}</span>
-      <Skeleton className="h-10 w-[min(20rem,70%)]" />
-      <Skeleton className="h-4 w-48" />
+    <SkeletonPage width="max-w-page">
+      <SkeletonHeader meta={1} />
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]">
-        <Skeleton className="h-64 rounded-lg" />
-        <Skeleton className="h-40 rounded-lg" />
+        <SkeletonPanel rows={4} />
+        <SkeletonPanel height="h-24" />
       </div>
-    </div>
+    </SkeletonPage>
   );
 }

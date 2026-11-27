@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/ui/AppLink";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +36,7 @@ export function ListRow({
   return (
     <li>
       {href ? (
-        <a
+        <AppLink
           className={cn(
             rowClass,
             "group/row text-inherit no-underline transition-colors duration-120 hover:bg-sunk hover:no-underline focus-visible:rounded-none focus-visible:outline-offset-[-2px]",
@@ -43,7 +44,7 @@ export function ListRow({
           href={href}
         >
           {content}
-        </a>
+        </AppLink>
       ) : (
         <div className={rowClass}>{content}</div>
       )}

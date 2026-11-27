@@ -262,6 +262,10 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    /* The page doesn't shift sideways when a long page's scrollbar comes or goes on navigation. */
+    scrollbar-gutter: stable;
+    /* Buttons and rows draw their own pressed state; no grey flash on tap. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
@@ -343,6 +347,60 @@
   }
 }
 
+/* ---------- View transitions (React <ViewTransition>, app/(app)/layout.tsx) ---------- */
+
+/* The page under the header: a link navigation fades the old page out fast and the new one in
+   with a 4px rise; a tab switch only fades. The group doesn't morph (pages differ in height), and
+   the header and footer sit in the still root snapshot. Clicks pass through to the live page. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+/* The sticky header stays put and above the moving page (it scrolls over the content). */
+::view-transition-group(site-header) {
+  z-index: 100;
+  animation: none;
+}
+::view-transition-old(site-header) {
+  display: none;
+}
+::view-transition-new(site-header) {
+  animation: none;
+}
+::view-transition-group(.page-nav),
+::view-transition-group(.page-tab) {
+  animation: none;
+}
+::view-transition-old(.page-nav),
+::view-transition-old(.page-tab) {
+  animation: 120ms var(--ease-out) both vt-out;
+}
+::view-transition-new(.page-nav) {
+  animation: 220ms var(--ease-out) 40ms both vt-rise;
+}
+::view-transition-new(.page-tab) {
+  animation: 180ms var(--ease-out) both vt-in;
+}
+@keyframes vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes vt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 /* ---------- Reduced motion: every animation and transition off; content is always visible. ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -352,5 +410,11 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  /* View transitions swap at once. */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }

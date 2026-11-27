@@ -1,5 +1,5 @@
+import { AppLink } from "@/components/ui/AppLink";
 import type { ReactNode } from "react";
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/Banner";
@@ -22,6 +22,7 @@ import { DocAccessButton } from "./DocAccessButton";
 import { NoticeBanner } from "./NoticeBanner";
 import type { DocAccess } from "@/lib/docs/access-state";
 import { OrgSettingsForm } from "./OrgSettingsForm";
+import { OrgTabsShell } from "./OrgTabsShell";
 import { PersonRow } from "./PersonRow";
 import { OrgLogo } from "@/components/onboarding/OrgLogo";
 import type { OrgProfile } from "@/lib/orgs/profile";
@@ -225,28 +226,6 @@ const TABS: { id: OrgTab; label: "tabMeetings" | "tabOverview" | "tabSettings"; 
   { id: "installningar", label: "tabSettings", adminOnly: true },
 ];
 
-/**
- * Server-rendered tabs: links with aria-current, so the URL can be shared and reloaded (each tab
- * is its own page view; no client tab panels). Inställningar only for admins.
- */
-function OrgTabs({ active, href, isAdmin }: { active: OrgTab; href: (tab: OrgTab) => string; isAdmin: boolean }) {
-  const t = useTranslations("org");
-  return (
-    <nav aria-label={t("tabsLabel")} className="-mt-2 flex gap-1 border-b border-line">
-      {TABS.filter((tab) => isAdmin || !tab.adminOnly).map((tab) => (
-        <Link
-          key={tab.id}
-          href={href(tab.id)}
-          aria-current={tab.id === active ? "page" : undefined}
-          className="-mb-px inline-flex min-h-10 flex-none items-center border-b-2 border-transparent px-3 text-sm font-medium text-ink-3 no-underline transition-colors duration-120 hover:text-ink aria-[current=page]:border-ink aria-[current=page]:text-ink max-md:min-h-11"
-        >
-          {t(tab.label)}
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
 const statusTone: Record<MeetingStatus, BadgeTone> = {
   live: "live",
   ending: "neutral",
@@ -255,18 +234,14 @@ const statusTone: Record<MeetingStatus, BadgeTone> = {
 };
 
 export function OrgDetailView(props: OrgDetailViewProps) {
-  const { org, isAdmin, userId, inviteUrl, members, people, meetings, meetingInfo, docAccess, viewerEmail, notice, startMeeting, startMeetingHref, formatCard, summarySettings, profileSettings, calendarSettings, boardList, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
+  const { org, isAdmin, userId, inviteUrl, members, people, meetings, notice, startMeetingHref, liveMeetingHref, tabs, actions, logoUrl, komIgang, inviteByEmail } = props;
   const t = useTranslations("org");
-  const access = (m: OrgDetailMeeting): DocAccess => docAccess?.[m.id] ?? "open";
-  const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
+  const tc = useTranslations("common");
   const active = meetings.find((m) => m.status === "live" || m.status === "ending");
   // Any member may continue the running meeting from their own device (Meet-like presence).
   const running = liveMeetingHref && active?.status === "live" && userId !== null ? active : null;
-  const nameError = notice?.code === "namn" ? notice.text : undefined;
   // Without tabs (older callers) everything an admin has shows on the one page, as before.
   const tab: OrgTab = tabs?.active ?? "moten";
-  const settingsHere = isAdmin && (!tabs || tab === "installningar");
-  const meetingsHere = !tabs || tab === "moten";
 
   const invitePanel = (
     <Panel title={t("inviteTitle")} titleId="invite-title" id="bjud-in" className="scroll-mt-6">
@@ -320,6 +295,8 @@ export function OrgDetailView(props: OrgDetailViewProps) {
     );
   }
 
+  const panel = <OrgPanels {...props} tab={tab} invitePanel={invitePanel} memberControls={memberControls} />;
+
   return (
     <div className="mx-auto w-full max-w-page px-gutter flex flex-col gap-6">
       <PageHeader
@@ -353,12 +330,45 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           )
         }
       />
-      {tabs && <OrgTabs active={tab} href={tabs.href} isAdmin={isAdmin} />}
-      <NoticeBanner notice={notice} />
-      {komIgang}
+      {tabs ? (
+        <OrgTabsShell
+          key={org.id}
+          active={tab}
+          label={t("tabsLabel")}
+          loadingLabel={tc("loading")}
+          tabs={TABS.filter((x) => isAdmin || !x.adminOnly).map((x) => ({ id: x.id, label: t(x.label), href: tabs.href(x.id) }))}
+          between={
+            <>
+              <NoticeBanner notice={notice} />
+              {komIgang}
+            </>
+          }
+        >
+          {tab === "oversikt" ? tabs.overview : panel}
+        </OrgTabsShell>
+      ) : (
+        <>
+          <NoticeBanner notice={notice} />
+          {komIgang}
+          {panel}
+        </>
+      )}
+    </div>
+  );
+}
 
-      {tab === "oversikt" && tabs ? tabs.overview : null}
-
+/** Möten and Inställningar of OrgDetailView (split out so the tab shell can hold them). */
+function OrgPanels(props: OrgDetailViewProps & { tab: OrgTab; invitePanel: ReactNode; memberControls: Record<string, ReactNode> }) {
+  const { org, isAdmin, userId, members, people, meetings, meetingInfo, viewerEmail, notice, startMeeting, formatCard, summarySettings, profileSettings, calendarSettings, boardList, liveMeetingHref, tabs, actions, tab, invitePanel, memberControls } = props;
+  const t = useTranslations("org");
+  const access = (m: OrgDetailMeeting): DocAccess => props.docAccess?.[m.id] ?? "open";
+  const starter = (m: OrgDetailMeeting) => members?.find((x) => x.userId === m.started_by)?.email || t("starterFallback");
+  const active = meetings.find((m) => m.status === "live" || m.status === "ending");
+  const nameError = notice?.code === "namn" ? notice.text : undefined;
+  const settingsHere = isAdmin && (!tabs || tab === "installningar");
+  const meetingsHere = !tabs || tab === "moten";
+  return (
+    <>
       {meetingsHere && (
         <div className={isAdmin ? "flex flex-col gap-6" : "grid grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)] items-start gap-6 max-[56rem]:grid-cols-[minmax(0,1fr)]"}>
           <div className="flex flex-col gap-6">
@@ -467,7 +477,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
               </div>
             )}
             <p className="mt-6 border-t border-line pt-4 text-sm text-ink-3">
-              {t.rich("settingsMore", { link: (chunks) => <a href={`/orgs/${org.id}/kom-igang`}>{chunks}</a> })}
+              {t.rich("settingsMore", { link: (chunks) => <AppLink href={`/orgs/${org.id}/kom-igang`}>{chunks}</AppLink> })}
             </p>
           </Panel>
 
@@ -495,7 +505,7 @@ export function OrgDetailView(props: OrgDetailViewProps) {
           </Panel>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -709,7 +719,7 @@ function PeoplePanel({
         {isAdmin && (
           <>
             {" "}
-            {t.rich("peopleBoardLink", { link: (chunks) => <a href={`/orgs/${orgId}/kom-igang?steg=2`}>{chunks}</a> })}
+            {t.rich("peopleBoardLink", { link: (chunks) => <AppLink href={`/orgs/${orgId}/kom-igang?steg=2`}>{chunks}</AppLink> })}
           </>
         )}
       </p>

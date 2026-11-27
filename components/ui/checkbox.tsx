@@ -14,8 +14,8 @@ export function Checkbox({ className, tone = "ink", ...props }: ComponentProps<t
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer grid size-5 shrink-0 cursor-pointer place-content-center rounded-[4px] border border-control bg-surface transition-colors duration-120",
-        "disabled:cursor-not-allowed disabled:opacity-50",
+        "peer grid size-5 shrink-0 cursor-pointer place-content-center rounded-[4px] border border-control bg-surface transition-[background-color,border-color,transform] duration-120 ease-out hover:border-ink-2 active:scale-[0.92]",
+        "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
         tone === "ink"
           ? "data-[state=checked]:border-ink data-[state=checked]:bg-ink data-[state=checked]:text-on-ink"
           : "data-[state=checked]:border-green data-[state=checked]:bg-green data-[state=checked]:text-on-green",

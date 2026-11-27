@@ -1,5 +1,6 @@
 "use client";
 
+import { AppLink } from "@/components/ui/AppLink";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -51,13 +52,13 @@ export function OnboardingShell(p: OnboardingShellProps) {
     <div className="mx-auto flex w-full max-w-[40rem] flex-col gap-8 px-gutter">
       <header className="flex flex-col gap-5">
         <div className="flex items-center justify-between gap-4">
-          <a className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-3 no-underline hover:text-ink md:min-h-0" href={p.orgHref}>
+          <AppLink className="inline-flex min-h-11 items-center gap-2 text-sm text-ink-3 no-underline hover:text-ink md:min-h-0" href={p.orgHref}>
             <OrgLogo name={p.orgName} src={p.logoUrl} size="sm" className="size-6 rounded-[5px] text-2xs" />
             <span className="wrap-anywhere">{p.orgName}</span>
-          </a>
-          <a className="inline-flex min-h-11 items-center text-sm text-ink-3 no-underline hover:text-ink md:min-h-0" href={p.orgHref}>
+          </AppLink>
+          <AppLink className="inline-flex min-h-11 items-center text-sm text-ink-3 no-underline hover:text-ink md:min-h-0" href={p.orgHref}>
             {t("shell.later")}
-          </a>
+          </AppLink>
         </div>
         <Progress step={p.step} done={p.done} skipped={p.skipped} onGo={p.onGo} />
       </header>

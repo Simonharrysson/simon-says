@@ -1,5 +1,6 @@
 "use client";
 
+import { AppLink } from "@/components/ui/AppLink";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
@@ -141,10 +142,10 @@ export function PrepareMeetingView(p: PrepareMeetingViewProps) {
   return (
     <div className="mx-auto flex w-full max-w-[40rem] flex-col gap-6 px-gutter">
       <header className="flex flex-col gap-2">
-        <a className="inline-flex items-center gap-1 self-start text-sm text-ink-3 no-underline hover:text-ink" href={p.orgHref}>
+        <AppLink className="inline-flex items-center gap-1 self-start text-sm text-ink-3 no-underline hover:text-ink" href={p.orgHref}>
           <IconArrowLeft size={16} />
           {p.orgName}
-        </a>
+        </AppLink>
         <h1 className="text-2xl focus:outline-none" ref={headingRef} tabIndex={-1}>
           {p.phase.step === "done" ? t("doneTitle") : t("title")}
         </h1>

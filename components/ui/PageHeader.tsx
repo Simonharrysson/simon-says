@@ -1,3 +1,4 @@
+import { AppLink } from "@/components/ui/AppLink";
 import type { ReactNode } from "react";
 import { IconArrowLeft } from "./icons";
 
@@ -19,10 +20,10 @@ export function PageHeader({
     <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
         {back && (
-          <a className="mb-3 inline-flex items-center gap-1 text-sm text-ink-3 no-underline hover:text-ink" href={back.href}>
+          <AppLink className="mb-3 inline-flex items-center gap-1 text-sm text-ink-3 no-underline hover:text-ink" href={back.href}>
             <IconArrowLeft size={16} />
             {back.label}
-          </a>
+          </AppLink>
         )}
         <h1 className={pageTitleClass}>{title}</h1>
         {meta && <div className="mt-2">{meta}</div>}
