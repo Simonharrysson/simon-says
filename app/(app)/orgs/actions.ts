@@ -64,11 +64,16 @@ export async function createOrgAction(form: FormData): Promise<void> {
 
 export async function joinOrgAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
-  const orgId = await joinOrg(db, field(form, "code"));
+  const code = field(form, "code");
+  // Already a member (RLS shows a förening's row to its members only): reopening the invite
+  // link is no new join, so no welcome and no Doc sharing again.
+  const { data: existing } = code ? await db.from("orgs").select("id").eq("invite_code", code).maybeSingle() : { data: null };
+  const wasMember = Boolean(existing);
+  const orgId = await joinOrg(db, code);
   if (!orgId) redirect("/orgs?fel=inbjudan");
   const { data } = await db.auth.getUser();
   const user = data.user;
-  if (user?.email) {
+  if (user?.email && !wasMember) {
     // The förening's earlier meeting Docs, shared through each starter's grant after the redirect.
     const member = { id: user.id, email: user.email };
     after(() =>
@@ -78,7 +83,7 @@ export async function joinOrgAction(form: FormData): Promise<void> {
   // The join trigger (0035) already linked them when an admin wrote their e-mail at their name;
   // otherwise "Vem av dessa är du?" (0051).
   const linked = user ? await isLinkedIn(db, orgId, user.id) : false;
-  redirect(afterJoinPath(orgId, linked));
+  redirect(wasMember && linked ? `/orgs/${orgId}` : afterJoinPath(orgId, linked));
 }
 
 /** "Vem av dessa är du?": the member taps their name (0051 checks: a member, an unlinked person, only themselves). */

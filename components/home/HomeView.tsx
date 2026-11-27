@@ -52,12 +52,26 @@ export function HomeView({
             live={false}
             title={t("unlinkedTitle", { count: unlinked.length })}
             action={
-              <ButtonLink href={`/orgs/${unlinked[0].id}/vem`} size="sm" icon={<IconArrowRight />}>
-                {t("unlinkedPick")}
-              </ButtonLink>
+              unlinked.length === 1 ? (
+                <ButtonLink href={`/orgs/${unlinked[0].id}/vem`} size="sm" icon={<IconArrowRight />}>
+                  {t("unlinkedPick")}
+                </ButtonLink>
+              ) : undefined
             }
           >
             <p>{t("unlinkedText", { names })}</p>
+            {unlinked.length > 1 && (
+              // One "Välj ditt namn" per förening: each has its own people list.
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {unlinked.map((u) => (
+                  <li key={u.id}>
+                    <ButtonLink href={`/orgs/${u.id}/vem`} size="sm" icon={<IconArrowRight />}>
+                      {t("unlinkedPickIn", { name: u.name })}
+                    </ButtonLink>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Banner>
         )}
         <section aria-labelledby="my-tasks-title" className="flex flex-col gap-4">

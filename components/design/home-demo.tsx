@@ -12,6 +12,7 @@ export const homeViews = [
   { id: "home-ticked", title: "Hem · bockat av: Ångra, skrivet i dokumentet, bocka av i dokumentet också" },
   { id: "home-done", title: "Hem · Visa klara" },
   { id: "home-empty", title: "Hem · inga uppgifter, inte kopplad i en förening" },
+  { id: "home-unlinked-two", title: "Hem · inte kopplad i två föreningar" },
   { id: "home-all-done", title: "Hem · allt klart, inga möten" },
   { id: "org-meeting", title: "Förening · ett möte: beslut och uppgifter" },
 ] as const;
@@ -87,6 +88,7 @@ export const homeRender: Record<string, () => React.ReactNode> = {
     ),
   "home-done": () => page(<HomeView tasks={[...tasks, ...doneTasks]} recent={recent} unlinked={[]} docs={docs} today={today} save={save} initialShowDone />),
   "home-empty": () => page(<HomeView tasks={[]} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }]} docs={{}} today={today} save={save} />),
+  "home-unlinked-two": () => page(<HomeView tasks={tasks} recent={recent.slice(0, 2)} unlinked={[{ id: "o2", name: "Filmföreningen" }, { id: "o3", name: "Körföreningen" }]} docs={docs} today={today} save={save} />),
   "home-all-done": () => page(<HomeView tasks={doneTasks} recent={[]} unlinked={[]} docs={{}} today={today} save={save} />),
   "org-meeting": () =>
     page(

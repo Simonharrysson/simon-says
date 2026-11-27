@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
+import { randomUUID } from "node:crypto";
+import { adminClient, anonClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import { addPerson, addSelfPerson, claimPerson, createOrg, isLinkedIn, joinOrg, renamePerson } from "@/lib/db/orgs";
 import { ensurePrivatSpace } from "@/lib/privat/space";
 
@@ -15,6 +16,23 @@ async function person(orgId: string, name: string, extra: Record<string, unknown
   const { data, error } = await adminClient().from("people").insert({ org_id: orgId, name, ...extra }).select("id").single();
   if (error) throw new Error(error.message);
   return data.id as string;
+}
+
+/** A signed-in user whose address is NOT confirmed (local auth lets them sign in). */
+async function unconfirmedUser(label: string): Promise<TestUser> {
+  const email = `${label}-${randomUUID()}@test.local`;
+  const password = `pw-${randomUUID()}`;
+  const { data, error } = await adminClient().auth.admin.createUser({ email, password, email_confirm: false });
+  if (error || !data.user) throw new Error(`createUser: ${error?.message}`);
+  const db = anonClient();
+  const { error: signInError } = await db.auth.signInWithPassword({ email, password });
+  if (signInError) throw new Error(`signIn: ${signInError.message}`);
+  return { id: data.user.id, email, db };
+}
+
+async function selfLinkedAt(id: string): Promise<string | null> {
+  const { data } = await adminClient().from("people").select("self_linked_at").eq("id", id).single();
+  return (data?.self_linked_at as string | null) ?? null;
 }
 
 async function linkOf(id: string): Promise<string | null> {
@@ -126,6 +144,40 @@ describe.skipIf(!hasLocalSupabase)("self link (0051)", () => {
     });
   });
 
+  describe("self_linked_at (Nyss kopplad)", () => {
+    it("a claim stamps it; members can't write it; an admin's unlink clears it", async () => {
+      const u = await createTestUser("sl-stamp");
+      await joinOrg(u.db, await inviteCode(orgId));
+      const p = await person(orgId, "Stämpel Ström");
+      expect(await claimPerson(u.db, p)).toBe("ok");
+      expect(await selfLinkedAt(p)).not.toBeNull();
+      // Not writable through the table (0025 column grants).
+      expect((await u.db.from("people").update({ self_linked_at: null }).eq("id", p)).error).not.toBeNull();
+      expect(await selfLinkedAt(p)).not.toBeNull();
+      // "Det stämmer inte": the admin unlinks through the table; the trigger clears the stamp.
+      expect((await admin.db.from("people").update({ member_user_id: null }).eq("id", p).not("self_linked_at", "is", null)).error).toBeNull();
+      expect(await linkOf(p)).toBeNull();
+      expect(await selfLinkedAt(p)).toBeNull();
+    });
+
+    it("an admin-side link (e-mail) is not a self link", async () => {
+      const u = await createTestUser("sl-admlink");
+      await joinOrg(u.db, await inviteCode(orgId));
+      const p = await person(orgId, "Epost Eriksson");
+      expect((await admin.db.rpc("set_person_email", { p_person_id: p, p_email: u.email })).error).toBeNull();
+      expect(await linkOf(p)).toBe(u.id);
+      expect(await selfLinkedAt(p)).toBeNull();
+    });
+
+    it("an unconfirmed address doesn't count as your own invite e-mail", async () => {
+      const u = await unconfirmedUser("sl-unconf");
+      await joinOrg(u.db, await inviteCode(orgId));
+      const p = await person(orgId, "Obekräftad Olsson", { email: u.email });
+      expect(await claimPerson(u.db, p)).toBe("taken");
+      expect(await linkOf(p)).toBeNull();
+    });
+  });
+
   describe("add_self_person", () => {
     let org2: string;
     let newcomer: TestUser;
@@ -145,6 +197,8 @@ describe.skipIf(!hasLocalSupabase)("self link (0051)", () => {
       expect(await addSelfPerson(newcomer.db, org2, "Ny Nilsson", "Kassör")).toBe("ok");
       const { data } = await adminClient().from("people").select("name, role, member_user_id").eq("org_id", org2).eq("name", "Ny Nilsson").single();
       expect(data).toEqual({ name: "Ny Nilsson", role: "Kassör", member_user_id: newcomer.id });
+      const { data: row } = await adminClient().from("people").select("id").eq("org_id", org2).eq("name", "Ny Nilsson").single();
+      expect(await selfLinkedAt(row!.id as string)).not.toBeNull();
       // A second self: already.
       expect(await addSelfPerson(newcomer.db, org2, "Ny Andra", null)).toBe("already");
     });

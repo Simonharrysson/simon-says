@@ -38,6 +38,7 @@
   "unlinkedTitle": "Vi hittar inte dina uppgifter i {count, plural, one {en förening} other {# föreningar}}",
   "unlinkedText": "Ingen i personlistan i {names} är kopplad till dig. Välj ditt namn i listan, så hamnar dina uppgifter här.",
   "unlinkedPick": "Välj ditt namn",
+  "unlinkedPickIn": "Välj ditt namn i {name}",
   "recentTitle": "Senaste mötena",
   "recentLabel": "Senaste mötena",
   "recentEmptyTitle": "Inga möten än",

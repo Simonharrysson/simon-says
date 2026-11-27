@@ -142,7 +142,10 @@
     "rolePlaceholder": "Kassör",
     "email": "E-post",
     "emailOptional": "(valfritt – bjuder in)",
-    "editExisting": "Ändra {name}"
+    "editExisting": "Ändra {name}",
+    "selfLinked": "Nyss kopplad: kopplade sig själv till namnet {when}.",
+    "undoSelfLink": "Det stämmer inte",
+    "undoSelfLinkLabel": "Det stämmer inte, koppla bort kontot från {name}"
   },
   "folder": {
     "fallbackName": "Mötesmappen",

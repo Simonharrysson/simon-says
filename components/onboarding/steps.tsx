@@ -207,6 +207,8 @@ export interface BoardStepProps {
   memberControls?: Record<string, ReactNode>;
   /** False: no invite area under the list (the page has its own "Bjud in" panel). Default true. */
   showInvite?: boolean;
+  /** "Det stämmer inte" on a "Nyss kopplad" row (0051): unlinks a member's self link. */
+  onUndoSelfLink?: (personId: string) => Promise<string | null>;
 }
 
 export function BoardStep(p: BoardStepProps) {
@@ -254,6 +256,7 @@ export function BoardStep(p: BoardStepProps) {
                     onEdit={() => setEditing(key)}
                     onRemove={row.personId ? () => p.onRemove(row.personId!) : undefined}
                     controls={row.member ? p.memberControls?.[row.member.userId] : undefined}
+                    onUndoSelfLink={row.personId && row.selfLinkedAt && p.onUndoSelfLink ? () => p.onUndoSelfLink!(row.personId!) : undefined}
                   />
                 )}
               </li>
@@ -323,6 +326,7 @@ function BoardRowView({
   onEdit,
   onRemove,
   controls,
+  onUndoSelfLink,
 }: {
   row: BoardRow;
   me: boolean;
@@ -331,11 +335,14 @@ function BoardRowView({
   onRemove?: () => Promise<string | null>;
   /** Account controls (the förening page's Inställningar), under the status line. */
   controls?: ReactNode;
+  onUndoSelfLink?: () => Promise<string | null>;
 }) {
   const t = useTranslations("onboarding.board");
   const orgT = useTranslations("org");
   const [removing, setRemoving] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const locale = useLocale();
   const display = row.name ?? row.email ?? t("unknown");
   return (
     <div className="flex flex-col gap-1 px-4 py-3">
@@ -351,6 +358,24 @@ function BoardRowView({
           <span className="text-sm text-ink-3">
             <StatusLine row={row} me={me} invite={invite} />
           </span>
+          {row.selfLinkedAt && onUndoSelfLink && (
+            <span className="mt-1 flex flex-wrap items-center gap-x-2 text-sm">
+              <span className="text-ink-2">{t("selfLinked", { when: formatDateTime(row.selfLinkedAt, locale) })}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={undoing}
+                aria-label={t("undoSelfLinkLabel", { name: display })}
+                onClick={async () => {
+                  setUndoing(true);
+                  setError(await onUndoSelfLink());
+                  setUndoing(false);
+                }}
+              >
+                {t("undoSelfLink")}
+              </Button>
+            </span>
+          )}
           {controls && <span className="mt-1 -ml-3 flex flex-wrap items-center gap-1">{controls}</span>}
           {!row.personId && (
             <span className="mt-2">

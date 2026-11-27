@@ -142,7 +142,10 @@
     "rolePlaceholder": "Treasurer",
     "email": "E-mail",
     "emailOptional": "(optional – sends an invitation)",
-    "editExisting": "Edit {name}"
+    "editExisting": "Edit {name}",
+    "selfLinked": "Just linked: linked themselves to this name {when}.",
+    "undoSelfLink": "That's not right",
+    "undoSelfLinkLabel": "That's not right, unlink the account from {name}"
   },
   "folder": {
     "fallbackName": "The meeting folder",

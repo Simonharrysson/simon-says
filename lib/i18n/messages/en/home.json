@@ -38,6 +38,7 @@
   "unlinkedTitle": "We can't find your tasks in {count, plural, one {one association} other {# associations}}",
   "unlinkedText": "Nobody in the people list of {names} is linked to you. Pick your name in the list, and your tasks will show up here.",
   "unlinkedPick": "Pick your name",
+  "unlinkedPickIn": "Pick your name in {name}",
   "recentTitle": "Latest meetings",
   "recentLabel": "Latest meetings",
   "recentEmptyTitle": "No meetings yet",
