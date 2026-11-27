@@ -49,7 +49,8 @@
     "notAudio": "The audio from the meeting.",
     "notDrive": "Nothing else in your Google Drive, and not the names of folders and documents shown when an admin imports old minutes.",
     "notCalendar": "Anything else from your calendar: other calendars, events that don't become meetings, descriptions and locations.",
-    "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first."
+    "notVoice": "Voiceprints. They don't exist in this version. Should they come, we will ask for explicit consent first.",
+    "foretag": "Business (in testing, invite only): a company's meetings are seen only by those the company's tree of groups allows (your own group, the groups below it and admins). When a meeting starts, the event happening now in the starter's own calendar is read: invited colleagues are stored as attendees (as ids), and for guests from other companies only the e-mail domain (for example acme.se) is stored as the customer, never addresses or names. A task for someone who may not see the meeting is sent only after the meeting's starter or an admin has approved its wording."
   },
   "mail": "You decide which e-mails Simon Says sends you. Under Account you can turn off each kind of e-mail separately, or choose No e-mail at all. At the bottom of every e-mail there is a link to the same choices that works without signing in, even if you don't have an account. We only store your choices (and, if you have no account, the address they apply to) as long as the service runs, so that a no keeps applying. E-mail us if you want us to delete them.",
   "processors": {

@@ -1,3 +1,4 @@
+import { isForetagOrg } from "@/lib/foretag/guard";
 import { notFound, redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
 import { orgTabHref } from "@/lib/orgs/tabs";
@@ -17,6 +18,8 @@ export default async function OrgSettingsRedirect({
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
+  // Förening only: a Företag (0050) has none of this.
+  if (await isForetagOrg(id)) notFound();
   const sp = await searchParams;
   const keep = new URLSearchParams();
   for (const key of ["kalender", "fel", "klart", "del"]) {

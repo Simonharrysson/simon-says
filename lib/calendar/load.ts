@@ -230,3 +230,45 @@ export async function calendarSnapshotForStart(input: {
     return null;
   }
 }
+
+/** A guest of a calendar event, as the Företag start screen shows it (never stored). */
+export interface ForetagGuest {
+  email: string;
+  name: string | null;
+  response: string | null;
+}
+
+/**
+ * Företag (0050): the event happening now in the user's OWN primary calendar (a work calendar,
+ * never a förening's shared one), with its guests, for the start screen to offer ("Koppla till
+ * kalenderhändelsen?"). Nothing is attached unless the starter confirms. Null when not connected,
+ * nothing is now, or on any failure.
+ */
+export async function foretagEventNow(userId: string, now = new Date()): Promise<{ id: string; title: string; guests: ForetagGuest[] } | null> {
+  try {
+    const api = await userCalendarApi(userId, 3000);
+    const from = new Date(now.getTime() - 12 * 3600_000);
+    const to = new Date(now.getTime() + NOW_WINDOW_MS + 60_000);
+    const event = eventForNow(await api.listEvents("primary", from, to, 50), now, null);
+    return event ? { id: event.id, title: event.title, guests: guestsOf(event) } : null;
+  } catch (err) {
+    if (!(err instanceof CalendarAccessMissingError)) console.warn("calendar: företag event lookup failed", (err as Error)?.message);
+    return null;
+  }
+}
+
+/** The confirmed event, read again at the start with the starter's grant (only while it is "now"). */
+export async function foretagEventById(userId: string, eventId: string, now = new Date()): Promise<{ id: string; title: string; guests: ForetagGuest[] } | null> {
+  if (!EVENT_ID.test(eventId)) return null;
+  try {
+    const event = await (await userCalendarApi(userId, 3000)).getEvent("primary", eventId);
+    if (!event || !eventForNow([event], now, null)) return null;
+    return { id: event.id, title: event.title, guests: guestsOf(event) };
+  } catch (err) {
+    if (!(err instanceof CalendarAccessMissingError)) console.warn("calendar: företag event read failed", (err as Error)?.message);
+    return null;
+  }
+}
+
+const guestsOf = (event: CalendarEvent): ForetagGuest[] =>
+  event.attendees.filter((a) => a.email).map((a) => ({ email: a.email!, name: a.name, response: a.response }));
