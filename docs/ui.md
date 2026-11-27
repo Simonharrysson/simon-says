@@ -134,7 +134,7 @@ tokens `--ease-spring` / `--ease-press`). Fast springs, never blocking a click:
   alerts, `data-enter-item`) rise 8 px and fade in, 35 ms apart (WAAPI, `<Enter>` /
   `useEntrance`). A page load (hydration) never animates its first paint. Counts
   ("2 beslut · 5 uppgifter") count up once with them (`<CountUp>`, fixed-width digits).
-- *Lists*: rows open in and close out on height + opacity (`<Presence>` / `<PresenceLi>`, motion
+- *Lists*: rows open in and close out on height + opacity (`<Presence>` / `<PresenceLi>` under `<Lazy>`, motion
   `domMin` loaded after hydration); reorders slide (`useFlip`). A task done on /hem closes out
   2.5 s after "Klar" (rows that still ask for something stay). The page heading crossfades into
   the next page's (`page-title` view transition).

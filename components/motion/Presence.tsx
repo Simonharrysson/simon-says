@@ -3,7 +3,8 @@
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import type { ComponentProps, ReactNode } from "react";
-import { SPRING_EXIT } from "@/lib/motion";
+import { SPRING, SPRING_EXIT } from "@/lib/motion";
+import { Lazy } from "./Lazy";
 
 /**
  * Rows that come and go: a new row opens to its height and fades in, a removed one fades and
@@ -11,16 +12,24 @@ import { SPRING_EXIT } from "@/lib/motion";
  * Rows already there when the list mounts don't animate. Children are keyed <PresenceLi>s.
  */
 export function Presence({ children }: { children: ReactNode }) {
-  return <AnimatePresence initial={false}>{children}</AnimatePresence>;
+  return (
+    <Lazy>
+      <AnimatePresence initial={false}>{children}</AnimatePresence>
+    </Lazy>
+  );
 }
 
 const rowVariants = {
   out: { height: 0, opacity: 0, overflow: "hidden" },
-  in: { height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } },
+  in: { height: "auto", opacity: 1, transition: SPRING, transitionEnd: { overflow: "visible" } },
   gone: { height: 0, opacity: 0, overflow: "hidden", transition: SPRING_EXIT },
 } as const;
-// Reduced motion: the same states, at once (a variant's own transition beats MotionConfig's).
-const instantVariants = { ...rowVariants, gone: { ...rowVariants.gone, transition: { duration: 0 } } } as const;
+// Reduced motion: the same states, at once .
+const instantVariants = {
+  ...rowVariants,
+  in: { ...rowVariants.in, transition: { duration: 0 } },
+  gone: { ...rowVariants.gone, transition: { duration: 0 } },
+} as const;
 
 type Props<T extends "li" | "div"> = Omit<ComponentProps<(typeof m)[T]>, "initial" | "animate" | "exit" | "variants">;
 

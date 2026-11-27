@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { AnimatePresence } from "motion/react";
+import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
+import { Lazy } from "@/components/motion/Lazy";
 import { PresenceDiv, PresenceLi } from "@/components/motion/Presence";
 import { useFlip } from "@/components/motion/useFlip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { dueDayLabel, isOverdue, meetingDayLabel, nextDay, type MyTask } from "@/lib/home/tasks";
+import { SPRING_EXIT } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 // The task list of Mina uppgifter. Ticking a task shows it done at once, with "Ångra" for 5
@@ -88,6 +90,8 @@ export function MyTasks({
   const settled = useSettled(states);
   const switchId = useId();
   const listRef = useFlip<HTMLUListElement>();
+  // The list and its empty state crossfade (instant under reduced motion).
+  const fade = useReducedMotion() ? { duration: 0 } : SPRING_EXIT;
 
   // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
   const doneHere = (task: MyTask) => {
@@ -122,109 +126,112 @@ export function MyTasks({
   const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* The bar can appear later (the first task done here brings "Visa klara"): it opens in,
-          its gap included (-mb-4 / pb-4), so the list below moves down smoothly. */}
-      <AnimatePresence initial={false}>
-        {(spaces.length > 1 || hasDone) && (
-          <PresenceDiv key="bar" data-enter-item className="-mb-4">
-            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-4">
-              {spaces.length > 1 ? (
-                <>
-                  {/* Phones: one labelled select (the phone's own picker); wider screens: every space as a toggle. */}
-                  <label className="flex w-full flex-col gap-1 text-sm font-medium md:hidden">
-                    {t("filterLabel")}
-                    <NativeSelect value={filter} onChange={(e) => setFilter(e.target.value)}>
+    <Lazy>
+      <div className="flex flex-col gap-4">
+        {/* The bar can appear later (the first task done here brings "Visa klara"): it opens in,
+            its gap included (-mb-4 / pb-4), so the list below moves down smoothly. */}
+        <AnimatePresence initial={false}>
+          {(spaces.length > 1 || hasDone) && (
+            <PresenceDiv key="bar" data-enter-item className="-mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-4">
+                {spaces.length > 1 ? (
+                  <>
+                    {/* Phones: one labelled select (the phone's own picker); wider screens: every space as a toggle. */}
+                    <label className="flex w-full flex-col gap-1 text-sm font-medium md:hidden">
+                      {t("filterLabel")}
+                      <NativeSelect value={filter} onChange={(e) => setFilter(e.target.value)}>
+                        {chips.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {t("chip", { name: s.name, count: s.count })}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    </label>
+                    <div role="group" aria-label={t("filterLabel")} className="flex flex-wrap gap-2 max-md:hidden">
                       {chips.map((s) => (
-                        <option key={s.id} value={s.id}>
+                        <button
+                          key={s.id}
+                          type="button"
+                          aria-pressed={filter === s.id}
+                          onClick={() => setFilter(s.id)}
+                          className={cn(
+                            "press inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium",
+                            filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
+                          )}
+                        >
                           {t("chip", { name: s.name, count: s.count })}
-                        </option>
+                        </button>
                       ))}
-                    </NativeSelect>
+                    </div>
+                  </>
+                ) : (
+                  <span />
+                )}
+                {hasDone && (
+                  <label htmlFor={switchId} className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
+                    <Switch id={switchId} checked={showDone} onCheckedChange={setShowDone} />
+                    {t("showDone")}
                   </label>
-                  <div role="group" aria-label={t("filterLabel")} className="flex flex-wrap gap-2 max-md:hidden">
-                    {chips.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        aria-pressed={filter === s.id}
-                        onClick={() => setFilter(s.id)}
-                        className={cn(
-                          "press inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium",
-                          filter === s.id ? "border-ink bg-ink text-on-ink" : "border-control bg-surface text-ink hover:bg-sunk",
-                        )}
-                      >
-                        {t("chip", { name: s.name, count: s.count })}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <span />
-              )}
-              {hasDone && (
-                <label htmlFor={switchId} className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-                  <Switch id={switchId} checked={showDone} onCheckedChange={setShowDone} />
-                  {t("showDone")}
-                </label>
-              )}
-            </div>
-          </PresenceDiv>
-        )}
-      </AnimatePresence>
-
-      {shownOpen.length > 0 && (
-        <p data-enter-item className="text-sm text-ink-2" aria-live="polite">
-          {t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })}
-          {overdueCount > 0 && (
-            <>
-              {" · "}
-              <span className="font-medium text-red">{t("overdueCount", { count: overdueCount })}</span>
-            </>
+                )}
+              </div>
+            </PresenceDiv>
           )}
-        </p>
-      )}
-      <AnimatePresence initial={false} mode="popLayout">
-        {visible.length === 0 ? (
-          <m.div
-            key="empty"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            data-enter-item
-            className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2"
-          >
-            {filter !== "all" ? (
-              <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
-            ) : (
+        </AnimatePresence>
+
+        {shownOpen.length > 0 && (
+          <p data-enter-item className="text-sm text-ink-2" aria-live="polite">
+            {t("openCount", { count: shownOpen.filter((x) => !doneHere(x)).length })}
+            {overdueCount > 0 && (
               <>
-                <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
-                <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
+                {" · "}
+                <span className="font-medium text-red">{t("overdueCount", { count: overdueCount })}</span>
               </>
             )}
-          </m.div>
-        ) : (
-          <m.ul key="list" ref={listRef} exit={{ opacity: 0 }} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
-            <AnimatePresence initial={false}>
-              {visible.map((task) => (
-                <TaskRow
-                  key={task.key}
-                  task={task}
-                  state={states[task.key]}
-                  checked={task.done || doneHere(task)}
-                  today={today}
-                  locale={locale}
-                  docUrl={docs[task.meetingId] ?? null}
-                  meetingHref={meetingHrefs[task.meetingId] ?? null}
-                  onTick={() => tick(task)}
-                  onUndo={() => undo(task)}
-                />
-              ))}
-            </AnimatePresence>
-          </m.ul>
+          </p>
         )}
-      </AnimatePresence>
-    </div>
+        <AnimatePresence initial={false} mode="popLayout">
+          {visible.length === 0 ? (
+            <m.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={fade}
+              data-enter-item
+              className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2"
+            >
+              {filter !== "all" ? (
+                <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
+              ) : (
+                <>
+                  <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
+                  <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
+                </>
+              )}
+            </m.div>
+          ) : (
+            <m.ul key="list" ref={listRef} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
+              <AnimatePresence initial={false}>
+                {visible.map((task) => (
+                  <TaskRow
+                    key={task.key}
+                    task={task}
+                    state={states[task.key]}
+                    checked={task.done || doneHere(task)}
+                    today={today}
+                    locale={locale}
+                    docUrl={docs[task.meetingId] ?? null}
+                    meetingHref={meetingHrefs[task.meetingId] ?? null}
+                    onTick={() => tick(task)}
+                    onUndo={() => undo(task)}
+                  />
+                ))}
+              </AnimatePresence>
+            </m.ul>
+          )}
+        </AnimatePresence>
+      </div>
+    </Lazy>
   );
 }
 
