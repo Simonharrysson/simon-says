@@ -222,7 +222,8 @@
       "depth": "The tree would get too deep.",
       "same": "{child} already reports to {manager}.",
       "missing": "That person is no longer in the tree.",
-      "hasReports": "{name} has people under them. Move them first."
+      "hasReports": "{name} has people under them. Move them first.",
+      "notPlaced": "{manager} has no place in the tree yet. Give {manager} a place first."
     },
     "detachTitle": "Remove the arrow from {manager} to {child}?",
     "detachText": "{child} goes to the top and then sees every meeting below them, not just in {team}.",

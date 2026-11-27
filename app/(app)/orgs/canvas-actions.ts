@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isUuid } from "@/lib/db/ids";
-import { addPerson, savePeopleCanvas, setManager } from "@/lib/db/foretag";
+import { addPerson, savePeopleCanvas, setAccountManager, setManager } from "@/lib/db/foretag";
 import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -25,24 +25,19 @@ function changed(orgId: string, reconcile = true): CanvasResult {
   return { ok: true };
 }
 
-type Db = Awaited<ReturnType<typeof createSupabaseServerClient>>;
-
-/** The person row for `who`: a member account without one gets it (place_member, unplaced). */
-async function personFor(db: Db, orgId: string, who: Who): Promise<string | null> {
-  if ("personId" in who) return isUuid(who.personId) ? who.personId : null;
-  if (!isUuid(who.userId)) return null;
-  const { data, error } = await db.rpc("place_member", { p_org_id: orgId, p_user_id: who.userId, p_group_id: null, p_name: who.name });
-  if (error) return null;
-  return (data as string | null) ?? null;
-}
-
-/** "Rapporterar till": an arrow drawn, removed (top) or a person taken out of the tree (none). */
+/** "Rapporterar till": an arrow drawn, removed (top) or a person taken out of the tree (none). A member account without a person row gets it in the same transaction. */
 export async function canvasSetManager(orgId: string, who: Who, to: ManagerTo): Promise<CanvasResult> {
   if (!isUuid(orgId) || !validTo(to)) return NO;
   const db = await createSupabaseServerClient();
-  const personId = await personFor(db, orgId, who);
-  if (!personId || (typeof to === "object" && to.manager === personId)) return NO;
-  if (!(await setManager(db, personId, to))) return NO;
+  let result: string;
+  if ("personId" in who) {
+    if (!isUuid(who.personId) || (typeof to === "object" && to.manager === who.personId)) return NO;
+    result = await setManager(db, who.personId, to);
+  } else {
+    if (!isUuid(who.userId)) return NO;
+    result = await setAccountManager(db, orgId, who.userId, who.name, to);
+  }
+  if (result !== "ok") return { ok: false, reason: result };
   return changed(orgId);
 }
 
@@ -57,9 +52,12 @@ export async function canvasAddPerson(
   const db = await createSupabaseServerClient();
   const added = await addPerson(db, orgId, { name: input.name.trim(), role: input.role.trim(), email: input.email.trim() });
   if (!added.ok) return { ok: false, reason: added.reason };
-  if (to !== "none" && !(await setManager(db, added.id, to))) {
-    changed(orgId);
-    return { ok: false, reason: "manager" };
+  if (to !== "none") {
+    const result = await setManager(db, added.id, to);
+    if (result !== "ok") {
+      changed(orgId);
+      return { ok: false, reason: result };
+    }
   }
   if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) await savePeopleCanvas(db, orgId, [{ id: added.id, x: at.x, y: at.y }]);
   changed(orgId);

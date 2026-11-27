@@ -222,7 +222,8 @@
       "depth": "Trädet blir för djupt.",
       "same": "{child} rapporterar redan till {manager}.",
       "missing": "Personen finns inte längre i trädet.",
-      "hasReports": "{name} har personer under sig. Flytta dem först."
+      "hasReports": "{name} har personer under sig. Flytta dem först.",
+      "notPlaced": "{manager} har ingen plats i trädet än. Ge {manager} en plats först."
     },
     "detachTitle": "Ta bort pilen från {manager} till {child}?",
     "detachText": "{child} hamnar högst upp och ser då alla möten under sig, inte bara i {team}.",

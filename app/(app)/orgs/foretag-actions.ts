@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { isUuid } from "@/lib/db/ids";
-import { addPerson, archiveGroup, createForetag, placeMember, placePerson, saveGroup, setManager } from "@/lib/db/foretag";
+import { addPerson, archiveGroup, createForetag, placeMember, placePerson, saveGroup, setAccountManager, setManager } from "@/lib/db/foretag";
 import { canCreateForetag } from "@/lib/foretag/gate";
 import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -107,12 +107,17 @@ export async function setManagerAction(form: FormData): Promise<void> {
   const personId = field(form, "personId");
   const userId = field(form, "userId");
   const db = await createSupabaseServerClient();
-  let id: string | null = isUuid(personId) ? personId : null;
-  if (!id && isUuid(userId)) {
-    const { data } = await db.rpc("place_member", { p_org_id: orgId, p_user_id: userId, p_group_id: null, p_name: field(form, "name") });
-    id = (data as string | null) ?? null;
-  }
-  if (!to || !id || (typeof to === "object" && to.manager === id) || !(await setManager(db, id, to))) redirect(back(orgId, "rapporterar", form));
+  // A member account without a person row: its row and the line in one transaction.
+  const result = !to
+    ? "invalid"
+    : isUuid(personId)
+      ? typeof to === "object" && to.manager === personId
+        ? "invalid"
+        : await setManager(db, personId, to)
+      : isUuid(userId)
+        ? await setAccountManager(db, orgId, userId, field(form, "name"), to)
+        : "invalid";
+  if (result !== "ok") redirect(back(orgId, result === "not_placed" ? "chef-utan-plats" : "rapporterar", form));
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }
@@ -124,7 +129,10 @@ export async function addTreePersonAction(form: FormData): Promise<void> {
   const db = await createSupabaseServerClient();
   const added = await addPerson(db, orgId, { name: field(form, "name").trim(), role: field(form, "role").trim(), email: field(form, "email").trim() });
   if (!added.ok) redirect(back(orgId, added.reason === "duplicate" ? "person-finns" : "person", form));
-  if (to && to !== "none" && !(await setManager(db, added.id, to))) redirect(back(orgId, "rapporterar", form));
+  if (to && to !== "none") {
+    const result = await setManager(db, added.id, to);
+    if (result !== "ok") redirect(back(orgId, result === "not_placed" ? "chef-utan-plats" : "rapporterar", form));
+  }
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);
 }

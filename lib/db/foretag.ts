@@ -34,19 +34,28 @@ export async function saveGroup(db: Db, orgId: string, input: { id?: string | nu
   return data !== null;
 }
 
-/** 0062: "Rapporterar till". `manager`: a person id; "top": no manager; "none": out of the tree. False when refused (not admin, a cycle, has reports). */
-export async function setManager(db: Db, personId: string, to: { manager: string } | "top" | "none"): Promise<boolean> {
-  const { data, error } = await db.rpc("set_manager", {
-    p_person_id: personId,
-    p_mode: typeof to === "string" ? to : "manager",
-    p_manager_id: typeof to === "string" ? null : to.manager,
-  });
+export type ManagerResult = "ok" | "forbidden" | "invalid" | "not_placed" | "cycle" | "has_reports";
+type ManagerTo = { manager: string } | "top" | "none";
+const managerArgs = (to: ManagerTo) => ({ p_mode: typeof to === "string" ? to : "manager", p_manager_id: typeof to === "string" ? null : to.manager });
+function managerResult(what: string, data: unknown, error: { code?: string; message: string } | null): ManagerResult {
   if (error) {
-    // The tree trigger's refusals: a cycle, too deep.
-    if (error.code === "22023") return false;
-    fail("set_manager", error);
+    // The tree trigger's own refusals (a cycle, too deep), should the function's check ever miss one.
+    if (error.code === "22023") return "cycle";
+    fail(what, error);
   }
-  return data === true;
+  return (["ok", "forbidden", "invalid", "not_placed", "cycle", "has_reports"] as const).find((r) => r === data) ?? "invalid";
+}
+
+/** 0062: "Rapporterar till" for a person row. `manager`: a person id; "top": no manager; "none": out of the tree. */
+export async function setManager(db: Db, personId: string, to: ManagerTo): Promise<ManagerResult> {
+  const { data, error } = await db.rpc("set_manager", { p_person_id: personId, ...managerArgs(to) });
+  return managerResult("set_manager", data, error);
+}
+
+/** 0062: the same for a member account without a person row: its row and the line in one transaction. */
+export async function setAccountManager(db: Db, orgId: string, userId: string, name: string, to: ManagerTo): Promise<ManagerResult> {
+  const { data, error } = await db.rpc("set_account_manager", { p_org_id: orgId, p_user_id: userId, p_name: name, ...managerArgs(to) });
+  return managerResult("set_account_manager", data, error);
 }
 
 /** 0062: save card positions on the canvas (admins; the database decides). False when refused. */

@@ -72,6 +72,7 @@ const orgTones: Record<string, Notice["tone"]> = {
   rapporterar: "danger",
   person: "danger",
   "person-finns": "danger",
+  "chef-utan-plats": "danger",
   kundnamn: "danger",
   // A förening's groups (0054)
   grupper: "danger",

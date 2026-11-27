@@ -288,7 +288,18 @@ function Canvas({ data, api }: { data: CanvasData; api: CanvasApi }) {
       const r = await run(() => api.setManager(orgId, whoOf(person), to));
       if (!r?.ok) {
         setPeople(before);
-        say(to === "none" ? t("refused.hasReports", { name: person.name }) : t("failed"), "error");
+        const reason = r && "reason" in r ? r.reason : undefined;
+        const managerName = managerId ? (byId.get(managerId)?.name ?? "") : "";
+        say(
+          reason === "has_reports"
+            ? t("refused.hasReports", { name: person.name })
+            : reason === "not_placed"
+              ? t("refused.notPlaced", { manager: managerName })
+              : reason === "cycle"
+                ? t("refused.cycle", { child: person.name, manager: managerName })
+                : t("failed"),
+          "error",
+        );
         return false;
       }
       const manager = managerId ? byId.get(managerId) : undefined;

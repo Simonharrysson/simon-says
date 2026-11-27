@@ -162,6 +162,9 @@
     },
     "person-finns": {
       "text": "Det finns redan en person med det namnet."
+    },
+    "chef-utan-plats": {
+      "text": "Den personen har ingen plats i trädet än och kan inte vara chef. Ge hen en plats först."
     }
   }
 }

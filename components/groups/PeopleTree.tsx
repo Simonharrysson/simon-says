@@ -59,7 +59,8 @@ export function PeopleTree({ orgId, isAdmin, people, actions, hidden = {} }: Peo
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="font-medium wrap-anywhere">{p.name}</span>
           {p.role && <span className="text-sm text-ink-2">{p.role}</span>}
-          {p.personId && p.email && p.email !== p.name && <span className="text-sm text-ink-3 wrap-anywhere">{p.email}</span>}
+          {/* A person's invite e-mail is the admins' business (members see names). */}
+          {isAdmin && p.personId && p.email && p.email !== p.name && <span className="text-sm text-ink-3 wrap-anywhere">{p.email}</span>}
           {p.you && <span className="text-sm text-ink-3">{t("youMark")}</span>}
           {p.admin && <Badge tone="info">{t("admin")}</Badge>}
           {p.personId && p.placed && reports(p.personId) > 0 && <span className="text-xs text-ink-3">{t("reports", { count: reports(p.personId) })}</span>}

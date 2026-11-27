@@ -162,6 +162,9 @@
     },
     "person-finns": {
       "text": "There's already a person with that name."
+    },
+    "chef-utan-plats": {
+      "text": "That person has no place in the tree yet and can't be a manager. Give them a place first."
     }
   }
 }

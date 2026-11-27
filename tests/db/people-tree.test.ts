@@ -47,19 +47,19 @@ describe.skipIf(!hasLocalSupabase)("people tree (0062)", () => {
   });
 
   it("only an admin draws a line; a member is refused", async () => {
-    expect(must("member", await manage(u.adam, "adam", "manager", "simon"))).toBe(false);
+    expect(must("member", await manage(u.adam, "adam", "manager", "simon"))).toBe("forbidden");
     expect(await groupOf("adam")).toBeNull();
   });
 
   it("builds the tree: the manager leads a team their reports sit in, the team under the manager's group", async () => {
-    expect(must("simon top", await manage(admin, "simon", "top"))).toBe(true);
+    expect(must("simon top", await manage(admin, "simon", "top"))).toBe("ok");
     for (const [n, m] of [
       ["adam", "simon"],
       ["eva", "simon"],
       ["bo", "adam"],
       ["cia", "eva"],
     ] as [Name, Name][])
-      expect(must(n, await manage(admin, n, "manager", m))).toBe(true);
+      expect(must(n, await manage(admin, n, "manager", m))).toBe("ok");
     const simonTeam = (await teamOf("simon"))!;
     expect(await groupOf("adam")).toBe(simonTeam.id);
     expect(await groupOf("eva")).toBe(simonTeam.id);
@@ -70,10 +70,9 @@ describe.skipIf(!hasLocalSupabase)("people tree (0062)", () => {
 
   it("never a cycle: Simon can't report to Bo (two levels below him), nothing changes", async () => {
     const before = await groupOf("simon");
-    const r = await manage(admin, "simon", "manager", "bo");
-    expect(r.error?.code === "22023" || r.data === false).toBe(true);
+    expect(must("cycle", await manage(admin, "simon", "manager", "bo"))).toBe("cycle");
     expect(await groupOf("simon")).toBe(before);
-    expect(await manage(admin, "simon", "manager", "simon").then((x) => x.data)).toBe(false);
+    expect(await manage(admin, "simon", "manager", "simon").then((x) => x.data)).toBe("invalid");
   });
 
   it("visibility is the rule as before: own team, every team below your level, no cousins, admins all", async () => {
@@ -91,7 +90,7 @@ describe.skipIf(!hasLocalSupabase)("people tree (0062)", () => {
 
   it("one manager: a new line replaces the old; Bo's move leaves Adams team empty, so it is archived", async () => {
     const adamsTeam = (await teamOf("adam"))!.id;
-    expect(must("bo to eva", await manage(admin, "bo", "manager", "eva"))).toBe(true);
+    expect(must("bo to eva", await manage(admin, "bo", "manager", "eva"))).toBe("ok");
     expect(await groupOf("bo")).toBe((await teamOf("eva"))!.id);
     expect(await teamOf("adam")).toBeNull();
     const archived = must("archived", await adminClient().from("groups").select("archived_at").eq("id", adamsTeam).single()) as { archived_at: string | null };
@@ -99,7 +98,7 @@ describe.skipIf(!hasLocalSupabase)("people tree (0062)", () => {
   });
 
   it("a manager's team moves with them", async () => {
-    expect(must("eva to adam", await manage(admin, "eva", "manager", "adam"))).toBe(true);
+    expect(must("eva to adam", await manage(admin, "eva", "manager", "adam"))).toBe("ok");
     const adamsTeam = (await teamOf("adam"))!;
     expect(await groupOf("eva")).toBe(adamsTeam.id);
     expect((await teamOf("eva"))!).toMatchObject({ parent_group_id: adamsTeam.id, depth: adamsTeam.depth + 1 });
@@ -107,12 +106,54 @@ describe.skipIf(!hasLocalSupabase)("people tree (0062)", () => {
   });
 
   it("out of the tree: refused while someone reports to you; fine once nobody does", async () => {
-    expect(must("eva none", await manage(admin, "eva", "none"))).toBe(false);
-    expect(must("cia top", await manage(admin, "cia", "top"))).toBe(true);
-    expect(must("bo top", await manage(admin, "bo", "top"))).toBe(true);
-    expect(must("eva none 2", await manage(admin, "eva", "none"))).toBe(true);
+    expect(must("eva none", await manage(admin, "eva", "none"))).toBe("has_reports");
+    expect(must("cia top", await manage(admin, "cia", "top"))).toBe("ok");
+    expect(must("bo top", await manage(admin, "bo", "top"))).toBe("ok");
+    expect(must("eva none 2", await manage(admin, "eva", "none"))).toBe("ok");
     expect(await groupOf("eva")).toBeNull();
     expect(await teamOf("eva")).toBeNull();
+  });
+
+  it("only someone in the tree can be a manager: nobody is placed at the top by becoming one", async () => {
+    // Eva is out of the tree (the test before): Bo can't report to her, and she stays out.
+    expect(must("to eva", await manage(admin, "bo", "manager", "eva"))).toBe("not_placed");
+    expect(await groupOf("eva")).toBeNull();
+    expect(await teamOf("eva")).toBeNull();
+  });
+
+  it("a member account without a person row: its row and the line in one go; nothing left behind when refused", async () => {
+    const db = adminClient();
+    const dora = await createTestUser("ptree-dora");
+    must("member", await db.from("org_members").insert({ org_id: orgId, user_id: dora.id, role: "member" }));
+    const rows = async () => ((await db.from("people").select("id, group_id").eq("org_id", orgId).eq("member_user_id", dora.id)).data ?? []) as { id: string; group_id: string | null }[];
+    // Refused (Eva isn't in the tree): no row made.
+    expect(must("refused", await admin.db.rpc("set_account_manager", { p_org_id: orgId, p_user_id: dora.id, p_name: "Dora", p_mode: "manager", p_manager_id: p.eva }))).toBe("not_placed");
+    expect(await rows()).toEqual([]);
+    // A member can't.
+    expect(must("member", await u.adam.db.rpc("set_account_manager", { p_org_id: orgId, p_user_id: dora.id, p_name: "Dora", p_mode: "manager", p_manager_id: p.simon }))).toBe("forbidden");
+    // The admin: row and line together.
+    expect(must("ok", await admin.db.rpc("set_account_manager", { p_org_id: orgId, p_user_id: dora.id, p_name: "Dora", p_mode: "manager", p_manager_id: p.simon }))).toBe("ok");
+    expect(await rows()).toEqual([{ id: expect.any(String), group_id: (await teamOf("simon"))!.id }]);
+  });
+
+  it("two admins drawing opposite lines at once: one wins, never a loop", async () => {
+    const db = adminClient();
+    const second = await createTestUser("ptree-admin2");
+    must("admin2", await db.from("org_members").insert({ org_id: orgId, user_id: second.id, role: "admin" }));
+    // Bo and Cia both at the top (earlier tests), neither leads anyone.
+    for (let round = 0; round < 5; round++) {
+      must("reset bo", await manage(admin, "bo", "top"));
+      must("reset cia", await manage(admin, "cia", "top"));
+      const [a, b] = await Promise.all([manage(admin, "bo", "manager", "cia"), manage(second, "cia", "manager", "bo")]);
+      const results = [a.data ?? a.error?.code, b.data ?? b.error?.code];
+      expect(results.filter((r) => r === "ok")).toHaveLength(1);
+      // The people never point at each other.
+      const boTeam = await teamOf("bo");
+      const ciaTeam = await teamOf("cia");
+      const boIn = await groupOf("bo");
+      const ciaIn = await groupOf("cia");
+      expect(boTeam !== null && ciaIn === boTeam.id && ciaTeam !== null && boIn === ciaTeam.id).toBe(false);
+    }
   });
 
   it("positions: admins save them, members can't, no direct writes, bad input refused whole", async () => {
@@ -129,6 +170,6 @@ describe.skipIf(!hasLocalSupabase)("people tree (0062)", () => {
   it("another org's admin can't draw lines here", async () => {
     const other = await createTestUser("ptree-other");
     must("other org", await adminClient().rpc("create_foretag", { p_user: other.id, p_name: "Andra bolaget", p_root_name: "Topp", p_person_name: "Otto" }));
-    expect(must("other", await manage(other, "adam", "top"))).toBe(false);
+    expect(must("other", await manage(other, "adam", "top"))).toBe("forbidden");
   });
 });

@@ -25,6 +25,7 @@ export function PeopleTreeViews({
   actions: PeopleTreeActions;
   hidden?: Record<string, string>;
 }) {
-  const tree = peopleTree(people, groups, members, userId);
+  // Members never get a person's invite e-mail, not even in the canvas's props (only admins edit it).
+  const tree = peopleTree(people, groups, members, userId).map((p) => (isAdmin || !p.personId ? p : { ...p, email: null }));
   return <TreeViews list={<PeopleTree orgId={orgId} isAdmin={isAdmin} people={tree} actions={actions} hidden={hidden} />} data={{ orgId, isAdmin, people: tree }} />;
 }
