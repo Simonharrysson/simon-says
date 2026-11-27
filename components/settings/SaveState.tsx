@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { IconCheck } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -122,6 +122,18 @@ export function useSavedValue<T>(server: T, save: (value: T) => Promise<string |
   };
 
   return { value, change, status, confirmed: () => confirmed.current };
+}
+
+const noSubscribe = () => () => {};
+
+/**
+ * False in the server's HTML and until this part has hydrated. A `<select>` that saves on change
+ * must wait for it: React replays a click made before hydration (switches, radios) but not a
+ * select's change event, so a choice made in that window would show and never be saved. Parts
+ * that stream in under <Suspense> (the calendar) hydrate last.
+ */
+export function useHydrated(): boolean {
+  return useSyncExternalStore(noSubscribe, () => true, () => false);
 }
 
 /** The quiet status line. `className` places it; it reserves its own height. */
