@@ -16,7 +16,8 @@ export interface MeetingTask extends MyTask {
 }
 
 export interface OrgMeetingPage {
-  org: { id: string; name: string };
+  /** `kind` (förening | foretag) when the loader read it. */
+  org: { id: string; name: string; kind?: string };
   meeting: { id: string; startedAt: string; status: string; title: string | null; isTest: boolean; endedAt?: string | null };
   decisions: string[];
   /** The Närvarande rows (as written: one name or a typed list each). */
@@ -42,7 +43,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     db.from("people").select("id, org_id, name, role, member_user_id").eq("org_id", orgId),
   ]);
   if (e4 || e5) throw new Error(`loadOrgMeeting: ${(e4 ?? e5)!.message}`);
-  return buildOrgMeeting({
+  const page = buildOrgMeeting({
     userId,
     org: { id: org.id, name: org.name },
     meeting: m,
@@ -50,6 +51,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     rows: (rows ?? []) as HomeNoteRow[],
     people: (people ?? []) as HomePerson[],
   });
+  return { ...page, org: { ...page.org, kind: org.kind as string } };
 }
 
 /**

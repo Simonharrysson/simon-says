@@ -110,26 +110,32 @@ export function NextMeetingHero(props: NextMeetingHeroProps) {
     const cal = props.calendar;
     if (!cal || (state.kind !== "prepared" && state.kind !== "unprepared")) return null;
     let line: ReactNode = null;
-    if (cal.state === "loading") line = <Skeleton className="h-4 w-56 max-w-full" aria-label={t("calendarLoading")} />;
-    else if (cal.state === "unavailable") line = <span className="truncate">{tCal("unavailable")}</span>;
+    if (cal.state === "loading")
+      line = (
+        <>
+          <Skeleton className="h-4 w-56 max-w-full" aria-hidden="true" />
+          <span className="sr-only">{t("calendarLoading")}</span>
+        </>
+      );
+    else if (cal.state === "unavailable") line = <span className="min-w-0 wrap-anywhere">{tCal("unavailable")}</span>;
     else if (cal.state === "disconnected")
       line = (
         <>
-          <span className="min-w-0 truncate">{tCal("connectHint")}</span>
+          <span className="min-w-0">{tCal("connectHint")}</span>
           <ConnectCalendarButton action={cal.connect} back={`/orgs/${orgId}`} variant="ghost" />
         </>
       );
     else if (state.kind === "prepared")
       line = state.event ? (
-        <span className="truncate">{t("calendarSame", { title: state.event.title || tCal("untitled") })}</span>
+        <span className="min-w-0 wrap-anywhere">{t("calendarSame", { title: state.event.title || tCal("untitled") })}</span>
       ) : cal.events[0] ? (
-        <span className="truncate">{t("calendarLater", { title: cal.events[0].title || tCal("untitled"), when: nextMeetingWhen(cal.events[0].date, cal.events[0].time, locale) })}</span>
+        <span className="min-w-0 wrap-anywhere">{t("calendarLater", { title: cal.events[0].title || tCal("untitled"), when: nextMeetingWhen(cal.events[0].date, cal.events[0].time, locale) })}</span>
       ) : (
-        <span className="truncate">{tCal("nothingUpcoming")}</span>
+        <span className="min-w-0 wrap-anywhere">{tCal("nothingUpcoming")}</span>
       );
-    else if (!state.event) line = <span className="truncate">{tCal("nothingUpcoming")}</span>;
-    else line = <span className="truncate">{t("calendarWhen", { when: nextMeetingWhen(state.event.date, state.event.time, locale) })}</span>;
-    return <div className="flex min-h-8 min-w-0 items-center gap-3 text-sm text-ink-3">{line}</div>;
+    else if (!state.event) line = <span className="min-w-0 wrap-anywhere">{tCal("nothingUpcoming")}</span>;
+    else line = <span className="min-w-0 wrap-anywhere">{t("calendarWhen", { when: nextMeetingWhen(state.event.date, state.event.time, locale) })}</span>;
+    return <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">{line}</div>;
   };
 
   switch (state.kind) {
@@ -191,6 +197,10 @@ export function NextMeetingHero(props: NextMeetingHeroProps) {
               {t("prepareNext")}
             </ButtonLink>
           )}
+          {/* Another meeting can always start (a Företag runs several a day). */}
+          <ButtonLink href={`/meetings/ny/${orgId}`} variant={props.foretag ? "secondary" : "ghost"} size="lg" icon={<IconMic />} className="max-sm:w-full">
+            {t("start")}
+          </ButtonLink>
         </>
       );
       break;

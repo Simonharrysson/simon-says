@@ -43,10 +43,12 @@ export function OrgMeetingView({
   const anyTick = tasks.some((x) => x.canTick);
   const seconds = meeting.endedAt ? (Date.parse(meeting.endedAt) - Date.parse(meeting.startedAt)) / 1000 : null;
   const attendees = page.attendees ?? [];
+  // "De som missade mötet" only in a förening (a Företag mails the meeting's people, neutrally);
+  // "mejlas strax" only right after the end (an old meeting left unsent says nothing).
   const mail =
     summary?.state === "sent"
-      ? t("meeting.summarySent", { mode: summary.mode === "missed" ? "missed" : "other", count: summary.sent })
-      : summary?.state === "pending" && meeting.status === "done" && !meeting.isTest
+      ? t("meeting.summarySent", { mode: summary.mode === "missed" && org.kind !== "foretag" ? "missed" : "other", count: summary.sent })
+      : summary?.state === "pending" && justEnded && !meeting.isTest
         ? t("meeting.summaryPending")
         : summary?.state === "off"
           ? t("meeting.summaryOff")

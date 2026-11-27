@@ -93,6 +93,8 @@ test("Nästa möte: live → notes being finished → just ended, recap and the 
   await expect(ended).toContainText("1 beslut · 1 uppgift");
   await expect(ended).toContainText("Sammanfattning skickad till 2 personer");
   await expect(ended.getByRole("link", { name: "Förbered nästa möte" })).toHaveAttribute("href", `/orgs/${org.id}/forbered`);
+  // A new meeting can still start from here.
+  await expect(ended.getByRole("link", { name: "Starta möte" })).toHaveAttribute("href", `/meetings/ny/${org.id}`);
   await expectNoOverflow(page);
   await expectAccessible(page);
 
