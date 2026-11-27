@@ -49,19 +49,38 @@
     "notAudio": "Ljudet från mötet.",
     "notDrive": "Något annat i din Google Drive, inte heller namnen på mappar och dokument som visas när admin läser in gamla protokoll.",
     "notCalendar": "Något annat ur din kalender: andra kalendrar, händelser som inte blir möten, beskrivningar och platser.",
-    "notVoice": "Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först."
+    "notVoice": "Röstavtryck. Det finns inte i den här versionen. Skulle det komma, frågar vi om uttryckligt samtycke först.",
+    "foretag": "Företag (under test, bara för inbjudna): ett företags möten ser bara de som får enligt företagets träd av grupper (den egna gruppen, grupperna längre ner och admins). När ett möte startas läses den pågående händelsen i startarens egen kalender: kollegerna som är bjudna sparas som deltagare (som id:n), och för gäster från andra företag sparas bara e-postdomänen (till exempel acme.se) som kund, aldrig adresser eller namn. En uppgift till någon som inte får se mötet skickas först när den som startade mötet eller en admin har godkänt texten."
   },
   "mail": "Du bestämmer vilka mejl Simon Says skickar till dig. Under Konto kan du stänga av varje sorts mejl för sig, eller välja Inga mejl alls. Längst ner i varje mejl finns en länk till samma val som fungerar utan inloggning, även om du inte har något konto. Vi sparar bara dina val (och, om du saknar konto, adressen de gäller) så länge tjänsten drivs, så att ett nej fortsätter att gälla. Mejla oss om du vill att vi raderar dem.",
   "processors": {
     "service": "Tjänst",
     "does": "Gör",
     "goodToKnow": "Bra att veta",
-    "elevenlabs": { "what": "Gör om ljudet till text under mötet.", "note": "Loggar förfrågningar som standard; noll lagring kan kräva särskilt avtal. Behandlingen kan ske utanför EU. Ljudet skickas direkt från laptopen." },
-    "anthropic": { "what": "Skriver anteckningarna utifrån transkriptionen.", "note": "Får texten, inte ljudet. Behandlingen kan ske utanför EU." },
-    "google": { "what": "Inloggning, och dokumentet i föreningens mötesmapp (annars i Drive hos den som startar mötet).", "note": "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive, och den som kopplar sin kalender ger läsrättighet till sin kalender (se Vad som sparas). Behandlingen kan ske utanför EU." },
-    "supabase": { "what": "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.", "note": "Lagras inom EU." },
-    "vercel": { "what": "Kör webbplatsen och servern.", "note": "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar." },
-    "resend": { "what": "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, mötessammanfattningar till personer i föreningens personlista, och sammanfattningen av en inspelning i Privat till den som spelade in.", "note": "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen." }
+    "elevenlabs": {
+      "what": "Gör om ljudet till text under mötet.",
+      "note": "Loggar förfrågningar som standard; noll lagring kan kräva särskilt avtal. Behandlingen kan ske utanför EU. Ljudet skickas direkt från laptopen."
+    },
+    "anthropic": {
+      "what": "Skriver anteckningarna utifrån transkriptionen.",
+      "note": "Får texten, inte ljudet. Behandlingen kan ske utanför EU."
+    },
+    "google": {
+      "what": "Inloggning, och dokumentet i föreningens mötesmapp (annars i Drive hos den som startar mötet).",
+      "note": "Vi får bara röra filer Simon Says själv skapat eller som du har valt. Undantag: en admin som läser in gamla protokoll kan ge läsrättighet till sin Drive, och den som kopplar sin kalender ger läsrättighet till sin kalender (se Vad som sparas). Behandlingen kan ske utanför EU."
+    },
+    "supabase": {
+      "what": "Databasen: konton, föreningar, personlistor, transkriptioner och anteckningar.",
+      "note": "Lagras inom EU."
+    },
+    "vercel": {
+      "what": "Kör webbplatsen och servern.",
+      "note": "Funktionerna körs i Stockholm. Vercel loggar vanliga förfrågningar (till exempel IP-adress och adress) i sina serverloggar."
+    },
+    "resend": {
+      "what": "Skickar e-post: driftlarm och dagliga sammanfattningar till oss, inbjudningar som en admin skickar till de adresser hen skriver in, mötessammanfattningar till personer i föreningens personlista, och sammanfattningen av en inspelning i Privat till den som spelade in.",
+      "note": "En mötessammanfattning innehåller mötets beslut, uppgifter och korta övriga punkter, aldrig transkriptionen."
+    }
   },
   "legal": {
     "intro": "Det här är vår nuvarande bedömning. En juridisk granskning återstår.",

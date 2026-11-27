@@ -97,7 +97,12 @@ AI-written task text from a restricted meeting can leak what the owner may not s
 - **Removed:** the "Kräv vem, när och klart när" setting (always suggest), the public profile and status page, Översikt / goals, Förbered möte and history import.
 - **Summary mail:** by default it goes to the meeting's own group plus its attendees, filtered to viewers. People higher up open it in the app instead **[decided 11-27]**.
 
-## Out of v1
+## As built (decisions made while building, 2026-11-27)
+- **Calendar:** a Företag start reads the event happening now in the starter's own primary calendar, never a förening's shared calendar. Guests whose address equals a member's sign-in address are stored as `calendar` attendees. Only the customer's domain is stored, and no external names.
+- **Format:** every Företag meeting is a new Enkel Doc in the starter's own folder. That means no Förbered möte, no agenda Docs and no carried "Från förra veckan", so no task is carried across groups.
+- **Busy company:** one live meeting per company at a time, from the existing org guard (0027). The company page says so even when the running meeting is one the viewer can't see.
+- **Navigation:** companies are listed on the Föreningar page under "Dina företag". The top bar has no fifth link, because it would not fit at 390 px.
+- **Admin-only people list:** in a Företag only admins write the people list. Members could otherwise link a placed person row to themselves and inherit its place in the tree.
 - Credits and billing.
 - CRM and export.
 - Gmail, Slack, event descriptions and Drive files from invites.
@@ -108,4 +113,5 @@ AI-written task text from a restricted meeting can leak what the owner may not s
 - Drag-and-drop in the tree, and a person at more than one node.
 - Revoking Doc shares when someone moves.
 - Search over history.
+- More than one live meeting per company at a time.
 - **Gate:** no company other than Harrysson & Company before a DPA (personuppgiftsbiträdesavtal), its subprocessor list and a legal review of /integritet and the terms **[decided 11-27]**.
