@@ -36,10 +36,14 @@ test("Förbered möte: Från förra veckan and a typed-but-not-added point reach
   await expect(page.getByText("Nästa möte")).toBeVisible();
   await page.getByRole("link", { name: "Ändra", exact: true }).click();
   // A click before hydration submits the form natively (the page reloads): click until it takes.
+  // Only while the button is still there: a slow first click that did take removes it, and a
+  // second click would then wait for a button that never comes back.
+  const editing = page.getByText("Du ändrar en förberedd dagordning");
   await expect(async () => {
-    await page.getByRole("button", { name: "Ta fram dagordningen" }).click();
-    await expect(page.getByText("Du ändrar en förberedd dagordning")).toBeVisible({ timeout: 3000 });
-  }).toPass({ timeout: 20_000 });
+    const takeOut = page.getByRole("button", { name: "Ta fram dagordningen" });
+    if (!(await editing.isVisible()) && (await takeOut.isVisible())) await takeOut.click({ timeout: 2000 });
+    await expect(editing).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 40_000 });
   const labels = await page.getByRole("list", { name: "Dagordning" }).getByRole("textbox").evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
   expect(labels).toContain("Rekrytering");
   expect(await fake.docText(doc.id)).toContain("Rekrytering");

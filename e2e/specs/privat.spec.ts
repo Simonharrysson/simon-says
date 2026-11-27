@@ -161,7 +161,8 @@ test("Privat: deleting a recording removes its notes and summary", async ({ sign
   await expect(page.getByText("Genomgång av offerten.")).toBeVisible();
   await page.getByRole("button", { name: "Radera inspelningen" }).click();
   await page.getByRole("dialog", { name: "Radera inspelningen?" }).getByRole("button", { name: "Radera inspelningen" }).click();
-  await expect(page.getByText("Inspelningen är raderad")).toBeVisible();
+  // The redirect lands on the context page, which `next dev` may still have to compile.
+  await expect(page.getByText("Inspelningen är raderad")).toBeVisible({ timeout: 45_000 });
   expect((await db.from("meetings").select("id").eq("id", m!.id)).data).toEqual([]);
   expect((await db.from("private_summaries").select("meeting_id").eq("meeting_id", m!.id)).data).toEqual([]);
   expect((await db.from("note_items").select("id").eq("meeting_id", m!.id)).data).toEqual([]);
