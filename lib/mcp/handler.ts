@@ -9,7 +9,7 @@ import type { McpReader } from "./reader";
 
 // POST /api/mcp: authenticate the Bearer token, check the allow-list and the rate limit, then run
 // one stateless MCP exchange as the user. Every refusal before the transport is plain HTTP (401
-// with the RFC 9728 challenge, 403, 429); the token itself is never logged.
+// with the RFC 9728 challenge, 403, 429, 503); the token itself is never logged.
 
 /** Calls per minute per grant (one connected assistant). */
 export const RATE_PER_MINUTE = 60;
@@ -21,8 +21,8 @@ export interface McpDeps {
   reader: (userId: string) => McpReader;
   /** The user behind a grant, freshly loaded (null: deleted). */
   loadUser: (userId: string) => Promise<User | null>;
-  /** The allow-list (lib/foretag/gate.ts) by the user's current e-mail. */
-  allowed: (email: string | null | undefined) => boolean;
+  /** The kill switch (MCP_ENABLED): off answers 503 for every token. */
+  enabled: () => boolean;
   toolDeps: ToolDeps;
   now?: () => Date;
 }
@@ -31,6 +31,7 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
 
 export async function handleMcp(request: Request, deps: McpDeps): Promise<Response> {
+  if (!deps.enabled()) return json(503, { error: "temporarily_unavailable", error_description: "Simon Says for Claude is turned off right now." });
   if (!allowedOrigin(request.headers.get("origin"), deps.origin)) return json(403, { error: "origin_not_allowed" });
 
   const unauthorized = (error?: "invalid_token") =>
@@ -51,7 +52,6 @@ export async function handleMcp(request: Request, deps: McpDeps): Promise<Respon
   if (!grant || grant.resource !== resourceUri(deps.origin)) return unauthorized("invalid_token");
   const user = await deps.loadUser(grant.user_id);
   if (!user) return unauthorized("invalid_token");
-  if (!deps.allowed(user.email)) return json(403, { error: "not_enabled", error_description: "Simon Says for Claude is not open for this account yet." });
   if (!(await deps.store.rateTake(`grant:${grant.id}`, RATE_PER_MINUTE, 60))) {
     return json(429, { error: "rate_limited", error_description: `At most ${RATE_PER_MINUTE} calls a minute.` }, { "retry-after": "60" });
   }

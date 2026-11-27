@@ -38,6 +38,12 @@ const schema = z.object({
   // Företag (0050): comma list of e-mails allowed to create a company space, until a DPA exists;
   // falls back to ADMIN_EMAILS, then ALARM_EMAIL (lib/foretag/gate.ts).
   FORETAG_CREATOR_EMAILS: optional,
+  // The MCP server (/api/mcp, the OAuth endpoints, the consent page): "0" turns it off for
+  // everyone (503), a kill switch. On by default: every signed-in user may connect their Claude.
+  MCP_ENABLED: z
+    .enum(["0", "1"])
+    .default("1")
+    .transform((v) => v === "1"),
   // Google Picker (A11): an API key restricted to the Picker API + our referrers, and the Cloud
   // project number (the Picker's appId, needed for drive.file grants). Both absent: the Picker is
   // off and the start screen offers only "Skapa nytt dokument".

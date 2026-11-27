@@ -50,7 +50,7 @@ describe("the SDK client against the route handlers", () => {
       store: m.store,
       reader: (userId) => fakeReader(userId, { setHandoffDone: async () => true }),
       loadUser: async (id) => (id === USER.id ? USER : null),
-      allowed: () => true,
+      enabled: () => true,
       toolDeps: {} as McpDeps["toolDeps"],
     };
     const provider = new MemoryProvider();

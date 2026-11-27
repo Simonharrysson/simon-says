@@ -38,7 +38,7 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
     store: dbStore(admin),
     reader: (userId) => dbReader(admin, userId),
     loadUser: async (id) => (await admin.auth.admin.getUserById(id)).data.user ?? null,
-    allowed: () => true,
+    enabled: () => true,
     toolDeps: defaultToolDeps,
   });
   let anna: TestUser, jonas: TestUser, maja: TestUser, fmember: TestUser;
@@ -112,8 +112,8 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
     expect(get.data).toMatchObject({ title: "Sprintmöte", org_kind: "foretag", decisions: ["Vi lanserar hemligprojektet"] });
     // Never a hit from a deleted line or a Må-runda row (the app's own visible() rule).
     expect((await call(client, "search_meetings", { query: "dolkstöt" })).data).toMatchObject({ meetings: [] });
-    const orgs = await call(client, "list_orgs");
-    expect((orgs.data as { orgs: { org_id: string }[] }).orgs.map((o) => o.org_id)).toContain(orgId);
+    const spaces = await call(client, "list_spaces");
+    expect((spaces.data as { spaces: { org_id: string }[] }).spaces.map((o) => o.org_id)).toContain(orgId);
     await client.close();
   });
 
@@ -146,7 +146,7 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
 
     expect(must("revoke", await jonas.db.rpc("revoke_mcp_grant", { p_grant_id: grants[0].id }))).toBe(false);
     expect(must("revoke", await anna.db.rpc("revoke_mcp_grant", { p_grant_id: grants[0].id }))).toBe(true);
-    await expect(client.callTool({ name: "list_orgs", arguments: {} })).rejects.toThrow();
+    await expect(client.callTool({ name: "list_spaces", arguments: {} })).rejects.toThrow();
   });
 
   it("every mcp_* function refuses what the user can't see (and only the service role may call them)", async () => {
@@ -169,7 +169,7 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
     };
     const maja_ = as(maja);
     const jonas_ = as(jonas);
-    const all = { p_org: null, p_from: null, p_to: null, p_done: false, p_limit: 100 };
+    const all = { p_org: null, p_ids: null as string[] | null, p_from: null, p_to: null, p_done: false, p_limit: 100 };
 
     // Positive controls: Jonas sees his own.
     expect(await jonas_("mcp_meetings", { ...all, p_ids: [devMeeting, privMeeting] })).toHaveLength(2);
@@ -205,5 +205,44 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
       const { error } = await maja.db.rpc(fn, { p_user: jonas.id });
       expect(error, fn).not.toBeNull();
     }
+  });
+
+  it("Privat: the owner finds and reads their own recordings and tasks; another user never gets them", async () => {
+    // Anna's Privat space: a "Kurs" context with one recording, its summary and a task.
+    const priv = (must("privat", await admin.from("orgs").insert({ name: "Privat", kind: "privat", created_by: anna.id, share_transcript: false, summary_mode: "off" }).select("id").single()) as { id: string }).id;
+    await admin.from("org_members").upsert({ org_id: priv, user_id: anna.id, role: "admin" }, { onConflict: "org_id,user_id", ignoreDuplicates: true });
+    const course = (must("ctx", await admin.from("contexts").insert({ org_id: priv, name: "Kurs TDDE15" }).select("id").single()) as { id: string }).id;
+    const rec = (must("rec", await admin.from("meetings").insert({ org_id: priv, started_by: anna.id, doc_id: "doc", notes_tab_id: "t.0", status: "done", context_id: course }).select("id").single()) as { id: string }).id;
+    must("sum", await admin.from("private_summaries").insert({ meeting_id: rec, context_id: course, summary: "Föreläsning om bayesiska nätverk", decisions: ["Läs kapitel 4"], people: ["Anna"] }));
+    const task = (must("task", await admin.from("context_tasks").insert({ context_id: course, meeting_id: rec, text: "Gör labb 2" }).select("id").single()) as { id: string }).id;
+
+    const { client: own } = await connectAs(anna.id, deps);
+    const spaces = (await call(own, "list_spaces")).data as { spaces: { org_id: string; kind: string; contexts?: { context_id: string; name: string }[] }[] };
+    expect(spaces.spaces.find((s) => s.org_id === priv)).toMatchObject({ kind: "privat", contexts: [{ context_id: course, name: "Kurs TDDE15" }] });
+    const hit = (await call(own, "search_meetings", { query: "bayesiska", context_id: course })).data as { meetings: { meeting_id: string; title: string }[] };
+    expect(hit.meetings).toMatchObject([{ meeting_id: rec, title: "Kurs TDDE15" }]);
+    expect((await call(own, "get_meeting", { meeting_id: rec })).data).toMatchObject({
+      org_kind: "privat",
+      summary: "Föreläsning om bayesiska nätverk",
+      decisions: ["Läs kapitel 4"],
+      tasks: [{ task_id: `p:${task}`, text: "Gör labb 2", done: false }],
+    });
+    const mine = (await call(own, "my_tasks")).data as { tasks: { task_id: string; context?: string }[] };
+    expect(mine.tasks).toContainEqual(expect.objectContaining({ task_id: `p:${task}`, context: "Kurs TDDE15" }));
+    expect((await call(own, "prepare_agenda", { org_id: priv, point: "X" })).isError).toBe(true);
+
+    // Jonas: never Anna's recording, summary or task, whatever he asks for.
+    const { client: other } = await connectAs(jonas.id, deps);
+    expect(((await call(other, "search_meetings", { query: "bayesiska" })).data as { meetings: unknown[] }).meetings).toEqual([]);
+    expect(((await call(other, "search_meetings", { context_id: course })).data as { meetings: unknown[] }).meetings).toEqual([]);
+    const get = await call(other, "get_meeting", { meeting_id: rec });
+    expect(get.isError).toBe(true);
+    expect(get.text).not.toContain("bayesiska");
+    expect(JSON.stringify((await call(other, "my_tasks", { status: "all" })).data)).not.toContain(task);
+    expect((await call(other, "complete_task", { task_id: `p:${task}` })).isError).toBe(true);
+    expect((must("open", await admin.from("context_tasks").select("done").eq("id", task).single()) as { done: boolean }).done).toBe(false);
+    expect((await call(own, "complete_task", { task_id: `p:${task}` })).data).toMatchObject({ done: true });
+    await own.close();
+    await other.close();
   });
 });

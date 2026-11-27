@@ -10,7 +10,6 @@ import { disconnectCalendar, requestCalendarAccess } from "../calendar-actions";
 import { loadEmailPrefs } from "@/lib/email/prefs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AiConnections } from "@/components/views/AiConnections";
-import { canCreateForetag } from "@/lib/foretag/gate";
 import { loadConnections } from "@/lib/mcp/account";
 import { mcpConfigured } from "@/lib/mcp/deps";
 import { resourceUri } from "@/lib/mcp/oauth";
@@ -35,8 +34,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     safeCalendarConnected(user.id),
     loadConnections(db),
   ]);
-  // Kopplade AI-assistenter: for the allow-list (spec "Gate"), and for anyone who still has a connection.
-  const showAi = mcpConfigured() && (canCreateForetag(user.email) || ai.connections.length > 0);
+  // Kopplade AI-assistenter: for everyone while MCP is on, and for anyone who still has a connection.
+  const showAi = mcpConfigured() || ai.connections.length > 0;
   return (
     <AccountView
       email={user.email ?? ""}

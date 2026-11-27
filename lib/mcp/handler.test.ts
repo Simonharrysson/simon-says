@@ -31,7 +31,7 @@ function deps(over: Partial<McpDeps> = {}) {
         setHandoffDone,
       }),
     loadUser: async (id) => (id === USER.id ? USER : null),
-    allowed: () => true,
+    enabled: () => true,
     toolDeps: {} as ToolDeps,
     ...over,
   };
@@ -60,7 +60,7 @@ describe("the SDK client through the whole connector flow", () => {
     const { d, m } = deps();
     const { client } = await connectAs(USER.id, d);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["complete_task", "get_meeting", "list_orgs", "my_tasks", "prepare_agenda", "search_meetings"]);
+    expect(names).toEqual(["complete_task", "get_meeting", "list_spaces", "my_tasks", "prepare_agenda", "search_meetings"]);
 
     const open = resultOf(await client.callTool({ name: "my_tasks", arguments: {} }));
     expect(open.isError).toBe(false);
@@ -87,11 +87,11 @@ describe("the SDK client through the whole connector flow", () => {
     await client.close();
   });
 
-  it("refuses when the allow-list no longer has the user, or the user is gone", async () => {
+  it("refuses when MCP is switched off (MCP_ENABLED=0), or the user is gone", async () => {
     const { d } = deps();
     const { provider } = await connectAs(USER.id, d);
     const auth = { authorization: `Bearer ${provider.saved!.access_token}` };
-    expect((await post({ ...d, allowed: () => false }, auth)).status).toBe(403);
+    expect((await post({ ...d, enabled: () => false }, auth)).status).toBe(503);
     expect((await post({ ...d, loadUser: async () => null }, auth)).status).toBe(401);
   });
 

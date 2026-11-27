@@ -1,8 +1,8 @@
 # Simon Says i Claude (MCP)
 
-Simon Says is a remote MCP server at `https://simonsays.harrysson.co/api/mcp`, using Streamable HTTP and OAuth 2.1. Once it is connected, your own Claude can search your meetings, read one, list your tasks and tick them off, and add a point to the next agenda. **Claude sees only what you see in the app.** Design: `docs/superpowers/specs/2026-11-27-mcp-design.md`.
+Simon Says is a remote MCP server at `https://simonsays.harrysson.co/api/mcp`, using Streamable HTTP and OAuth 2.1. Once it is connected, your own Claude can search your meetings and Privat recordings, read one, list your tasks and tick them off, and add a point to the next agenda. **Claude sees only what you see in the app.** Design: `docs/superpowers/specs/2026-11-27-mcp-design.md`.
 
-> Behind the Företag allow-list (`FORETAG_CREATOR_EMAILS`, else `ADMIN_EMAILS`, else `ALARM_EMAIL`) until it is tested. Anyone else gets "Inte tillgängligt än".
+> For every user: Privat, föreningar and Företag. Kill switch: `MCP_ENABLED=0` turns it off for everyone (503).
 
 ## Lägg till i Claude
 
@@ -23,12 +23,12 @@ claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mc
 
 | Tool | Does |
 | --- | --- |
-| `list_orgs` | Your föreningar, Företag and Privat, with your role |
-| `search_meetings(query?, org_id?, from?, to?, cursor?, limit?)` | Finished meetings, newest first, with a short matching snippet |
-| `get_meeting(meeting_id)` | Title, date, attendance, decisions, tasks (Vem / När / Klart när), summary, Doc link |
+| `list_spaces` | Your föreningar, Företag and Privat space (with its contexts, e.g. courses) |
+| `search_meetings(query?, org_id?, context_id?, from?, to?, cursor?, limit?)` | Finished meetings and recordings, newest first, with a short matching snippet |
+| `get_meeting(meeting_id)` | A meeting or recording: title, date, attendance, decisions, tasks (Vem / När / Klart när), summary, Doc link |
 | `my_tasks(status?, due_before?, cursor?, limit?)` | Mina uppgifter (open by default) |
 | `complete_task(task_id)` | Same as ticking on /hem: the owner or an admin, and the Doc gets "✓ klart" |
-| `prepare_agenda(org_id \| meeting_id, point)` | Adds a point to a förening's next agenda; creates it (Förbered möte's proposed date) when none is prepared |
+| `prepare_agenda(org_id \| meeting_id, point)` | Förening meetings only. Adds a point to the next agenda; creates it (Förbered möte's proposed date) when none is prepared |
 
 Claude cannot change or delete notes, and it cannot see more than you can. Every call is logged with tool, ids and time, never content.
 

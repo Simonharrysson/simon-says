@@ -97,28 +97,44 @@ export const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c
 
 const spacesOf = (orgs: McpOrg[]) => [...orgs].sort((a, b) => a.name.localeCompare(b.name, "sv"));
 
-export async function listOrgs(ctx: ToolCtx): Promise<ToolResult> {
+/** Föreningar, Företag and the user's Privat space with its contexts (a course, a client, a project). */
+export async function listSpaces(ctx: ToolCtx): Promise<ToolResult> {
   const spaces = spacesOf(await ctx.reader.orgs());
-  return ok({ orgs: spaces.map((s) => ({ org_id: s.id, name: s.name, kind: s.kind, role: s.role })) });
+  const privat = spaces.filter((s) => s.kind === "privat").map((s) => s.id);
+  const contexts = await ctx.reader.contexts(privat);
+  return ok({
+    spaces: spaces.map((s) => ({
+      org_id: s.id,
+      name: s.name,
+      kind: s.kind,
+      role: s.role,
+      ...(s.kind === "privat"
+        ? { contexts: contexts.filter((c) => c.org_id === s.id).sort((a, b) => a.name.localeCompare(b.name, "sv")).map((c) => ({ context_id: c.id, name: c.name })) }
+        : {}),
+    })),
+  });
 }
 
 export async function searchMeetings(
   ctx: ToolCtx,
-  args: { query?: string; org_id?: string; from?: string; to?: string; cursor?: string; limit?: number },
+  args: { query?: string; org_id?: string; context_id?: string; from?: string; to?: string; cursor?: string; limit?: number },
 ): Promise<ToolResult> {
   const spaces = await ctx.reader.orgs();
   if (args.org_id) ctx.ids.org_id = args.org_id;
-  if (args.org_id && !spaces.some((s) => s.id === args.org_id)) return refuse("Unknown org_id (or you are not a member). Call list_orgs for your orgs.");
+  if (args.context_id) ctx.ids.context_id = args.context_id;
+  if (args.org_id && !spaces.some((s) => s.id === args.org_id)) return refuse("Unknown org_id (or you are not a member). Call list_spaces for your spaces.");
   const q = clean(args.query);
   if (q && (q.length < 2 || q.length > 100)) return refuse("query must be 2 to 100 characters.");
 
-  const meetings = await ctx.reader.meetings({
+  const inRange = await ctx.reader.meetings({
     org: args.org_id ?? null,
     from: args.from ? `${args.from}T00:00:00Z` : null,
     to: args.to ? `${args.to}T23:59:59Z` : null,
     done: true,
     limit: SEARCH_WINDOW,
   });
+  // A Privat context (a course, a client): its recordings only.
+  const meetings = args.context_id ? inRange.filter((m) => m.context_id === args.context_id) : inRange;
   const spaceOf = new Map(spaces.map((s) => [s.id, s]));
   // Privat recordings are titled by their context ("TDDE15").
   const contexts = await ctx.reader.contexts(spaces.filter((s) => s.kind === "privat").map((s) => s.id));
@@ -149,16 +165,24 @@ export async function searchMeetings(
   return ok({
     meetings: items.map(({ m, snippet: s }) => {
       const space = spaceOf.get(m.org_id);
-      return { meeting_id: m.id, org: space?.name ?? null, org_kind: space?.kind ?? null, started_at: m.started_at, title: titleOf(m), ...(s ? { match: s } : {}) };
+      return {
+        meeting_id: m.id,
+        org: space?.name ?? null,
+        org_kind: space?.kind ?? null,
+        ...(m.context_id ? { context_id: m.context_id } : {}),
+        started_at: m.started_at,
+        title: titleOf(m),
+        ...(s ? { match: s } : {}),
+      };
     }),
     next_cursor,
-    ...(meetings.length === SEARCH_WINDOW ? { note: `Only the ${SEARCH_WINDOW} newest meetings in range were searched; narrow with from/to.` } : {}),
+    ...(inRange.length === SEARCH_WINDOW ? { note: `Only the ${SEARCH_WINDOW} newest meetings in range were searched; narrow with from/to.` } : {}),
   });
 }
 
 export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Promise<ToolResult> {
   const id = args.meeting_id;
-  const notFound = refuse("Meeting not found, or you can't see it.");
+  const notFound = refuse("Meeting or recording not found, or you can't see it.");
   if (!isUuid(id)) return notFound;
   ctx.ids.meeting_id = id;
   const [m] = await ctx.reader.meetings({ ids: [id], done: false, limit: 1 });
@@ -177,6 +201,7 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
       meeting_id: id,
       org: org.name,
       org_kind: "privat",
+      context_id: m.context_id ?? null,
       title: context?.name ?? null,
       started_at: m.started_at,
       attendance: summary?.people ?? [],
@@ -222,14 +247,14 @@ async function myTaskList(ctx: ToolCtx) {
   const orgs = await ctx.reader.orgs();
   const spaces: HomeSpace[] = orgs.map((o) => ({ id: o.id, name: o.name, kind: o.kind, isAdmin: o.role === "admin" }));
   const noteSpaces = spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => s.id);
-  const foretag = spaces.filter((s) => s.kind === "foretag").map((s) => s.id);
   const privat = spaces.find((s) => s.kind === "privat") ?? null;
   const meetings: McpMeeting[] = [];
   for (const org of noteSpaces) meetings.push(...(await ctx.reader.meetings({ org, done: true, limit: MEETINGS_PER_SPACE })));
   const [rows, people, handoffs] = await Promise.all([
     ctx.reader.noteItems(meetings.map((m) => m.id)),
     ctx.reader.people(noteSpaces),
-    ctx.reader.handoffs(foretag),
+    // Reviewed tasks: a Företag, or a förening with groups (0054), as /hem reads them.
+    ctx.reader.handoffs(noteSpaces),
   ]);
   let privatTasks: ReturnType<typeof myPrivatTasks> = [];
   if (privat) {
@@ -322,12 +347,12 @@ export async function prepareAgenda(ctx: ToolCtx, args: { org_id?: string; meeti
     if (!m) return refuse("Meeting not found, or you can't see it.");
     orgId = m.org_id;
   }
-  if (!orgId || !isUuid(orgId)) return refuse("Give org_id (from list_orgs) or meeting_id.");
+  if (!orgId || !isUuid(orgId)) return refuse("Give org_id (from list_spaces) or meeting_id.");
   ctx.ids.org_id = orgId;
   const org = (await ctx.reader.orgs()).find((o) => o.id === orgId);
   if (!org) return refuse("Unknown org_id (or you are not a member).");
   // Förbered möte is förening only (lib/foretag/guard.ts; proxy.ts for Privat).
-  if (org.kind !== "forening") return refuse("Agendas are prepared only in a förening (not a Företag or Privat).");
+  if (org.kind !== "forening") return refuse("Agendas are prepared only for a förening's meetings (not a Företag, and not Privat recordings).");
 
   // A member of this förening (shown by the reader): Förbered möte's own path, with this user as actor.
   const db = ctx.deps.actorClient(ctx.user);

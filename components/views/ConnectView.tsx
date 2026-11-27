@@ -23,7 +23,7 @@ export function ConnectView({
   clientName: string;
   host: string;
   email: string;
-  /** On the allow-list (lib/foretag/gate.ts); otherwise only Avbryt. */
+  /** MCP is on (MCP_ENABLED); otherwise only Avbryt. */
   allowed: boolean;
   approve: FormAction;
   deny: FormAction;

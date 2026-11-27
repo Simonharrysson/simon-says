@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { canCreateForetag } from "@/lib/foretag/gate";
+import { getEnv } from "@/lib/env";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { McpDeps } from "./handler";
@@ -14,9 +14,9 @@ export function mcpStore(): McpStore {
   return dbStore(supabaseAdmin());
 }
 
-/** MCP is on (kept as a switch for the routes; the allow-list gates who may use it). */
+/** MCP is on (MCP_ENABLED, default on): every endpoint answers 503 when it is off. */
 export function mcpConfigured(): boolean {
-  return true;
+  return getEnv().MCP_ENABLED;
 }
 
 export function mcpDeps(): McpDeps {
@@ -29,8 +29,7 @@ export function mcpDeps(): McpDeps {
       if (error || !data.user) return null;
       return data.user;
     },
-    // The same allow-list as creating a Företag, until MCP is tested (spec "Gate").
-    allowed: canCreateForetag,
+    enabled: mcpConfigured,
     toolDeps: defaultToolDeps,
   };
 }

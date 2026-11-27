@@ -1,8 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { canCreateForetag } from "@/lib/foretag/gate";
-import { mcpStore } from "@/lib/mcp/deps";
+import { mcpConfigured, mcpStore } from "@/lib/mcp/deps";
 import { approve, deny } from "@/lib/mcp/endpoints";
 import { appOrigin } from "@/lib/origin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -18,8 +17,8 @@ export async function approveConnection(formData: FormData): Promise<void> {
   } = await db.auth.getUser();
   if (!user) redirect(`/login?next=${encodeURIComponent(`/koppla/${id}`)}`);
   const store = mcpStore();
-  // The allow-list again: the page may have been open since before a change.
-  const to = canCreateForetag(user.email) ? await approve(id, user.id, store, appOrigin()) : await deny(id, store, appOrigin());
+  // The kill switch again: the page may have been open since before it was turned off.
+  const to = mcpConfigured() ? await approve(id, user.id, store, appOrigin()) : await deny(id, store, appOrigin());
   redirect(to ?? `/koppla/${id}`);
 }
 

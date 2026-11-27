@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ConnectMessage, ConnectView } from "@/components/views/ConnectView";
 import { PublicShell } from "@/components/views/PublicShell";
-import { canCreateForetag } from "@/lib/foretag/gate";
 import { mcpConfigured, mcpStore } from "@/lib/mcp/deps";
 import { looksLike } from "@/lib/mcp/oauth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -18,7 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /** "Ge Claude tillgång till dina möten i Simon Says": the consent for one stored authorization request. */
 export default async function ConnectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!mcpConfigured() || !looksLike("request", id)) return shell(<ConnectMessage kind="expired" />);
+  if (!looksLike("request", id)) return shell(<ConnectMessage kind="expired" />);
   const db = await createSupabaseServerClient();
   const {
     data: { user },
@@ -35,7 +34,7 @@ export default async function ConnectPage({ params }: { params: Promise<{ id: st
       clientName={client.client_name}
       host={new URL(req.redirect_uri).host}
       email={user.email ?? ""}
-      allowed={canCreateForetag(user.email)}
+      allowed={mcpConfigured()}
       approve={approveConnection}
       deny={denyConnection}
     />,
