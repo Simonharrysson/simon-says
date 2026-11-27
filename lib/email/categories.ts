@@ -2,14 +2,14 @@
 //
 // User-facing categories can be turned off per person (Konto → Mejl, or the link in every mail);
 // lib/email/prefs.ts mayEmail() is the gate every user-facing send goes through. Adding a
-// category: add it here AND replace public.email_categories() in a migration (0039, 0045; the one list
+// category: add it here AND replace public.email_categories() in a migration (0039, 0045, 0059; the one list
 // in the database, used by every constraint and writer; categories.test.ts compares the two).
 //
 // Not here on purpose: the operator's own mail (spend alarm, daily summary, "mötet avslutades
 // utan slutpass" in lib/alarm.ts and lib/meetings/tick.ts). Those go to ALARM_EMAIL, the
 // operator's env address, never to users, so there is nothing for a user to turn off.
 
-export const EMAIL_CATEGORIES = ["meeting_summary", "invite", "private_summary"] as const;
+export const EMAIL_CATEGORIES = ["meeting_summary", "invite", "private_summary", "meeting_brief"] as const;
 
 export type EmailCategory = (typeof EMAIL_CATEGORIES)[number];
 
