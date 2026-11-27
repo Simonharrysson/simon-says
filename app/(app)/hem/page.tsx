@@ -44,7 +44,7 @@ async function HomeContent() {
   return <HomeView bare tasks={data.tasks} recent={data.recent} unlinked={data.unlinked} email={user.email ?? null} docs={data.docs} today={stockholmDay(new Date())} />;
 }
 
-/** Mina uppgifter (heading, intro, filters, list) and Senaste mötena while they load. */
+/** Mina uppgifter (heading, intro, filters, Visa klara, count, list) and Senaste mötena while they load. */
 function HomeSkeleton() {
   return (
     <>
@@ -58,6 +58,8 @@ function HomeSkeleton() {
           <Skeleton className="h-8 w-20 rounded-md" />
           <Skeleton className="h-8 w-28 rounded-md" />
         </div>
+        <Skeleton className="h-6 w-28 rounded-full" />
+        <Skeleton className="h-4 w-40" />
         <SkeletonPanel rows={3} titleWidth="w-28" />
       </div>
       <div className="mt-6">
