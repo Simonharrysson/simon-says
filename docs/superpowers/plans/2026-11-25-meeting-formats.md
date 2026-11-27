@@ -22,7 +22,7 @@
   - Claude: `claude-opus-5-5`, streaming, structured output via `output_config.format`, `output_config.effort: "medium"`, `betas: ["server-side-fallback-2026-07-01"]`, `fallbacks: "default"`, `stop_reason` checked before content; transcript as append-only blocks with the cache breakpoint on the newest; every Claude call's tokens recorded (`recordClaudeUsage`); no Claude call under `KILL_SWITCH=1` or past `GLOBAL_DAILY_USD` (`dayUsd()`).
   - Migrations always backward compatible with the code in production (add first, use in a later deploy; widen checks, never narrow); explicit grants; RLS on. CI (`supabase db reset` + vitest) is the DB gate.
   - UI text Swedish, code and comments English; `docs/ui.md` design system.
-  - Cost bar ≤ $1.50 per meeting-hour; churn median ≤ 15 %; recall 100 %.
+  - Cost bar ≤ $1.75 per meeting-hour; churn median ≤ 15 %; recall 100 %.
 - New migrations start at `0023`.
 - **Privacy:** real Hook & Look minutes (or any förening's minutes or stadgar) never enter fixtures, prompts, tests, logs or the repo. Fixtures are fictional with the same structure (spec answer 2). Learned formats store only the approved profile, never minutes content or picked doc ids (only the parent folder id).
 - Agenda Doc access always with the **starter's** token (spec answer 1); never with another member's token.
@@ -387,7 +387,7 @@ Stages (as `scripts/check-notes-render.ts`: `npm run check-agenda-render -- <use
 - [ ] **Step 2:** `npx vitest run scripts/lib` → FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** `npx vitest run scripts/lib` → PASS; `npm run notes-eval -- --check` → no problems ($0).
-- [ ] **Step 5 (Paid run, gate):** check the Anthropic Console org spend first (stop and ask Simon if less than $6 is left this month). `npm run notes-eval -- --only veckomote-a,veckomote-b --repeat 2 --ledger .notes-replay/spend-formats.json --budget 5`. **Gate:** both fixtures PASS every bar incl. churn ≤ 15 %, recall 100 %, ≤ $1.50/h. On a miss: tune `AGENDA_SYSTEM_PROMPT` (never `SYSTEM_PROMPT`) and rerun, at most 3 rounds and within the ledger budget; if still missing, stop and report to Simon with the per-bar numbers.
+- [ ] **Step 5 (Paid run, gate):** check the Anthropic Console org spend first (stop and ask Simon if less than $6 is left this month). `npm run notes-eval -- --only veckomote-a,veckomote-b --repeat 2 --ledger .notes-replay/spend-formats.json --budget 5`. **Gate:** both fixtures PASS every bar incl. churn ≤ 15 %, recall 100 %, ≤ $1.75/h. On a miss: tune `AGENDA_SYSTEM_PROMPT` (never `SYSTEM_PROMPT`) and rerun, at most 3 rounds and within the ledger budget; if still missing, stop and report to Simon with the per-bar numbers.
 - [ ] **Step 6:** Record numbers (placement, roles, followup, leaks, churn, $/h, spend so far) in `docs/learnings.md`; commit `test: agenda-mode notes eval`.
 
 **Phase A is done when** A13's Testmöte check and A14's gate pass on prod; the first real Hook & Look meeting needs nothing from Phase B or C.

@@ -31,7 +31,7 @@
 - **Consent in the room:** before Start, the runner confirms "Alla i rummet vet att mötet transkriberas och kan be om paus" (logged per meeting); a Paus button stops audio. Per-org setting `share_transcript` (default on): when off, the transcript tab is not created and only notes are shared. Personal-data controller: **Harrysson & Company AB** (decided by Simon 2026-11-24), named on `/integritet`.
 - **Usage is counted on the server only** (from token mints and server time), never from client-reported numbers.
 - Limits: 20 h/month per org, 4 h per meeting (warn 3 h 45, stop 4 h), **max 2 orgs created per user**, **global cap `GLOBAL_DAILY_HOURS` (default 30)**, **global dollar cap `GLOBAL_DAILY_USD` (default 25)** computed from recorded usage, **`KILL_SWITCH=1` env** blocks token and tick endpoints. Notes ticks ≥ 30 s apart per meeting. Daily summary email at 06:00 UTC; **immediate** email when the day passes 50 % of the dollar cap.
-- **Cost target:** Claude ≤ $1.50 per meeting-hour (measured in Task 0.5 / Task 8; gate). Claude returns **operations** (add / change / remove item) rather than the full list each tick, to keep output tokens small.
+- **Cost target:** Claude ≤ $1.75 per meeting-hour (raised from $1.50 on 2026-11-27: $100 of credits a month) (measured in Task 0.5 / Task 8; gate). Claude returns **operations** (add / change / remove item) rather than the full list each tick, to keep output tokens small.
 - **Visible health:** the Doc header shows `● LIVE · uppdaterad HH:mm`; the live page shows a banner when notes are > 3 min old; every tick outcome goes to `meeting_events`; 3 failed ticks in a row → immediate email to `ALARM_EMAIL`.
 - Only the person running the meeting has an account; others are names in the org's person list. New org members get access to Docs of meetings started after they joined (older Docs: shared manually — v1 call).
 - v1 stores no full meeting audio. Voiceprints are v1.1, but the `people` table exists now.
@@ -67,7 +67,7 @@
 
 - [ ] **Step 1:** Loop over the private meeting's events at 4× speed; every 45 s of meeting time send the new transcript chunk + current notes text to `claude-opus-5-5` (operations format: add/change/remove item) and write the result into a real Doc, one paragraph per item.
 - [ ] **Step 2:** Two people read the Doc live on their laptops while it fills and one of them edits/deletes items and types own lines; the script respects edits naively (skip changed paragraphs).
-- [ ] **Step 3:** Measure and write `spike/notes/REPORT.md`: **churn** = share of existing, unedited items whose text changed per tick (bar: median ≤ 15 %); recall of the decisions/actions in `scripted.expected.json` (bar: all found by the end); **Claude $ per meeting-hour** (bar: ≤ $1.50); cache hit rate; what the readers found confusing. **Gate:** if a bar is missed, change prompt/format/tick length here, before any app code. The churn metric and bars are reused in Task 8.
+- [ ] **Step 3:** Measure and write `spike/notes/REPORT.md`: **churn** = share of existing, unedited items whose text changed per tick (bar: median ≤ 15 %); recall of the decisions/actions in `scripted.expected.json` (bar: all found by the end); **Claude $ per meeting-hour** (bar: ≤ $1.75); cache hit rate; what the readers found confusing. **Gate:** if a bar is missed, change prompt/format/tick length here, before any app code. The churn metric and bars are reused in Task 8.
 
 ### Task 1: Repo, skeleton, CI with Supabase, environments
 
@@ -191,7 +191,7 @@ Message layout: system prompt (stable) → one user content block per earlier ti
 
 - [ ] **Step 1:** Tests (mocked client): ops on locked/deleted ids are dropped; `remove` of a locked item ignored; `refusal` → no ops; malformed output → no ops + log; request uses `claude-opus-5-5`, effort `medium`, fallbacks `default`, cache breakpoint on the newest transcript block; `usage.usd` computed with $4 / $20 / $0.20 per MTok (+ cache-write rate); `churn` on a fixed pair.
 - [ ] **Step 2:** FAIL → implement → PASS.
-- [ ] **Step 3 (Early check, gate):** `scripts/notes-replay.ts` on the scripted and the private meeting at real tick spacing against the real API; prints ops per tick, `cache_read_input_tokens` (**> 0 from tick 2**), churn, $ per meeting-hour. **Gate: Task 0.5 bars (median churn ≤ 15 %, all expected items found, ≤ $1.50/h).** Simon reads the output before Task 9.
+- [ ] **Step 3 (Early check, gate):** `scripts/notes-replay.ts` on the scripted and the private meeting at real tick spacing against the real API; prints ops per tick, `cache_read_input_tokens` (**> 0 from tick 2**), churn, $ per meeting-hour. **Gate: Task 0.5 bars (median churn ≤ 15 %, all expected items found, ≤ $1.75/h).** Simon reads the output before Task 9.
 - [ ] **Step 4:** Commit `feat: notes engine`.
 
 ### Task 9: Render notes into the Doc + human-edit detection

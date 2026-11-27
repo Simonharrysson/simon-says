@@ -121,6 +121,9 @@ export function mustNotHit(items: NotesItem[], m: MustNot): NotesItem | undefine
 /** The fixture's people as resolveOwner takes them (the id is not used). */
 export const rolePeople = (e: Expected) => (e.people ?? []).map((p, k) => ({ id: `p${k}`, name: p.name, role: p.role }));
 
+/** The Claude cost bar, $ per meeting-hour (notes-eval, notes-replay, the paid suite tier). */
+export const MAX_USD_PER_HOUR = 1.75;
+
 export interface Score {
   found: number;
   total: number;

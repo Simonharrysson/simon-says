@@ -2,7 +2,7 @@
 // and paid-eval fixtures belong to which feature, and how a vitest JSON report and a notes-eval
 // summary become one PASS/FAIL row per feature.
 
-import { scorePasses, type Score } from "./notes-score";
+import { MAX_USD_PER_HOUR, scorePasses, type Score } from "./notes-score";
 
 export interface Feature {
   key: string;
@@ -131,10 +131,10 @@ export interface EvalRun {
   score: Score;
 }
 
-/** notes-eval's bars (scripts/notes-eval.ts runPasses): churn ≤ 15 %, ≤ $1.50 per meeting-hour, every score bar. JSON null churn = NaN = fail, as there. */
+/** notes-eval's bars (scripts/notes-eval.ts runPasses): churn ≤ 15 %, ≤ $1.75 per meeting-hour, every score bar. JSON null churn = NaN = fail, as there. */
 export function evalRunPasses(r: EvalRun): boolean {
   const churn = r.medianChurn ?? NaN;
-  return churn <= 0.15 && r.perHour <= 1.5 && scorePasses(r.score);
+  return churn <= 0.15 && r.perHour <= MAX_USD_PER_HOUR && scorePasses(r.score);
 }
 
 const pct = (x: { ok: number; total: number }) => `${x.ok}/${x.total}`;
