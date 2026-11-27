@@ -19,7 +19,6 @@ export function AccountView({
   saveLocale,
   localeFailed,
   calendar,
-  bare,
 }: {
   email: string;
   signOut: FormAction;
@@ -32,18 +31,14 @@ export function AccountView({
   localeFailed?: boolean;
   /** "Kalender" (todo #14): connect or disconnect the Google Calendar (CalendarConnect). */
   calendar?: ReactNode;
-  /**
-   * Only the panels, for a page that renders the column and its title itself (so the title is
-   * in the first HTML while the panels stream in): /installningar.
-   */
-  bare?: boolean;
 }) {
   const t = useTranslations("account");
   const common = useTranslations("common");
   const calT = useTranslations("calendar");
   const locale = useLocale();
-  const panels = (
-    <>
+  return (
+    <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">
+      <PageHeader title={t("title")} />
       <Panel title={t("signedInAs")} titleId="account-title">
         <dl className="flex flex-col gap-4 [&_dd]:mt-1 [&_dd]:flex [&_dd]:flex-col [&_dd]:gap-1 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-3">
           <div>
@@ -103,18 +98,6 @@ export function AccountView({
       <form action={signOut}>
         <SubmitButton pendingLabel={common("signingOut")}>{common("signOut")}</SubmitButton>
       </form>
-    </>
+    </div>
   );
-  if (bare) return panels;
-  return (
-    <AccountColumn>
-      <PageHeader title={t("title")} />
-      {panels}
-    </AccountColumn>
-  );
-}
-
-/** Konto's page column. */
-export function AccountColumn({ children }: { children: ReactNode }) {
-  return <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">{children}</div>;
 }
