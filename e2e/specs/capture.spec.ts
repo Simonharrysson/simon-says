@@ -112,6 +112,7 @@ test("capture: surfaces, vitals, switch timings", async ({ browser, db, seedOrg,
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(800);
       report[`${name}@${w.name}`] = await vitals(page);
+      writeFileSync(`${OUT}/vitals.json`, JSON.stringify(report, null, 2));
       await page.screenshot({ path: `${OUT}/${name}-${w.name}.png`, fullPage: true });
     }
   }
@@ -168,7 +169,7 @@ test("capture: surfaces, vitals, switch timings", async ({ browser, db, seedOrg,
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
     return { visibleMs: Date.now() - t0, ...((await inPage) ?? { fullLoad: true }) };
   };
-  report["nav:hem"] = await timeNav("Hem", "Mina uppgifter");
+  report["nav:hem"] = await timeNav("Hem", "Hem");
   report["nav:foreningar"] = await timeNav("Föreningar", "Föreningar");
 
   writeFileSync(`${OUT}/vitals.json`, JSON.stringify(report, null, 2));
