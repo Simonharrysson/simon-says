@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { IconCheck } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -13,15 +13,30 @@ export type SaveStatus = { state: "idle" | "saving" | "saved" } | { state: "erro
 
 const IDLE: SaveStatus = { state: "idle" };
 
+// Statuses kept above a part that the server may re-mount after its save (the calendar form
+// streams in under <Suspense>): a keyed `useSaveState` keeps its "Sparat" across that.
+const Kept = createContext<{ get: (key: string) => SaveStatus; set: (key: string, s: SaveStatus) => void } | null>(null);
+
+export function SaveStatesProvider({ children }: { children: ReactNode }) {
+  const [map, setMap] = useState<Record<string, SaveStatus>>({});
+  const get = useCallback((key: string) => map[key] ?? IDLE, [map]);
+  const set = useCallback((key: string, s: SaveStatus) => setMap((m) => ({ ...m, [key]: s })), []);
+  return <Kept.Provider value={{ get, set }}>{children}</Kept.Provider>;
+}
+
 /** `run(work)`: shows saving, then saved (or the error `work` throws / returns as a string). */
-export function useSaveState() {
-  const [status, setStatus] = useState<SaveStatus>(IDLE);
+export function useSaveState(key?: string) {
+  const kept = useContext(Kept);
+  const [local, setLocal] = useState<SaveStatus>(IDLE);
+  const shared = Boolean(key && kept);
+  const status = shared ? kept!.get(key!) : local;
+  const setStatus = useCallback((s: SaveStatus) => (shared ? kept!.set(key!, s) : setLocal(s)), [shared, kept, key]);
   const runs = useRef(0);
   useEffect(() => {
     if (status.state !== "saved") return;
     const timer = setTimeout(() => setStatus(IDLE), 3000);
     return () => clearTimeout(timer);
-  }, [status]);
+  }, [status, setStatus]);
   const run = useCallback(async (work: () => Promise<string | null | void>): Promise<boolean> => {
     const mine = ++runs.current;
     setStatus({ state: "saving" });
@@ -34,8 +49,8 @@ export function useSaveState() {
     // A later change owns the line now.
     if (mine === runs.current) setStatus(error ? { state: "error", message: error } : { state: "saved" });
     return !error;
-  }, []);
-  const reset = useCallback(() => setStatus(IDLE), []);
+  }, [setStatus]);
+  const reset = useCallback(() => setStatus(IDLE), [setStatus]);
   return { status, run, reset };
 }
 

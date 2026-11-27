@@ -37,7 +37,7 @@ export function OrgCalendarForm({
   connect: FormAction;
 }) {
   const t = useTranslations("calendar");
-  const { status, run } = useSaveState();
+  const { status, run } = useSaveState("calendar");
   // The settings' save model: the calendar saves when chosen; the title filter (text) with Spara.
   // A choice sends the *saved* filter, never a half-typed one.
   const [calendarId, setCalendarId] = useState(current.id ?? "");

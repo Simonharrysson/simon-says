@@ -5,6 +5,7 @@ import { IconTrash } from "@/components/ui/icons";
 import { Panel } from "@/components/ui/Panel";
 import type { OrgDetailViewProps } from "@/components/views/OrgDetailView";
 import { OrgFlag, OrgFlagsProvider } from "./OrgFlags";
+import { SaveStatesProvider } from "./SaveState";
 import { SettingsSections } from "./SettingsSections";
 
 /**
@@ -20,6 +21,7 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
 
   return (
     <OrgFlagsProvider org={org} updateOrg={actions.updateOrg}>
+      <SaveStatesProvider>
       <SettingsSections
         notice={props.settingsSection ?? null}
         sections={{
@@ -97,6 +99,7 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
           ),
         }}
       />
+      </SaveStatesProvider>
     </OrgFlagsProvider>
   );
 }
