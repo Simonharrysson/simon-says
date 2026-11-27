@@ -50,6 +50,8 @@ describe("settingsSection", () => {
     expect(settingsSection({ noticeCode: "admin-ny" })).toBe("styrelsen");
     expect(settingsSection({ noticeCode: "medlem-last_admin" })).toBe("styrelsen");
     expect(settingsSection({ noticeCode: "personnamn" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "grupper" })).toBe("styrelsen");
+    expect(settingsSection({ noticeCode: "grupp-arkiv" })).toBe("styrelsen");
     expect(settingsSection({ noticeCode: "sammanfattning" })).toBe("efter-motet");
     expect(settingsSection({ noticeCode: "kalender-ok" })).toBe("moten");
     expect(settingsSection({ noticeCode: "org-active" })).toBe("radera");

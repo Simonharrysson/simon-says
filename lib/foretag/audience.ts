@@ -23,3 +23,12 @@ export function audiencePeople<T extends AudiencePerson>(input: { groupId: strin
     return inAudience;
   });
 }
+
+/**
+ * A förening with groups (0054): the people its summary may go to, i.e. those whose account can
+ * see the meeting. People without an account (an e-mail only) can't open it and never get it.
+ */
+export function viewerPeople<T extends { member_user_id?: string | null }>(people: T[], viewerIds: string[]): T[] {
+  const viewers = new Set(viewerIds);
+  return people.filter((p) => Boolean(p.member_user_id && viewers.has(p.member_user_id)));
+}

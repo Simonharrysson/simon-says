@@ -110,3 +110,17 @@ AI-written task text from a restricted meeting can leak what the owner may not s
 - Search over history.
 - More than one live meeting per company at a time.
 - **Gate:** no company other than Harrysson & Company before a DPA (personuppgiftsbiträdesavtal), its subprocessor list and a legal review of /integritet and the terms **[decided 11-27]**.
+
+## Föreningar with groups (0054, proposed in PR #45, not yet confirmed by Simon)
+Simon asked for this on 2026-11-27: the same tree, the same visibility rule, opt-in. The calls below are the implementer's and are open for review. A förening may opt in to the same tree, with the same visibility rule and the same task delivery across visibility. It is off by default. A förening without groups behaves exactly as before, and its visibility check keeps the one-join fast path.
+- **Turning it on and off:** an admin uses Inställningar → Styrelsen och medlemmar → Grupper.
+  - *Organisera i grupper* creates the top group (default "Styrelsen") and places every person an admin linked in it, so they see no less. A name a member claimed themself (0051) waits unplaced for an admin. Members without a name in the list are unplaced from then on, and the confirm says how many.
+  - *Sluta använda grupper* opens every group's meetings to every member again. A Privat möte stays starter + attendees + admins (coordinator). Groups and places are kept for a later turn-on.
+- **Shared with Företag:** `orgs.groups_enabled` widens "is a Företag" to "has the tree" (`org_has_tree`) in the predicate and in the group, place and handoff functions. The tree editor (`components/groups/GroupTree`) and `GroupPicker` are shared too.
+- **Förening-specific:**
+  - Formats, agenda Docs and "kräv Vem/När/Klart när" stay. An agenda or prepared Doc can be used only for a meeting of the whole förening.
+  - There is one live meeting at a time, and no calendar attendees or customers. A Privat möte is therefore seen by its starter and the admins.
+  - The summary keeps the förening's own mode, filtered to the viewers.
+  - "Från förra veckan" carries tasks only from the same group, and never from or into a Privat möte. Förbered möte, goal proposals and history digests draw only from meetings of the whole förening.
+  - A placed person row is written by admins only, and linking through the table is admin-only (0051). `claim_person` refuses a placed name (`ask_admin`), and any unlink clears the place.
+  - Joining shares only the Docs of meetings the new member can see (`visible_meeting_ids`).

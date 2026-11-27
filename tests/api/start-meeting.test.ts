@@ -1191,4 +1191,35 @@ describe("POST /api/meetings in a Företag (0050)", () => {
     expect(m.planForetag).not.toHaveBeenCalled();
     expect(insertedRow().group_id).toBeUndefined();
   });
+  describe("a förening with groups (0054)", () => {
+    beforeEach(() => {
+      m.getOrg.mockResolvedValue({ id: ORG, name: "Föreningen", kind: "forening", groups_enabled: true, share_transcript: true, meeting_folder_id: "shared-folder" });
+      m.planForetag.mockResolvedValue(plan({ customerId: null, eventTitle: null }));
+    });
+
+    it("plans the group without the calendar or a customer; the format stays; the Doc goes only to the viewers, never the shared folder", async () => {
+      const res = await call({ orgId: ORG, consent: true, groupId: GROUP, private: false, formatKind: "veckomote" });
+      expect(res.status).toBe(200);
+      expect(m.planForetag).toHaveBeenCalledWith(expect.objectContaining({ groupId: GROUP, private: false, readCalendar: false, calendarEventId: null, attendeeIds: [] }));
+      expect(m.createFormatDoc).toHaveBeenCalled();
+      const input = m.createFormatDoc.mock.calls[0][1];
+      expect(input.meetingFolderId).toBeNull();
+      expect(input.memberEmails).toEqual(["c@x.se"]);
+      expect(insertedRow()).toMatchObject({ group_id: GROUP, private: false, context_id: null });
+    });
+
+    it("its own agenda Doc only for Hela föreningen: a group's or a Privat möte's start is refused before anything is written", async () => {
+      const res = await call({ orgId: ORG, consent: true, agendaDocId: AGENDA_DOC, groupId: GROUP });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe("agenda_restricted");
+      expectNoWrites();
+      m.planForetag.mockResolvedValue(plan({ groupId: null, private: false, customerId: null, eventTitle: null }));
+      expect((await call({ orgId: ORG, consent: true, agendaDocId: AGENDA_DOC, groupId: null })).status).toBe(200);
+    });
+
+    it("still one running meeting per förening", async () => {
+      m.active = [{ id: "other-live" }];
+      expect((await call({ orgId: ORG, consent: true, groupId: GROUP })).status).toBe(409);
+    });
+  });
 });

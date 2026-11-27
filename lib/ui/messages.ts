@@ -69,6 +69,8 @@ const orgTones: Record<string, Notice["tone"]> = {
   "grupp-arkiv": "danger",
   placering: "danger",
   kundnamn: "danger",
+  // A förening's groups (0054)
+  grupper: "danger",
 };
 
 function pick(tones: Record<string, Notice["tone"]>, texts: Record<string, Copy>, fel?: string, klart?: string): Notice | null {
