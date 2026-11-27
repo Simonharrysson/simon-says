@@ -40,7 +40,7 @@ test("Förening: turn groups on, build the tree, a meeting for Utveckling is see
   await groups.getByRole("button", { name: "Organisera i grupper" }).click();
   const dialog = admin.getByRole("dialog", { name: `Organisera ${org.name} i grupper?` });
   // The admin account has no name in the list: told before anything changes.
-  await expect(dialog.getByText("1 medlem har inget namn i listan", { exact: false })).toBeVisible();
+  await expect(dialog.getByText("1 medlem är inte kopplad av en admin", { exact: false })).toBeVisible();
   await expect(dialog.getByLabel("Översta gruppen")).toHaveValue("Styrelsen");
   await dialog.getByRole("button", { name: "Organisera i grupper" }).click();
   await expect(admin.getByRole("heading", { name: "Styrelsen", level: 3, exact: true })).toBeVisible({ timeout: 15_000 });

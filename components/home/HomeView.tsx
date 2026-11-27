@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Banner } from "@/components/ui/Banner";
-import { CopyButton } from "@/components/ui/CopyButton";
+import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { IconArrowRight } from "@/components/ui/icons";
 import { ListRow } from "@/components/ui/ListRow";
@@ -20,7 +20,6 @@ export function HomeView({
   tasks,
   recent,
   unlinked,
-  email,
   docs,
   today,
   save,
@@ -32,8 +31,6 @@ export function HomeView({
   tasks: MyTask[];
   recent: RecentMeeting[];
   unlinked: { id: string; name: string }[];
-  /** The user's sign-in address: what an admin writes next to their name to link them. */
-  email?: string | null;
   docs: Record<string, string>;
   today: string;
   save?: SaveTick;
@@ -45,7 +42,6 @@ export function HomeView({
   approvals?: PendingHandoff[];
 }) {
   const t = useTranslations("home");
-  const common = useTranslations("common");
   const locale = useLocale() === "en" ? "en" : "sv";
   const meetingHrefs: Record<string, string> = {};
   for (const task of tasks) {
@@ -63,12 +59,26 @@ export function HomeView({
             live={false}
             title={t("unlinkedTitle", { count: unlinked.length })}
             action={
-              email ? (
-                <CopyButton value={email} label={t("copyEmail")} copiedLabel={common("copied")} copiedText={t("emailCopied")} failedText={t("emailCopyManual")} />
+              unlinked.length === 1 ? (
+                <ButtonLink href={`/orgs/${unlinked[0].id}/vem`} size="sm" icon={<IconArrowRight />}>
+                  {t("unlinkedPick")}
+                </ButtonLink>
               ) : undefined
             }
           >
-            <p>{email ? t("unlinkedTextEmail", { names, email }) : t("unlinkedText", { names })}</p>
+            <p>{t("unlinkedText", { names })}</p>
+            {unlinked.length > 1 && (
+              // One "Välj ditt namn" per förening: each has its own people list.
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {unlinked.map((u) => (
+                  <li key={u.id}>
+                    <ButtonLink href={`/orgs/${u.id}/vem`} size="sm" icon={<IconArrowRight />}>
+                      {t("unlinkedPickIn", { name: u.name })}
+                    </ButtonLink>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Banner>
         )}
         {approvals.length > 0 && <HandoffApprovals items={approvals} />}

@@ -108,12 +108,14 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       must("cleanup", await adminClient().from("meetings").delete().eq("id", priv));
     });
 
-    it("a plain member still edits the list (add, rename, link, delete)", async () => {
+    it("a plain member still edits the list (add, rename, claim their own name, delete)", async () => {
       const add = await u.olle.db.from("people").insert({ org_id: orgId, name: "Ny person" }).select("id").single();
       expect(add.error).toBeNull();
       const id = (add.data as { id: string }).id;
-      const ren = await u.olle.db.from("people").update({ name: "Nyare", member_user_id: u.olle.id }).eq("id", id).select("id");
+      const ren = await u.olle.db.from("people").update({ name: "Nyare" }).eq("id", id).select("id");
       expect(ren.data).toEqual([{ id }]);
+      // Linking goes through claim_person (0051), unchanged while groups are off.
+      expect((await u.olle.db.rpc("claim_person", { p_person_id: id })).data).toBe("ok");
       const renOther = await u.olle.db.from("people").update({ name: "Erik E" }).eq("org_id", orgId).eq("name", "Erik").select("id");
       expect(renOther.data?.length).toBe(1);
       must("back", await adminClient().from("people").update({ name: "Erik" }).eq("org_id", orgId).eq("name", "Erik E"));
@@ -221,19 +223,35 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       expect(place.error?.message).toMatch(/permission denied/i);
       expect((await u.jonas.db.rpc("set_group", { p_org_id: orgId, p_id: null, p_name: "Hack", p_parent: null })).data).toBeNull();
       expect((await u.jonas.db.rpc("set_person_group", { p_person_id: await personId(orgId, "Jonas"), p_group_id: g.styrelsen })).data).toBe(false);
-      // An unplaced name stays a member's to add and rename, but only an admin links it to an
-      // account (else placing "Karin" could place whoever linked themself to her name).
+      // Through the table only an admin links (0051); a placed name is never self-claimed.
       const linkSelf = await u.olle.db.from("people").insert({ org_id: orgId, name: "Olle", member_user_id: u.olle.id }).select("id");
       expect(linkSelf.error?.message).toMatch(/only an admin links/);
       const add = await u.olle.db.from("people").insert({ org_id: orgId, name: "Karin" }).select("id").single();
       expect(add.error).toBeNull();
       const id = (add.data as { id: string }).id;
-      expect((await u.olle.db.from("people").update({ name: "Karin K" }).eq("id", id).select("id")).data).toEqual([{ id }]);
-      const claim = await u.olle.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("id");
-      expect(claim.error?.message).toMatch(/only an admin links/);
-      expect((await u.anna.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("id")).data).toEqual([{ id }]);
+      expect((await u.anna.db.rpc("set_person_group", { p_person_id: id, p_group_id: g.styrelsen })).data).toBe(true);
+      expect((await u.olle.db.rpc("claim_person", { p_person_id: id })).data).toBe("ask_admin");
+      const viaAdd = await u.olle.db.rpc("add_self_person", { p_org_id: orgId, p_name: "Karin", p_role: "" });
+      expect((viaAdd.data as { result: string }).result).toBe("ask_admin");
+      expect(await seen("olle")).toEqual([]);
+      // An admin links it: the link change clears the place, which an admin then sets on purpose.
+      expect((await u.anna.db.from("people").update({ member_user_id: u.olle.id }).eq("id", id).select("group_id")).data).toEqual([{ group_id: null }]);
       expect(await seen("olle")).toEqual([]);
       must("cleanup", await adminClient().from("people").delete().eq("id", id));
+    });
+
+    it("unlinking a placed person (leaving, a new e-mail) clears the place, so the name can't carry it to someone else", async () => {
+      const admin = adminClient();
+      const lisa = await personId(orgId, "Lisa");
+      must("unlink", await admin.from("people").update({ member_user_id: null }).eq("id", lisa));
+      const row = must("row", await admin.from("people").select("group_id").eq("id", lisa).single()) as { group_id: string | null };
+      expect(row.group_id).toBeNull();
+      // Now unplaced and unlinked: a member may claim the name, and gets no place with it.
+      expect((await u.olle.db.rpc("claim_person", { p_person_id: lisa })).data).toBe("ok");
+      expect(await seen("olle")).toEqual([]);
+      // Restore Lisa for the other tests.
+      must("relink", await admin.from("people").update({ member_user_id: u.lisa.id }).eq("id", lisa));
+      must("replace", await admin.from("people").update({ group_id: g.dev }).eq("id", lisa));
     });
 
     it("the last group is kept while groups are on", async () => {
@@ -286,6 +304,18 @@ describe.skipIf(!hasLocalSupabase)("a förening with groups (0054)", () => {
       expect(await canSee("jonas")).toBe(false);
       const groups = must("groups", await adminClient().from("groups").select("name").eq("org_id", orgId).is("archived_at", null).order("name")) as { name: string }[];
       expect(groups.map((x) => x.name)).toEqual(["Styrelsen", "Utveckling"]);
+    });
+
+    it("turning on places only people an admin linked; a name a member claimed waits for an admin", async () => {
+      const orgId = await forening(u, "Självkopplad");
+      const admin = adminClient();
+      const jonas = await personId(orgId, "Jonas");
+      must("unlink", await admin.from("people").update({ member_user_id: null }).eq("id", jonas));
+      expect((await u.jonas.db.rpc("claim_person", { p_person_id: jonas })).data).toBe("ok");
+      expect((await u.anna.db.rpc("set_org_groups", { p_org_id: orgId, p_on: true, p_root_name: "Styrelsen" })).data).toBe(true);
+      const rows = must("people", await admin.from("people").select("name, group_id").eq("org_id", orgId)) as { name: string; group_id: string | null }[];
+      const at = Object.fromEntries(rows.map((r) => [r.name, r.group_id !== null]));
+      expect(at).toMatchObject({ Jonas: false, Erik: true, Maja: true });
     });
 
     it("only a förening: never a Företag or Privat", async () => {

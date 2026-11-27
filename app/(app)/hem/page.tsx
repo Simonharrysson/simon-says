@@ -41,7 +41,7 @@ async function HomeContent() {
   if (!user) redirect("/login?next=/hem");
   const data = await loadHome(db, user.id);
   if (data.brandNew) redirect("/orgs");
-  return <HomeView bare tasks={data.tasks} recent={data.recent} unlinked={data.unlinked} email={user.email ?? null} docs={data.docs} today={stockholmDay(new Date())} approvals={data.approvals} />;
+  return <HomeView bare tasks={data.tasks} recent={data.recent} unlinked={data.unlinked} docs={data.docs} today={stockholmDay(new Date())} approvals={data.approvals} />;
 }
 
 /** Mina uppgifter (heading, intro, filters, Visa klara, count, list) and Senaste mötena while they load. */

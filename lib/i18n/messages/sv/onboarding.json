@@ -146,7 +146,10 @@
     "emailOptional": "(valfritt – bjuder in)",
     "editExisting": "Ändra {name}",
     "sendInvite": "Skicka inbjudan",
-    "shareLink": "Dela länk"
+    "shareLink": "Dela länk",
+    "selfLinked": "Nyss kopplad: kopplade sig själv till namnet {when}.",
+    "undoSelfLink": "Det stämmer inte",
+    "undoSelfLinkLabel": "Det stämmer inte, koppla bort kontot från {name}"
   },
   "folder": {
     "fallbackName": "Mötesmappen",

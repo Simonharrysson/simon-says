@@ -10,20 +10,19 @@
 -- answers exactly as before on every table: the visibility check keeps 0050's one-join fast path
 -- (meeting → membership → org), now "not a Företag and no tree" instead of "not a Företag".
 -- Only an admin turns it on or off (set_org_groups). Turning it on never narrows what a linked
--- person sees: the first group is created and every linked, unplaced person is placed in it (the
--- top, which sees everything). Members without a person row are unplaced from then on (the editor
+-- person sees: the first group is created and every person an admin linked (not one a member
+-- claimed themself, 0051) and unplaced is placed in it (the top, which sees everything). Members without a person row are unplaced from then on (the editor
 -- says so first). Turning it off is an explicit admin choice that opens every group's meetings to
 -- every member again (the UI asks to confirm), never a Privat möte (still starter + attendees +
 -- admins); groups and placements are kept for a later turn-on.
 --
--- Depends on 0053 (Företag follow-up): its functions are redefined here with "Företag" widened to
+-- Depends on 0051 (self link) and 0053 (Företag follow-up): its functions are redefined here with "Företag" widened to
 -- "has the tree" (org_has_tree), bodies otherwise unchanged.
 --
 -- Also: in a förening, any member may edit the person list (0002); a member relinking a PLACED
 -- person row to their own account would inherit its place in the tree. Placed rows are now written
--- by admins only (a Företag's people were admin-only already, 0050), and while groups are on only an
--- admin links any row to an account. Security-definer paths (join linking by an invited e-mail,
--- leaving) are unaffected.
+-- by admins only (a Företag's people were admin-only already, 0050); a placed name is never
+-- self-claimed (0051's claim_person), and unlinking clears the place.
 
 alter table public.orgs add column groups_enabled boolean not null default false;
 -- No client grant: only set_org_groups() writes it. Clients read it (orgs_select) like any column.
@@ -118,8 +117,10 @@ begin
     end if;
     insert into public.groups (org_id, name) values (p_org_id, v_name) returning id into v_root;
   end if;
+  -- Only links an admin made (or an invited e-mail's): a name a member claimed themself (0051,
+  -- self_linked_at) waits unplaced for an admin to confirm it.
   update public.people p set group_id = v_root
-  where p.org_id = p_org_id and p.member_user_id is not null
+  where p.org_id = p_org_id and p.member_user_id is not null and p.self_linked_at is null
     and (p.group_id is null or exists (select 1 from public.groups g where g.id = p.group_id and g.archived_at is not null));
   update public.orgs set groups_enabled = true where id = p_org_id;
   return true;
@@ -277,30 +278,86 @@ create policy people_delete on public.people for delete to authenticated
     and (group_id is null or public.is_org_admin(org_id))
   );
 
--- While the tree is on, who a person row stands for (member_user_id) is set only by an admin or by
--- the database's own functions (join by an invited e-mail, link by e-mail, leaving): otherwise a
--- member could link an unplaced name to some account, and the admin who then places that name
--- would place the account. Security invoker, so current_user tells a client's own write
--- ('authenticated') from a security-definer function's.
-create function public.people_link_guard()
+-- Linking through the table is admin-only since 0051 (people_guard_link). The self-link functions
+-- (0051, security definer) and every unlink are made safe for the tree here:
+-- * claim_person() never links a person who has a place (group_id): 'ask_admin', an admin links
+--   them (else a member could claim a placed name and inherit its place);
+-- * any change of who a person stands for clears their place (leaving, an admin's new e-mail,
+--   a relink): the next account starts unplaced, and an admin places it.
+create function public.people_unplace_on_relink()
 returns trigger
 language plpgsql set search_path = ''
 as $$
 begin
-  if current_user = 'authenticated'
-    and ((tg_op = 'INSERT' and new.member_user_id is not null)
-      or (tg_op = 'UPDATE' and new.member_user_id is distinct from old.member_user_id))
-    and public.org_has_tree(new.org_id)
-    and not public.is_org_admin(new.org_id) then
-    raise exception 'people: only an admin links a person to an account while groups are on' using errcode = '42501';
+  if new.member_user_id is distinct from old.member_user_id and old.group_id is not null
+    and new.group_id is not distinct from old.group_id then
+    new.group_id := null;
   end if;
   return new;
 end;
 $$;
+revoke all on function public.people_unplace_on_relink() from public, anon, authenticated;
 
-create trigger people_link_guard
-  before insert or update of member_user_id on public.people
-  for each row execute function public.people_link_guard();
+create trigger people_unplace_on_relink
+  before update of member_user_id on public.people
+  for each row execute function public.people_unplace_on_relink();
+
+-- 0051's claim_person, plus: a person with a place is never claimed ('ask_admin').
+create or replace function public.claim_person(p_person_id uuid)
+returns text
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_org uuid;
+  v_member uuid;
+  v_email text;
+  v_group uuid;
+begin
+  if v_user is null then
+    return 'forbidden';
+  end if;
+  select p.org_id, lower(btrim(p.email)) into v_org, v_email from public.people p
+  join public.orgs o on o.id = p.org_id and o.kind = 'forening'
+  where p.id = p_person_id;
+  if v_org is null or not public.is_org_member(v_org) then
+    return 'forbidden';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(v_org::text || v_user::text, 0));
+  select p.member_user_id, p.group_id into v_member, v_group from public.people p where p.id = p_person_id for update;
+  if v_member = v_user then
+    return 'ok';
+  end if;
+  if v_member is not null then
+    return 'taken';
+  end if;
+  if v_group is not null then
+    return 'ask_admin';
+  end if;
+  if v_email is not null and v_email is distinct from
+    (select lower(btrim(u.email::text)) from auth.users u where u.id = v_user and u.email_confirmed_at is not null) then
+    return 'taken';
+  end if;
+  if exists (select 1 from public.people q where q.org_id = v_org and q.member_user_id = v_user) then
+    return 'already';
+  end if;
+  update public.people set member_user_id = v_user, self_linked_at = now() where id = p_person_id and member_user_id is null and group_id is null;
+  return 'ok';
+end;
+$$;
+revoke all on function public.claim_person(uuid) from public, anon, authenticated;
+grant execute on function public.claim_person(uuid) to authenticated;
+-- add_self_person (0051) claims an existing name through claim_person (so 'ask_admin' too) and
+-- otherwise adds a new, unplaced person: unchanged.
+
+-- The meetings among p_ids this account can see (service role: the join's Doc sharing shares
+-- only these, so never a Privat möte or a group's meeting outside the member's place).
+create function public.visible_meeting_ids(p_user uuid, p_ids uuid[])
+returns setof uuid
+language sql stable security definer set search_path = ''
+as $$ select i from unnest(coalesce(p_ids, '{}')) as i where public.foretag_can_see(p_user, i) $$;
+revoke all on function public.visible_meeting_ids(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.visible_meeting_ids(uuid, uuid[]) to service_role;
 
 -- ---------------------------------------------------------------------------------------------
 -- Handoffs (0053's body) for any org with the tree. `p_owners` may carry each task's `text` as the

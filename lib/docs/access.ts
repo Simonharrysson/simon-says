@@ -142,15 +142,24 @@ export async function shareOrgDocsWithNewMember(orgId: string, user: { id: strin
     .eq("org_id", orgId)
     .not("started_by", "is", null)
     .neq("started_by", user.id)
-    // A Privat möte (0050/0054) is never shared on join: starter, attendees and admins only.
-    .eq("private", false)
     .order("started_at", { ascending: false })
     .limit(JOIN_SHARE_LIMIT);
   if (error) {
     console.error(`join share: meetings: ${error.message}`);
     return 0;
   }
-  const all = ((data ?? []) as ShareableMeeting[]).filter((m) => m.doc_id && appCreatedDoc(m));
+  // Only meetings the new member can see (0050/0054: the tree, a Privat möte), by the database's
+  // own rule; a failed check shares nothing.
+  const rows = (data ?? []) as ShareableMeeting[];
+  const { data: visible, error: ve } = rows.length
+    ? await db.rpc("visible_meeting_ids", { p_user: user.id, p_ids: rows.map((m) => m.id) })
+    : { data: [], error: null };
+  if (ve) {
+    console.error(`join share: visibility: ${ve.message}`);
+    return 0;
+  }
+  const canSee = new Set((visible ?? []) as string[]);
+  const all = rows.filter((m) => canSee.has(m.id) && m.doc_id && appCreatedDoc(m));
   // Only starters still in the förening: someone who left keeps their Drive, not our use of it.
   const members = await stillMembers(orgId, [...new Set(all.map((m) => m.started_by!))]);
   const meetings = all.filter((m) => members.has(m.started_by!));

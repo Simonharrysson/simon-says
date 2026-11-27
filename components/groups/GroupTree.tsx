@@ -23,6 +23,8 @@ export interface TreePerson {
   name: string;
   member_user_id: string | null;
   group_id: string | null;
+  /** 0051: the member linked themself ("Vem av dessa är du?"); turning groups on leaves them for an admin to place. */
+  self_linked_at?: string | null;
 }
 
 export interface GroupTreeActions {

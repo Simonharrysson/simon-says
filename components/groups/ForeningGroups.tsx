@@ -29,8 +29,9 @@ export function ForeningGroups({ org, userId, groups, people, members, actions }
   const on = org.groups_enabled === true;
 
   if (!on) {
-    // Accounts that no person row stands for: unplaced once groups are on (they then see only their own).
-    const linked = new Set(people.flatMap((p) => (p.member_user_id ? [p.member_user_id] : [])));
+    // Accounts no admin-linked person row stands for: unplaced once groups are on (they then see
+    // only their own). A name a member claimed themself (0051) waits for an admin to place it.
+    const linked = new Set(people.flatMap((p) => (p.member_user_id && !p.self_linked_at ? [p.member_user_id] : [])));
     const unplaced = members.filter((m) => !linked.has(m.userId)).length;
     return (
       <Panel title={t("title")} titleId="groups-title">

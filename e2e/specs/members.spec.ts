@@ -7,7 +7,7 @@ test.describe("invite link", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test("a cancelled Google sign-in keeps the invite; the second try joins @phone", async ({ page, nextLogin, newEmail, seedOrg, db }) => {
-    const org = await seedOrg();
+    const org = await seedOrg({ people: ["Anna Berg", "Mia Medlem", { name: "Inbjuden Ivarsson", email: "nagon-annan@example.com" }] });
     const member = newEmail("medlem");
 
     await page.goto(`/join/${org.inviteCode}`);
@@ -30,8 +30,23 @@ test.describe("invite link", () => {
     await expect(page.getByText(member)).toBeVisible();
     await page.getByRole("button", { name: `Gå med i ${org.name}` }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}$`));
+    // "Vem av dessa är du?" (0051): the free names (not the one invited at another address).
+    await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}/vem$`));
+    await expect(page.getByRole("heading", { name: "Vem av dessa är du?" })).toBeVisible();
+    const names = page.getByRole("list", { name: `Namn i ${org.name} som inte har något konto än` });
+    await expect(names.getByRole("button")).toHaveText([/Anna Berg/, /Mia Medlem/]);
+    await expectAccessible(page);
+    await names.getByRole("button", { name: /Mia Medlem/ }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}\\?valkommen=1$`));
+    const welcome = page.getByRole("region", { name: `Välkommen till ${org.name}!` });
+    await expect(welcome.getByText("Mia Medlem")).toBeVisible();
     await expect(page.getByText("Du är medlem")).toBeVisible();
+    const { data: linked } = await db.from("people").select("name").eq("org_id", org.id).not("member_user_id", "is", null);
+    expect(linked?.map((p) => p.name)).toEqual(["Mia Medlem"]);
+    await welcome.getByRole("link", { name: "Stäng välkomstrutan" }).click();
+    await expect(page).toHaveURL(new RegExp(`/orgs/${org.id}$`));
+    await expect(welcome).toHaveCount(0);
     const { data } = await db.from("org_members").select("role").eq("org_id", org.id);
     expect(data?.map((r) => r.role).sort()).toEqual(["admin", "member"]);
   });
