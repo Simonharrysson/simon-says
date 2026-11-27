@@ -40,7 +40,7 @@
     },
     "format": {
       "title": "How you usually meet",
-      "lead": "Simon Says writes the minutes in your format. You can change it at any time."
+      "lead": "Simon Says writes the minutes in your format, a Weekly meeting to start with. Under Change you can switch format, let Simon Says learn from your old minutes or read the annual meeting's agenda from your statutes."
     },
     "protokoll": {
       "title": "Your earlier meetings",
@@ -62,7 +62,7 @@
     "text": "Logo, the board, meeting folder, how you usually meet, your old minutes and voices. Everything is optional and takes a few minutes.",
     "start": "Start",
     "continue": "Continue",
-    "hide": "Continue later"
+    "hide": "Hide"
   },
   "shell": {
     "later": "Continue later",
@@ -76,7 +76,9 @@
     "next": "Continue",
     "skip": "Skip",
     "back": "Back",
-    "finish": "Done"
+    "finish": "Done",
+    "doneNote": "Done. You can change this at any time under <link>Settings → {section}</link>.",
+    "importNote": "Read in more minutes at any time under <link>Earlier minutes</link>."
   },
   "logo": {
     "saveFailed": "The logo couldn't be saved. Try again.",
@@ -122,7 +124,7 @@
     "inviteByEmail": "Invite by e-mail",
     "inviteText": "Simon Says sends an e-mail with the association's link to the addresses. Whoever signs in with the address you typed is linked to their name here.",
     "orShare": "Or share the link yourself",
-    "shareText": "Share the link with them, e.g. in the board's chat. Whoever signs in with the address you typed is linked to their name here.",
+    "shareText": "Share the link, e.g. in the board's chat. Whoever opens it and signs in with Google becomes a member; with an address from the list they are linked to their name.",
     "inviteLink": "Invite link",
     "hasAccount": "Has an account",
     "you": " · you",
@@ -142,7 +144,9 @@
     "rolePlaceholder": "Treasurer",
     "email": "E-mail",
     "emailOptional": "(optional – sends an invitation)",
-    "editExisting": "Edit {name}"
+    "editExisting": "Edit {name}",
+    "sendInvite": "Send invitation",
+    "shareLink": "Share link"
   },
   "folder": {
     "fallbackName": "The meeting folder",
@@ -201,7 +205,8 @@
     "doNow": "Do it now",
     "open": "Open",
     "prepare": "Prepare the first meeting →",
-    "toOrg": "Go to the association"
+    "toOrg": "Go to the association",
+    "change": "Change"
   },
   "actions": {
     "adminOnly": "Only admins can change this.",

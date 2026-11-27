@@ -4,7 +4,7 @@ import { AppLink } from "@/components/ui/AppLink";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { IconArrowLeft, IconArrowRight } from "@/components/ui/icons";
+import { IconArrowLeft, IconArrowRight, IconCheck } from "@/components/ui/icons";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
 import { cn } from "@/lib/utils";
 import { OrgLogo } from "./OrgLogo";
@@ -30,6 +30,8 @@ export interface OnboardingShellProps {
   /** The step's title and one-line lead. */
   title: ReactNode;
   lead?: ReactNode;
+  /** A quiet line under the lead (a done step: where its setting lives now). */
+  note?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }
@@ -74,6 +76,12 @@ export function OnboardingShell(p: OnboardingShellProps) {
             {p.title}
           </h1>
           {p.lead && <div className="max-w-[34rem] text-ink-2">{p.lead}</div>}
+          {p.note && (
+            <p className="flex max-w-[34rem] items-start gap-2 text-sm text-ink-3">
+              <IconCheck size={16} className="mt-0.5 flex-none text-green" />
+              <span>{p.note}</span>
+            </p>
+          )}
         </div>
         {p.children}
       </div>
