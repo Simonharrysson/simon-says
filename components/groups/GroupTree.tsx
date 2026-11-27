@@ -60,6 +60,8 @@ export function GroupTree({ orgId, isAdmin, userId, groups, people, members, act
   const extra = Object.entries(hidden).map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />);
 
   const emails = new Map(members.map((m) => [m.userId, m.email]));
+  // 0055: a group's head (chef), display only.
+  const headName = (g: GroupRow) => (g.head_person_id ? (people.find((p) => p.id === g.head_person_id)?.name ?? null) : null);
   const personLine = (p: TreePerson) => (
     <li key={p.id} className="flex min-h-12 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line py-2 first:border-t-0">
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -97,11 +99,14 @@ export function GroupTree({ orgId, isAdmin, userId, groups, people, members, act
                 className="rounded-md border border-line bg-surface px-4 py-3 transition-shadow duration-150 hover:shadow-panel"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                  <h3 className="text-base font-semibold wrap-anywhere">{group.name}</h3>
+                  <h3 className="text-base font-semibold wrap-anywhere">
+                    {group.name}
+                    {headName(group) && <span className="ml-2 text-sm font-normal text-ink-3">{`${t("head")}: ${headName(group)}`}</span>}
+                  </h3>
                   <p className="text-xs text-ink-3">{above.length ? t("seenBy", { groups: above.map((g) => g.name).join(", ") }) : t("seenByAdmins")}</p>
                 </div>
                 {inGroup.length ? <ul className="mt-1">{inGroup.map(personLine)}</ul> : <p className="mt-1 text-sm text-ink-3">{t("empty")}</p>}
-                {isAdmin && <GroupControls group={group} groups={groups} orgId={orgId} actions={actions} extra={extra} hidden={hidden} canArchive={canArchive} />}
+                {isAdmin && <GroupControls group={group} groups={groups} people={people} orgId={orgId} actions={actions} extra={extra} hidden={hidden} canArchive={canArchive} />}
               </li>
             );
           })}
@@ -166,6 +171,7 @@ export function GroupTree({ orgId, isAdmin, userId, groups, people, members, act
 function GroupControls({
   group,
   groups,
+  people,
   orgId,
   actions,
   extra,
@@ -174,6 +180,7 @@ function GroupControls({
 }: {
   group: GroupRow;
   groups: GroupRow[];
+  people: TreePerson[];
   orgId: string;
   actions: GroupTreeActions;
   extra: ReactNode;
@@ -202,6 +209,19 @@ function GroupControls({
                   {`${" ".repeat(r.depth)}${r.group.name}`}
                 </option>
               ))}
+            </NativeSelect>
+          </div>
+          <div className="flex min-w-[10rem] flex-1 flex-col gap-2">
+            <Label htmlFor={`g-${group.id}-head`}>{t("head")}</Label>
+            <NativeSelect id={`g-${group.id}-head`} name="headId" defaultValue={group.head_person_id ?? ""}>
+              <option value="">{t("noHead")}</option>
+              {[...people]
+                .sort((a, b) => a.name.localeCompare(b.name, "sv"))
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
             </NativeSelect>
           </div>
           <SubmitButton variant="secondary" pendingLabel={t("saving")}>

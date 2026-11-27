@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 import { isUuid } from "@/lib/db/ids";
-import { archiveGroup, createForetag, placeMember, placePerson, saveGroup } from "@/lib/db/foretag";
+import { archiveGroup, createForetag, placeMember, placePerson, saveGroup, setGroupHead } from "@/lib/db/foretag";
 import { canCreateForetag } from "@/lib/foretag/gate";
 import { reconcileAfter } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -57,6 +57,11 @@ export async function saveGroupAction(form: FormData): Promise<void> {
     parentId: isUuid(parent) ? parent : null,
   });
   if (!ok) redirect(back(orgId, "grupp", form));
+  // 0055: the head (chef), when the form has the field (the list's "Ändra"). Display only.
+  if (isUuid(groupId) && form.has("headId")) {
+    const head = field(form, "headId");
+    if (!(await setGroupHead(db, groupId, isUuid(head) ? head : null))) redirect(back(orgId, "grupp", form));
+  }
   // Who can see what changed: Doc access and held tasks follow (lib/foretag/reconcile.ts).
   reconcileAfter(orgId);
   revalidatePath(`/orgs/${orgId}`);

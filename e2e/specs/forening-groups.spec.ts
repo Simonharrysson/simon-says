@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { ADMIN_EMAIL } from "../env";
-import { ensureUser, expect, expectAccessible, fake, test } from "../fixtures";
+import { ensureUser, expect, expectAccessible, fake, test, treeAsList } from "../fixtures";
 
 // A förening with groups (0054): the admin turns groups on in Inställningar, builds Styrelsen →
 // Utveckling, Kommunikation with the same tree editor as a Företag and places people. A developer
@@ -35,6 +35,8 @@ test("Förening: turn groups on, build the tree, a meeting for Utveckling is see
 
   // The admin turns groups on in Inställningar.
   const { page: admin } = await signedIn(ADMIN_EMAIL, `${org.url}?flik=installningar&del=styrelsen`);
+  // This spec drives the list editor's forms (the canvas: group-canvas.spec.ts).
+  await treeAsList(admin);
   const groups = admin.getByRole("region", { name: "Grupper" });
   await expect(groups.getByText("Av just nu: alla medlemmar ser alla möten.")).toBeVisible();
   await groups.getByRole("button", { name: "Organisera i grupper" }).click();
@@ -66,8 +68,9 @@ test("Förening: turn groups on, build the tree, a meeting for Utveckling is see
   await move("Dev Devsson", "Utveckling");
   await move("Kim Komm", "Kommunikation");
   await admin.reload();
-  await expect(admin.locator('[data-group="Utveckling"]').getByText("Dev Devsson")).toBeVisible();
-  await expect(admin.locator('[data-group="Styrelsen"]').getByText("Hedda Head")).toBeVisible();
+  // The people listed in the group (the "Chef" select under Ändra lists everyone: not that).
+  await expect(admin.locator('[data-group="Utveckling"] > ul').getByText("Dev Devsson")).toBeVisible();
+  await expect(admin.locator('[data-group="Styrelsen"] > ul').getByText("Hedda Head")).toBeVisible();
   await expect(admin.locator('[data-group="Utveckling"]').getByText("Ses av: Styrelsen")).toBeVisible();
   await expectAccessible(admin);
   await snap(admin, "forening-grupper");

@@ -16,6 +16,11 @@ export interface GroupRow {
   depth: number;
   position: number;
   archived_at?: string | null;
+  /** 0055: the card's place on the canvas (null: laid out by the app). Visual only. */
+  canvas_x?: number | null;
+  canvas_y?: number | null;
+  /** 0055: the group's head (chef), display only; visibility follows the tree alone. */
+  head_person_id?: string | null;
 }
 
 /** Active groups depth-first (each parent before its children), siblings by position then name. */

@@ -15,7 +15,7 @@ function fail(what: string, error: { message: string }): never {
 export async function listGroups(db: Db, orgId: string): Promise<GroupRow[]> {
   const { data, error } = await db
     .from("groups")
-    .select("id, name, parent_group_id, depth, position, archived_at")
+    .select("id, name, parent_group_id, depth, position, archived_at, canvas_x, canvas_y, head_person_id")
     .eq("org_id", orgId)
     .order("depth")
     .order("position");
@@ -32,6 +32,23 @@ export async function saveGroup(db: Db, orgId: string, input: { id?: string | nu
     fail("set_group", error);
   }
   return data !== null;
+}
+
+/** 0055: save card positions on the canvas (admins; the database decides). False when refused. */
+export async function saveGroupCanvas(db: Db, orgId: string, positions: { id: string; x: number; y: number }[]): Promise<boolean> {
+  const { data, error } = await db.rpc("set_group_canvas", { p_org_id: orgId, p_positions: positions });
+  if (error) {
+    if (error.code === "22023") return false;
+    fail("set_group_canvas", error);
+  }
+  return typeof data === "number";
+}
+
+/** 0055: a group's head (chef), or none. Display only. */
+export async function setGroupHead(db: Db, groupId: string, personId: string | null): Promise<boolean> {
+  const { data, error } = await db.rpc("set_group_head", { p_group_id: groupId, p_person_id: personId });
+  if (error) fail("set_group_head", error);
+  return data === true;
 }
 
 export async function archiveGroup(db: Db, groupId: string): Promise<boolean> {

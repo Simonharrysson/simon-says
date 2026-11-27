@@ -5,7 +5,8 @@ import { IconUsers } from "@/components/ui/icons";
 import { Panel } from "@/components/ui/Panel";
 import type { OrgMember } from "@/lib/db/members";
 import type { GroupRow } from "@/lib/foretag/tree";
-import { GroupTree, type GroupTreeActions, type TreePerson } from "./GroupTree";
+import { type GroupTreeActions, type TreePerson } from "./GroupTree";
+import { GroupTreeViews } from "./GroupTreeViews";
 
 // Inställningar → Styrelsen och medlemmar → Grupper (0054, admins): a förening may organise its
 // people in the Företag's tree, opt-in. Off (the default): one panel saying so, with "Organisera i
@@ -72,7 +73,7 @@ export function ForeningGroups({ org, userId, groups, people, members, actions }
           {t("onNow")} {tp("intro")}
         </p>
       </div>
-      <GroupTree orgId={org.id} isAdmin userId={userId} groups={groups} people={people} members={members} actions={actions} hidden={HIDDEN} keepLastGroup />
+      <GroupTreeViews orgId={org.id} isAdmin userId={userId} groups={groups} people={people} members={members} actions={actions} hidden={HIDDEN} keepLastGroup />
       <div className="flex justify-end">
         <ConfirmAction
           action={actions.setGroups}

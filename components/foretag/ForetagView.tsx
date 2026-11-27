@@ -24,7 +24,7 @@ import type { GroupRow } from "@/lib/foretag/tree";
 import { formatDateTime } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Notice } from "@/lib/ui/messages";
-import { GroupTree } from "@/components/groups/GroupTree";
+import { GroupTreeViews } from "@/components/groups/GroupTreeViews";
 
 // The Företag page (0050): Möten · Kunder · Personer & grupper · Inställningar. Everything listed
 // here was read with the viewer's own client, so it is exactly what RLS lets them see.
@@ -213,7 +213,7 @@ function PeopleTab({ org, isAdmin, userId, data, actions }: ForetagViewProps) {
       <p className="max-w-[68ch] text-sm text-ink-2">
         {t("intro")} {!isAdmin && t("readOnly")}
       </p>
-      <GroupTree orgId={org.id} isAdmin={isAdmin} userId={userId} groups={data.groups} people={data.people} members={data.members} actions={actions} />
+      <GroupTreeViews orgId={org.id} isAdmin={isAdmin} userId={userId} groups={data.groups} people={data.people} members={data.members} actions={actions} />
 
       {!isAdmin && (
         <div className="flex justify-end">

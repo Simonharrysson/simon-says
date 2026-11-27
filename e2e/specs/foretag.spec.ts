@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_EMAIL } from "../env";
-import { ensureUser, expect, expectAccessible, fake, test } from "../fixtures";
+import { ensureUser, expect, expectAccessible, fake, test, treeAsList } from "../fixtures";
 
 // Företag (0050): the CEO (an allowed creator) creates a company and builds the tree in the UI,
 // a developer starts a meeting for Utveckling, and visibility follows the tree: the developer and
@@ -42,6 +42,8 @@ async function buildCompany(page: Page, db: SupabaseClient, people: { dev: strin
   const nav = page.getByRole("navigation", { name: "Huvudmeny" });
   // A company is not a förening: Föreningar offers no company, Företag (its own top-rail item) does.
   await page.goto("/orgs");
+  // This spec drives the list editor's forms (the canvas: group-canvas.spec.ts).
+  await treeAsList(page);
   await expect(page.getByRole("region", { name: "Skapa ett företag" })).toHaveCount(0);
   await nav.getByRole("link", { name: "Företag", exact: true }).click();
   await expect(page).toHaveURL(/\/foretag$/);
