@@ -13,11 +13,14 @@ import { useMountedFresh } from "./fresh";
 export function CountUp({ text, className }: { text: string; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const fresh = useMountedFresh();
+  // Once: an <Activity> that shows a kept tab again re-runs layout effects, but not this.
+  const counted = useRef(false);
   const parts = text.split(/(\d+)/);
 
   useLayoutEffect(() => {
     const root = ref.current;
-    if (!fresh || !root || reducedMotion()) return;
+    if (!fresh || !root || counted.current || reducedMotion()) return;
+    counted.current = true;
     const nums = [...root.querySelectorAll<HTMLElement>("[data-count]")].map((el) => ({ el, to: Number(el.dataset.count) }));
     if (!nums.some((n) => n.to > 0)) return;
     const set = (p: number) => {
@@ -25,14 +28,18 @@ export function CountUp({ text, className }: { text: string; className?: string 
     };
     set(0);
     const start = performance.now();
+    let finished = false;
     let frame = requestAnimationFrame(function step(now) {
       const p = Math.min(1, (now - start) / COUNT_MS);
       set(p);
       if (p < 1) frame = requestAnimationFrame(step);
+      else finished = true;
     });
     return () => {
       cancelAnimationFrame(frame);
       set(1);
+      // Cut short (hidden at once, or React's dev double effect): it may count again.
+      if (!finished) counted.current = false;
     };
     // Once, at mount: later text changes render as they are.
   }, [fresh]);

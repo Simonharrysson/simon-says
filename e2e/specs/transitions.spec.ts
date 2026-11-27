@@ -7,7 +7,7 @@ import { ensureUser, expect, test } from "../fixtures";
 // reduced motion, so these specs turn it off and check that the motion really runs, by sampling
 // it frame by frame, not only that the content swaps.
 
-type Recorded = { enters: number; vts: string[][] };
+type Recorded = { enters: number; vts: string[][]; vtDone: number; vtSkipped: number };
 
 const must = <T,>(what: string, r: { data: T; error: { message: string } | null }): T => {
   if (r.error) throw new Error(`${what}: ${r.error.message}`);
@@ -48,11 +48,12 @@ async function sample(page: Page, kind: "indicator" | "row", arg: string, ms: nu
 }
 
 test.describe("transitions", () => {
-  test.use({ contextOptions: { reducedMotion: "no-preference" } });
+  // TEMPORARY (recordings for the PR): video on. Removed before the PR leaves draft.
+  test.use({ contextOptions: { reducedMotion: "no-preference" }, video: { mode: "on", size: { width: 1280, height: 800 } }, viewport: { width: 1280, height: 800 } });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      const rec: Recorded = { enters: 0, vts: [] };
+      const rec: Recorded = { enters: 0, vts: [], vtDone: 0, vtSkipped: 0 };
       (window as unknown as { __motion: Recorded }).__motion = rec;
       const animate = Element.prototype.animate;
       Element.prototype.animate = function (this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
@@ -63,7 +64,13 @@ test.describe("transitions", () => {
       if (start) {
         document.startViewTransition = ((arg: Parameters<typeof start>[0]) => {
           rec.vts.push(typeof arg === "object" && arg && "types" in arg ? [...(arg.types ?? [])] : []);
-          return start(arg);
+          const vt = start(arg);
+          // A skipped transition (e.g. a view-transition-name used twice) rejects `ready`.
+          vt.ready.then(
+            () => rec.vtDone++,
+            () => rec.vtSkipped++,
+          );
+          return vt;
         }) as typeof document.startViewTransition;
       }
     });
@@ -107,9 +114,22 @@ test.describe("transitions", () => {
     await page.goto("/hem");
     await noReducedMotion(page);
     const rail = page.getByRole("navigation", { name: "Huvudmeny" });
+    await expect(rail.locator("[data-slider]")).toHaveCount(1);
+    const from = (await rail.getByRole("link", { name: "Hem", exact: true }).boundingBox())!.x;
+    const to = (await rail.getByRole("link", { name: "Föreningar", exact: true }).boundingBox())!.x;
+    const frames = sample(page, "indicator", "Huvudmeny", 1200);
     await rail.getByRole("link", { name: "Föreningar", exact: true }).click();
+    // The rail's pill slides from Hem over Privat to Föreningar.
+    const xs = (await frames).map(([x]) => x);
+    const seen = xs.map(Math.round).join(",");
+    expect(Math.abs(xs[0] - from), seen).toBeLessThan(2);
+    expect(Math.abs(xs.at(-1)! - to), seen).toBeLessThan(2);
+    expect(xs.some((x) => x > from + 4 && x < to - 4), seen).toBe(true);
     await expect(page).toHaveURL(/\/orgs$/);
     await expect.poll(async () => (await motion(page)).vts.some((types) => types.includes("nav"))).toBe(true);
+    // It really ran (not skipped), heading morph included.
+    await expect.poll(async () => (await motion(page)).vtDone).toBeGreaterThan(0);
+    expect((await motion(page)).vtSkipped).toBe(0);
     await expect(rail.getByRole("link", { name: "Föreningar", exact: true })).toHaveAttribute("aria-current", "page");
     // Let Föreningar finish arriving (streamed content, the running view transition) first: a
     // click during it can be committed together with that work rather than as its own transition.
@@ -119,6 +139,8 @@ test.describe("transitions", () => {
     await rail.getByRole("link", { name: "Hem", exact: true }).click();
     await expect(page).toHaveURL(/\/hem$/);
     await expect.poll(async () => (await motion(page)).vts.filter((types) => types.includes("nav")).length).toBeGreaterThanOrEqual(2);
+    await expect.poll(async () => (await motion(page)).vtDone).toBeGreaterThanOrEqual(2);
+    expect((await motion(page)).vtSkipped).toBe(0);
   });
 });
 
