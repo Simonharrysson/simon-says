@@ -81,7 +81,6 @@ export default async function OnboardingPage({ params, searchParams }: { params:
       invites={invites}
       inviterName={inviterNameFor(people.find((x) => x.member_user_id === user.data.user?.id)?.name, user.data.user?.user_metadata)}
       pickerEnabled={pickerEnabled(getEnv())}
-      formatSaved={Boolean(format.id)}
       formatCard={
         // Nothing saved yet: the card shows the Veckomöte that Fortsätt makes (as the step did).
         <FormatCard

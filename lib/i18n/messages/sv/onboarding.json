@@ -62,7 +62,7 @@
     "text": "Logga, styrelsen, mötesmapp, hur ni brukar ha möten, era gamla protokoll och röster. Allt är valfritt och tar några minuter.",
     "start": "Börja",
     "continue": "Fortsätt",
-    "hide": "Fortsätt senare"
+    "hide": "Dölj"
   },
   "shell": {
     "later": "Fortsätt senare",

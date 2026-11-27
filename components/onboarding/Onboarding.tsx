@@ -43,8 +43,6 @@ export interface OnboardingProps {
   invites: InviteRow[];
   inviterName: string;
   pickerEnabled: boolean;
-  /** The förening has a saved default format (a Veckomöte is made on Fortsätt when not). */
-  formatSaved: boolean;
   /** The format card (`FormatCard`), as on Inställningar → Möten. */
   formatCard: ReactNode;
   historyCount: number;
@@ -155,8 +153,9 @@ export function Onboarding(p: OnboardingProps) {
               onSkip={() => finish("format", "skipped")}
               onNext={async () => {
                 setFormatError(null);
-                // Nothing chosen yet: the förening gets the Veckomöte the card shows as its start.
-                if (!p.formatSaved) {
+                // Nothing chosen yet: the förening gets the Veckomöte the card shows as its start
+                // (the route keeps any format already chosen, also one chosen in the card just now).
+                {
                   setBusy(true);
                   const res = await fetch(`/api/orgs/${orgId}/onboarding/formats`, {
                     method: "POST",

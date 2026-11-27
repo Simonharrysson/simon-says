@@ -51,7 +51,6 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
                   {folderSettings}
                 </Panel>
               )}
-              {calendarSettings && <Panel>{calendarSettings}</Panel>}
               <Panel title={s("duringTitle")} titleId="during-title">
                 <div className="flex max-w-[44rem] flex-col gap-5">
                   <OrgFlag name="share_transcript" id="settings-share" title={t("shareTranscript")}>
@@ -67,6 +66,8 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
                   {voiceSettings}
                 </Panel>
               )}
+              {/* Last: Google's answer streams in, and nothing below it can move when it does. */}
+              {calendarSettings && <Panel>{calendarSettings}</Panel>}
             </>
           ),
           "efter-motet": summarySettings ? <Panel>{summarySettings}</Panel> : null,

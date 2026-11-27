@@ -263,8 +263,9 @@ their section (`SettingsHashRedirect`, `HASH_SECTIONS`).
     (several addresses, the mail's preview, every invite sent) and "Dela länk" (the link and
     "Skapa ny länk").
   - **Möten**: Mötesformat (`FormatCard`: switch, adjust, learn, the stadgar's årsmöte), the
-    meeting folder (`MeetingFolderSetting`), the meetings' calendar, "Under mötet" (share the
-    transcript, require Vem/När/Klart när) and Röster (`VoicesSetting`).
+    meeting folder (`MeetingFolderSetting`), "Under mötet" (share the transcript, require
+    Vem/När/Klart när), Röster (`VoicesSetting`) and, last because Google's answer streams in,
+    the meetings' calendar.
   - **Efter mötet**: the summary e-mail (`SummarySettingsForm`).
   - **Radera**: delete the förening.
 
@@ -655,7 +656,7 @@ progress rail (done = ink, skipped = grey, here = blue; never dots; each part ju
 slide in from the right going forward, from the left going back (`animate-step-in` / `-back`, off
 with reduced motion). Progress is saved on every Fortsätt / Hoppa över (`org_onboarding`) and kept
 in `?steg=n`; the förening page shows the admins a "Kom igång n/6" card (`KomIgangCard`, Fortsätt ·
-Fortsätt senare) until every step is done or skipped. Föreningar from before 0035 have no row and no card.
+Dölj) until every step is done or skipped. Föreningar from before 0035 have no row and no card.
 
 Kom igång is a checklist, not a second editor: each step renders the very component Inställningar
 uses (`useOrgDetails` + `LogoStep`, `OrgBoard`, `MeetingFolderSetting`, `FormatCard`,
@@ -680,7 +681,8 @@ has hidden the card, `/kom-igang` redirects to Inställningar.
 3. **Mötesmapp**: the existing folder Picker (`useMeetingFolderPicker`).
 4. **Så brukar ni ha möten**: Inställningar's format card (`FormatCard`): switch, adjust, learn
    from old minutes, or the årsmöte from the stadgar. With nothing chosen yet it shows Veckomöte,
-   and Fortsätt makes that the default (`POST /api/orgs/<id>/onboarding/formats` `{ weekly }`).
+   and Fortsätt makes that the default (`POST /api/orgs/<id>/onboarding/formats` `{ weekly }`,
+   which keeps a format already chosen, also one chosen in the card just now).
    **Stadgar** (todo #15, `StadgarArsmote`): one Claude call (`extractArsmoteItems`, oneShot spend
    gate) gives the Årsmöte's agenda only; the list is editable and saved as a non-default version
    the förening points at (`orgs.arsmote_format_id`, `set_type_formats` with `p_styrelse` null).

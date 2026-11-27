@@ -143,7 +143,6 @@ export const onboardingRender: Record<string, () => ReactNode> = {
       invites={[]}
       inviterName="Anna Berg"
       pickerEnabled={false}
-      formatSaved={false}
       formatCard={<FormatCard orgId={ORG_ID} current={{ kind: "veckomote", name: "Veckomöte" }} isAdmin formats={[]} changeFormat={async () => {}} />}
       historyCount={0}
     />
