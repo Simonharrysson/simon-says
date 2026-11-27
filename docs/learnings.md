@@ -518,7 +518,7 @@ sub-point lands *before* our "– " lines), " Klart!" appended to our tasks-sect
 - Now off by default for every format (standard, learned, stored). `FormatProfile.hideCheckin` (absent = off, stored only when true; no migration). At the start `meetingRoles` turns a checkin item into a procedural one when off, so the meeting has no checkin role and no `checkin_window`: no detector call, no masking, no hidden Doc text, notes may land under the item, and it stays out of the dashboard's recurring topics.
 - Opt-in: "Anpassa format" → "Dölj må-rundan i anteckningarna (experimentellt — kan ibland dölja annat som sägs)". The masking code path is unchanged behind it. `notes-eval --hide-checkin` replays it; without the flag the Må-runda content bar is off.
 
-## 2026-11-26 · Concrete tasks: Vem, När, Klart när (0047)
+## 2026-11-26 · Concrete tasks: Vem, När, Klart när (0049)
 
 - Paid smoke (the one allowed, ≤ $1): `notes-eval --only concrete-tasks --budget 1` on the new fictional
   fixture `fixtures/notes/concrete-tasks`, **$0.037** (ledger `.notes-replay/spend.json` of the

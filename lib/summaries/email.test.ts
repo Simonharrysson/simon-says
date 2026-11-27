@@ -98,7 +98,7 @@ describe("summary e-mail in English (the recipient chose English)", () => {
   });
 });
 
-describe("summary e-mail: concrete tasks (0047)", () => {
+describe("summary e-mail: concrete tasks (0049)", () => {
   const input: SummaryEmailInput = {
     ...base,
     content: {

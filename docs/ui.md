@@ -359,7 +359,7 @@ Building blocks (usable on their own):
   Stämmer inline; unknown shows "Vem är detta?" (blue) + Välj, which opens the name chips and
   "Någon annan". Pickers are closed by default. Speakers are keyed by `(elSessionId, speakerLabel)`
   since labels restart on a new ElevenLabs session.
-- `TasksPanel {tasks}` — "Uppgifter" under the speaker list (concrete tasks, 0047): each task with Vem /
+- `TasksPanel {tasks}` — "Uppgifter" under the speaker list (concrete tasks, 0049): each task with Vem /
   När / Klart när ("saknas" in grey italics when missing). A task that lacks something shows one calm
   question ("Vem ansvarar och när ska det vara klart?" or "Hur vet ni att det är klart?") and "Fråga nu",
   which makes the question big (blue wash) until "Klar". A badge counts what is left to ask; no dots.

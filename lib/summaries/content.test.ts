@@ -89,7 +89,7 @@ describe("summaryContent", () => {
   });
 });
 
-describe("concrete tasks in the summary (0047)", () => {
+describe("concrete tasks in the summary (0049)", () => {
   const rows: SummaryItem[] = [
     item({ id: "n1", section: "action", kind: "task", text: "Boka lokal", owner: "Erik", due: "fredag", due_date: "2026-11-27", done_when: "kontraktet är påskrivet" }),
     item({ id: "n2", section: "action", kind: "task", text: "Betala hyran", owner: "Kassör" }),

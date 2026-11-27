@@ -158,7 +158,7 @@ abstract class Sim {
   protected blocks: string[] = [];
   protected sentTick = 0;
   protected nextId: string | undefined;
-  /** Concrete tasks (0047): "require" renders placeholders, as runTick for a förening with the setting on. */
+  /** Concrete tasks (0049): "require" renders placeholders, as runTick for a förening with the setting on. */
   taskMode: TaskMode = "suggest";
   /** The Avsluta dialog's answers (meetings.task_answers), applied on the final tick after Claude. */
   taskAnswers: TaskAnswer[] = [];

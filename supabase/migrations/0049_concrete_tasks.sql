@@ -21,7 +21,7 @@ grant update (require_task_fields) on table public.orgs to authenticated;
 
 alter table public.meetings add column task_answers jsonb;
 
--- save_note_rows v3: also writes done_when and due_date. Same name and parameters as v2 (0024).
+-- save_note_rows v3: also writes done_when and due_date (kept as stored when a row lacks the key). Same name and parameters as v2 (0024).
 create or replace function public.save_note_rows(p_meeting_id uuid, p_lease_id uuid, p_rows jsonb)
 returns boolean
 language plpgsql volatile security definer set search_path = ''
@@ -43,13 +43,19 @@ begin
     coalesce(r.locked, false), coalesce(r.deleted_by_human, false), r.last_rendered_text, r.range_name,
     coalesce(r.position, 0),
     r.kind, r.anchor, coalesce(r.done, false), r.owner_person_id, r.carried_from_meeting, r.carried_from_id, r.copy_of,
-    r.done_when, r.due_date
-  from jsonb_to_recordset(coalesce(p_rows, '[]'::jsonb)) as r(
+    -- A row without the key (code from before this migration, during a deploy rollover) keeps the
+    -- stored value; a row with the key (null included) sets it, so new code can still clear it.
+    case when e ? 'done_when' then r.done_when else cur.done_when end,
+    case when e ? 'due_date' then r.due_date else cur.due_date end
+  from jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) e
+  cross join lateral jsonb_to_record(e) as r(
     id text, section text, text text, owner text, due text, locked boolean, deleted_by_human boolean,
     last_rendered_text text, range_name text, position int,
     kind text, anchor text, done boolean, owner_person_id uuid, carried_from_meeting uuid, carried_from_id text,
     copy_of text, done_when text, due_date date
   )
+  left join public.note_items cur on cur.meeting_id = p_meeting_id and cur.id = r.id
+  where true -- ends the join, so "on conflict" below is not read as a join condition
   on conflict (meeting_id, id) do update set
     section = excluded.section,
     text = excluded.text,

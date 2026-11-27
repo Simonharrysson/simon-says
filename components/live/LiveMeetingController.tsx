@@ -179,6 +179,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const capture = useRef<MicCapture | null>(null);
   const stream = useRef<LiveStream | null>(null);
   const userStopped = useRef(false);
+  /** An end is under way (Avsluta, or the stream stopped on its own): a second Avsluta does nothing. */
+  const endStarted = useRef(false);
   /** Set once the user chose to leave, so the beforeunload prompt doesn't ask a second time. */
   const leaving = useRef(false);
   /** When posted runs were acknowledged; pruned once a notes write is newer. */
@@ -266,6 +268,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
    */
   const endOnServer = useCallback(
     async (id: string, auto: boolean, reason?: string | null, endWithoutUnsent = false, answers: TaskAnswer[] = []) => {
+      endStarted.current = true;
       setPhase("ending");
       setStoppedAt((t) => t ?? Date.now());
       setEndFailed(false);
@@ -675,7 +678,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const endAnswers = useRef<TaskAnswer[]>([]);
   const onStop = (answers?: TaskAnswer[]) => {
     const s = stream.current;
-    if (!meeting) return;
+    if (!meeting || endStarted.current) return;
+    endStarted.current = true;
     endAnswers.current = answers ?? [];
     userStopped.current = true;
     setPhase("ending");

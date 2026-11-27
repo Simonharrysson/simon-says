@@ -12,7 +12,7 @@ export interface NotesItem {
   text: string;
   owner?: string;
   due?: string;
-  /** "Klart när": the measurable result that makes the task done (0047). Set only when said. */
+  /** "Klart när": the measurable result that makes the task done (0049). Set only when said. */
   doneWhen?: string;
   // Format layout (meeting formats A6). Set only when present, so v1 items keep their shape.
   /** Where the item lives: `ag-<n>`, `tasks`, `notes`, `info.<slug>`. */
@@ -23,7 +23,7 @@ export interface NotesItem {
   copyOf?: string;
   /** Carried from the previous meeting's open tasks (Från förra veckan). */
   carried?: boolean;
-  /** The deadline as a day (YYYY-MM-DD), from the row's due_date (0047); marks a carried task overdue. */
+  /** The deadline as a day (YYYY-MM-DD), from the row's due_date (0049); marks a carried task overdue. */
   dueDate?: string;
   /** Render missing Vem/När/Klart när as visible placeholders (the space requires them, lib/notes/tasks.ts). Never stored. */
   placeholders?: boolean;

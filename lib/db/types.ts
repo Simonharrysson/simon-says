@@ -79,7 +79,7 @@ export interface OrgRow {
   website_url?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
-  /** 0047: "Kräv vem, när och klart när" for tasks (default true). */
+  /** 0049: "Kräv vem, när och klart när" for tasks (default true). */
   require_task_fields?: boolean;
   /** 0046: the förening's meeting calendar (Google id, name as chosen, title filter); null = none. Never logged. */
   calendar_id?: string | null;
@@ -165,7 +165,7 @@ export interface MeetingRow {
   /** 0037: null = summary not handled yet; else why it is done. */
   summary_state?: SummaryState | null;
   summary_at?: string | null;
-  /** 0047: the Avsluta dialog's answers, applied by the final pass (lib/notes/tasks.ts). */
+  /** 0049: the Avsluta dialog's answers, applied by the final pass (lib/notes/tasks.ts). */
   task_answers?: unknown;
   /** 0046: the calendar event the meeting matched at start ({ title, expected, declined }: lib/calendar/events.ts). */
   calendar_event?: unknown;
@@ -220,9 +220,9 @@ export interface NoteItemRow {
   carried_from_meeting?: string | null;
   carried_from_id?: string | null;
   copy_of?: string | null;
-  /** 0047: "Klart när": the measurable result that makes the task done; null = not said. */
+  /** 0049: "Klart när": the measurable result that makes the task done; null = not said. */
   done_when?: string | null;
-  /** 0047: `due` as a date (YYYY-MM-DD) when it names one; carried tasks keep their source's. */
+  /** 0049: `due` as a date (YYYY-MM-DD) when it names one; carried tasks keep their source's. */
   due_date?: string | null;
 }
 

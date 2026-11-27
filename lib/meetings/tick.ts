@@ -1405,15 +1405,25 @@ export async function claimEnd(
 }
 
 /**
- * Avsluta answers for a meeting that was already ending when they arrived (another tab, the org
- * page or an automatic end claimed it first). Stored only while no final pass has started: status
- * `ending` and no end attempt holding its lease; the pending (or cron-retried) final pass then
- * writes them. False: the final pass is running or done, so they were not saved (say so).
+ * Avsluta answers for a meeting that was already ending when they arrived: another tab, the org
+ * page or an automatic end claimed it first, or this same end's first POST timed out on the client
+ * after the claim had stored them (a retry). True when they are stored now:
+ * - every answer is already stored as sent (the retry): nothing to write;
+ * - else, while no final pass has started (status `ending`, no live end lease), merged per task
+ *   into what is stored (these answers win for their tasks), for the pending or cron-retried pass.
+ * False: the final pass is running or done, so they were not saved (the page says so).
  */
 export async function saveLateTaskAnswers(meetingId: string, answers: TaskAnswer[], now: Date = new Date()): Promise<boolean> {
   if (!answers.length) return true;
+  const row = must("end: late answers", await db().from("meetings").select("task_answers").eq("id", meetingId).maybeSingle()) as {
+    task_answers: unknown;
+  } | null;
+  const stored = parseTaskAnswers(row?.task_answers);
+  const same = (a: TaskAnswer, b: TaskAnswer | undefined) => !!b && a.owner === b.owner && a.due === b.due && a.doneWhen === b.doneWhen;
+  if (answers.every((a) => same(a, stored.find((s) => s.id === a.id)))) return true;
+  const merged = [...stored.filter((s) => !answers.some((a) => a.id === s.id)), ...answers];
   // Two guarded updates (no lease, or an expired one) rather than one or-filter: each is atomic.
-  const update = () => db().from("meetings").update({ task_answers: answers }).eq("id", meetingId).eq("status", "ending");
+  const update = () => db().from("meetings").update({ task_answers: merged }).eq("id", meetingId).eq("status", "ending");
   const free = must("end: late answers", await update().is("end_lease_until", null).select("id")) as { id: string }[];
   if (free.length) return true;
   const expired = must("end: late answers", await update().lt("end_lease_until", now.toISOString()).select("id")) as { id: string }[];

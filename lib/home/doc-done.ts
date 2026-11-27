@@ -1,6 +1,7 @@
 import type { NoteItemRow } from "@/lib/db/types";
 import { ownedSpan, type NotesTab } from "@/lib/docs/notes";
 import { replaceRange, type DocsRequest } from "@/lib/google/docs";
+import { hasPlaceholder, stripPlaceholders } from "@/lib/notes/tasks";
 
 // "✓ klart" for a task ticked in the app after its meeting ended (Mina uppgifter). Pure: which
 // lines to write. The same human-edit-wins rule as the tick (ownedSpan): a line is written only
@@ -32,7 +33,9 @@ export function planDocDone(tab: NotesTab, tabId: string, targets: NoteItemRow[]
     const span = row.range_name ? ownedSpan(tab, row) : null;
     if (span && hasMark(span.paraText)) ok = true;
     else if (span) {
-      const text = `${span.paraText} ${DONE_MARK}`;
+      // Done: what was still asked for ("(deadline?) – (klart när?)") no longer is.
+      const line = hasPlaceholder(span.paraText) ? stripPlaceholders(span.paraText) : span.paraText;
+      const text = `${line} ${DONE_MARK}`;
       requests.push(replaceRange(tabId, row.range_name!, text));
       written.push({ id: row.id, text });
       ok = true;

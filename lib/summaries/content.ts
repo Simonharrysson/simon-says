@@ -29,7 +29,7 @@ export interface SummaryTask {
   text: string;
   owner: string | null;
   due: string | null;
-  /** "Klart när" (0047); null = not said. */
+  /** "Klart när" (0049); null = not said. */
   doneWhen?: string | null;
   /** Its deadline day is before the day the e-mail is made. */
   overdue?: boolean;

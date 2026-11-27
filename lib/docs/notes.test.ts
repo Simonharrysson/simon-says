@@ -747,7 +747,7 @@ describe("planRender", () => {
   });
 });
 
-describe("concrete tasks: placeholders (0047)", () => {
+describe("concrete tasks: placeholders (0049)", () => {
   it("formatItem writes the missing fields visibly only when asked, and Klart när when known", () => {
     expect(formatItem({ section: "action", text: "boka lokal", owner: "Kassör", placeholders: true })).toBe(
       "☐ Kassör: boka lokal (deadline?) – (klart när?)",

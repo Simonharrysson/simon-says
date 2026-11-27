@@ -163,7 +163,7 @@ describe("feature: formats (Förbered möte: Från förra veckan through a prepa
       },
     });
     expect(m2.meeting.agenda_roles?.["ag-3"]).toBe("followup");
-    // "fredag" was said at meeting 1: a week later it has passed (concrete tasks, 0047).
+    // "fredag" was said at meeting 1: a week later it has passed (concrete tasks, 0049).
     expect(linesOf(m2.doc).filter((l) => l.includes("Boka Kårallen"))).toEqual(["– Kassör: Boka Kårallen (fredag, försenad)."]);
     await m2.tick(block([{ at: 1000, speaker: 0, text: "Kårallen är bokad. Festen blir fredag den tolfte." }]));
     await m2.tick(null, { final: true });

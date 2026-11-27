@@ -229,7 +229,7 @@ describe("formatLine", () => {
     expect(formatLine({ id: "n4", section: "note", text: "Budgeten håller" }, ctx)).toBe("Budgeten håller.");
   });
 
-  it("concrete tasks (0047): placeholders for what is missing, Klart när when known, overdue on carried tasks", () => {
+  it("concrete tasks (0049): placeholders for what is missing, Klart när when known, overdue on carried tasks", () => {
     const t: NotesItem = { id: "n1", section: "action", text: "Boka lokal", owner: "Anna Berg" };
     expect(formatLine({ ...t, placeholders: true }, ctx)).toBe("Kassör: Boka lokal (deadline?) – (klart när?).");
     expect(formatLine({ ...t, owner: undefined, placeholders: true }, ctx)).toBe("(vem?): Boka lokal (deadline?) – (klart när?).");

@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IconPause, IconPlay, IconStop } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
@@ -43,11 +43,19 @@ export function MeetingControls({
   const ending = status === "ending";
   const [tasks, setTasks] = useState<TaskView[] | null>(null);
   const [checking, setChecking] = useState(false);
+  // The meeting stopped on its own (a cap, another tab) while a dialog was open: close it, so it
+  // can't end the meeting a second time.
+  useEffect(() => {
+    if (!ending) return;
+    setTasks(null);
+    dialog.current?.close();
+  }, [ending]);
   const askEnd = async () => {
     if (!askTasks) return dialog.current?.showModal();
     setChecking(true);
     const open = await askTasks();
     setChecking(false);
+    if (ending) return;
     if (open.length) setTasks(open);
     else dialog.current?.showModal();
   };
@@ -88,7 +96,9 @@ export function MeetingControls({
         stayLabel={t("controls.stay")}
         confirmLabel={t("controls.confirmEnd")}
         confirmIcon={<IconStop size={16} />}
-        onConfirm={() => onStop()}
+        onConfirm={() => {
+          if (!ending) onStop();
+        }}
       >
         {t("stopCopy")}
       </LiveDialog>
@@ -99,7 +109,9 @@ export function MeetingControls({
           onOpenChange={(o) => {
             if (!o) setTasks(null);
           }}
-          onConfirm={(answers) => onStop(answers)}
+          onConfirm={(answers) => {
+            if (!ending) onStop(answers);
+          }}
         />
       )}
     </div>

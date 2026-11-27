@@ -506,7 +506,7 @@ function agendaInput(over: Partial<UpdateNotesInput> = {}): UpdateNotesInput {
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
 describe("v1 prompt and schema stay byte-identical", () => {
-  // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0047, done_when).
+  // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when).
   it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
     expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
     expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("5f3da687b5c8b3dd2872b65f15bd98f410b2f8539a652017aca532d18647149a");
