@@ -269,10 +269,13 @@ their section (`SettingsHashRedirect`, `HASH_SECTIONS`).
   - **Efter mötet**: the summary e-mail (`SummarySettingsForm`).
   - **Radera**: delete the förening.
 
-  One save model: switches, choices and uploads save on change and say "Sparat" quietly
-  (`useSaveState` / `SaveState`, a line that keeps its place); only text has a Spara button (the
-  name and Om oss, the calendar's title filter). The three switches share `updateOrgAction`, so
-  `OrgFlagsProvider` sends all three with the *saved* name.
+  One save model: switches, choices and uploads save on change and say "Sparat" quietly, only
+  after the save is confirmed (`useSavedValue` / `SaveState`, a line that keeps its place): one
+  save at a time, the latest waiting change next, a failure rolls back and says why. Those saves
+  return results (`setOrgFlagAction` writes one column, `saveSummaryAction`,
+  `saveOrgCalendarResult`; app/(app)/orgs/settings-actions.ts). Only text has a Spara button (the
+  name and Om oss, the calendar's title filter). Back to the tab's entry without `del` shows the
+  default section. Once Kom igång is hidden or done, Föreningen offers "Visa Kom igång igen".
 
 **Meeting list.** Each row: the meeting's title as the main line (`lib/meetings/title.ts`: the
 calendar event's title, else the title the final notes pass gave (meetings.title, 0048), else the
