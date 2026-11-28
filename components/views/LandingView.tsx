@@ -50,25 +50,27 @@ export function LandingView({ user, signIn }: LandingViewProps) {
     <>
       {/* ---------- Hero ---------- */}
       <section className="pt-[clamp(2.5rem,7vw,6rem)] pb-[clamp(3rem,6vw,5rem)]" aria-labelledby="hero-title">
-        <div className={cn(wrap, "grid grid-cols-[minmax(0,1fr)] items-end gap-x-[clamp(2rem,5vw,5rem)] gap-y-6 min-[64rem]:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]")}>
+        <div className={cn(wrap, "flex flex-col gap-[clamp(1.5rem,3vw,2.5rem)]")}>
           <h1
             id="hero-title"
-            className="max-w-[13ch] text-[clamp(2.75rem,1.35rem+5.4vw,5.75rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
+            className="max-w-[16ch] text-[clamp(2.625rem,1.3rem+5.2vw,6rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
           >
             {t("heroTitle")}
           </h1>
-          <div className="flex flex-col gap-6 min-[64rem]:pb-2">
-            <p className="max-w-[34rem] text-lg text-ink-2 min-[48rem]:text-xl min-[48rem]:leading-[1.5]">{t("heroText")}</p>
-            <div className="flex flex-wrap items-center gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
-              <StartAction signedIn={signedIn} signIn={signIn} google={!signedIn} />
-              <a
-                className="press inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-5 text-base font-medium text-ink-2 no-underline hover:bg-sunk hover:text-ink hover:no-underline"
-                href="#funktioner"
-              >
-                {t("seeHow")}
-              </a>
+          <div className="grid grid-cols-[minmax(0,1fr)] items-end gap-x-[clamp(2rem,5vw,5rem)] gap-y-6 min-[60rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+            <p className="max-w-[38rem] text-lg text-ink-2 min-[48rem]:text-xl min-[48rem]:leading-[1.5]">{t("heroText")}</p>
+            <div className="flex flex-col gap-4 min-[60rem]:items-end">
+              <div className="flex flex-wrap items-center gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
+                <StartAction signedIn={signedIn} signIn={signIn} google={!signedIn} />
+                <a
+                  className="press inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-5 text-base font-medium text-ink-2 no-underline hover:bg-sunk hover:text-ink hover:no-underline"
+                  href="#funktioner"
+                >
+                  {t("seeHow")}
+                </a>
+              </div>
+              <p className="text-sm text-ink-3">{user ? t("signedInAs", { email: user.email }) : t("freeLine")}</p>
             </div>
-            <p className="text-sm text-ink-3">{user ? t("signedInAs", { email: user.email }) : t("freeLine")}</p>
           </div>
         </div>
         <div className={cn(wrap, "mt-[clamp(2.5rem,5vw,4.5rem)]")}>
@@ -182,7 +184,7 @@ export function LandingView({ user, signIn }: LandingViewProps) {
       {/* ---------- Din AI ---------- */}
       <Section id="ai" title={t("ai.title")} lead={t("ai.text")} tinted>
         <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-x-[clamp(2rem,5vw,4rem)] gap-y-10 min-[60rem]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <Stage label={t("ai.chatLabel")} className="bg-surface">
+          <Stage label={t("ai.chatLabel")} className="bg-surface dark:bg-board">
             <ChatMock />
           </Stage>
           <div className="flex flex-col gap-4">
@@ -344,7 +346,7 @@ function Split({ id, title, lead, picture, reverse = false, children }: { id: st
 function WhereCard({ title, text, children }: { title: string; text: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-5">
-      <Stage className="min-h-[19rem] bg-surface">{children}</Stage>
+      <Stage className="min-h-[19rem] bg-surface min-[56rem]:h-[21rem] dark:bg-board">{children}</Stage>
       <div className="flex flex-col gap-2">
         <h3 className={h3Class}>{title}</h3>
         <p className="max-w-[34rem] text-ink-2">{text}</p>

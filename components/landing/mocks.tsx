@@ -11,9 +11,11 @@ import { ASSISTANTS } from "./config";
 // sheet rows are divided by hairlines or tinted, never boxed.
 
 /** A floating sheet: the app's surface lifted by an offset shadow, no ring. */
-export const sheetClass = "rounded-xl bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.22)]";
+export const sheetClass =
+  "rounded-xl bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.22)] dark:bg-sunk dark:shadow-[0_1px_0_rgb(255_255_255/0.06)_inset,0_16px_40px_-16px_rgb(0_0_0/0.8)]";
 /** The tinted stage a picture sits on. */
-export const stageClass = "relative overflow-hidden rounded-2xl bg-sunk";
+/** In the dark the stage sinks to the surface black and the sheets rise to the lighter grey. */
+export const stageClass = "relative overflow-hidden rounded-2xl bg-sunk dark:bg-surface";
 
 const label = "text-2xs font-semibold text-ink-3";
 
@@ -24,7 +26,7 @@ function Check({ done = false, size = "md" }: { done?: boolean; size?: "sm" | "m
       <IconCheck size={size === "sm" ? 10 : 12} strokeWidth={2.5} />
     </span>
   ) : (
-    <span className={cn("flex-none border-[1.5px] border-control", box)} />
+    <span className={cn("block flex-none border-[1.5px] border-control", box)} />
   );
 }
 
@@ -129,7 +131,7 @@ export function RoomMock() {
   const t = useTranslations("landing.where");
   return (
     <div className="flex w-full max-w-[24rem] flex-col items-center gap-6">
-      <span className="relative grid size-24 place-items-center rounded-full bg-surface text-red shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.22)]">
+      <span className="relative grid size-24 place-items-center rounded-full bg-surface text-red dark:bg-sunk shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_-12px_rgb(0_0_0/0.22)]">
         <span className="absolute inset-[-10px] rounded-full bg-red/10" />
         <span className="absolute inset-[-22px] rounded-full bg-red/5" />
         <IconMic size={34} className="relative" />
@@ -137,7 +139,7 @@ export function RoomMock() {
       <div className={cn(sheetClass, "flex w-full items-center gap-3 py-2 pr-2 pl-4 text-xs")}>
         <span className="font-mono font-medium text-red tabular-nums">{t("live")}</span>
         <span className="min-w-0 flex-1 truncate text-ink-3">{t("partial")}</span>
-        <span className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-sunk px-3 font-medium text-ink">
+        <span className="inline-flex min-h-9 items-center gap-1.5 rounded-md bg-sunk px-3 font-medium text-ink dark:bg-surface">
           <IconPause size={14} />
           {t("pause")}
         </span>
@@ -166,7 +168,7 @@ export function CallMock() {
   );
   return (
     <div className="flex w-full max-w-[24rem] flex-col gap-4">
-      <div className="flex items-center gap-2 self-start rounded-full bg-surface py-1.5 pr-4 pl-2 text-xs font-medium text-ink-2 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_8px_20px_-10px_rgb(0_0_0/0.2)]">
+      <div className="flex items-center gap-2 self-start rounded-full bg-surface dark:bg-sunk py-1.5 pr-4 pl-2 text-xs font-medium text-ink-2 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_8px_20px_-10px_rgb(0_0_0/0.2)]">
         <span className="grid size-6 place-items-center rounded-full bg-green-wash text-green">
           <IconMic size={13} />
         </span>
@@ -191,7 +193,7 @@ function TreeNode({ name, people, sees, seesLabel }: { name: string; people: str
     <div
       className={cn(
         "relative flex flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left",
-        sees ? "bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06),0_10px_24px_-12px_rgb(0_0_0/0.22)]" : "bg-board/60 text-ink-3",
+        sees ? "bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.06),0_10px_24px_-12px_rgb(0_0_0/0.22)] dark:bg-sunk" : "bg-board/60 text-ink-3 dark:bg-sunk/40",
       )}
     >
       <span className={cn("text-sm font-semibold", !sees && "text-ink-3")}>{name}</span>
@@ -206,7 +208,7 @@ export function TreeMock() {
   const t = useTranslations("landing.foretag");
   return (
     <div className="flex w-full max-w-[34rem] flex-col gap-5">
-      <p className="flex items-center gap-2 self-center rounded-full bg-surface px-3 py-1.5 text-xs font-medium shadow-[0_1px_2px_rgb(0_0_0/0.06),0_8px_20px_-10px_rgb(0_0_0/0.2)]">
+      <p className="flex items-center gap-2 self-center rounded-full bg-surface dark:bg-sunk px-3 py-1.5 text-xs font-medium shadow-[0_1px_2px_rgb(0_0_0/0.06),0_8px_20px_-10px_rgb(0_0_0/0.2)]">
         <span className="font-mono text-red">LIVE</span>
         {t("meeting")}
       </p>
@@ -261,7 +263,7 @@ export function TreeMock() {
 export function AgendaMock() {
   const t = useTranslations("landing.foreningar");
   return (
-    <div className="relative w-full max-w-[30rem] pt-2 pb-16 min-[48rem]:pb-10">
+    <div className="relative w-full max-w-[30rem] pt-2 pb-24">
       <div className={cn(docPaperClass, "w-[min(100%,24rem)] -rotate-1")}>
         <p className={docTitleClass}>{t("agenda")}</p>
         <ol className="mt-3 flex flex-col gap-1.5 [counter-reset:item] [&>li]:[counter-increment:item] [&>li]:before:mr-2 [&>li]:before:text-[#5f6368] [&>li]:before:content-[counter(item)'.']">
@@ -310,8 +312,8 @@ export function PrivatMock() {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="mr-1 text-ink-3">{t("contexts")}</span>
         <span className="rounded-full bg-ink px-3 py-1.5 font-medium text-on-ink">{t("context1")}</span>
-        <span className="rounded-full bg-surface px-3 py-1.5 text-ink-2 shadow-[0_1px_2px_rgb(0_0_0/0.08)]">{t("context2")}</span>
-        <span className="rounded-full bg-surface px-3 py-1.5 text-ink-2 shadow-[0_1px_2px_rgb(0_0_0/0.08)]">{t("context3")}</span>
+        <span className="rounded-full bg-surface dark:bg-sunk px-3 py-1.5 text-ink-2 shadow-[0_1px_2px_rgb(0_0_0/0.08)]">{t("context2")}</span>
+        <span className="rounded-full bg-surface dark:bg-sunk px-3 py-1.5 text-ink-2 shadow-[0_1px_2px_rgb(0_0_0/0.08)]">{t("context3")}</span>
       </div>
       <div className={cn(sheetClass, "overflow-hidden")}>
         <div className="flex items-center gap-3 border-b border-line px-5 py-4">
@@ -372,7 +374,7 @@ export function ChatMock() {
 export function AssistantTiles() {
   const t = useTranslations("landing.ai");
   return (
-    <ul aria-label={t("toolsLabel")} className="grid grid-cols-2 gap-3 min-[48rem]:grid-cols-4">
+    <ul aria-label={t("toolsLabel")} className="grid grid-cols-2 gap-3">
       {ASSISTANTS.map((a) => (
         <li key={a.name} className="flex items-center gap-3 rounded-xl bg-surface p-3 shadow-panel">
           <span aria-hidden="true" className="grid size-10 flex-none place-items-center rounded-lg bg-sunk font-mono text-xs font-medium text-ink">

@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { Wordmark } from "@/components/ui/Wordmark";
+import { cn } from "@/lib/utils";
 import { HeaderFrame } from "./HeaderFrame";
 import { MobileMenu } from "./MobileMenu";
 import { StartAction } from "./StartAction";
@@ -38,7 +39,7 @@ export function LandingHeader({ signedIn, signIn }: { signedIn: boolean; signIn:
         </nav>
         <div className="ml-auto flex items-center gap-2">
           {!signedIn && (
-            <a className={`${linkClass} hidden min-[64rem]:inline-flex`} href="/login">
+            <a className={cn(linkClass, "hidden min-[64rem]:inline-flex")} href="/login">
               {t("signIn")}
             </a>
           )}

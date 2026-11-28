@@ -78,14 +78,14 @@ export function HeroDemo() {
         data-step={shown}
         aria-hidden="true"
         className={cn(
-          "relative grid grid-cols-[minmax(0,1fr)] gap-[clamp(0.75rem,2vw,1.5rem)] rounded-2xl bg-sunk p-[clamp(0.75rem,2.5vw,2.5rem)] min-[60rem]:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]",
+          "relative grid grid-cols-[minmax(0,1fr)] gap-[clamp(0.75rem,2vw,1.5rem)] rounded-2xl bg-sunk dark:bg-surface p-[clamp(0.75rem,2.5vw,2.5rem)] min-[60rem]:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]",
           // The reset: the finished meeting fades out, the blank Doc fades back in, and the rows
           // jump back to hidden while it is invisible (no un-writing).
           "transition-opacity duration-400 ease-[var(--ease-out)] data-[step='12']:opacity-0 [&[data-step='0']_*]:transition-none",
         )}
       >
         {/* The live page on the laptop: what was just said, as captions. */}
-        <div className="flex flex-col gap-4 rounded-xl bg-surface p-4 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_8px_24px_-12px_rgb(0_0_0/0.18)] min-[60rem]:p-5">
+        <div className="flex flex-col gap-4 rounded-xl bg-surface p-4 shadow-[0_1px_2px_rgb(0_0_0/0.06),0_8px_24px_-12px_rgb(0_0_0/0.18)] min-[60rem]:p-5 dark:bg-sunk dark:shadow-[0_1px_0_rgb(255_255_255/0.06)_inset]">
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs font-medium text-red tabular-nums">LIVE 14:32</span>
             <span className="min-w-0 flex-1 truncate text-sm font-medium">{t("room")}</span>
@@ -103,13 +103,13 @@ export function HeroDemo() {
                   data-last={n === 5 ? "true" : undefined}
                   className={cn(
                     "flex flex-col gap-0.5 transition-opacity duration-300 [grid-area:1/1] min-[60rem]:[grid-area:auto]",
-                    "data-[state=future]:opacity-0 max-[60rem]:data-[state=past]:opacity-0 min-[60rem]:data-[state=past]:opacity-55",
+                    "data-[state=future]:opacity-0 max-[60rem]:data-[state=past]:opacity-0 min-[60rem]:data-[state=past]:text-ink-3",
                     // Reduced motion: the whole conversation (the last line only on a phone).
                     "motion-reduce:opacity-100 max-[60rem]:motion-reduce:not-data-[last=true]:opacity-0",
                   )}
                 >
                   <span className="text-xs font-semibold text-blue">{t(`s${n}`)}</span>
-                  <span className="text-sm leading-snug text-ink">
+                  <span className="text-sm leading-snug">
                     {words.map((w, wi) => (
                       <span
                         key={wi}
@@ -162,7 +162,7 @@ export function HeroDemo() {
         {/* The summary goes out. */}
         <div
           data-on={on(AT.mail)}
-          className="pointer-events-none absolute right-[clamp(1.25rem,4vw,3.5rem)] bottom-[clamp(1.25rem,3vw,2.75rem)] flex translate-y-3 scale-[0.97] items-center gap-3 rounded-full bg-ink py-2.5 pr-5 pl-3 text-on-ink opacity-0 shadow-[0_10px_30px_-10px_rgb(0_0_0/0.45)] transition-[opacity,translate,scale] duration-[var(--dur-spring)] ease-[var(--ease-spring)] data-[on=true]:translate-y-0 data-[on=true]:scale-100 data-[on=true]:opacity-100 motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100"
+          className="pointer-events-none flex translate-y-3 justify-self-end min-[60rem]:absolute min-[60rem]:right-[clamp(1.25rem,4vw,3.5rem)] min-[60rem]:bottom-[clamp(1.25rem,3vw,2.75rem)] scale-[0.97] items-center gap-3 rounded-full bg-ink py-2.5 pr-5 pl-3 text-on-ink opacity-0 shadow-[0_10px_30px_-10px_rgb(0_0_0/0.45)] transition-[opacity,translate,scale] duration-[var(--dur-spring)] ease-[var(--ease-spring)] data-[on=true]:translate-y-0 data-[on=true]:scale-100 data-[on=true]:opacity-100 motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:opacity-100"
         >
           <span className="grid size-8 place-items-center rounded-full bg-green text-on-green">
             <IconMail size={16} />
