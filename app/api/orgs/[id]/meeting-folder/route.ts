@@ -4,6 +4,8 @@ import { apiT } from "@/lib/i18n/api";
 import { DRIVE_ID } from "@/lib/agenda/candidates";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
+import { orgDriveAccount, setOrgDriveFolder } from "@/lib/google/drive-account";
+import { choosePickerAccount } from "@/lib/google/drive-account-rules";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +24,9 @@ function folderNameOf(raw: unknown): string | null {
 /**
  * The förening's meeting folder, picked in the Google Picker. Body `{ folderId, folderName?, grantOnly? }`
  * (`folderName` is stored with an admin's pick, so the page names the folder without a Drive call).
- * Admin without `grantOnly` (FormatCard): sets `orgs.meeting_folder_id` (204). Everyone else —
+ * Admin without `grantOnly` (FormatCard): sets `orgs.meeting_folder_id` (204); an admin who
+ * connected the förening's Drive account (0070) picked it in THAT account's Picker, so the account
+ * records the folder and new Docs go there through it. Everyone else —
  * members, and the start screen's "Använd mötesmappen" (`grantOnly: true`, admins too): 204 only
  * when `folderId` is already the förening's folder (their own pick just granted their token
  * access to it), else 403. The start screen never changes the folder.
@@ -60,6 +64,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
     if (error || (data ?? []).length === 0) {
       if (error) console.error(`meeting-folder: update: ${error.message}`);
+      return fail("save_failed", 500, t("api.folderSaveFailed"));
+    }
+    try {
+      const account = await orgDriveAccount(id);
+      if (account && choosePickerAccount(account, user.id).use === "org") await setOrgDriveFolder(id, account.googleSub, folderId);
+    } catch (err) {
+      // The folder is saved; new Docs keep the starter's grant until it is picked again.
+      console.error(`meeting-folder: drive account folder: ${(err as Error).message}`);
       return fail("save_failed", 500, t("api.folderSaveFailed"));
     }
     return new NextResponse(null, { status: 204, headers: noStore });

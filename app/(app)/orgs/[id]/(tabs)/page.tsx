@@ -52,6 +52,9 @@ import { messages } from "@/lib/i18n/messages";
 import { OrgDetailsForm } from "@/components/settings/OrgDetails";
 import { ReopenKomIgang } from "@/components/settings/ReopenKomIgang";
 import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
+import { DriveAccountLostBanner } from "@/components/settings/DriveAccountLostBanner";
+import { orgDriveAccount } from "@/lib/google/drive-account";
+import { driveAccountView, driveResultOf } from "@/lib/google/drive-account-rules";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrgBoard } from "@/components/views/OrgBoard";
 import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
@@ -194,12 +197,12 @@ export default async function OrgPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string; valkommen?: string }>;
+  searchParams: Promise<{ fel?: string; klart?: string; flik?: string; import?: string; drive?: string; kalender?: string; valkommen?: string; drivekonto?: string }>;
 }) {
   const { id } = await params;
   const locale = await getLocale();
   const t = await getTranslations("org");
-  const { fel, klart, flik, import: openImport, drive, kalender, valkommen } = await searchParams;
+  const { fel, klart, flik, import: openImport, drive, kalender, valkommen, drivekonto } = await searchParams;
   if (!isUuid(id)) notFound();
   const db = await createSupabaseServerClient();
   const org = await getOrg(db, id);
@@ -250,6 +253,9 @@ export default async function OrgPage({
     ) : null;
   const invites = isAdmin && tab === "installningar" ? await safeInvites(id) : [];
   const settings = isAdmin && tab === "installningar";
+  // 0070: the förening's own Drive account, for admins only (service role, never its token).
+  const driveAccount = isAdmin ? await orgDriveAccount(id).catch(() => null) : null;
+  const driveView = driveAccountView(driveAccount, me ?? "", org.meeting_folder_id ?? null);
   const board = boardRows(people, members ?? []);
   // Grupper (0054): the tree and everyone's place, read as the admin (RLS).
   const tree = settings ? await loadGroupSettings(db, id) : null;
@@ -324,6 +330,7 @@ export default async function OrgPage({
             <KomIgangCard orgId={org.id} state={onboarding} onDismiss={dismissAction.bind(null, org.id, true)} />
           )}
           {isAdmin && tab === "moten" && <SettingsHashRedirect href={orgTabHref(org.id, "installningar")} />}
+          {driveView?.lost && !settings && <DriveAccountLostBanner email={driveView.email} href={`${orgTabHref(org.id, "installningar")}&del=moten`} />}
         </>
       }
       docAccess={docAccess}
@@ -400,7 +407,14 @@ export default async function OrgPage({
       }
       folderSettings={
         settings ? (
-          <MeetingFolderSetting orgId={org.id} folderName={org.meeting_folder_name ?? null} folderSet={Boolean(org.meeting_folder_id)} pickerEnabled={pickerEnabled(getEnv())} />
+          <MeetingFolderSetting
+            orgId={org.id}
+            folderName={org.meeting_folder_name ?? null}
+            folderSet={Boolean(org.meeting_folder_id)}
+            pickerEnabled={pickerEnabled(getEnv())}
+            driveAccount={driveView}
+            driveResult={driveResultOf(drivekonto)}
+          />
         ) : undefined
       }
       voiceSettings={settings ? <VoicesSetting orgId={org.id} board={board} /> : undefined}

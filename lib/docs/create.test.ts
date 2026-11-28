@@ -285,3 +285,24 @@ describe("only the permission Simon Says created is ours (0053)", () => {
     expect(g.permDelete.mock.calls.map((c) => (c[0] as { permissionId: string }).permissionId)).toEqual(["w"]);
   });
 });
+
+describe("shared drives (Delade enheter): every Drive call says so", () => {
+  const driveCalls = () =>
+    [g.list, g.filesCreate, g.filesGet, g.permCreate, g.permList, g.permDelete].flatMap((f) => f.mock.calls.map((c) => [f, c[0] as Record<string, unknown>] as const));
+
+  it("create, folder lookup, sharing and revoking all carry supportsAllDrives; the list also includeItemsFromAllDrives", async () => {
+    g.list.mockResolvedValue({ data: { files: [] } });
+    g.filesCreate.mockResolvedValueOnce({ data: { id: "folder-new" } }).mockResolvedValue({ data: { id: "doc1" } });
+    g.filesGet.mockResolvedValue({ data: { driveId: "drive-1", capabilities: { canAddChildren: true } } });
+    g.permList.mockResolvedValue({ data: { permissions: [{ id: "p1", emailAddress: "a@x.se", role: "writer" }] } });
+    await createMeetingDoc(auth, { ...input, meetingFolderId: "folderInSharedDrive" });
+    await createMeetingDoc(auth, input);
+    await shareWith(auth, "doc1", "c@x.se", { checkExisting: true });
+    await revokePermission(auth, "doc1", "p1");
+    await revokeLegacyShare(auth, "doc1", "a@x.se");
+    const calls = driveCalls();
+    expect(calls.length).toBeGreaterThanOrEqual(8);
+    for (const [, params] of calls) expect(params).toMatchObject({ supportsAllDrives: true });
+    for (const params of g.list.mock.calls.map((c) => c[0])) expect(params).toMatchObject({ includeItemsFromAllDrives: true });
+  });
+});

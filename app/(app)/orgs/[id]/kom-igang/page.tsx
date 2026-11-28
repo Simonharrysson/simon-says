@@ -20,6 +20,8 @@ import { boardRows } from "@/lib/people/board";
 import type { InviteRow } from "@/lib/invites/rules";
 import { inviterNameFor, listInvites } from "@/lib/invites/send";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { orgDriveAccount } from "@/lib/google/drive-account";
+import { driveAccountView, driveResultOf } from "@/lib/google/drive-account-rules";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -36,9 +38,9 @@ const EMPTY: OnboardingState = { done: [], skipped: [], completedAt: null, dismi
  * Once an admin has hidden it ("Fortsätt senare" on the card) it is gone: every setting it touched
  * lives in Inställningar, so the link leads there.
  */
-export default async function OnboardingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ steg?: string }> }) {
+export default async function OnboardingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ steg?: string; drivekonto?: string }> }) {
   const { id } = await params;
-  const { steg } = await searchParams;
+  const { steg, drivekonto } = await searchParams;
   if (!isUuid(id)) notFound();
   // Förening only: a Företag (0050) has none of this.
   if (await isForetagOrg(id)) notFound();
@@ -52,7 +54,7 @@ export default async function OnboardingPage({ params, searchParams }: { params:
 
   // Service role for the invites: only after the admin check above.
   const locale = await getLocale();
-  const [state, people, members, format, formats, history, user, invites] = await Promise.all([
+  const [state, people, members, format, formats, history, user, invites, driveAccount] = await Promise.all([
     loadOnboarding(db, id),
     listPeople(db, id),
     orgMemberList(id).catch((): OrgMember[] => []),
@@ -61,6 +63,8 @@ export default async function OnboardingPage({ params, searchParams }: { params:
     historySummary(db, id).catch(() => ({ count: 0 })),
     db.auth.getUser(),
     listInvites(supabaseAdmin(), id).catch((): InviteRow[] => []),
+    // Service role, after the admin check: the förening's Drive account (never its token).
+    orgDriveAccount(id).catch(() => null),
   ]);
   if (state?.dismissedAt) redirect(orgTabHref(id, "installningar"));
   const s = state ?? EMPTY;
@@ -84,6 +88,8 @@ export default async function OnboardingPage({ params, searchParams }: { params:
       invites={invites}
       inviterName={inviterNameFor(people.find((x) => x.member_user_id === user.data.user?.id)?.name, user.data.user?.user_metadata)}
       pickerEnabled={pickerEnabled(getEnv())}
+      driveAccount={driveAccountView(driveAccount, user.data.user?.id ?? "", org.meeting_folder_id ?? null)}
+      driveResult={driveResultOf(drivekonto)}
       formatCard={
         // Nothing saved yet: the card shows the Veckomöte that Fortsätt makes (as the step did).
         <FormatCard

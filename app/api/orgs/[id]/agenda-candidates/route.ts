@@ -11,6 +11,7 @@ import { preparedDocState } from "@/lib/prepare/stale";
 import { isUuid } from "@/lib/db/ids";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { DriveAccountLostError, driveSubOf, orgDriveClient } from "@/lib/google/drive-account";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -56,12 +57,16 @@ async function preparedRow(orgId: string) {
 /** The suggestion for `p`, with whether this starter's grant can edit it. */
 async function preparedSuggestion(p: NonNullable<Awaited<ReturnType<typeof preparedRow>>>, auth: Auth, userId: string): Promise<PreparedSuggestion | null> {
   try {
-    const access = await checkAgendaDoc(auth, p.doc_id);
+    // A Doc the förening's Drive account made (0070) is checked through that account: the start uses it too.
+    const sub = await driveSubOf("prepared_agendas", p.id);
+    const access = await checkAgendaDoc(sub ? await orgDriveClient(p.org_id, sub) : auth, p.doc_id);
     // Never suggest a Doc that is gone (trashed, or deleted: the preparer no longer sees it).
     const state = preparedDocState(access, p.prepared_by === userId);
     if (state === "gone" || (!access.ok && access.error !== "not_found")) return null;
     return { docId: p.doc_id, name: access.ok ? access.name || p.doc_name : p.doc_name, date: p.meeting_date, time: p.meeting_time, kind: p.kind, accessible: access.ok };
   } catch (err) {
+    // The förening's account needs renewing (admins see it at the folder): no suggestion meanwhile.
+    if (err instanceof DriveAccountLostError) return null;
     if (err instanceof GoogleAuthLostError) throw err;
     console.error(`agenda-candidates: prepared: ${(err as Error).message}`);
     return null;

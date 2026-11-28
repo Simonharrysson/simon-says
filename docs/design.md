@@ -168,6 +168,24 @@ it is deleted when they leave the org.
   **and a third-party security assessment (CASA)** before it can be used by more than 100 users;
   until then Google shows an "unverified app" warning on that consent screen and the 100-user
   cap applies. Consider this before the service opens wider.
+- **The förening's own Drive account (0070, branch drive-account):** most föreningar keep their
+  documents in a Google account of the förening (a Workspace), not in the admin's personal one.
+  In the folder card (Kom igång step 3, Inställningar › Möten) an admin picks "Använd ett annat
+  Google-konto": **Google's own code flow, not Supabase's** (that would switch the session), with
+  `openid email drive.file` only (never wider, no `include_granted_scopes`), `prompt=select_account
+  consent`, PKCE, and a `state` sealed (AES-GCM, `lib/crypto.ts`) in an httpOnly cookie bound to the
+  signed-in user and the förening, ten minutes; the callback re-checks admin
+  (`lib/google/drive-account-oauth.ts`, `app/api/google/drive-account/callback`). The identity comes
+  from Google's tokeninfo (`aud` must be our client). The refresh token is stored like every other
+  (`org_drive_accounts`, one per förening, service role only). Which grant a Doc call uses is
+  decided **per Doc** and recorded (`meetings`/`prepared_agendas.drive_account_sub`), because under
+  drive.file only the creating or picking grant reaches a file: a new Doc in the meeting folder goes
+  through the förening's account while that account picked the folder, else the starter's grant as
+  before; an existing Doc keeps the account that made it. Group, private, Företag and Privat
+  meetings never use it (no shared folder). A refused token is marked lost (admins see "Drive-kopplingen
+  behöver förnyas"), never replaced by anyone's own Drive. Only the admin who connected it gets its
+  Picker token; it is deleted with the förening, the user, or when they stop being an admin
+  (trigger). Rules: `lib/google/drive-account-rules.ts`.
 - **Calendar, `calendar.readonly` (todo #14, branch calendar):** optional, per user, asked only by
   "Koppla kalender" (Inställningar, the förening's Starta möte card or its calendar setting), by its
   own consent of identity + `calendar.readonly` **without** `include_granted_scopes`, so this

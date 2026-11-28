@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 
 // The Google Picker (drive.file): the user picks a Doc or a folder in Google's own dialog, which
 // grants our app access to exactly that file. The access token comes from
-// POST /api/google/picker-token (the user's own grant; never the refresh token).
+// POST /api/google/picker-token (the user's own grant, or the förening's Drive account for the
+// admin who connected it; never the refresh token). Shared drives ("Delade enheter") are shown.
 
 export type PickerMode = "doc" | "folder" | "docs-multi" | "doc-or-pdf";
 
@@ -55,6 +56,7 @@ interface DocsView {
   setSelectFolderEnabled(on: boolean): DocsView;
   setIncludeFolders(on: boolean): DocsView;
   setMode(mode: unknown): DocsView;
+  setEnableDrives(on: boolean): DocsView;
 }
 interface PickerBuilder {
   addView(v: DocsView): PickerBuilder;
@@ -71,7 +73,7 @@ interface PickerNs {
   DocsView: new (viewId?: unknown) => DocsView;
   PickerBuilder: new () => PickerBuilder;
   ViewId: { DOCS: unknown; FOLDERS: unknown };
-  Feature: { MULTISELECT_ENABLED: unknown };
+  Feature: { MULTISELECT_ENABLED: unknown; SUPPORT_DRIVES: unknown };
   Action: { PICKED: string; CANCEL: string };
   DocsViewMode: { LIST: unknown };
 }
@@ -111,10 +113,15 @@ function loadPicker(): Promise<PickerNs> {
 
 type PickerCopy = { offline: string; failed: string };
 
-async function pickerToken(copy: PickerCopy): Promise<{ accessToken: string; developerKey: string; appId: string }> {
+async function pickerToken(copy: PickerCopy, orgId: string | undefined): Promise<{ accessToken: string; developerKey: string; appId: string }> {
   let res: Response;
   try {
-    res = await fetch("/api/google/picker-token", { method: "POST", cache: "no-store" });
+    res = await fetch("/api/google/picker-token", {
+      method: "POST",
+      cache: "no-store",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(orgId ? { orgId } : {}),
+    });
   } catch {
     throw new PickerError("network", copy.offline);
   }
@@ -132,7 +139,7 @@ async function pickerToken(copy: PickerCopy): Promise<{ accessToken: string; dev
  * `PickerError` (message in the UI language) when the token or Google's script is unavailable. `ready`
  * turns true once Google's script has loaded (it starts loading on mount).
  */
-export function usePicker(): {
+export function usePicker(scope: { orgId?: string } = {}): {
   ready: boolean;
   open(opts: PickerOptions): Promise<PickedFile[] | null>;
 } {
@@ -156,18 +163,19 @@ export function usePicker(): {
       loadPicker().catch(() => {
         throw new PickerError("picker_load", t("loadFailed"));
       }),
-      pickerToken({ offline: t("offline"), failed: t("failed") }),
+      // In a förening: the server decides whose Drive the Picker shows (its connected account, for the admin who connected it).
+      pickerToken({ offline: t("offline"), failed: t("failed") }, scope.orgId),
     ]);
     setReady(true);
 
     const views: DocsView[] = [];
     if (opts.mode === "folder") {
-      views.push(new picker.DocsView(picker.ViewId.FOLDERS).setSelectFolderEnabled(true).setIncludeFolders(true));
+      views.push(new picker.DocsView(picker.ViewId.FOLDERS).setSelectFolderEnabled(true).setIncludeFolders(true).setEnableDrives(true));
     } else {
       const mimes = opts.mode === "doc-or-pdf" ? `${DOC_MIME},${PDF_MIME}` : DOC_MIME;
       // The folder first (when given), then all Docs: a Doc kept elsewhere can still be picked.
       if (opts.parentId) views.push(new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(mimes).setParent(opts.parentId));
-      views.push(new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(mimes));
+      views.push(new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(mimes).setEnableDrives(true));
     }
 
     return new Promise<PickedFile[] | null>((resolve) => {
@@ -178,7 +186,9 @@ export function usePicker(): {
         .setDeveloperKey(token.developerKey)
         .setAppId(token.appId)
         .setLocale(locale)
-        .setTitle(opts.title);
+        .setTitle(opts.title)
+        // "Delade enheter": shared drives next to My Drive.
+        .enableFeature(picker.Feature.SUPPORT_DRIVES);
       if (opts.mode === "docs-multi") builder = builder.enableFeature(picker.Feature.MULTISELECT_ENABLED);
       const dialog = builder
         .setCallback((r) => {
@@ -200,7 +210,7 @@ export function usePicker(): {
         .build();
       dialog.setVisible(true);
     });
-  }, [t, locale]);
+  }, [t, locale, scope.orgId]);
 
   return { ready, open };
 }

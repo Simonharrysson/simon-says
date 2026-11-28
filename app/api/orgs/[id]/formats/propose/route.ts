@@ -6,7 +6,8 @@ import { isUuid } from "@/lib/db/ids";
 import { myRole } from "@/lib/db/orgs";
 import { proposeFormat } from "@/lib/formats/learn";
 import { docStructure, firstNames, recurringOnly, type DocStructure } from "@/lib/formats/structure";
-import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { GoogleAuthLostError } from "@/lib/google/client";
+import { DriveAccountLostError, pickerAuth } from "@/lib/google/drive-account";
 import { docsApi, driveApi } from "@/lib/google/docs";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -74,7 +75,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let docs: { isTemplate: boolean; structure: DocStructure }[];
   let folderId: string | null = null;
   try {
-    const auth = await getGoogleAuth(user.id);
+    // The grant whose Picker picked the Docs (the förening's Drive account for the admin who connected it).
+    const { auth } = await pickerAuth(user.id, id);
     const api = docsApi(auth);
     docs = await Promise.all(
       docIds.map(async (documentId) => {
@@ -96,6 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.error(`formats/propose: parents: ${(err as Error).message}`.slice(0, 200));
     }
   } catch (err) {
+    if (err instanceof DriveAccountLostError) return fail("drive_account_lost", 409, t("api.driveAccountLost"));
     if (err instanceof GoogleAuthLostError) {
       return fail("google_auth_lost", 401, t("api.googleAuthLost"));
     }

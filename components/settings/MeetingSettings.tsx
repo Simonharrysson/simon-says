@@ -3,7 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FolderStep, VoicesStep } from "@/components/onboarding/steps";
+import { FolderStep, VoicesStep, type DriveAccountResult } from "@/components/onboarding/steps";
+import { connectDriveAccount, disconnectDriveAccount } from "@/app/(app)/orgs/drive-account-actions";
+import type { DriveAccountView } from "@/lib/google/drive-account-rules";
 import { useMeetingFolderPicker } from "@/components/views/useMeetingFolderPicker";
 import { voiceConsentAction } from "@/app/(app)/orgs/[id]/kom-igang/actions";
 import type { BoardRow } from "@/lib/people/board";
@@ -11,10 +13,39 @@ import { useSettingsSection } from "./SettingsSections";
 
 // Möten's own editors, rendered by Inställningar → Möten and by Kom igång's steps 3 and 6 alike.
 
-/** The förening's meeting folder in Drive (admins pick it in the Google Picker; saved at once). */
-export function MeetingFolderSetting({ orgId, folderName, folderSet, pickerEnabled }: { orgId: string; folderName: string | null; folderSet: boolean; pickerEnabled: boolean }) {
+/**
+ * The förening's meeting folder in Drive (admins pick it in the Google Picker; saved at once), and
+ * the förening's own Drive account it lives in (0070: "Använd ett annat Google-konto").
+ */
+export function MeetingFolderSetting({
+  orgId,
+  folderName,
+  folderSet,
+  pickerEnabled,
+  driveAccount = null,
+  driveResult = null,
+  from = "installningar",
+}: {
+  orgId: string;
+  folderName: string | null;
+  folderSet: boolean;
+  pickerEnabled: boolean;
+  driveAccount?: DriveAccountView | null;
+  driveResult?: DriveAccountResult | null;
+  from?: "kom-igang" | "installningar";
+}) {
   const folder = useMeetingFolderPicker(orgId);
-  return <FolderStep folderName={folderName} folderSet={folderSet} pickerEnabled={pickerEnabled} busy={folder.busy} message={folder.message} onPick={folder.pick} />;
+  return (
+    <FolderStep
+      folderName={folderName}
+      folderSet={folderSet}
+      pickerEnabled={pickerEnabled}
+      busy={folder.busy}
+      message={folder.message}
+      onPick={folder.pick}
+      drive={{ view: driveAccount, result: driveResult, orgId, from, connect: connectDriveAccount, disconnect: disconnectDriveAccount }}
+    />
+  );
 }
 
 /** Who has said yes to having their voice learned later (saved on each tick). */

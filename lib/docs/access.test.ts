@@ -6,7 +6,8 @@ import { GoogleAuthLostError } from "@/lib/google/client";
 const g = vi.hoisted(() => ({
   permCreate: vi.fn(),
   getGoogleAuth: vi.fn(),
-  meetings: [] as { id: string; org_id: string; doc_id: string; started_by: string | null; agenda_doc: boolean }[],
+  orgDriveClient: vi.fn(),
+  meetings: [] as { id: string; org_id: string; doc_id: string; started_by: string | null; agenda_doc: boolean; drive_account_sub?: string | null }[],
   members: ["s1", "s2"] as string[],
   shared: [] as { meeting_id: string; user_id: string }[],
   upserts: [] as unknown[],
@@ -27,6 +28,10 @@ vi.mock("@/lib/google/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/client")>()),
   getGoogleAuth: g.getGoogleAuth,
 }));
+vi.mock("@/lib/google/drive-account", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/google/drive-account")>()),
+  orgDriveClient: g.orgDriveClient,
+}));
 vi.mock("@/lib/supabase/admin", () => ({
   supabaseAdmin: () => ({
     rpc: async (name: string, args: { p_ids: string[] }) => (g.rpcs.push([name, args]), { data: g.visible ?? args.p_ids, error: null }),
@@ -36,6 +41,8 @@ vi.mock("@/lib/supabase/admin", () => ({
         b[op] = (...args: unknown[]) => (g.filters.push([table, op, args]), b);
       }
       b.upsert = async (rows: unknown) => (g.upserts.push(rows), { error: g.upsertError });
+      // driveSubOf (0070): no förening account made these Docs unless the test's row says so.
+      b.maybeSingle = async () => ({ data: null, error: null });
       b.then = (resolve: (v: unknown) => unknown) =>
         resolve({
           data: table === "meetings" ? g.meetings : table === "org_members" ? g.members.map((user_id) => ({ user_id })) : g.shared,
@@ -53,6 +60,7 @@ const NEW = { id: "u-new", email: "nyss@ekdala.test" };
 beforeEach(() => {
   g.permCreate.mockReset().mockResolvedValue({ data: { id: "perm-1" } });
   g.getGoogleAuth.mockReset().mockImplementation(async (who: string) => ({ who }));
+  g.orgDriveClient.mockReset().mockImplementation(async (orgId: string, sub: string) => ({ who: `org:${orgId}:${sub}` }));
   g.meetings = [];
   g.members = ["s1", "s2"];
   g.shared = [];
@@ -175,5 +183,36 @@ describe("recordDocShares", () => {
     await expect(recordDocShares("m1", ["u1"])).resolves.toBeUndefined();
     await recordDocShares("m1", []);
     expect(g.upserts).toHaveLength(1);
+  });
+});
+
+describe("Docs of the förening's Drive account (0070)", () => {
+  const orgDoc = { id: "m-org", org_id: "org1", doc_id: "d-org", started_by: "s1", agenda_doc: false, app_created_doc: true, drive_account_sub: "sub-1" };
+
+  it("shares through the förening's account, not the starter's, even after the starter left", async () => {
+    g.members = [];
+    expect(await shareMeetingDocWith(orgDoc, NEW)).toBe("shared");
+    expect(g.orgDriveClient).toHaveBeenCalledWith("org1", "sub-1");
+    expect(g.getGoogleAuth).not.toHaveBeenCalled();
+    expect(g.permCreate).toHaveBeenCalledWith("org:org1:sub-1", expect.objectContaining({ fileId: "d-org", supportsAllDrives: true }));
+  });
+
+  it("a lost or replaced account is never swapped for the starter's grant", async () => {
+    const { DriveAccountLostError } = await import("@/lib/google/drive-account");
+    g.orgDriveClient.mockRejectedValue(new DriveAccountLostError("org1", "lost"));
+    expect(await shareMeetingDocWith(orgDoc, NEW)).toBe("starter_google_lost");
+    expect(g.getGoogleAuth).not.toHaveBeenCalled();
+    expect(g.permCreate).not.toHaveBeenCalled();
+  });
+
+  it("a joiner gets each Doc through the account that owns it", async () => {
+    g.meetings = [
+      { id: "m-own", org_id: "org1", doc_id: "d-own", started_by: "s1", agenda_doc: false },
+      { id: "m-org", org_id: "org1", doc_id: "d-org", started_by: "s2", agenda_doc: false, drive_account_sub: "sub-1" },
+    ];
+    g.members = ["s1"];
+    expect(await shareOrgDocsWithNewMember("org1", NEW)).toBe(2);
+    const owners = g.permCreate.mock.calls.map((c) => c[0]).sort();
+    expect(owners).toEqual(["org:org1:sub-1", "s1"]);
   });
 });

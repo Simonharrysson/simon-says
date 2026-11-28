@@ -146,6 +146,8 @@ export class GoogleFake {
     try {
       const body = method === "GET" || method === "DELETE" ? null : await readBody(req);
       if (path === "token" && method === "POST") return send(res, 200, this.token(body?.toString() ?? ""));
+      if (path === "o/oauth2/v2/auth" && method === "GET") return this.authorize(res, url);
+      if (path === "tokeninfo" && method === "POST") return send(res, 200, this.tokeninfo(body?.toString() ?? ""));
       const user = this.user(req);
       const json = () => (body && body.length ? (JSON.parse(body.toString()) as Record<string, unknown>) : {});
 
@@ -187,8 +189,41 @@ export class GoogleFake {
     }
   }
 
+  /** The account Google's consent screen "picks" next (`login_hint` wins); the e2e default otherwise. */
+  oauthAccount = "styrelsen@forening.e2e.test";
+
+  /**
+   * Google's consent screen for "Använd ett annat Google-konto" (0070): answers at once with a code
+   * for the picked account (an address with "+deny" cancels, like "Avbryt").
+   */
+  private authorize(res: ServerResponse, url: URL) {
+    const back = new URL(url.searchParams.get("redirect_uri") ?? "");
+    const state = url.searchParams.get("state") ?? "";
+    const email = (url.searchParams.get("login_hint") || this.oauthAccount).toLowerCase();
+    if (!url.searchParams.get("code_challenge") || url.searchParams.get("code_challenge_method") !== "S256") throw new HttpError(400, "PKCE required");
+    if (email.includes("+deny")) back.searchParams.set("error", "access_denied");
+    else back.searchParams.set("code", `e2e-code:${email}`);
+    back.searchParams.set("state", state);
+    res.writeHead(302, { location: back.toString() });
+    res.end();
+  }
+
+  /** tokeninfo for an access token: our client, the account's id and address, its scopes. */
+  private tokeninfo(form: string) {
+    const at = new URLSearchParams(form).get("access_token") ?? "";
+    if (!at.startsWith("e2e-at:")) throw new HttpError(400, "invalid_token");
+    const email = at.slice("e2e-at:".length);
+    return { aud: "e2e-client", azp: "e2e-client", sub: `e2e-sub-${email}`, email, email_verified: "true", scope: "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file" };
+  }
+
   private token(form: string) {
     const params = new URLSearchParams(form);
+    if (params.get("grant_type") === "authorization_code") {
+      const code = params.get("code") ?? "";
+      if (!code.startsWith("e2e-code:") || !params.get("code_verifier")) throw new HttpError(400, "invalid_grant");
+      const email = code.slice("e2e-code:".length);
+      return { access_token: `e2e-at:${email}`, refresh_token: `e2e-refresh:${email}`, expires_in: 3599, token_type: "Bearer", scope: "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive.file" };
+    }
     const refresh = params.get("refresh_token") ?? "";
     if (params.get("grant_type") !== "refresh_token" || !refresh.startsWith("e2e-refresh:")) {
       throw new HttpError(400, "invalid_grant");

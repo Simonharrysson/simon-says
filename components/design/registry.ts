@@ -29,6 +29,7 @@ export const designViews: DesignView[] = [
   { id: "org-settings", title: "Förening · admin, Inställningar → Föreningen", group: "Sidor" },
   { id: "org-settings-styrelsen", title: "Förening · admin, Inställningar → Styrelsen och medlemmar", group: "Sidor" },
   { id: "org-settings-moten", title: "Förening · admin, Inställningar → Möten", group: "Sidor" },
+  { id: "folder-drive-account", title: "Mötesmapp · föreningens eget Google-konto (kopplat, välj mapp, förnyas, inget)", group: "Sidor" },
   { id: "org-settings-efter", title: "Förening · admin, Inställningar → Efter mötet", group: "Sidor" },
   { id: "org-settings-radera", title: "Förening · admin, Inställningar → Radera", group: "Sidor" },
   { id: "org-member", title: "Förening · medlem, Möten (två flikar)", group: "Sidor" },

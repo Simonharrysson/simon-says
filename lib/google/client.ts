@@ -76,6 +76,9 @@ export async function getGoogleAuth(userId: string): Promise<OAuth2Client> {
 
 const loggedWide = new Set<string>();
 
+/** An OAuth2Client for a stored refresh token (fresh access token fetched); `label` names it in errors. */
+export const clientForRefreshToken = (label: string, refreshToken: string) => clientFor(label, refreshToken);
+
 async function clientFor(userId: string, refreshToken: string): Promise<OAuth2Client> {
   const env = getEnv();
   // The e2e test mode refreshes against the fake Google server (lib/e2e/guard.ts).

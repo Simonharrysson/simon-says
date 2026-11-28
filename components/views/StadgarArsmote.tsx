@@ -30,7 +30,7 @@ export type StadgarPhase =
 /** The flow's state and actions. `pick` calls the Picker right away, so the click's activation reaches it. */
 export function useStadgarArsmote(orgId: string, onSaved?: () => void) {
   const t = useTranslations("stadgar");
-  const picker = usePicker();
+  const picker = usePicker({ orgId });
   const [stadgar, setStadgar] = useState<StadgarPhase>({ phase: "idle" });
 
   const pick = async () => {

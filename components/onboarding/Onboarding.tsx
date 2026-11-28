@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
+import type { DriveAccountResult } from "@/components/onboarding/steps";
+import type { DriveAccountView } from "@/lib/google/drive-account-rules";
 import { useOrgDetails } from "@/components/settings/OrgDetails";
 import { OrgBoard } from "@/components/views/OrgBoard";
 import { STEP_IDS, markStep, stepNumber, type OnboardingState, type StepId } from "@/lib/onboarding/steps";
@@ -43,6 +45,9 @@ export interface OnboardingProps {
   invites: InviteRow[];
   inviterName: string;
   pickerEnabled: boolean;
+  /** 0070: the förening's own Drive account (admins), and `?drivekonto=` after connecting. */
+  driveAccount?: DriveAccountView | null;
+  driveResult?: DriveAccountResult | null;
   /** The format card (`FormatCard`), as on Inställningar → Möten. */
   formatCard: ReactNode;
   historyCount: number;
@@ -139,7 +144,15 @@ export function Onboarding(p: OnboardingProps) {
     case "mapp":
       return (
         <OnboardingShell {...shell} footer={<StepFooter busy={busy} onBack={back} onSkip={() => finish("mapp", "skipped")} onNext={() => finish("mapp", p.org.folderSet ? "done" : "skipped")} />}>
-          <MeetingFolderSetting orgId={orgId} folderName={p.org.folderName} folderSet={p.org.folderSet} pickerEnabled={p.pickerEnabled} />
+          <MeetingFolderSetting
+            orgId={orgId}
+            folderName={p.org.folderName}
+            folderSet={p.org.folderSet}
+            pickerEnabled={p.pickerEnabled}
+            driveAccount={p.driveAccount ?? null}
+            driveResult={p.driveResult ?? null}
+            from="kom-igang"
+          />
         </OnboardingShell>
       );
     case "format":

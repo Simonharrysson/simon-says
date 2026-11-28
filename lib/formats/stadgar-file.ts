@@ -1,10 +1,12 @@
 import "server-only";
-import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { GoogleAuthLostError } from "@/lib/google/client";
+import { DriveAccountLostError, pickerAuth } from "@/lib/google/drive-account";
 import { driveApi } from "@/lib/google/docs";
 import type { StadgarInput } from "./stadgar";
 
 // Reads the stadgar the admin picked (a Google Doc as plain text, or a PDF of at most 10 MB) with
-// the admin's own Google grant. Shared by "Lägg in punkter från stadgarna" (C1) and onboarding
+// the grant whose Picker picked them (the admin's own, or the förening's Drive account for the admin
+// who connected it, 0070). Shared by "Lägg in punkter från stadgarna" (C1) and onboarding
 // step 4. The text is never stored or logged.
 
 const DOC_MIME = "application/vnd.google-apps.document";
@@ -20,10 +22,10 @@ const googleStatus = (err: unknown): number | undefined => {
   return typeof s === "number" ? s : undefined;
 };
 
-export async function readStadgarFile(userId: string, fileId: string, logLabel: string): Promise<StadgarFile> {
+export async function readStadgarFile(userId: string, fileId: string, logLabel: string, orgId: string | null = null): Promise<StadgarFile> {
   let input: StadgarInput;
   try {
-    const drive = driveApi(await getGoogleAuth(userId));
+    const drive = driveApi((await pickerAuth(userId, orgId)).auth);
     const meta = (await drive.files.get({ fileId, fields: "mimeType,size", supportsAllDrives: true })).data;
     if (meta.mimeType === DOC_MIME) {
       const res = await drive.files.export({ fileId, mimeType: "text/plain" }, { responseType: "text" });
@@ -38,6 +40,9 @@ export async function readStadgarFile(userId: string, fileId: string, logLabel: 
       return { ok: false, error: "unsupported_type", status: 400, message: "Välj ett Google-dokument eller en PDF." };
     }
   } catch (err) {
+    if (err instanceof DriveAccountLostError) {
+      return { ok: false, error: "drive_account_lost", status: 409, message: "Drive-kopplingen behöver förnyas. Välj ”Förnya” vid mötesmappen." };
+    }
     if (err instanceof GoogleAuthLostError) {
       return { ok: false, error: "google_auth_lost", status: 401, message: "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen." };
     }

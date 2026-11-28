@@ -11,7 +11,7 @@ import { PickerError, usePicker } from "@/components/google/Picker";
  */
 export function useMeetingFolderPicker(orgId: string) {
   const t = useTranslations("common.picker");
-  const picker = usePicker();
+  const picker = usePicker({ orgId });
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);

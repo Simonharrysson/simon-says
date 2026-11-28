@@ -33,7 +33,7 @@ import { LoginView } from "@/components/views/LoginView";
 import { FormatCard } from "@/components/views/FormatCard";
 import { LearnFormatView, type LearnPhase } from "@/components/views/FormatEditor";
 import { OrgDetailView, type OrgDetailViewProps, type OrgTab } from "@/components/views/OrgDetailView";
-import { BoardStep } from "@/components/onboarding/steps";
+import { BoardStep, FolderStep, type FolderDriveAccount } from "@/components/onboarding/steps";
 import type { BoardRow } from "@/lib/people/board";
 import { OrgDetailsForm } from "@/components/settings/OrgDetails";
 import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
@@ -567,6 +567,36 @@ function PublicChrome({ children, noLoginLink }: { children: ReactNode; noLoginL
 }
 
 /** The förening page's Inställningar, one section open (fictional data). */
+/** The folder card's förening Drive account (0070), every state side by side (fictional addresses). */
+function FolderDriveDemo() {
+  const drive = (view: FolderDriveAccount["view"], result: FolderDriveAccount["result"] = null): FolderDriveAccount => ({
+    view,
+    result,
+    orgId: ORG_ID,
+    from: "installningar",
+    connect: noopAction,
+    disconnect: noopAction,
+  });
+  const account = { email: "styrelsen@exempelforeningen.se", lost: false, folderPicked: true, mine: true };
+  const states: [string, ReactNode][] = [
+    ["Inget eget konto, ingen mapp", <FolderStep key="a" folderName={null} folderSet={false} pickerEnabled onPick={() => {}} drive={drive(null)} />],
+    ["Inget eget konto, mapp vald", <FolderStep key="b" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive(null)} />],
+    ["Nyss kopplat: välj mappen i kontot", <FolderStep key="c" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive({ ...account, folderPicked: false }, "ok")} />],
+    ["Kopplat, mapp vald", <FolderStep key="d" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive(account)} />],
+    ["Kopplat av en annan admin", <FolderStep key="e" folderName={null} folderSet={false} pickerEnabled onPick={() => {}} drive={drive({ ...account, mine: false, folderPicked: false })} />],
+    ["Behöver förnyas", <FolderStep key="f" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive({ ...account, lost: true })} />],
+  ];
+  return (
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,26rem),1fr))] gap-6">
+      {states.map(([title, node], i) => (
+        <Panel key={title} title={title} titleId={`folder-drive-${i}`}>
+          {node}
+        </Panel>
+      ))}
+    </div>
+  );
+}
+
 function SettingsDemo({ section }: { section: SettingsSectionId }) {
   return (
     <AppChrome>
@@ -788,6 +818,7 @@ const render: Record<string, () => ReactNode> = {
   "org-settings-styrelsen": () => <SettingsDemo section="styrelsen" />,
   "org-settings-moten": () => <SettingsDemo section="moten" />,
   "org-settings-efter": () => <SettingsDemo section="efter-motet" />,
+  "folder-drive-account": () => <FolderDriveDemo />,
   "org-settings-radera": () => <SettingsDemo section="radera" />,
   "org-member": () => (
     <AppChrome>

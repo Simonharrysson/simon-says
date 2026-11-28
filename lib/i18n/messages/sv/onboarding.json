@@ -158,7 +158,30 @@
     "noneTitle": "Ingen mötesmapp än",
     "pick": "Välj mapp i Google Drive",
     "noneText": "Välj mappen där ni redan har era protokoll, eller skapa en ny i Drive först (t.ex. ”Styrelsen 2026–2027”). Dela den med styrelsen, så kommer alla åt dokumenten.",
-    "pickerOff": "Google-väljaren är inte inställd än. Utan mötesmapp hamnar dokumenten i den som startar mötets egen Drive."
+    "pickerOff": "Google-väljaren är inte inställd än. Utan mötesmapp hamnar dokumenten i den som startar mötets egen Drive.",
+    "pickIn": "Välj mapp i {email}",
+    "account": {
+      "other": "Använd ett annat Google-konto",
+      "otherHint": "Ligger mappen i föreningens eget Google-konto? Koppla det och välj mappen där.",
+      "line": "Dokumenten ligger i {email}",
+      "switch": "Byt konto",
+      "disconnect": "Koppla från",
+      "disconnecting": "Kopplar från …",
+      "disconnectTitle": "Koppla från {email}?",
+      "disconnectText": "Nya dokument hamnar då i Drive hos den som startar mötet. Dokumenten som redan finns ligger kvar i {email}.",
+      "pickInAccount": "Välj mötesmappen i {email}, så hamnar nya dokument där.",
+      "otherAdmin": "En annan admin kopplade kontot och väljer mappen. Byt konto om du vill göra det själv.",
+      "lostTitle": "Drive-kopplingen behöver förnyas",
+      "lostText": "Google godtar inte längre kopplingen till {email}. Inga dokument skrivs någon annanstans under tiden.",
+      "renew": "Förnya",
+      "result": {
+        "ok": "Kontot är kopplat. Välj mötesmappen i det kontot.",
+        "nej": "Inget kopplades. Tillåt Drive hos Google om du vill försöka igen.",
+        "fel": "Kontot gick inte att koppla. Försök igen om en liten stund.",
+        "bort": "Kontot är bortkopplat."
+      }
+    },
+    "pickShort": "Välj mapp"
   },
   "format": {
     "preview": [
