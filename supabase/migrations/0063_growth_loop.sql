@@ -239,6 +239,7 @@ create function public.claim_meeting_invite(p_invite_id uuid, p_user_id uuid, p_
 returns table (outcome text, org_id uuid, meeting_id uuid)
 language plpgsql volatile security definer set search_path = ''
 as $$
+#variable_conflict use_column
 declare
   v_inv public.meeting_invites;
   v_email text;
