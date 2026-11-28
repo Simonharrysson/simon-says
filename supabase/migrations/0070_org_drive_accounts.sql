@@ -126,3 +126,13 @@ end;
 $$;
 
 revoke all on function public.doc_share_queue_revocation() from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------------------------
+-- A mail category for admins' notices about the förening's setup (lib/email/categories.ts mirrors
+-- it): first "another admin switched the förening's Drive account". Can be turned off like every
+-- other category.
+
+create or replace function public.email_categories()
+returns text[]
+language sql immutable set search_path = ''
+as $$ select array['meeting_summary', 'invite', 'private_summary', 'meeting_brief', 'meeting_invite', 'admin_notice']::text[] $$;

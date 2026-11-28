@@ -1,14 +1,13 @@
 import "server-only";
 import { orgMemberList } from "@/lib/db/members";
-import { loadEmailPrefs } from "@/lib/email/prefs";
+import { sendUserMail } from "@/lib/email/prefs";
 import { defaultMailer, type Mailer } from "@/lib/mail";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // An admin replaced the förening's Drive account another admin connected (0070): the förening's
-// other admins get a short mail (the folder card also says it for 30 days). A security notice about
-// where the förening's documents go, so not one of the optional categories; "Inga mejl alls" is
-// still respected. Never the addresses in logs.
+// other admins get a short mail (the folder card also says it for 30 days), category admin_notice
+// (they can turn it off). Never the addresses in logs.
 
 export interface ReplacedNotice {
   orgId: string;
@@ -41,9 +40,8 @@ export async function notifyDriveAccountReplaced(n: ReplacedNotice, mailer: Mail
   const { subject, text } = replacedMail(n, link);
   let sent = 0;
   for (const a of admins) {
-    const prefs = await loadEmailPrefs({ userId: a.userId, email: a.email }, supabaseAdmin());
-    if (prefs?.allOff) continue;
-    if (await mailer.send({ to: a.email, subject, text, idempotencyKey: `drive-replaced-${n.orgId}-${a.userId}-${n.newEmail}` })) sent++;
+    const r = await sendUserMail(mailer, { userId: a.userId, email: a.email }, "admin_notice", { subject, text, idempotencyKey: `drive-replaced-${n.orgId}-${a.userId}-${n.newEmail}` }, supabaseAdmin());
+    if (r === "sent") sent++;
   }
   console.info(`org drive ${n.orgId}: replaced by ${n.byUserId}; ${sent} of ${admins.length} admins mailed`);
   return sent;

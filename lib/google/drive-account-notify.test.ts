@@ -14,8 +14,10 @@ vi.mock("@/lib/db/members", () => ({
     { userId: "u-mia", email: "mia@ekdala.test", role: "member" },
   ],
 }));
-vi.mock("@/lib/email/prefs", () => ({ loadEmailPrefs: async (r: { userId: string }) => ({ allOff: g.allOff.has(r.userId), off: [] }) }));
-vi.mock("@/lib/supabase/admin", () => ({ supabaseAdmin: () => ({}) }));
+// The gate: Lisa turned admin_notice (or all mail) off.
+vi.mock("@/lib/supabase/admin", () => ({
+  supabaseAdmin: () => ({ rpc: async (_: string, a: { p_user_id: string; p_category: string }) => ({ data: a.p_category === "admin_notice" && !g.allOff.has(a.p_user_id), error: null }) }),
+}));
 
 const { notifyDriveAccountReplaced } = await import("./drive-account-notify");
 
@@ -27,7 +29,7 @@ describe("notifyDriveAccountReplaced", () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
   });
 
-  it("the other admins only, not the replacer or members, respecting Inga mejl alls; says both accounts", async () => {
+  it("the other admins only, not the replacer or members, through the admin_notice gate; says both accounts", async () => {
     const send = vi.fn(async () => true);
     expect(await notifyDriveAccountReplaced(notice, { send })).toBe(1);
     expect(send).toHaveBeenCalledTimes(1);

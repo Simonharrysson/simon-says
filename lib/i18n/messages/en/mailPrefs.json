@@ -20,6 +20,10 @@
     "meeting_invite": {
       "label": "Notes from meetings you attended",
       "description": "When someone writes up a meeting you attended and you have no account: your tasks from the meeting and a link in. At most one reminder."
+    },
+    "admin_notice": {
+      "label": "Changes to the association's settings",
+      "description": "For admins: when another admin changes, for example, the Google account the association's meeting documents are saved in."
     }
   },
   "allOff": "Turn off all e-mail",
