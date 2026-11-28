@@ -1,3 +1,4 @@
+import { driveSubOf } from "@/lib/google/drive-account";
 import { after, NextResponse, type NextRequest } from "next/server";
 import { isUuid } from "@/lib/db/ids";
 import { getEnv } from "@/lib/env";
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // so the page can say which limit it is (C9).
       reason: limits.limit ?? null,
       docPaused: Boolean(meeting.doc_paused_at),
+      // 0070: paused because the förening's Drive account needs renewing (an admin's job, not a new sign-in).
+      ...(meeting.doc_paused_at ? { docPausedForening: Boolean(await driveSubOf("meetings", meeting.id).catch(() => null)) } : {}),
       lastTickOkAt: meeting.last_tick_ok_at ?? null,
       // The session the server considers current: a tab whose session isn't it stops (another tab took over).
       currentElSessionId: meeting.current_el_session_id ?? null,

@@ -27,7 +27,8 @@
     "at": "at {time}",
     "first": "The first notes arrive within a minute",
     "open": "Open",
-    "newTab": "(Google Doc, opens in a new tab)"
+    "newTab": "(Google Doc, opens in a new tab)",
+    "pausedForening": "Paused — the Drive connection needs renewing"
   },
   "controls": {
     "resume": "Resume",
@@ -67,7 +68,9 @@
     "audioWaiting": "The audio is waiting in the browser",
     "offline": "No internet connection. The audio is held in the browser for up to a minute and sent when the network is back. Nothing is stored on the computer.",
     "broken": "The connection broke. The audio is held in the browser for up to a minute and sent when we're back. You don't need to do anything.",
-    "more": "Show {count, plural, one {1 more warning} other {# more warnings}}"
+    "more": "Show {count, plural, one {1 more warning} other {# more warnings}}",
+    "docTitleForening": "Document paused — the association's Drive connection needs renewing",
+    "docForening": "An admin renews it under Settings › Meetings. Transcription continues, and everything is written into the document once it's renewed."
   },
   "limits": {
     "stop": {

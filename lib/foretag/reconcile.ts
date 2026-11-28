@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { recordDocShares } from "@/lib/docs/access";
 import { revokeLegacyShare, revokePermission, shareWith } from "@/lib/docs/create";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { orgDriveClient } from "@/lib/google/drive-account";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { holdCrossingTasks } from "./summary";
 import { hasTree } from "./tree";
@@ -45,9 +46,10 @@ export async function reconcileForetag(orgId: string): Promise<ReconcileResult> 
     return result;
   }
 
-  const { data: meetings, error: me } = await db.from("meetings").select("id, doc_id, started_by, status, started_at").eq("org_id", orgId);
+  // `*`: drive_account_sub (0070) when the database has it.
+  const { data: meetings, error: me } = await db.from("meetings").select("*").eq("org_id", orgId);
   if (me) throw new Error(`reconcile: meetings: ${me.message}`);
-  const rows = (meetings ?? []) as { id: string; doc_id: string | null; started_by: string | null; status: string; started_at: string }[];
+  const rows = (meetings ?? []) as { id: string; doc_id: string | null; started_by: string | null; status: string; started_at: string; drive_account_sub?: string | null }[];
   const ids = rows.map((m) => m.id);
   const { data: shares, error: se } = ids.length
     ? await db.from("meeting_doc_shares").select("meeting_id, user_id, email, permission_id, preexisting").in("meeting_id", ids)
@@ -88,9 +90,10 @@ export async function reconcileForetag(orgId: string): Promise<ReconcileResult> 
     if (!work.length) continue;
     let auth;
     try {
-      auth = await getGoogleAuth(m.started_by);
+      // The grant that owns the Doc: the förening's Drive account that made it (0070), else the starter's.
+      auth = m.drive_account_sub ? await orgDriveClient(orgId, m.drive_account_sub) : await getGoogleAuth(m.started_by);
     } catch (err) {
-      console.error(`reconcile ${m.id}: starter's Google grant unavailable${err instanceof GoogleAuthLostError ? " (lost)" : ""}`);
+      console.error(`reconcile ${m.id}: the Doc owner's Google grant unavailable${err instanceof GoogleAuthLostError ? " (lost)" : ""}`);
       result.failed += work.length;
       continue;
     }
@@ -179,11 +182,13 @@ export async function drainForetagQueues(): Promise<{ orgs: number; revocations:
     }
   }
 
-  const { data: revocations, error: re } = await db.from("doc_share_revocations").select("id, doc_id, owner_user_id, permission_id, attempts").order("queued_at").limit(DRAIN_LIMIT);
+  // `*`: org_id / drive_account_sub (0070) when the database has them.
+  const { data: revocations, error: re } = await db.from("doc_share_revocations").select("*").order("queued_at").limit(DRAIN_LIMIT);
   if (re) console.error(`revocation queue: ${re.message}`);
-  for (const r of (revocations ?? []) as { id: string; doc_id: string; owner_user_id: string; permission_id: string; attempts: number }[]) {
+  for (const r of (revocations ?? []) as { id: string; doc_id: string; owner_user_id: string; permission_id: string; attempts: number; org_id?: string | null; drive_account_sub?: string | null }[]) {
     try {
-      await revokePermission(await getGoogleAuth(r.owner_user_id), r.doc_id, r.permission_id);
+      const owner = r.org_id && r.drive_account_sub ? await orgDriveClient(r.org_id, r.drive_account_sub) : await getGoogleAuth(r.owner_user_id);
+      await revokePermission(owner, r.doc_id, r.permission_id);
       await db.from("doc_share_revocations").delete().eq("id", r.id);
       done.revocations++;
     } catch (err) {

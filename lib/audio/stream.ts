@@ -147,6 +147,8 @@ export interface HeartbeatInfo {
   /** The cap that warns or stops: meeting_length | org_month | global_day | global_usd | kill_switch. */
   reason?: string | null;
   docPaused?: boolean;
+  /** 0070: the Doc is the förening's Drive account's, which needs renewing (not the starter's sign-in). */
+  docPausedForening?: boolean;
   lastTickOkAt?: string | null;
   /** The session the server considers current (another tab may have taken over). */
   currentElSessionId?: string | null;

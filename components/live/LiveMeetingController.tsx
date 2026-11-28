@@ -179,6 +179,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [stoppedAt, setStoppedAt] = useState<number | null>(null);
   const [minutesLeft, setMinutesLeft] = useState<number | null>(null);
   const [docPaused, setDocPaused] = useState(props.meeting?.docPaused ?? false);
+  const [docPausedForening, setDocPausedForening] = useState(false);
   const [lastTickOkAt, setLastTickOkAt] = useState<string | null>(props.meeting?.lastTickOkAt ?? null);
   const [now, setNow] = useState(() => Date.now());
   const [health, setHealth] = useState<StreamHealth>({ audioStalled: false, postsFailing: false, authLost: false, quiet: false });
@@ -454,6 +455,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
         setMinutesLeft(h.minutesLeft ?? null);
         if (h.reason !== undefined) setLimitReason(h.reason ?? null);
         if (h.docPaused !== undefined) setDocPaused(h.docPaused);
+        setDocPausedForening(Boolean(h.docPaused && h.docPausedForening));
         if (h.lastTickOkAt !== undefined) {
           setLastTickOkAt(h.lastTickOkAt);
           const ok = h.lastTickOkAt ? Date.parse(h.lastTickOkAt) : 0;
@@ -1026,6 +1028,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       connection={connection}
       firstConnect={firstConnect}
       docPaused={docPaused}
+      docPausedForening={docPausedForening}
       staleMinutes={staleMinutes}
       minutesLeft={minutesLeft}
       limitReason={limitReason}

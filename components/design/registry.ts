@@ -136,6 +136,7 @@ export const designViews: DesignView[] = [
   { id: "live", title: "Pågår", group: "Mötet live" },
   { id: "live-reconnecting", title: "Ansluter igen + anteckningarna efter", group: "Mötet live" },
   { id: "live-doc-paused", title: "Dokumentet pausat", group: "Mötet live" },
+  { id: "live-doc-paused-forening", title: "Dokumentet pausat · föreningens Drive-koppling behöver förnyas", group: "Mötet live" },
   { id: "live-many-warnings", title: "Flera varningar samtidigt", group: "Mötet live" },
   { id: "live-time-warning", title: "3 h 45 · varning", group: "Mötet live" },
   { id: "live-paused", title: "Pausat", group: "Mötet live" },

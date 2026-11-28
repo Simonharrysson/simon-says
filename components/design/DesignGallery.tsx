@@ -1300,6 +1300,7 @@ const render: Record<string, () => ReactNode> = {
   live: () => <LiveDemo />,
   "live-reconnecting": () => <LiveDemo connection="reconnecting" staleMinutes={4} lastUpdatedAt={ago(4)} updatedMinutesAgo={4} />,
   "live-doc-paused": () => <LiveDemo docPaused lastUpdatedAt={ago(6)} updatedMinutesAgo={6} />,
+  "live-doc-paused-forening": () => <LiveDemo docPaused docPausedForening lastUpdatedAt={ago(6)} updatedMinutesAgo={6} />,
   "live-many-warnings": () => (
     <LiveDemo docPaused connection="offline" staleMinutes={5} minutesLeft={12} elapsedMs={(3 * 60 + 48) * 60_000} lastUpdatedAt={ago(5)} />
   ),

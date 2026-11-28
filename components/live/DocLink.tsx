@@ -15,6 +15,7 @@ export function DocLink({
   updatedMinutesAgo,
   health = "ok",
   pending,
+  pausedForening,
 }: {
   url: string | null;
   title: string;
@@ -25,6 +26,8 @@ export function DocLink({
   health?: DocHealth;
   /** Doc not created yet (meeting starting). */
   pending?: boolean;
+  /** 0070: paused because the förening's Drive account needs renewing (not a new sign-in). */
+  pausedForening?: boolean;
 }) {
   const t = useTranslations("live.doc");
   const locale = useLocale();
@@ -33,7 +36,7 @@ export function DocLink({
   if (pending) meta = t("creating");
   else if (health === "paused") {
     tone = "red";
-    meta = t("paused");
+    meta = pausedForening ? t("pausedForening") : t("paused");
   } else if (health === "stale") {
     meta = lastUpdatedAt
       ? t("staleAt", { time: formatClock(lastUpdatedAt, locale) })

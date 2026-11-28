@@ -74,3 +74,35 @@ alter table public.meetings
 
 alter table public.prepared_agendas
   add column drive_account_sub text check (drive_account_sub is null or char_length(drive_account_sub) between 1 and 255);
+
+-- ---------------------------------------------------------------------------------------------
+-- A deleted account's share on a Doc the förening's account made: revoked through THAT account
+-- (the starter's grant would get a 404 and count it as done while the access stayed). The queue
+-- (0053/0054) records the Doc's förening and account; the reconcile uses them when set.
+
+alter table public.doc_share_revocations
+  add column org_id uuid references public.orgs (id) on delete cascade,
+  add column drive_account_sub text check (drive_account_sub is null or char_length(drive_account_sub) between 1 and 255);
+
+create or replace function public.doc_share_queue_revocation()
+returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  -- Part of an account deletion: never in its way (any error is a warning).
+  begin
+    if old.permission_id is not null and not exists (select 1 from auth.users u where u.id = old.user_id) then
+      insert into public.doc_share_revocations (doc_id, owner_user_id, permission_id, org_id, drive_account_sub)
+      select mt.doc_id, mt.started_by, old.permission_id, mt.org_id, mt.drive_account_sub
+      from public.meetings mt
+      join public.orgs o on o.id = mt.org_id and (o.kind = 'foretag' or o.groups_enabled)
+      where mt.id = old.meeting_id and mt.doc_id is not null and mt.started_by is not null and mt.started_by <> old.user_id;
+    end if;
+  exception when others then
+    raise warning 'doc_share_queue_revocation: % (%)', sqlerrm, sqlstate;
+  end;
+  return old;
+end;
+$$;
+
+revoke all on function public.doc_share_queue_revocation() from public, anon, authenticated;

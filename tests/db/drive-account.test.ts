@@ -75,7 +75,7 @@ describe.skipIf(!hasLocalSupabase)("org_drive_accounts (0070)", () => {
 
   it("the connecting admin removed or leaving: removed", async () => {
     await connect(orgId, second.id);
-    expect(await removeMember(admin.db, orgId, second.id)).toBeTruthy();
+    expect(await removeMember(admin.db, orgId, second.id)).toBe("removed");
     expect(await connected(orgId)).toBe(0);
 
     const third = await createTestUser("da-adm3");
