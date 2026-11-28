@@ -11,6 +11,7 @@ const WARM = [
   "/login",
   "/integritet",
   "/orgs",
+  "/foretag",
   "/installningar",
   "/orgs/00000000-0000-4000-8000-000000000000",
   "/orgs/00000000-0000-4000-8000-000000000000/kom-igang",
