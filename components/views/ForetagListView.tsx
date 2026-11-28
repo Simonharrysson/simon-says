@@ -74,6 +74,7 @@ export function ForetagListView({ companies, notice, createForetag, nameError }:
                 {t("create")}
               </SubmitButton>
             </div>
+            <p className="text-xs text-ink-3">{t("limit")}</p>
           </form>
         </Panel>
       )}
