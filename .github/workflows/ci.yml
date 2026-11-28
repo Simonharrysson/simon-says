@@ -71,9 +71,16 @@ jobs:
 
   # End-to-end (docs/testing.md "E2E"): the real app under `next dev` against its own local
   # Supabase (jobs can't share a stack), every external service faked (e2e/fakes).
-  e2e:
+  # Three shards, each with its own runner, Supabase stack and app. The `e2e` job below is the
+  # required check name; it aggregates the shards.
+  e2e-shard:
+    name: e2e shard ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
 
@@ -108,21 +115,40 @@ jobs:
           rm local.env
 
       - name: Playwright browser cache
+        id: pw-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
-      - run: npx playwright install --with-deps chromium
+      # Browsers come from the cache when it hits; the system deps are never cached.
+      - name: Install Playwright browser
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
 
-      - run: npm run e2e
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - run: npx playwright test --shard=${{ matrix.shard }}/3
 
       - name: Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+
+  # The required check. Passes only when every shard passed (a skipped or cancelled shard fails it).
+  e2e:
+    needs: e2e-shard
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "e2e shards: ${{ needs.e2e-shard.result }}"
+          test "${{ needs.e2e-shard.result }}" = "success"
