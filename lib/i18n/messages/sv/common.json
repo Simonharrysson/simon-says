@@ -45,5 +45,7 @@
   "metaNewMeeting": "Nytt möte",
   "metaMeeting": "Möte",
   "metaKomIgang": "Kom igång",
-  "close": "Stäng"
+  "close": "Stäng",
+  "copiedToClipboard": "Kopierat till urklipp",
+  "copyFailed": "Kunde inte kopiera. Klicka på texten för att markera den och kopiera själv."
 }

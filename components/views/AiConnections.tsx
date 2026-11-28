@@ -1,10 +1,13 @@
 import { useFormatter, useTranslations } from "next-intl";
 import { Banner } from "@/components/ui/Banner";
 import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
+import { toolForClientName } from "@/lib/mcp/clients";
 import type { AuditEntry, ConnectionRow } from "@/lib/mcp/account";
+import { AddAnother, ConnectPicker, ToolMark } from "./ConnectAi";
 
-// Konto → Kopplade AI-assistenter: each connected assistant with Återkalla, and the recent calls
-// (tool and time only). docs/mcp.md has the "Lägg till i Claude" steps.
+// Konto → Koppla till din AI: what is connected (each with Koppla från), then the tiles to
+// connect a tool (behind "Koppla en till" once something is connected), then the recent calls
+// (tool and time only). docs/mcp.md has the steps per tool.
 
 export function AiConnections({
   connections,
@@ -17,46 +20,51 @@ export function AiConnections({
   audit: AuditEntry[];
   revoke: FormAction;
   revokeFailed?: boolean;
-  /** The server's address, for the "Lägg till i Claude" line. */
+  /** The server's address, to paste into the tools. */
   mcpUrl: string;
 }) {
   const t = useTranslations("connect");
   const format = useFormatter();
   const when = (iso: string) => format.dateTime(new Date(iso), { dateStyle: "medium", timeStyle: "short" });
+  const picker = <ConnectPicker mcpUrl={mcpUrl} />;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <p className="text-ink-2 max-w-[68ch]">{t("panelIntro")}</p>
       {revokeFailed && (
         <Banner tone="warning" live={false}>
           {t("revokeFailed")}
         </Banner>
       )}
-      {connections.length === 0 ? (
-        <p className="text-ink-3">{t("panelEmpty")}</p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-line">
-          {connections.map((c) => (
-            <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <div className="flex flex-col">
-                <span className="font-medium wrap-anywhere">{c.client_name}</span>
-                <span className="text-sm text-ink-3">
-                  {t("connectedAt", { date: when(c.created_at) })} · {c.last_used_at ? t("lastUsed", { date: when(c.last_used_at) }) : t("neverUsed")}
-                </span>
-              </div>
-              <ConfirmAction
-                action={revoke}
-                hidden={{ grant: c.id }}
-                trigger={t("revoke")}
-                title={t("revoke")}
-                description={t("revokeConfirm", { client: c.client_name })}
-                confirmLabel={t("revoke")}
-                pendingLabel={t("revoking")}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="text-sm text-ink-2 wrap-anywhere">{t("panelHowTo", { url: mcpUrl })}</p>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-sm font-semibold">{t("connectedTitle")}</h3>
+        {connections.length === 0 ? (
+          <p className="text-ink-3">{t("panelEmpty")}</p>
+        ) : (
+          <ul aria-label={t("connectedTitle")} className="flex flex-col divide-y divide-line">
+            {connections.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-1">
+                <ToolMark tool={toolForClientName(c.client_name)} className="bg-sunk" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="font-medium wrap-anywhere">{c.client_name}</span>
+                  <span className="text-sm text-ink-3">
+                    {t("connectedAt", { date: when(c.created_at) })} · {c.last_used_at ? t("lastUsed", { date: when(c.last_used_at) }) : t("neverUsed")}
+                  </span>
+                </div>
+                <ConfirmAction
+                  action={revoke}
+                  hidden={{ grant: c.id }}
+                  trigger={t("revoke")}
+                  title={t("revokeTitle", { client: c.client_name })}
+                  description={t("revokeConfirm", { client: c.client_name })}
+                  confirmLabel={t("revoke")}
+                  pendingLabel={t("revoking")}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {connections.length > 0 ? <AddAnother>{picker}</AddAnother> : picker}
       {audit.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold">{t("auditTitle")}</h3>

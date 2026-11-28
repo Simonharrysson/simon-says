@@ -9,7 +9,7 @@
   "cannotTitle": "{app} will not be able to",
   "cannotEdit": "change or delete notes and minutes",
   "cannotMore": "see more than you see in Simon Says",
-  "revokeHint": "You can revoke access at any time under Account → Connected AI assistants.",
+  "revokeHint": "You can disconnect at any time under Account → Connect your AI.",
   "approve": "Allow",
   "approving": "Allowing…",
   "deny": "Cancel",
@@ -20,17 +20,16 @@
   "errorTitle": "The connection could not be started",
   "errorClient": "Simon Says does not recognise the app that tried to connect. Remove the connection in Claude and add it again.",
   "errorRedirect": "The app tried to send you to an address it has not registered. It was stopped for your safety.",
-  "panelTitle": "Connected AI assistants",
-  "panelIntro": "AI assistants you have given access to your meetings, such as Claude. They only see what you see.",
-  "panelEmpty": "No connected assistants.",
-  "panelHowTo": "Add to Claude: Settings → Connectors → Add custom connector with the address {url}. In Claude Code: claude mcp add --transport http simon-says {url}",
+  "panelTitle": "Connect your AI",
+  "panelIntro": "Ask your AI about your meetings, decisions and tasks. It only sees what you see, and you can disconnect at any time.",
+  "panelEmpty": "Nothing connected yet.",
   "connectedAt": "Connected {date}",
   "lastUsed": "last used {date}",
   "neverUsed": "not used yet",
-  "revoke": "Revoke",
-  "revoking": "Revoking…",
-  "revokeConfirm": "Revoke access for {client}? The assistant will no longer reach your meetings.",
-  "revokeFailed": "Access could not be revoked. Try again.",
+  "revoke": "Disconnect",
+  "revoking": "Disconnecting…",
+  "revokeConfirm": "{client} will no longer reach your meetings. You can connect again at any time.",
+  "revokeFailed": "It couldn't be disconnected. Try again.",
   "auditTitle": "Recent calls",
   "auditIntro": "What the assistants did: tool and time, never content.",
   "auditFailed": "failed",
@@ -42,5 +41,86 @@
   "unknownWarning": "Simon Says does not recognise where the access would go, so it can't be allowed.",
   "appChatgpt": "ChatGPT",
   "appCursor": "Cursor",
-  "appVscode": "VS Code"
+  "appVscode": "VS Code",
+  "connectedTitle": "Connected now",
+  "addAnother": "Connect another",
+  "pickLabel": "Choose your AI tool",
+  "stepsTitle": "Connect {tool}",
+  "addressLabel": "The Simon Says address",
+  "commandLabel": "Command",
+  "configLabel": "MCP setting",
+  "newTab": "(opens in a new tab)",
+  "openClaude": "Open Claude",
+  "openChatgpt": "Open ChatGPT",
+  "chatgptHelp": "OpenAI's instructions",
+  "addToCursor": "Add to Cursor",
+  "addToVscode": "Add to VS Code",
+  "addToVscodeInsiders": "VS Code Insiders",
+  "tryIt": "Try it: ask <b>“What did we decide at the last meeting?”</b>",
+  "revokeTitle": "Disconnect {client}?",
+  "tools": {
+    "claude": {
+      "desc": "Web, desktop and mobile"
+    },
+    "chatgpt": {
+      "desc": "Business and Enterprise"
+    },
+    "cursor": {
+      "desc": "One click in the editor"
+    },
+    "vscode": {
+      "desc": "Copilot in agent mode"
+    },
+    "claude-code": {
+      "desc": "One command in the terminal"
+    },
+    "gemini": {
+      "desc": "One command in the terminal"
+    },
+    "other": {
+      "name": "Another tool",
+      "desc": "Anything with MCP and sign-in"
+    }
+  },
+  "steps": {
+    "claude": {
+      "1": "Open Claude and go to <b>Customize → Connectors</b>.",
+      "2": "Click <b>+ Add</b> and choose <b>Add custom connector</b>.",
+      "3": "Name it <b>Simon Says</b> and paste the address:",
+      "4": "Click <b>Connect</b>, sign in with Google and allow."
+    },
+    "chatgpt": {
+      "note": "Needs ChatGPT Business, Enterprise or Edu, on the web. On Business an admin adds it.",
+      "1": "Open ChatGPT and go to <b>Plugins</b>.",
+      "2": "Click <b>+</b> and choose <b>Add custom MCP server</b>.",
+      "3": "Name it <b>Simon Says</b> and paste the address under <b>Connection</b>:",
+      "4": "Choose OAuth for sign-in, tick <b>I understand and want to continue</b> and click <b>Create as a plugin</b>.",
+      "5": "Sign in with Google and allow."
+    },
+    "cursor": {
+      "1": "Click <b>Add to Cursor</b>. Cursor opens and asks whether to install <b>simon-says</b>.",
+      "2": "Install it, then sign in with Google when Cursor asks, and allow.",
+      "3": "Link not working? Add this under <b>mcpServers</b> in Cursor's <b>mcp.json</b>:"
+    },
+    "vscode": {
+      "1": "Click <b>Add to VS Code</b> and choose <b>Install</b>.",
+      "2": "Start <b>simon-says</b> and allow the sign-in when VS Code asks.",
+      "3": "Sign in with Google and allow. Then ask in Copilot Chat, in agent mode."
+    },
+    "claude-code": {
+      "1": "Run in the terminal:",
+      "2": "Start Claude Code, type <b>/mcp</b>, choose <b>simon-says</b> and then <b>Authenticate</b>.",
+      "3": "Sign in with Google and allow in the browser."
+    },
+    "gemini": {
+      "1": "Run in the terminal:",
+      "2": "Type <b>/mcp auth simon-says</b> in Gemini CLI.",
+      "3": "Sign in with Google and allow in the browser."
+    },
+    "other": {
+      "1": "Add an MCP server with the address:",
+      "2": "Or paste this into the tool's MCP settings:",
+      "3": "The tool needs MCP over HTTP with OAuth. Sign in with Google and allow."
+    }
+  }
 }

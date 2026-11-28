@@ -53,7 +53,7 @@ export async function saveLocaleAction(formData: FormData): Promise<void> {
   redirect(ok ? "/installningar" : "/installningar?fel=sprak");
 }
 
-/** Konto → Kopplade AI-assistenter → Återkalla (the user's own grant only: revoke_mcp_grant). */
+/** Konto → Koppla till din AI → Koppla från (the user's own grant only: revoke_mcp_grant). */
 export async function revokeConnectionAction(formData: FormData): Promise<void> {
   const id = formData.get("grant");
   const db = await createSupabaseServerClient();

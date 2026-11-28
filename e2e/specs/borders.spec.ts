@@ -23,8 +23,10 @@ async function visit(page: Page, path: string, offenders: string[], ready: (page
 
 /** Konto: every collapsible section opened (each header is a button with aria-expanded). */
 async function openAllAccountSections(page: Page) {
-  for (const trigger of await page.locator('[data-section-trigger][aria-expanded="false"]').all()) await trigger.click();
-  await expect(page.locator('[data-section-trigger][aria-expanded="false"]')).toHaveCount(0);
+  const closed = page.locator('[data-section-trigger][aria-expanded="false"]');
+  // One at a time: each click changes which ones match.
+  for (let n = await closed.count(); n > 0; n--) await closed.first().click();
+  await expect(closed).toHaveCount(0);
 }
 
 test("no double borders: Hem, Föreningar, a förening's tabs, a meeting's page, every settings section, Konto, the start screen @phone", async ({ page, seedOrg, db }, info) => {

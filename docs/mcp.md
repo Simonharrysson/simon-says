@@ -4,20 +4,23 @@ Simon Says is a remote MCP server at `https://simonsays.harrysson.co/api/mcp`, u
 
 > For every user: Privat, föreningar and Företag. Kill switch: `MCP_ENABLED=0` turns it off for everyone (503).
 
-## Lägg till i Claude
+## Lägg till i din AI
 
-**claude.ai and Claude Desktop**
-1. Settings → Connectors → **Add custom connector**.
-2. Name: `Simon Says`. URL: `https://simonsays.harrysson.co/api/mcp`. Leave the OAuth fields empty, because Claude registers itself.
-3. Click **Connect**. Simon Says opens: sign in with Google, check that the request comes from Claude (`claude.ai`), and click **Godkänn**.
+Konto → **Koppla till din AI** (`/installningar#ai`) has a tile per tool with numbered steps, the address to copy and one-click installs (`lib/mcp/clients.ts`). The address is `https://simonsays.harrysson.co/api/mcp`; every tool signs in with OAuth (Google, then **Godkänn** on `/koppla/<id>`).
 
-**Claude Code**
-```sh
-claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mcp
-# then, inside Claude Code: /mcp → simon-says → Authenticate (opens the browser)
-```
+| Tool | How |
+| --- | --- |
+| Claude (web, Desktop, mobile) | claude.ai → Customize → Connectors → + Add → Add custom connector, name `Simon Says`, paste the address, Connect (support.claude.com/en/articles/11175166) |
+| ChatGPT (Business, Enterprise, Edu; web) | Plugins → + → Add custom MCP server, paste the address under Connection, OAuth, Create as a plugin (help.openai.com/en/articles/12584461) |
+| Cursor | `cursor://anysphere.cursor-deeplink/mcp/install?name=simon-says&config=<base64 {"url": …}>`, or `mcpServers` in `mcp.json` (cursor.com/docs/context/mcp/install-links) |
+| VS Code (Copilot agent mode) | `vscode:mcp/install?<{"name":"simon-says","type":"http","url":…}>`, and `vscode-insiders:` (code.visualstudio.com/api/extension-guides/ai/mcp) |
+| Claude Code | `claude mcp add --transport http simon-says <address>`, then `/mcp` → simon-says → Authenticate |
+| Gemini CLI | `gemini mcp add --transport http simon-says <address>`, then `/mcp auth simon-says` (geminicli.com/docs/tools/mcp-server) |
+| Another tool | `{"mcpServers":{"simon-says":{"url":"<address>"}}}`; it needs MCP over HTTP with OAuth and a redirect URI on the allow-list (Operations below) |
 
-**Återkalla:** go to Konto → **Kopplade AI-assistenter** → Återkalla. The assistant loses access on its next call. The same panel lists the last 20 calls, showing tool and time only.
+Not offered: Windsurf (its OAuth redirect URI is not documented, so it can't be allow-listed).
+
+**Koppla från:** Konto → **Koppla till din AI** → Koppla från. The assistant loses access on its next call. The same section lists the last 20 calls, showing tool and time only. The list names each connection by the name its client registered (with a monogram when it matches a known tool): that name is the client's own claim, so it only labels, never decides.
 
 ## Tools
 

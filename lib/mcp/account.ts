@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// Konto → Kopplade AI-assistenter: the user's own grants and recent audit rows, read with their
+// Konto → Koppla till din AI: the user's own grants and recent audit rows, read with their
 // own client (RLS: own rows only). A database without 0060 reads as "none".
 
 export interface ConnectionRow {
