@@ -1164,6 +1164,7 @@ const render: Record<string, () => ReactNode> = {
         emailPrefs={{ allOff: false, off: ["invite"] }}
         saveEmailPrefs={fakeSave}
         saveLocale={noopAction}
+        openSections={["mejl"]}
       />
     </AppChrome>
   ),
@@ -1175,12 +1176,13 @@ const render: Record<string, () => ReactNode> = {
         emailPrefs={{ allOff: true, off: ["invite"] }}
         saveEmailPrefs={fakeSave}
         saveLocale={noopAction}
+        openSections={["mejl"]}
       />
     </AppChrome>
   ),
   "account-mail-error": () => (
     <AppChrome>
-      <AccountView email="anna.berg@example.com" signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} saveLocale={noopAction} />
+      <AccountView email="anna.berg@example.com" signOut={noopAction} emailPrefs={null} saveEmailPrefs={fakeSave} saveLocale={noopAction} openSections={["mejl"]} />
     </AppChrome>
   ),
   "account-mail-save-fails": () => (
@@ -1191,6 +1193,7 @@ const render: Record<string, () => ReactNode> = {
         emailPrefs={{ allOff: false, off: [] }}
         saveEmailPrefs={async () => false}
         saveLocale={noopAction}
+        openSections={["mejl"]}
       />
     </AppChrome>
   ),

@@ -21,6 +21,12 @@ async function visit(page: Page, path: string, offenders: string[], ready: (page
   await test.info().attach(path, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
 
+/** Konto: every collapsible section opened (each header is a button with aria-expanded). */
+async function openAllAccountSections(page: Page) {
+  for (const trigger of await page.locator('[data-section-trigger][aria-expanded="false"]').all()) await trigger.click();
+  await expect(page.locator('[data-section-trigger][aria-expanded="false"]')).toHaveCount(0);
+}
+
 test("no double borders: Hem, Föreningar, a förening's tabs, a meeting's page, every settings section, Konto, the start screen @phone", async ({ page, seedOrg, db }, info) => {
   await sizeFor(page, info);
   const org = await seedOrg({ people: [{ name: "Emma Bertmar", email: "emma.bertmar@e2e.test" }, "Erik Lund"] });
@@ -47,6 +53,9 @@ test("no double borders: Hem, Föreningar, a förening's tabs, a meeting's page,
     await visit(page, `${org.url}?flik=installningar&del=${del}`, offenders, ready);
   }
   await visit(page, "/installningar", offenders, (p) => p.getByRole("heading", { name: "Ditt konto", level: 1 }));
+  // Konto's sections start closed: audit them open too.
+  await openAllAccountSections(page);
+  offenders.push(...formatOffenders("/installningar (open)", await auditBorders(page)));
   await visit(page, `/meetings/ny/${org.id}`, offenders, (p) => p.getByRole("checkbox", { name: "Alla i rummet vet att mötet transkriberas och kan be om paus" }));
 
   expect(offenders, "double borders (box in a box, or lines that touch)").toEqual([]);

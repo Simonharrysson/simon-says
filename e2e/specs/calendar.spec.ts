@@ -97,6 +97,8 @@ test("Kalender: connect, choose the förening's calendar, see the next meetings,
   // Koppla från (Inställningar): our copy is deleted.
   await adminPage.goto("/installningar");
   const panel = adminPage.locator("section", { has: adminPage.getByRole("heading", { name: "Kalender", exact: true }) });
+  await expect(panel.getByText("Kopplad", { exact: true })).toBeVisible();
+  await panel.getByRole("button", { name: "Kalender", exact: true }).click();
   await expect(panel.getByText("Din Google-kalender är kopplad")).toBeVisible();
   await panel.getByRole("button", { name: "Koppla från" }).click();
   await adminPage.getByRole("dialog").getByRole("button", { name: "Koppla från" }).click();

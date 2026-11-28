@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { IconCheck } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
+import { mailSummary } from "@/lib/account/summary";
+import { useSectionSummary } from "./AccountSection";
 import {
   EMAIL_CATEGORIES,
   type EmailCategory,
@@ -85,6 +87,11 @@ export function EmailPrefsForm({
       }
     });
   };
+
+  // Konto: the section header's "5 av 6 på" follows the switches.
+  const account = useTranslations("account");
+  const count = mailSummary(prefs, briefForeningar ? orgBriefs : undefined);
+  useSectionSummary(count.on === 0 ? account("summaryMailAllOff") : account("summaryMailOn", { on: count.on, total: count.total }), count.on > 0);
 
   const order = highlight ? [highlight, ...EMAIL_CATEGORIES.filter((c) => c !== highlight)] : [...EMAIL_CATEGORIES];
 
