@@ -5,6 +5,7 @@ import { isUuid } from "@/lib/db/ids";
 import { buildOrgMeeting } from "@/lib/home/meeting";
 import { stockholmDay, taskTips, visible, type HomeNoteRow } from "@/lib/home/tasks";
 import { isTask } from "@/lib/meetings/summary";
+import { attributedLine, attributionOf } from "@/lib/memory/attribution";
 import { allSources, clean, MEMORY_SECTIONS, parseLines, visibleLines } from "@/lib/memory/memory";
 import { appOrigin } from "@/lib/origin";
 import { summaryContent } from "@/lib/summaries/content";
@@ -154,6 +155,7 @@ export async function getOrgMemory(ctx: ToolCtx, args: { org_id: string }): Prom
   const seen = sources.length ? await ctx.reader.meetings({ ids: sources, done: false, limit: Math.min(sources.length, 1000) }) : [];
   const shown = visibleLines(lines, new Set(seen.map((m) => m.id)));
   const date = new Map(seen.map((m) => [m.id, stockholmDay(m.started_at)]));
+  const dates = Object.fromEntries(date);
   return ok({
     org: org.name,
     org_kind: org.kind,
@@ -164,7 +166,20 @@ export async function getOrgMemory(ctx: ToolCtx, args: { org_id: string }): Prom
         s,
         shown
           .filter((l) => l.section === s)
-          .map((l) => ({ text: l.text, sources: l.sources.map((id) => ({ meeting_id: id, date: date.get(id) ?? null, url: meetingUrl(ctx, org.id, id) })) })),
+          .map((l) => {
+            // Every line is an attributed statement ("Anna Svensson sa i mötet 12 nov: …"), never a bare claim.
+            const a = attributionOf(l);
+            return {
+              text: attributedLine(l, dates, "sv"),
+              statement: l.text,
+              ...(a.kind === "said"
+                ? { said_by: a.speaker, said_in: { meeting_id: a.meetingId, date: date.get(a.meetingId) ?? null, url: meetingUrl(ctx, org.id, a.meetingId) } }
+                : a.kind === "admin"
+                  ? { added_by: a.by ?? "an admin" }
+                  : {}),
+              sources: l.sources.map((id) => ({ meeting_id: id, date: date.get(id) ?? null, url: meetingUrl(ctx, org.id, id) })),
+            };
+          }),
       ]),
     ),
     ...(lines.length ? {} : { note: "No memory yet. An admin can build it in Simon Says: Inställningar → Vad Claude ska veta → Uppdatera." }),

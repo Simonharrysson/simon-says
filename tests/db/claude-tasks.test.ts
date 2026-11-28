@@ -310,6 +310,9 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     const forMaja = await text(maja);
     expect(forMaja).toContain("Julfest varje december");
     expect(forMaja).toContain("VD = verkställande direktör");
+    // Attributed: a line from before attribution names its meeting, an admin's line its admin.
+    expect(forMaja).toMatch(/Från mötet \d{1,2} [a-zé]+: Julfest varje december/);
+    expect(forMaja).toContain("Tillagt av en admin: VD = verkställande direktör");
     expect(forMaja).not.toContain("Hemligprojektet");
     expect(await text(jonas)).toContain("Hemligprojektet först");
   });

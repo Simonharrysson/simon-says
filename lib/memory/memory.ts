@@ -25,7 +25,20 @@ export interface MemoryLine {
   sources: string[];
   /** An admin wrote or changed it: Uppdatera never touches it. */
   edited: boolean;
+  /**
+   * An attributed line (generated after 2026-11-28): the meeting it was said in (one of
+   * `sources`). The page and get_org_memory render it as "<speaker> sa i mötet <date>: <text>".
+   * Absent on older generated lines ("Från mötet <date>: …") and on an admin's own lines.
+   */
+  saidIn?: string;
+  /** Who said it: a task owner in `saidIn` (checked by the server, never invented). Absent: unknown. */
+  speaker?: string;
+  /** The admin who wrote or last changed the line ("Tillagt av <admin>"); absent when not known. */
+  addedBy?: string;
 }
+
+/** Longest speaker or admin name kept. */
+export const MAX_NAME = 80;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LINE_ID = /^[A-Za-z0-9_-]{1,40}$/;
@@ -46,14 +59,27 @@ export function parseLines(raw: unknown): MemoryLine[] {
     if (typeof r.id !== "string" || !LINE_ID.test(r.id) || seen.has(r.id) || !isSection(r.section) || !text || text.length > MAX_LINE) continue;
     seen.add(r.id);
     const sources = Array.isArray(r.sources) ? [...new Set(r.sources.filter((s): s is string => typeof s === "string" && UUID.test(s)))].slice(0, MAX_SOURCES) : [];
-    out.push({ id: r.id, section: r.section, text, sources, edited: r.edited === true });
+    const line: MemoryLine = { id: r.id, section: r.section, text, sources, edited: r.edited === true };
+    const name = (v: unknown) => {
+      const n = clean(typeof v === "string" ? v : "");
+      return n && n.length <= MAX_NAME ? n : null;
+    };
+    // Who said it only holds for the text as Claude wrote it: never on an admin's line.
+    if (!line.edited && typeof r.saidIn === "string" && sources.includes(r.saidIn)) {
+      line.saidIn = r.saidIn;
+      const speaker = name(r.speaker);
+      if (speaker) line.speaker = speaker;
+    }
+    const by = line.edited ? name(r.addedBy) : null;
+    if (by) line.addedBy = by;
+    out.push(line);
   }
   return out.slice(0, MAX_LINES);
 }
 
 /** What Claude returns for Uppdatera (structured output). */
 export const GeneratedSchema = z.object({
-  lines: z.array(z.object({ section: z.enum(MEMORY_SECTIONS), text: z.string(), sources: z.array(z.string()) })),
+  lines: z.array(z.object({ section: z.enum(MEMORY_SECTIONS), text: z.string(), sources: z.array(z.string()), speaker: z.string().optional() })),
 });
 export type Generated = z.infer<typeof GeneratedSchema>;
 
@@ -68,8 +94,9 @@ export const GENERATED_JSON_SCHEMA = {
           section: { type: "string", enum: [...MEMORY_SECTIONS] },
           text: { type: "string" },
           sources: { type: "array", items: { type: "string" } },
+          speaker: { type: "string" },
         },
-        required: ["section", "text", "sources"],
+        required: ["section", "text", "sources", "speaker"],
         additionalProperties: false,
       },
     },
@@ -82,8 +109,17 @@ export const GENERATED_JSON_SCHEMA = {
  * After Uppdatera: every line an admin wrote or changed stays as it is (first); Claude's lines
  * replace the earlier generated ones. A generated line keeps only sources from `allowed` (the
  * meetings it was sent) and is dropped without one, when too long, or when it repeats a kept line.
+ * Its first allowed source is the meeting it was said in (`saidIn`). Its speaker is kept only when
+ * it is a task owner of that very meeting (`owners`, from the meeting data, never Claude): a name
+ * Claude made up, or one from another meeting, becomes "Sades i mötet" (unknown speaker).
  */
-export function mergeGenerated(existing: MemoryLine[], generated: Generated, allowed: Set<string>, newId: () => string): MemoryLine[] {
+export function mergeGenerated(
+  existing: MemoryLine[],
+  generated: Generated,
+  allowed: Set<string>,
+  newId: () => string,
+  owners: Map<string, string[]> = new Map(),
+): MemoryLine[] {
   const kept = existing.filter((l) => l.edited);
   const out: MemoryLine[] = [...kept];
   const count = new Map<MemorySection, number>();
@@ -96,7 +132,9 @@ export function mergeGenerated(existing: MemoryLine[], generated: Generated, all
     if (out.some((l) => same(l.text, text))) continue;
     if ((count.get(g.section) ?? 0) >= MAX_PER_SECTION) continue;
     count.set(g.section, (count.get(g.section) ?? 0) + 1);
-    out.push({ id: newId(), section: g.section, text, sources, edited: false });
+    const saidIn = sources[0];
+    const speaker = clean(g.speaker) ? (owners.get(saidIn) ?? []).find((o) => same(o, g.speaker ?? "")) : undefined;
+    out.push({ id: newId(), section: g.section, text, sources, edited: false, saidIn, ...(speaker && speaker.length <= MAX_NAME ? { speaker } : {}) });
   }
   return out.slice(0, MAX_LINES);
 }
@@ -110,13 +148,17 @@ export interface EditedLine {
 
 /**
  * The admin's save: lines they removed go, a changed one is marked edited (its sources stay: they
- * are the server's, never the form's), a new one has no sources. Null when the edit is invalid.
+ * are the server's, never the form's) and loses who said it (the text is now the admin's), a new
+ * one has no sources. Both get `author` ("Tillagt av <admin>", the server's, never the form's).
+ * Null when the edit is invalid.
  */
-export function applyEdits(existing: MemoryLine[], edits: EditedLine[], newId: () => string): MemoryLine[] | null {
+export function applyEdits(existing: MemoryLine[], edits: EditedLine[], newId: () => string, author: string | null = null): MemoryLine[] | null {
   if (!Array.isArray(edits) || edits.length > MAX_LINES) return null;
   const byId = new Map(existing.map((l) => [l.id, l]));
   const out: MemoryLine[] = [];
   const used = new Set<string>();
+  const by = clean(author);
+  const stamp = by && by.length <= MAX_NAME ? { addedBy: by } : {};
   for (const e of edits) {
     if (!e || typeof e !== "object" || !isSection(e.section) || typeof e.text !== "string") return null;
     const text = clean(e.text);
@@ -128,9 +170,14 @@ export function applyEdits(existing: MemoryLine[], edits: EditedLine[], newId: (
     if (before) {
       used.add(before.id);
       const changed = before.text !== text || before.section !== e.section;
-      out.push({ ...before, section: e.section, text, edited: before.edited || changed });
+      if (!changed) {
+        out.push(before);
+        continue;
+      }
+      const { saidIn: _s, speaker: _p, addedBy: _a, ...rest } = before;
+      out.push({ ...rest, section: e.section, text, edited: true, ...stamp });
     } else {
-      out.push({ id: newId(), section: e.section, text, sources: [], edited: true });
+      out.push({ id: newId(), section: e.section, text, sources: [], edited: true, ...stamp });
     }
   }
   return out;

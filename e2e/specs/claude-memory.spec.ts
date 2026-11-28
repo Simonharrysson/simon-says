@@ -22,6 +22,9 @@ test("Vad Claude ska veta: Uppdatera from the meetings, edit and add a line, sav
   // The line citing a meeting Claude wasn't sent never lands.
   await expect(page.getByRole("textbox", { name: "Prioriteringar, rad 1" })).toHaveCount(0);
   await expect(page.locator(`a[href="/orgs/${org.id}/mote/${meeting.id}"]`).first()).toBeVisible();
+  // Every line is an attributed statement; an invented speaker is never named.
+  await expect(page.locator("[data-memory-attribution]").filter({ hasText: /^Sades i mötet / })).toHaveCount(2);
+  await expect(page.getByText("Påhittad Persson")).toHaveCount(0);
   await expect(page.getByText(/^Byggd från 1 möte sedan /)).toBeVisible();
   const calls = await fake.claudeCalls("memory");
   expect(calls.some((c) => c.text.includes("Hackathonet hålls i Kårallen"))).toBe(true);
@@ -39,7 +42,8 @@ test("Vad Claude ska veta: Uppdatera from the meetings, edit and add a line, sav
   await expect(page.getByRole("textbox", { name: "Ordlista, rad 1" })).toHaveValue("KS = kommunikationsstyrelsen, styrelsens utskott");
   await expect(page.getByRole("textbox", { name: "Vem är vem, rad 1" })).toHaveValue("Anna Berg är kassör");
   await expect(page.getByRole("textbox", { name: "Kunder, rad 1" })).toHaveValue(SCRIPTED.memory.customer);
-  await expect(page.getByText("Ändrad av er")).toHaveCount(2);
+  await expect(page.locator("[data-memory-attribution]").filter({ hasText: /^Tillagt av / })).toHaveCount(2);
+  await expect(page.locator("[data-memory-attribution]").filter({ hasText: /^Sades i mötet / })).toHaveCount(1);
   await expectAccessible(page);
 
   // A line built from a meeting the admin can't see (another förening's) never reaches the page.

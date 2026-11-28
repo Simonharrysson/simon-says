@@ -56,6 +56,13 @@ const schema = z.object({
   GLOBAL_DAILY_USD: z.coerce.number().positive().finite().default(25),
   // Booked on every closed ElevenLabs session (Ruling 14). Creator overage rate.
   ELEVENLABS_USD_PER_HOUR: z.coerce.number().nonnegative().finite().default(0.22),
+  // "Claude ska …" agent tasks (0065), parked: "1" lets the notes engine mark a task the meeting
+  // gives Claude (owner "Claude"). Off by default; existing agent tasks keep working either way
+  // (list_agent_tasks, update_agent_task, "Hos Claude").
+  AGENT_TASKS_ENABLED: z
+    .enum(["0", "1"])
+    .default("0")
+    .transform((v) => v === "1"),
   // Strictly "0" or "1": anything else ("true", "on", "") fails at boot rather than silently
   // meaning off.
   KILL_SWITCH: z

@@ -175,9 +175,10 @@ function answer(kind: ClaudeKind, text: string): unknown {
       return {
         lines: ids.length
           ? [
-              { section: "customers", text: m.customer, sources: [ids[0]] },
-              { section: "glossary", text: m.glossary, sources: [ids[0]] },
-              { section: "priorities", text: m.foreign, sources: ["00000000-0000-4000-8000-000000000000"] },
+              // An invented speaker: the app must not name them ("Sades i mötet …").
+              { section: "customers", text: m.customer, sources: [ids[0]], speaker: "Påhittad Persson" },
+              { section: "glossary", text: m.glossary, sources: [ids[0]], speaker: "" },
+              { section: "priorities", text: m.foreign, sources: ["00000000-0000-4000-8000-000000000000"], speaker: "" },
             ]
           : [],
       };

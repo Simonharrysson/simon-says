@@ -106,7 +106,8 @@ function defaultDeps(): TickDeps {
     appendTranscript,
     updateNotes: (input, opts) =>
       updateNotes(
-        input,
+        // Agent tasks (0065) are parked unless AGENT_TASKS_ENABLED=1.
+        { ...input, agentTasks: getEnv().AGENT_TASKS_ENABLED },
         opts?.timeoutMs
           ? { client: new Anthropic({ apiKey: getEnv().ANTHROPIC_API_KEY, timeout: opts.timeoutMs, maxRetries: 0 }) as unknown as NotesClient }
           : {},

@@ -21,7 +21,7 @@ import {
   type MemoryLine,
   visibleLines,
 } from "./memory";
-import { MEMORY_SYSTEM_PROMPT, memoryUserText, type MemoryMeeting } from "./prompt";
+import { MEMORY_SYSTEM_PROMPT, meetingOwners, memoryUserText, type MemoryMeeting } from "./prompt";
 
 // "Vad Claude ska veta": the page's reads and writes, all on the server (0065 gives clients no
 // access to org_memory). Reads go through the service role after the admin check and keep only the
@@ -131,7 +131,16 @@ export type SaveResult = { ok: true } | { ok: false; reason: "forbidden" | "inva
  * is ever cut to make room. An edit of a line that is no longer there (the page is older than an
  * Uppdatera) is refused as stale, never turned into a new line without its sources.
  */
-export async function saveMemoryEdits(db: SupabaseClient, admin: SupabaseClient, orgId: string, userId: string, edits: EditedLine[], seenIds: string[]): Promise<SaveResult> {
+export async function saveMemoryEdits(
+  db: SupabaseClient,
+  admin: SupabaseClient,
+  orgId: string,
+  userId: string,
+  edits: EditedLine[],
+  seenIds: string[],
+  /** The admin's name, stamped on the lines they write or change ("Tillagt av <admin>"). */
+  authorName: string | null = null,
+): Promise<SaveResult> {
   if (!(await isAdminOf(db, orgId, userId))) return { ok: false, reason: "forbidden" };
   if (!Array.isArray(seenIds) || !Array.isArray(edits)) return { ok: false, reason: "invalid" };
   for (let attempt = 0; attempt < RETRIES; attempt++) {
@@ -141,7 +150,7 @@ export async function saveMemoryEdits(db: SupabaseClient, admin: SupabaseClient,
     const visibleIds = new Set((await filterFor(db, all)).lines.map((l) => l.id));
     const seen = new Set(seenIds.filter((id) => typeof id === "string" && visibleIds.has(id)));
     if (edits.some((e) => e && typeof e.id === "string" && !seen.has(e.id))) return { ok: false, reason: "stale" };
-    const edited = applyEdits(all.filter((l) => seen.has(l.id)), edits, newLineId);
+    const edited = applyEdits(all.filter((l) => seen.has(l.id)), edits, newLineId, authorName);
     if (!edited) return { ok: false, reason: "invalid" };
     const lines = [...edited, ...all.filter((l) => !seen.has(l.id))];
     if (lines.length > MAX_LINES) return { ok: false, reason: "invalid" };
@@ -246,9 +255,10 @@ async function runRefresh(org: { id: string; name: string }, userId: string, dep
   });
   if (!result.ok) return { ok: false, reason: result.reason === "spend" ? "spend" : "failed" };
   const oldest = meetings.at(-1)!;
+  const owners = meetingOwners(meetings);
   for (let attempt = 0; attempt < RETRIES; attempt++) {
     const row = await readRow(deps.admin, org.id);
-    const lines = mergeGenerated(row?.memory.lines ?? [], result.value, allowed, newLineId);
+    const lines = mergeGenerated(row?.memory.lines ?? [], result.value, allowed, newLineId, owners);
     const saved = await writeIfUnchanged(deps.admin, org.id, userId, row ? row.version : null, {
       lines,
       generated_at: deps.now.toISOString(),
