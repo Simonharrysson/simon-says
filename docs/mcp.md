@@ -49,7 +49,7 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
 **Vad Claude ska veta** (Inställningar → Vad Claude ska veta; föreningar and Företag, admins)
 - **Uppdatera** asks Claude for lines built from at most 40 of the newest meetings that **every member** can see (`org_memory_sources`).
 - Lines an admin wrote or changed are never replaced.
-- Members read the page through their Claude, with `get_org_memory`.
+- Members read the page through their Claude, with `get_org_memory`. The table is server-only: the page and the tool both leave out a line when the reader can't see all of its sources.
 - Admins can run Uppdatera once a minute. Its usage is recorded on the org, under the kill switch and the daily cap.
 
 ## Operations

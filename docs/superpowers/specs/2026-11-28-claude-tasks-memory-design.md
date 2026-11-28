@@ -41,7 +41,7 @@ A per-org page (Företag and föreningar, not Privat) under **Inställningar →
 
 Each line is short text with its **sources** (links to meetings).
 
-- **Storage.** One row per org, `org_memory (org_id pk, lines jsonb, generated_at, sources_from, sources_count, updated_at, updated_by)`. A line is `{id, section, text, sources: meeting uuid[], edited}`. Members select it (`is_org_member`). **[security review]** Clients get no writes at all. The server writes it with the service role after its admin check, so no one can set `sources`, `edited` or the cooldown by hand. The size is capped.
+- **Storage.** One row per org, `org_memory (org_id pk, lines jsonb, generated_at, sources_from, sources_count, updated_at, updated_by)`. A line is `{id, section, text, sources: meeting uuid[], edited}`. **[security review]** No client access at all, not even select. The page is read on the server after the admin check, with the same per-line source filter as `get_org_memory`, for admins too. Writes are optimistic (`version`, retried and merged again), so an admin edit is never overwritten. Uppdatera claims its 60 s cooldown with one conditional update, so two can't run at once. A save changes only the lines the page showed.
 - **Visibility.** **[choice: owner's "simplest"]** The memory is admin-curated and readable by every member.
   - A generated draft may use only meetings **every current member can see**. That is `org_memory_sources(p_org, p_limit)` in SQL: done, not a Testmöte, and no `org_members` row for whom `foretag_can_see(member, meeting)` is false. The tree rule isn't restated anywhere.
   - Rows are filtered by the app's `visible()` (never deleted lines, Må-runda or info cells).
@@ -58,8 +58,8 @@ Each line is short text with its **sources** (links to meetings).
 ```
 agent_task_status  (meeting_id, item_id) pk → note_items; status, note, updated_by, updated_at
                    RLS select: is_meeting_member(meeting_id). No client writes.
-org_memory         org_id pk → orgs; lines jsonb, generated_at, sources_from, sources_count, updated_at, updated_by
-                   RLS select: is_org_member; insert/update: is_org_admin
+org_memory         org_id pk → orgs; lines jsonb, generated_at, sources_from, sources_count, updated_at, updated_by, version
+                   service role only (no client grants)
 mcp_agent_task_status(p_user, p_meeting_ids)            read, is_meeting_member
 mcp_set_agent_task(p_user, p_meeting, p_item, p_status, p_note)  is_meeting_member + (started_by = p_user or is_org_admin)
 mcp_org_memory(p_user, p_org)                            read, is_org_member
