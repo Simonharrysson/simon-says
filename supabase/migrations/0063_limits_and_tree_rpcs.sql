@@ -1,4 +1,4 @@
--- 0064: two small fixes. Additive and backward compatible with deployed v1: one new column with a
+-- 0063: two small fixes. Additive and backward compatible with deployed v1: one new column with a
 -- default, one new internal function, and function bodies replaced with the same signatures,
 -- return types and grants. Refusals stay what v1 already handles (false / null, the same error
 -- texts), never a new exception.

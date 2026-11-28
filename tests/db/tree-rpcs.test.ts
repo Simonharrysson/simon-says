@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 
-// 0064: the old tree RPCs (0050/0054: set_group, set_person_group, place_member, archive_group)
+// 0063: the old tree RPCs (0050/0054: set_group, set_person_group, place_member, archive_group)
 // keep 0062's people-tree rules and take its per-org lock. Simon at the top; Adam reports to
 // Simon; Bo to Adam. Cia and Dan are extra people for the concurrent rounds.
 
@@ -13,7 +13,7 @@ const must = <T>(what: string, r: { data: T; error: { message: string } | null }
 type Name = "simon" | "adam" | "bo" | "cia" | "dan" | "eve" | "fia";
 const NAMES: Name[] = ["simon", "adam", "bo", "cia", "dan", "eve", "fia"];
 
-describe.skipIf(!hasLocalSupabase)("old tree RPCs keep the people-tree rules (0064)", () => {
+describe.skipIf(!hasLocalSupabase)("old tree RPCs keep the people-tree rules (0063)", () => {
   const u = {} as Record<Name, TestUser>;
   const p = {} as Record<Name, string>;
   let admin: TestUser;

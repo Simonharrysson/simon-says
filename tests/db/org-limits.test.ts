@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase } from "@/test/local-supabase";
 import { createOrg, listMyOrgs } from "@/lib/db/orgs";
 
-// 0064: the create limits (10 existing, 30 ever; 0041) count föreningar only. Companies (0050) are
+// 0063: the create limits (10 existing, 30 ever; 0041) count föreningar only. Companies (0050) are
 // gated by the allow-list and made with the service role: they neither count nor are counted.
 // Privat (0045) stays outside both.
 
@@ -11,13 +11,13 @@ const must = <T>(what: string, r: { data: T; error: { message: string } | null }
   return r.data;
 };
 
-describe.skipIf(!hasLocalSupabase)("org limits per kind (0064)", () => {
+describe.skipIf(!hasLocalSupabase)("org limits per kind (0063)", () => {
   it("companies don't count: 30 companies, then 10 föreningar still fit, the 11th is refused", async () => {
     const user = await createTestUser("limit-kind");
     const admin = adminClient();
     for (let i = 1; i <= 30; i++)
       must(`company ${i}`, await admin.rpc("create_foretag", { p_user: user.id, p_name: `Bolag ${i}`, p_root_name: "Ledning", p_person_name: "Ägare" }));
-    // Before 0064 the first förening was already refused (30 rows in the ledger, 30 orgs).
+    // Before 0063 the first förening was already refused (30 rows in the ledger, 30 orgs).
     for (let i = 1; i <= 10; i++) expect((await createOrg(user.db, `Förening ${i}`)).ok, `förening ${i}`).toBe(true);
     expect(await createOrg(user.db, "Elva")).toEqual({ ok: false, reason: "limit" });
     expect(await listMyOrgs(user.db)).toHaveLength(10);
