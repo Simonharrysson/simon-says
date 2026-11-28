@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import { addToIndex, normalizeRef, type SourceIndex } from "@/lib/notes/sources";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { CheckinWindow } from "@/lib/db/types";
 import { formatLine } from "@/lib/docs/format-render";
@@ -42,6 +43,8 @@ export interface TickLog {
   stop: string | null;
   dropped: number;
   servedBy: string | null;
+  /** 0069: the times Claude cited ("src") this tick, and how many named a line it was sent. */
+  cites?: { refs: number; valid: number };
   items: NotesItem[];
   /** Agenda mode: the Må-runda detector's cost this tick (counted in `totalUsd` and the ledger). */
   checkinUsd?: number;
@@ -196,6 +199,25 @@ export function opLine(op: NotesOp): string {
 }
 
 /** The real SDK client, wrapped so the caller sees each raw message (thinking tokens, serving model). */
+/** 0069: the cited times in Claude's raw answer, and how many resolve to a line it was sent. */
+function countCites(msg: BetaMessage | undefined, index: SourceIndex): { refs: number; valid: number } {
+  const text = (msg?.content ?? []).flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+  let refs = 0;
+  let valid = 0;
+  try {
+    for (const op of (JSON.parse(text) as { ops?: { src?: unknown }[] }).ops ?? []) {
+      for (const r of Array.isArray(op.src) ? op.src : []) {
+        refs++;
+        const t = typeof r === "string" ? normalizeRef(r) : null;
+        if (t && index.has(t)) valid++;
+      }
+    }
+  } catch {
+    // malformed output: counted by the engine
+  }
+  return { refs, valid };
+}
+
 export function makeClient(onMessage: (m: BetaMessage) => void): NotesClient {
   const sdk = new Anthropic({ apiKey: apiKey(), timeout: 120_000, maxRetries: 2 });
   return {
@@ -282,6 +304,7 @@ export async function runReplay(opts: {
   });
   const detLine = (l: Line) => ({ atMs: l.startMs, speaker: names[l.speaker] ?? l.speaker, text: l.text });
 
+  let sourceIndex: SourceIndex = new Map();
   for (const step of plan) {
     if (opts.realtime && step.n > 1 && !step.final) await new Promise((r) => setTimeout(r, tickMs / (opts.speed ?? 1)));
     const upTo = Math.min(step.n, tickCount);
@@ -325,6 +348,12 @@ export async function runReplay(opts: {
     if (!skipped) {
       const blocks = agenda ? chunks.slice(0, upTo).map((c) => blockText(win ? maskCheckin(c, win, (l) => l.startMs) : c)) : blocksAll.slice(0, upTo);
       const tab = agenda ? agendaTabText(expected, items, human) : null;
+      // 0069: the lines sent, as the tick indexes them (never a Må-runda placeholder).
+      const sent = chunks.slice(0, upTo).map((c) => (agenda && win ? maskCheckin(c, win, (l) => l.startMs) : c));
+      sourceIndex = sent.reduce<SourceIndex>(
+        (index, c) => addToIndex(index, c.filter((l) => lines.includes(l)).map((l) => ({ key: `eval:${lines.indexOf(l)}:0`, startMs: l.startMs }))),
+        new Map(),
+      );
       out = await updateNotes(
         {
           orgName: expected.orgName ?? "Föreningen",
@@ -336,6 +365,7 @@ export async function runReplay(opts: {
           deletedIds: [],
           final: step.final,
           nextId,
+          sources: sourceIndex,
           ...(agenda && tab ? { agenda, ownLines: tab.ownLines } : {}),
         },
         { client },
@@ -345,6 +375,7 @@ export async function runReplay(opts: {
       nextId = out.nextId;
     }
     const msg = seen.last as BetaMessage | undefined;
+    const cites = out ? countCites(msg, sourceIndex) : undefined;
     const u = out?.usage ?? zero;
     const prompt = u.input + u.cacheRead + u.cacheWrite;
     const c = out && prev.length ? churn(prev, items, []) : null;
@@ -365,6 +396,7 @@ export async function runReplay(opts: {
       stop: out ? out.stopReason : (skipped ?? null),
       dropped: out?.dropped ?? 0,
       servedBy: msg?.model ?? null,
+      ...(cites ? { cites } : {}),
       items,
       ...(agenda ? { checkinUsd, window: win, ...(skipped ? { skipped } : {}) } : {}),
     };
