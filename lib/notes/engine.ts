@@ -389,13 +389,17 @@ export function applyOps(
  * Agent tasks parked (AGENT_TASKS_ENABLED off): an owner that means the assistant ("Claude", "AI:n",
  * "Simon Says") is left out of an add and a change, so the row is never marked as Claude's task.
  */
-export function withoutAgentOwners(ops: NotesOp[]): NotesOp[] {
+export function withoutAgentOwners(ops: NotesOp[], people: string[] = []): NotesOp[] {
+  // A real person in the meeting called that (a member named Claude) keeps their task, as before 0065.
+  const norm = (s: string) => s.normalize("NFC").replace(/\s+/g, " ").trim().toLocaleLowerCase("sv");
+  const names = new Set(people.flatMap((p) => [norm(p), norm(p).split(" ")[0]]).filter(Boolean));
+  const assistant = (owner: string | undefined) => isAgentOwner(owner) && !names.has(norm(owner!).replace(/[.:!]+$/, ""));
   return ops.map((op) => {
-    if (op.op === "add" && isAgentOwner(op.item.owner)) {
+    if (op.op === "add" && assistant(op.item.owner)) {
       const { owner: _, ...item } = op.item;
       return { ...op, item };
     }
-    if (op.op === "change" && isAgentOwner(op.owner)) {
+    if (op.op === "change" && assistant(op.owner)) {
       const { owner: _, ...rest } = op;
       return rest;
     }
@@ -544,7 +548,7 @@ export async function updateNotes(
     return nothing("malformed");
   }
 
-  const applied = applyOps(items, input.agentTasks ? parsed.ops : withoutAgentOwners(parsed.ops), {
+  const applied = applyOps(items, input.agentTasks ? parsed.ops : withoutAgentOwners(parsed.ops, [...Object.values(input.speakerNames), ...(input.agenda?.people.map((p) => p.name) ?? [])]), {
     protectedIds: [...lockedIds, ...input.deletedIds],
     final: input.final,
     nextId,

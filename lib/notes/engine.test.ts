@@ -540,6 +540,13 @@ describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
     expect(on.items.find((i) => i.id === "n2")!.owner).toBe("AI:n");
   });
 
+  it("off: a real person called Claude keeps their task", async () => {
+    const ops = [{ op: "add", id: "n9", section: "action", text: "Boka bussen", owner: "Claude" }];
+    const named = input({ speakerNames: { "S1-speaker_0": "Claude Berg" } });
+    const r = await updateNotes(named, { client: fakeClient(message({ text: JSON.stringify({ ops }) })).client });
+    expect(r.items.find((i) => i.text === "Boka bussen")!.owner).toBe("Claude");
+  });
+
   it("the env flag defaults to off", async () => {
     const { parseEnv } = await import("@/lib/env");
     const { testEnv } = await import("@/test/env");
