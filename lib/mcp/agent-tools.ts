@@ -30,7 +30,7 @@ const MAX_NOTE = 500;
 type Filter = AgentState | "all";
 const isOpen = (s: AgentState) => s !== "done";
 
-const meetingUrl = (orgId: string, meetingId: string) => `${appOrigin()}/orgs/${orgId}/mote/${meetingId}`;
+const meetingUrl = (ctx: ToolCtx, orgId: string, meetingId: string) => `${ctx.origin ?? appOrigin()}/orgs/${orgId}/mote/${meetingId}`;
 
 /** The note-taking spaces (förening, Företag) and their finished meetings the user can see. */
 async function noteSpaces(ctx: ToolCtx, onlyOrg?: string) {
@@ -78,7 +78,7 @@ export async function listAgentTasks(ctx: ToolCtx, args: { status?: Filter; curs
           date: stockholmDay(m.started_at),
           org: org.name,
           org_kind: org.kind,
-          url: meetingUrl(org.id, m.id),
+          url: meetingUrl(ctx, org.id, m.id),
           doc_url: m.doc_id ? docUrl(m.doc_id) : null,
         },
         context: {
@@ -119,7 +119,7 @@ export async function updateAgentTask(ctx: ToolCtx, args: { task_id: string; sta
 
   if (args.status !== "done") {
     if (!(await ctx.reader.setAgentTask(m.id, row.id, args.status, note))) return notFound;
-    return ok({ task_id: args.task_id, status: args.status, note: note ?? before.note, meeting_url: meetingUrl(org.id, m.id) });
+    return ok({ task_id: args.task_id, status: args.status, note: note ?? before.note, meeting_url: meetingUrl(ctx, org.id, m.id) });
   }
 
   // Done: the same path as ticking it in the app (note row, Från förra veckan chain, "✓ klart" in the Doc).
@@ -134,7 +134,7 @@ export async function updateAgentTask(ctx: ToolCtx, args: { task_id: string; sta
     failed: "Done in Simon Says, but the Google Doc could not be updated right now.",
     none: "Done.",
   };
-  return ok({ task_id: args.task_id, status: "done", note: note ?? before.note, doc: result.doc, doc_note: docNote[result.doc], meeting_url: meetingUrl(org.id, m.id) });
+  return ok({ task_id: args.task_id, status: "done", note: note ?? before.note, doc: result.doc, doc_note: docNote[result.doc], meeting_url: meetingUrl(ctx, org.id, m.id) });
 }
 
 export async function getOrgMemory(ctx: ToolCtx, args: { org_id: string }): Promise<ToolResult> {
@@ -160,7 +160,7 @@ export async function getOrgMemory(ctx: ToolCtx, args: { org_id: string }): Prom
         s,
         shown
           .filter((l) => l.section === s)
-          .map((l) => ({ text: l.text, sources: l.sources.map((id) => ({ meeting_id: id, date: date.get(id) ?? null, url: meetingUrl(org.id, id) })) })),
+          .map((l) => ({ text: l.text, sources: l.sources.map((id) => ({ meeting_id: id, date: date.get(id) ?? null, url: meetingUrl(ctx, org.id, id) })) })),
       ]),
     ),
     ...(lines.length ? {} : { note: "No memory yet. An admin can build it in Simon Says: Inställningar → Vad Claude ska veta → Uppdatera." }),

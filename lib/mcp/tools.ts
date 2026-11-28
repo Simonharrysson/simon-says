@@ -71,6 +71,8 @@ export interface ToolCtx {
   user: User;
   deps: ToolDeps;
   now: Date;
+  /** The app's origin, for links to meeting pages (the handler's; appOrigin() when absent). */
+  origin?: string;
   /** Ids this call touched, for the audit row (filled by the tool). */
   ids: Record<string, string>;
 }
