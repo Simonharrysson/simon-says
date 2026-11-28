@@ -72,7 +72,16 @@
     "attended": "Närvarande: {names}",
     "summarySent": "{mode, select, missed {Sammanfattningen mejlades till {count, plural, one {den som missade mötet} other {de # som missade mötet}}.} other {Sammanfattningen mejlades till {count, plural, one {# person} other {# personer}}.}}",
     "summaryPending": "Sammanfattningen mejlas strax till dem som ska ha den.",
-    "summaryOff": "Ingen sammanfattning mejlas, det är avstängt i inställningarna."
+    "summaryOff": "Ingen sammanfattning mejlas, det är avstängt i inställningarna.",
+    "guestBack": "Till Simon Says",
+    "guestNote": "Du ser det här mötet som gäst: {org} har delat bara det här mötet med dig.",
+    "guestsTitle": "Gäster med åtkomst till mötet",
+    "guestsHint": "De stod på mötets gästlista, fick anteckningarna mejlade och loggade in. De ser bara det här mötet.",
+    "guestRevoked": "åtkomst borttagen",
+    "guestRevoke": "Ta bort åtkomst",
+    "guestRestore": "Ge åtkomst igen",
+    "guestRevokeLabel": "Ta bort {name}s åtkomst till mötet",
+    "guestRestoreLabel": "Ge {name} åtkomst till mötet igen"
   },
   "openCount": "{count, plural, one {# öppen uppgift} other {# öppna uppgifter}}",
   "overdueCount": "{count, plural, one {# försenad} other {# försenade}}",

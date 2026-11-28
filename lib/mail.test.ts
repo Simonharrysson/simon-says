@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { resendMailer } from "./mail";
+import { resendMailer, withFromName } from "./mail";
 
 describe("resendMailer", () => {
   it("passes html and reply_to only when given", async () => {
@@ -27,5 +27,13 @@ describe("resendMailer outcomes", () => {
     expect(await mailer(async () => new Response("{}", { status: 503 })).send(msg)).toBe(false);
     expect(err.mock.calls.flat().join(" ")).not.toMatch(/a@example\.com/);
     err.mockRestore();
+  });
+});
+
+describe("withFromName (0067: \"Johanna via Simon Says\")", () => {
+  it("swaps the display name, keeps our address, strips header tricks", () => {
+    expect(withFromName("Simon Says <noreply@harrysson.co>", "Johanna via Simon Says")).toBe('"Johanna via Simon Says" <noreply@harrysson.co>');
+    expect(withFromName("noreply@harrysson.co", 'Ev"il <x@y>\r\nBcc: z')).toBe('"Evil x@yBcc: z" <noreply@harrysson.co>');
+    expect(withFromName("Simon Says <noreply@harrysson.co>", undefined)).toBe("Simon Says <noreply@harrysson.co>");
   });
 });

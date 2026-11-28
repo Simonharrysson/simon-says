@@ -47,7 +47,7 @@ export interface OrgDetailMeeting {
 
 export interface OrgDetailViewProps {
   /** `about` and the links (0044, todo #13) show in the header when set. */
-  org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean; require_task_fields?: boolean } & Partial<OrgProfile>;
+  org: { id: string; name: string; share_transcript: boolean; show_on_status: boolean; require_task_fields?: boolean; invite_attendees?: boolean } & Partial<OrgProfile>;
   isAdmin: boolean;
   userId: string | null;
   inviteUrl: string;

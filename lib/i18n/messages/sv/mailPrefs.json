@@ -16,6 +16,10 @@
     "meeting_brief": {
       "label": "Inför möten",
       "description": "Tio minuter före ett möte i din kalender: senaste mötet, de viktigaste besluten och öppna uppgifter. För kundmöten i Företag."
+    },
+    "meeting_invite": {
+      "label": "Anteckningar från möten du var med på",
+      "description": "När någon skriver ett möte du var med på och du inte har ett konto: dina uppgifter från mötet och en länk in. Högst en påminnelse."
     }
   },
   "allOff": "Stäng av alla mejl",

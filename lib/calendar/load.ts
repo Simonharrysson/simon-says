@@ -13,6 +13,7 @@ import {
   type CalendarInfo,
   type MatchPerson,
   type MeetingCalendarEvent,
+  unmatchedGuests,
   isOrgCalendarId,
 } from "./events";
 
@@ -180,7 +181,11 @@ export async function meetingEventForStart(input: {
       event = eventForNow(await api.listEvents(org.calendar_id, from, to, 50), now, org.calendar_filter);
     }
     if (!event) return null;
-    return { title: event.title, ...matchAttendees(event.attendees, input.people, input.memberEmails) };
+    return {
+      title: event.title,
+      ...matchAttendees(event.attendees, input.people, input.memberEmails),
+      guests: unmatchedGuests(event.attendees, input.people, input.memberEmails),
+    };
   } catch (err) {
     if (!(err instanceof CalendarAccessMissingError)) console.warn("calendar: start lookup failed", (err as Error)?.message);
     return null;

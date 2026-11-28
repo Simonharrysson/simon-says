@@ -192,7 +192,10 @@
     "agendaFirst": "Choose an agenda or create a new document first.",
     "silent": "The microphone hasn’t heard anything yet. Say something, or test it under Meeting settings.",
     "settings": "Meeting settings",
-    "howItWorks": "How it works"
+    "howItWorks": "How it works",
+    "inviteGuests": "Guests without an account get a summary from you",
+    "inviteGuestsOn": "Their own tasks and a link in, at most one reminder.",
+    "inviteGuestsOff": "Off: nobody without an account gets e-mail after the meeting."
   },
   "meeting": {
     "backTo": "Back to ",

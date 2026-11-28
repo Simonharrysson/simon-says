@@ -136,6 +136,11 @@ export interface MeetingCalendarEvent {
   expected: string[];
   /** People who declined: clearly absent by the calendar. */
   declined: string[];
+  /**
+   * At start only, never stored in meetings.calendar_event: guests outside the people list (with an
+   * address, not declined), written to meeting_calendar_guests (0067, server only).
+   */
+  guests?: CalendarAttendee[];
 }
 
 const normName = (s: string) => s.normalize("NFC").replace(/\s+/g, " ").trim().toLocaleLowerCase("sv");
@@ -171,6 +176,30 @@ export function matchAttendees(
   }
   for (const id of expected) declined.delete(id);
   return { expected: [...expected].sort(), declined: [...declined].sort() };
+}
+
+/**
+ * Guests the förening's people list doesn't know (the same matching as matchAttendees), with an
+ * address and not declined: the growth loop's calendar-only guests (0067, meeting_calendar_guests).
+ * Never the organiser's own row twice; one per address.
+ */
+export function unmatchedGuests(attendees: CalendarAttendee[], people: MatchPerson[], memberEmails: Map<string, string>): CalendarAttendee[] {
+  const known = new Set<string>();
+  for (const p of people) {
+    for (const e of [p.email, p.member_user_id ? memberEmails.get(p.member_user_id) : null]) {
+      if (e && e.includes("@")) known.add(e.trim().toLowerCase());
+    }
+  }
+  const names = new Map<string, number>();
+  for (const p of people) names.set(normName(p.name), (names.get(normName(p.name)) ?? 0) + 1);
+  const out = new Map<string, CalendarAttendee>();
+  for (const a of attendees) {
+    if (!a.email || a.response === "declined" || known.has(a.email)) continue;
+    // Matched by its exact full name (matchAttendees): that person, not a guest.
+    if (a.name && names.get(normName(a.name)) === 1) continue;
+    if (!out.has(a.email)) out.set(a.email, a);
+  }
+  return [...out.values()];
 }
 
 /** The stored form (meetings.calendar_event) read back, or null. */

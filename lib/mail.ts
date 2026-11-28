@@ -18,6 +18,16 @@ export interface MailMessage {
   idempotencyKey?: string;
   /** Extra headers, e.g. List-Unsubscribe (lib/email/token.ts listUnsubscribeHeaders). */
   headers?: Record<string, string>;
+  /** A display name instead of the sender's own ("Johanna via Simon Says"); the address stays ours. */
+  fromName?: string;
+}
+
+/** `from` with another display name: "Johanna via Simon Says <noreply@…>". */
+export function withFromName(from: string, name: string | undefined): string {
+  const clean = (name ?? "").replace(/[\r\n<>"\\]/g, "").trim();
+  if (!clean) return from;
+  const address = /<([^>]+)>\s*$/.exec(from)?.[1] ?? from.trim();
+  return `"${clean}" <${address}>`;
 }
 
 /** sent: the provider took it · failed: it did not · uncertain: no answer (timeout, 5xx), may have gone out. */
@@ -43,7 +53,7 @@ export function resendMailer(apiKey: string, from: string, fetchFn: typeof fetch
           ...(message.idempotencyKey ? { "idempotency-key": message.idempotencyKey } : {}),
         },
         body: JSON.stringify({
-          from,
+          from: withFromName(from, message.fromName),
           to: [message.to],
           subject: message.subject,
           text: message.text,

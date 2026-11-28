@@ -192,7 +192,10 @@
     "agendaFirst": "Välj dagordning eller skapa ett nytt dokument först.",
     "silent": "Mikrofonen hör inget än. Säg något, eller testa den under Inställningar för mötet.",
     "settings": "Inställningar för mötet",
-    "howItWorks": "Så fungerar det"
+    "howItWorks": "Så fungerar det",
+    "inviteGuests": "Gäster utan konto får en sammanfattning från dig",
+    "inviteGuestsOn": "Deras egna uppgifter och en länk in, högst en påminnelse.",
+    "inviteGuestsOff": "Av: ingen utan konto får mejl efter mötet."
   },
   "meeting": {
     "backTo": "Tillbaka till ",

@@ -164,6 +164,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [foretagChoice, setForetagChoice] = useState<ForetagChoice | null>(null);
   /** A förening with groups (0054): "Möte för" and Privat möte, sent with the agenda choice. */
   const [groupChoice, setGroupChoice] = useState<ForetagChoice | null>(null);
+  // The growth loop (0067): invite attendees without an account after this meeting (default on).
+  const [inviteGuests, setInviteGuests] = useState(true);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);
   /** The format override kept across that remount. */
@@ -605,6 +607,8 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
             ...(props.calendarEvent ? { calendarEventId: props.calendarEvent.id } : {}),
             // A förening with groups: who the meeting is for.
             ...(groupStart ? { groupId: groupStart.groupId, private: groupStart.private } : {}),
+            // The starter turned the invite mail off for this meeting.
+            ...(inviteGuests ? {} : { inviteAttendees: false }),
           }),
           }),
         });
@@ -1126,6 +1130,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
       source={props.meeting === null ? source : undefined}
       onSourceChange={props.meeting === null ? onSourceChange : undefined}
       foretag={Boolean(props.foretag)}
+      inviteGuests={props.meeting === null && !props.privat && !props.foretag && !groupChoice?.private ? { on: inviteGuests, onChange: setInviteGuests } : undefined}
       callReady={source !== "call" || (callSupport === "ok" ? callShared : micOnly)}
       callHint={callSupport === "ok" ? undefined : tCall("micOnlyFirst")}
       callSetup={

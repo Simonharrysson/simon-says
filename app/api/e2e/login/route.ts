@@ -56,6 +56,10 @@ export async function GET(request: NextRequest) {
     if (error) return failed("sign-in", error.message);
   }
   await storeGoogleToken(userId, `e2e-refresh:${email}`, GOOGLE_SCOPES.join(" "));
+  // A real sign-in comes with a Google identity (the invite claim, 0067, requires one); the local
+  // seed's test function adds it (it exists only in a local/CI database).
+  const identity = await admin.rpc("test_add_google_identity", { p_user: userId });
+  if (identity.error) console.warn(`e2e login: google identity: ${identity.error.message}`);
   if (request.nextUrl.searchParams.get("drive") === "1") {
     await storeImportToken(userId, `e2e-refresh:${email}`, IMPORT_SCOPES.join(" "));
     return NextResponse.redirect(`${appOrigin()}${withParam(next, "drive", "ok")}`);

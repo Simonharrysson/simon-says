@@ -72,7 +72,16 @@
     "attended": "Present: {names}",
     "summarySent": "{mode, select, missed {The summary was e-mailed to {count, plural, one {the one who missed the meeting} other {the # who missed the meeting}}.} other {The summary was e-mailed to {count, plural, one {# person} other {# people}}.}}",
     "summaryPending": "The summary is e-mailed shortly to the people who should get it.",
-    "summaryOff": "No summary is e-mailed; it is turned off in the settings."
+    "summaryOff": "No summary is e-mailed; it is turned off in the settings.",
+    "guestBack": "To Simon Says",
+    "guestNote": "You see this meeting as a guest: {org} has shared only this meeting with you.",
+    "guestsTitle": "Guests with access to the meeting",
+    "guestsHint": "They were on the meeting's guest list, got the notes by e-mail and signed in. They see only this meeting.",
+    "guestRevoked": "access removed",
+    "guestRevoke": "Remove access",
+    "guestRestore": "Give access again",
+    "guestRevokeLabel": "Remove {name}'s access to the meeting",
+    "guestRestoreLabel": "Give {name} access to the meeting again"
   },
   "openCount": "{count, plural, one {# open task} other {# open tasks}}",
   "overdueCount": "{count} overdue",
