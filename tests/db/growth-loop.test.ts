@@ -17,6 +17,13 @@ vi.mock("@/lib/env", async (importOriginal) => {
   return { ...mod, getEnv: () => env };
 });
 
+// The e-mail gate's database answer can be switched off (as when may_email fails): "unknown".
+const gate = vi.hoisted(() => ({ down: false }));
+vi.mock("@/lib/email/prefs", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/email/prefs")>();
+  return { ...mod, checkEmailGate: async (...a: Parameters<typeof mod.checkEmailGate>) => (gate.down ? "unknown" : mod.checkEmailGate(...a)) };
+});
+
 const { createOrg, joinOrg } = await import("@/lib/db/orgs");
 const { sendMeetingSummaries } = await import("@/lib/summaries/send");
 const { sendQueuedInvites, sendInviteReminders, sendPendingInvites, trySendMeetingInvites } = await import("@/lib/growth/send");
@@ -207,6 +214,25 @@ describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
       await sendPendingInvites(f, { orgId });
       expect((await db().from("meeting_invites").select("status, skip_reason").eq("meeting_id", id).eq("email", email).single()).data).toEqual({ status: "skipped", skip_reason: "expired" });
       expect(f.sent.filter((m) => m.to === email).map((m) => m.subject.startsWith("Sammanfattning:"))).toEqual([true]);
+      await sendPendingInvites(f, { orgId });
+      expect(summariesTo(f, email)).toHaveLength(1);
+    });
+
+    it("the opt-out check can't answer: nothing claimed, the next run sends it", async () => {
+      const { id, email } = await setup();
+      expect((await db().auth.admin.createUser({ email, email_confirm: true })).error).toBeNull();
+      const f = fakeMailer();
+      gate.down = true;
+      try {
+        await trySendMeetingInvites(id, f);
+      } finally {
+        gate.down = false;
+      }
+      expect((await invite(id, email))!.status).toBe("skipped");
+      expect(summariesTo(f, email)).toHaveLength(0);
+      expect((await db().from("meeting_invites").select("summary_fallback_at").eq("meeting_id", id).eq("email", email).single()).data!.summary_fallback_at).toBeNull();
+      await sendPendingInvites(f, { orgId });
+      expect(summariesTo(f, email)).toHaveLength(1);
       await sendPendingInvites(f, { orgId });
       expect(summariesTo(f, email)).toHaveLength(1);
     });
