@@ -100,12 +100,11 @@ export function HeroDemo() {
                 <li
                   key={n}
                   data-state={state}
+                  data-hero-caption
                   data-last={n === 5 ? "true" : undefined}
                   className={cn(
                     "flex flex-col gap-0.5 transition-opacity duration-300 [grid-area:1/1] min-[60rem]:[grid-area:auto]",
                     "data-[state=future]:opacity-0 max-[60rem]:data-[state=past]:opacity-0 min-[60rem]:data-[state=past]:text-ink-3",
-                    // Reduced motion: the whole conversation (the last line only on a phone).
-                    "motion-reduce:opacity-100 max-[60rem]:motion-reduce:not-data-[last=true]:opacity-0",
                   )}
                 >
                   <span className="text-xs font-semibold text-blue">{t(`s${n}`)}</span>

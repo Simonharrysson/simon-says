@@ -49,11 +49,11 @@ export function LandingView({ user, signIn }: LandingViewProps) {
   return (
     <>
       {/* ---------- Hero ---------- */}
-      <section className="pt-[clamp(2.5rem,7vw,6rem)] pb-[clamp(3rem,6vw,5rem)]" aria-labelledby="hero-title">
-        <div className={cn(wrap, "flex flex-col gap-[clamp(1.5rem,3vw,2.5rem)]")}>
+      <section className="pt-[clamp(2rem,4vw,3.5rem)] pb-[clamp(3rem,6vw,5rem)]" aria-labelledby="hero-title">
+        <div className={cn(wrap, "flex flex-col items-start gap-[clamp(1.25rem,2vw,1.5rem)]")}>
           <h1
             id="hero-title"
-            className="text-[clamp(2.125rem,1.3rem+5.2vw,6rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
+            className="text-[clamp(2.125rem,1.1rem+4.4vw,5rem)] max-[48rem]:text-[clamp(2.125rem,1.3rem+5.2vw,2.75rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
           >
             {/* One sentence per line, so the line count never depends on which font has loaded (no shift on swap). */}
             {t("heroTitle")
@@ -65,23 +65,21 @@ export function LandingView({ user, signIn }: LandingViewProps) {
                 </span>
               ))}
           </h1>
-          <div className="grid grid-cols-[minmax(0,1fr)] items-end gap-x-[clamp(2rem,5vw,5rem)] gap-y-6 min-[60rem]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-            <p className="max-w-[38rem] text-lg text-ink-2 min-[48rem]:text-xl min-[48rem]:leading-[1.5]">{t("heroText")}</p>
-            <div className="flex flex-col gap-4 min-[60rem]:items-end">
-              <div className="flex flex-wrap items-center gap-2 max-[30rem]:flex-col max-[30rem]:items-stretch max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
-                <StartAction signedIn={signedIn} signIn={signIn} google={!signedIn} />
-                <a
-                  className="press inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-5 text-base font-medium text-ink-2 no-underline hover:bg-sunk hover:text-ink hover:no-underline"
-                  href="#funktioner"
-                >
-                  {t("seeHow")}
-                </a>
-              </div>
-              <p className="text-sm text-ink-3">{user ? t("signedInAs", { email: user.email }) : t("freeLine")}</p>
+          <p className="max-w-[46rem] text-lg text-ink-2 min-[48rem]:text-xl min-[48rem]:leading-[1.5]">{t("heroText")}</p>
+          <div className="flex w-full flex-col items-start gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-2 max-[30rem]:w-full max-[30rem]:flex-col max-[30rem]:items-stretch max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
+              <StartAction signedIn={signedIn} signIn={signIn} google={!signedIn} />
+              <a
+                className="press inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-5 text-base font-medium text-ink-2 no-underline hover:bg-sunk hover:text-ink hover:no-underline"
+                href="#funktioner"
+              >
+                {t("seeHow")}
+              </a>
             </div>
+            <p className="text-sm text-ink-3">{user ? t("signedInAs", { email: user.email }) : t("freeLine")}</p>
           </div>
         </div>
-        <div className={cn(wrap, "mt-[clamp(2.5rem,5vw,4.5rem)]")}>
+        <div className={cn(wrap, "mt-[clamp(2rem,3.5vw,3rem)]")}>
           <HeroDemo />
         </div>
       </section>
