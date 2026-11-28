@@ -85,6 +85,9 @@ describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
     return data as { id: string; status: string; person_id: string | null; sent_at: string | null; claimed_by: string | null; reminder_status: string | null } | null;
   }
 
+  /** A Google identity, as a real sign-in has (the claim requires one; the seed's test function). */
+  const google = async (u: TestUser) => expect((await db().rpc("test_add_google_identity", { p_user: u.id })).error).toBeNull();
+
   beforeAll(async () => {
     [admin, member, guest, other] = await Promise.all([createTestUser("gl-adm"), createTestUser("gl-mem"), createTestUser("gl-guest"), createTestUser("gl-other")]);
     const r = await createOrg(admin.db, "Tillväxtföreningen");
@@ -135,6 +138,17 @@ describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
     expect((await invite(id, oskarEmail))!.status).toBe("sent");
   });
 
+  it("an address that said no to invites keeps its summary as before", async () => {
+    const no = `nej-${randomUUID().slice(0, 6)}@exempel.se`;
+    const pid = await person("Nej Nilsson", { email: no });
+    expect((await db().from("email_address_preferences").insert({ email: no, all_off: false, off_categories: ["meeting_invite"] })).error).toBeNull();
+    const id = await meeting({ calendar_event: { title: "Styrelsemöte november", expected: [pid], declined: [] } });
+    const f = fakeMailer();
+    await sendMeetingSummaries(id, f);
+    expect((await invite(id, no))!.status).toBe("skipped");
+    expect(f.sent.map((m) => m.to)).toContain(no);
+  });
+
   it("the starter's toggle at Starta turns it off for that meeting", async () => {
     const id = await meeting({ invite_attendees: false });
     await sendMeetingSummaries(id, fakeMailer());
@@ -164,6 +178,13 @@ describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
         .single();
       if (error) throw new Error(error.message);
       token = inviteToken(data.id as string, guestEmail());
+    });
+
+    it("without a Google identity even the invited address can't claim (e-mail sign-up can't bypass the binding)", async () => {
+      expect((await claimInvite(token, { id: guest.id })).outcome).toBe("mismatch");
+      expect((await loadInvite(token))!.claimedBy).toBeNull();
+      await google(guest);
+      await google(other);
     });
 
     it("before the claim the guest sees nothing", async () => {
@@ -232,6 +253,7 @@ describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
 
   it("a people row's claim links the row and joins the förening", async () => {
     const newbie = await createTestUser("gl-new");
+    await google(newbie);
     const pid = await person("Ny Nilsson", { email: newbie.email.toLowerCase() });
     const id = await meeting();
     const { data } = await db()

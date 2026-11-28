@@ -117,23 +117,24 @@ revoke all on table public.meeting_guests from anon, authenticated, service_role
 grant select, insert, update, delete on table public.meeting_guests to service_role;
 grant select on table public.meeting_guests to authenticated;
 
--- Does p_user hold a live grant to p_meeting? Read at every check: not revoked, the meeting not
--- private, not a Privat space.
-create function public.guest_can_see_meeting(p_user uuid, p_meeting_id uuid)
+-- Does the CALLER (auth.uid(), never an argument: nobody can ask about another user) hold a live
+-- grant to p_meeting? Read at every check: not revoked, the meeting not private, a förening only
+-- (no Företag guests in v1, never a Privat space).
+create function public.guest_can_see_meeting(p_meeting_id uuid)
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
-  select p_user is not null and exists (
+  select auth.uid() is not null and exists (
     select 1
     from public.meeting_guests g
     join public.meetings mt on mt.id = g.meeting_id
     join public.orgs o on o.id = mt.org_id
-    where g.meeting_id = p_meeting_id and g.user_id = p_user and g.revoked_at is null
-      and not coalesce(mt.private, false) and o.kind <> 'privat'
+    where g.meeting_id = p_meeting_id and g.user_id = auth.uid() and g.revoked_at is null
+      and not coalesce(mt.private, false) and o.kind = 'forening'
   );
 $$;
-revoke all on function public.guest_can_see_meeting(uuid, uuid) from public, anon;
-grant execute on function public.guest_can_see_meeting(uuid, uuid) to authenticated, service_role;
+revoke all on function public.guest_can_see_meeting(uuid) from public, anon;
+grant execute on function public.guest_can_see_meeting(uuid) to authenticated, service_role;
 
 -- Is the caller an admin of the meeting's org? (No RLS detour through meetings.)
 create function public.is_meeting_org_admin(p_meeting_id uuid)
@@ -156,9 +157,9 @@ create policy meeting_guests_select on public.meeting_guests for select to authe
 
 -- The two tables the meeting page reads. Permissive: OR'ed with the members' policies.
 create policy meetings_guest_select on public.meetings for select to authenticated
-  using (public.guest_can_see_meeting((select auth.uid()), id));
+  using (public.guest_can_see_meeting(id));
 create policy note_items_guest_select on public.note_items for select to authenticated
-  using (public.guest_can_see_meeting((select auth.uid()), meeting_id));
+  using (public.guest_can_see_meeting(meeting_id));
 
 -- Admins only: take a guest's access away (or give it back). False when refused.
 create function public.set_meeting_guest_access(p_meeting_id uuid, p_user_id uuid, p_on boolean)
@@ -257,7 +258,14 @@ begin
     return query select (case when v_inv.claimed_by = p_user_id then 'ok_again' else 'used' end)::text, v_inv.org_id, v_inv.meeting_id;
     return;
   end if;
-  select lower(btrim(u.email::text)) into v_email from auth.users u where u.id = p_user_id and u.email_confirmed_at is not null;
+  -- A confirmed address, signed in with Google (defence in depth: should e-mail sign-up ever be
+  -- turned on, an unverified-by-Google account must not take an invite by typing its address).
+  select lower(btrim(u.email::text)) into v_email from auth.users u
+  where u.id = p_user_id and u.email_confirmed_at is not null
+    and exists (
+      select 1 from auth.identities i
+      where i.user_id = u.id and i.provider = 'google' and lower(btrim(coalesce(i.identity_data ->> 'email', u.email::text))) = lower(btrim(u.email::text))
+    );
   if v_email is null or v_email <> v_inv.email then
     return query select 'mismatch'::text, v_inv.org_id, v_inv.meeting_id;
     return;
@@ -268,7 +276,7 @@ begin
   end if;
   select coalesce(mt.private, false), o.kind into v_private, v_kind
   from public.meetings mt join public.orgs o on o.id = mt.org_id where mt.id = v_inv.meeting_id;
-  if v_kind is null or v_private or v_kind = 'privat' then
+  if v_kind is distinct from 'forening' or v_private then
     return query select 'gone'::text, v_inv.org_id, v_inv.meeting_id;
     return;
   end if;
@@ -336,7 +344,7 @@ declare
 begin
   delete from public.meeting_calendar_guests g
   using public.meetings mt
-  where mt.id = g.meeting_id and mt.ended_at < now() - interval '30 days';
+  where mt.id = g.meeting_id and coalesce(mt.ended_at, mt.started_at) < now() - interval '30 days';
   get diagnostics v_guests = row_count;
   update public.meeting_invites i set email = null, name = null
   where i.email is not null and i.claimed_at is null and i.created_at < now() - interval '90 days';

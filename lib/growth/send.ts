@@ -5,7 +5,7 @@ import { logEvent } from "@/lib/db/events";
 import { orgMemberList } from "@/lib/db/members";
 import type { ItemRole, SummaryMode } from "@/lib/db/types";
 import { e2eMode } from "@/lib/e2e/guard";
-import { sendUserMailDetailed } from "@/lib/email/prefs";
+import { checkEmailGate, sendUserMailDetailed } from "@/lib/email/prefs";
 import { emailPrefsUrl, listUnsubscribeHeaders } from "@/lib/email/token";
 import { localeForEmail } from "@/lib/i18n/user-locale";
 import type { Mailer } from "@/lib/mail";
@@ -125,6 +125,17 @@ export async function queueMeetingInvites(input: QueueInput): Promise<void> {
           { onConflict: "meeting_id,email", ignoreDuplicates: true },
         ),
       );
+      // Decided now, before the summary list is reduced: an address that said no to these mails,
+      // or that a cap holds back, is `skipped` at once and keeps its summary as before.
+      const queued = must("queued", await db.from("meeting_invites").select("id, org_id, email").eq("meeting_id", m.id).eq("status", "queued")) as {
+        id: string;
+        org_id: string;
+        email: string | null;
+      }[];
+      for (const row of queued) {
+        const reason = await heldBack(db, row, new Date());
+        if (reason) must("skip", await db.from("meeting_invites").update({ status: "skipped", skip_reason: reason }).eq("id", row.id).eq("status", "queued"));
+      }
     }
     await logEvent(m.id, "invites", {
       state: "queued",
@@ -140,8 +151,30 @@ export async function queueMeetingInvites(input: QueueInput): Promise<void> {
 }
 
 /** Every address this meeting invites (any status): never also in its summary list. */
+/** Invites that are, or may be, on their way: these addresses get the invite, not the summary. */
+export const ACTIVE_INVITE = ["queued", "sending", "sent", "uncertain"] as const;
+
+/**
+ * Why an invite to this address won't go out (the gate said no, or a cap), or null. "unknown" from
+ * the gate is not a no: the send re-checks.
+ */
+async function heldBack(db: SupabaseClient, row: { id: string; org_id: string; email: string | null }, now: Date): Promise<string | null> {
+  if (!row.email) return "no_email";
+  const gate = await checkEmailGate({ userId: null, email: row.email }, "meeting_invite", db);
+  if (gate === "opted_out" || gate === "invalid") return gate;
+  const earlier = must(
+    "earlier",
+    await db.from("meeting_invites").select("sent_at, clicked_at, clicked_human_at, claimed_at").eq("org_id", row.org_id).eq("email", row.email).neq("id", row.id).not("sent_at", "is", null).order("sent_at", { ascending: false }).limit(5),
+  ) as { sent_at: string | null; clicked_at: string | null; clicked_human_at: string | null; claimed_at: string | null }[];
+  return addressPaused(earlier, now);
+}
+
+/**
+ * Every address this meeting invites and hasn't given up on: never also in its summary list. A
+ * skipped (opted out, capped) or failed invite leaves the person's summary as it was.
+ */
 export async function inviteAddresses(meetingId: string): Promise<Set<string>> {
-  const { data, error } = await supabaseAdmin().from("meeting_invites").select("email").eq("meeting_id", meetingId);
+  const { data, error } = await supabaseAdmin().from("meeting_invites").select("email").eq("meeting_id", meetingId).in("status", [...ACTIVE_INVITE]);
   if (error) {
     console.error(`invites ${meetingId}: addresses: ${error.message}`);
     return new Set();
@@ -272,11 +305,7 @@ async function deliver(
   if (!email || !ctx.ok) return { outcome: "skipped", reason: !email ? "no_email" : "off" };
   if ((await accountEmails(db, [email])).has(email)) return { outcome: "skipped", reason: "account" };
   if (!reminder) {
-    const earlier = must(
-      "earlier",
-      await db.from("meeting_invites").select("sent_at, clicked_at, clicked_human_at, claimed_at").eq("org_id", row.org_id).eq("email", email).neq("id", row.id).not("sent_at", "is", null).order("sent_at", { ascending: false }).limit(5),
-    ) as { sent_at: string | null; clicked_at: string | null; clicked_human_at: string | null; claimed_at: string | null }[];
-    const paused = addressPaused(earlier, deps.now());
+    const paused = await heldBack(db, row, deps.now());
     if (paused) return { outcome: "skipped", reason: paused };
   }
   const locale = await localeForEmail(email, db);
