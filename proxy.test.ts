@@ -12,8 +12,8 @@ let refreshed = 0;
 const KNOWN_ORG = "11111111-1111-4111-8111-111111111111";
 
 beforeAll(() => {
-  Object.assign(process.env, testEnv);
-  vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+  Object.assign(process.env, testEnv, { ADMIN_EMAILS: "boss@example.com" });
+  vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes("/auth/v1/token") && url.includes("refresh_token")) {
       refreshed++;
@@ -26,7 +26,12 @@ beforeAll(() => {
         user,
       });
     }
-    if (url.includes("/auth/v1/user")) return Response.json(user);
+    if (url.includes("/auth/v1/user")) {
+      // The access token's subject picks the account: "boss" is in ADMIN_EMAILS.
+      const auth = new Headers(input instanceof Request ? input.headers : init?.headers).get("authorization") ?? "";
+      const sub = JSON.parse(Buffer.from(auth.replace(/^Bearer /i, "").split(".")[1] ?? "", "base64url").toString() || "{}").sub;
+      return Response.json(sub === "boss" ? { ...user, id: "boss", email: "boss@example.com" } : user);
+    }
     if (url.includes("/rest/v1/orgs")) return Response.json(url.includes(KNOWN_ORG) ? [{ id: KNOWN_ORG }] : []);
     throw new Error(`unexpected fetch ${url}`);
   });
@@ -78,6 +83,27 @@ describe("proxy", () => {
     expect(notUuid.status).toBe(404);
     const known = await proxy(new NextRequest(`https://simonsays.example/orgs/${KNOWN_ORG}?flik=oversikt`, { headers }));
     expect(known.status).toBe(200);
+  });
+
+  it("answers a real 404 on /admin for everyone outside ADMIN_EMAILS, never a login redirect", async () => {
+    const session = (sub: string) => ({ access_token: jwt(sub, now() + 3600), refresh_token: "r", token_type: "bearer", expires_in: 3600, expires_at: now() + 3600, user });
+    const cookie = (sub: string) => ({ cookie: `sb-example-auth-token=base64-${b64url(session(sub))}`, "sec-fetch-dest": "document" });
+
+    const signedOut = await proxy(new NextRequest("https://simonsays.example/admin"));
+    expect(signedOut.status).toBe(404);
+    expect(signedOut.headers.get("location")).toBeNull();
+    expect(signedOut.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+
+    const member = await proxy(new NextRequest("https://simonsays.example/admin", { headers: cookie("u1") }));
+    expect(member.status).toBe(404);
+    // Below /admin and for client (RSC) requests too.
+    const rsc = await proxy(new NextRequest("https://simonsays.example/admin/x", { headers: { ...cookie("u1"), rsc: "1" } }));
+    expect(rsc.status).toBe(404);
+
+    const admin = await proxy(new NextRequest("https://simonsays.example/admin", { headers: cookie("boss") }));
+    expect(admin.status).toBe(200);
+    expect(admin.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(admin.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("passes through without a session", async () => {
