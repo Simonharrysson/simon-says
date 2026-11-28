@@ -33,5 +33,6 @@
   "remove": "Ta bort raden",
   "edited": "Ändrad av er",
   "sources": "Källor",
-  "sourceLink": "Möte {date}"
+  "sourceLink": "Möte {date}",
+  "stale": "Sidan har ändrats sedan du öppnade den (någon tryckte Uppdatera). Ladda om sidan och gör ändringen igen."
 }

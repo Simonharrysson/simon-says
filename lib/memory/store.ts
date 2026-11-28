@@ -123,26 +123,32 @@ async function writeIfUnchanged(admin: SupabaseClient, orgId: string, userId: st
   return (data ?? []).length === 1;
 }
 
+export type SaveResult = { ok: true } | { ok: false; reason: "forbidden" | "invalid" | "stale" | "failed" };
+
 /**
  * An admin's save. `seenIds`: the lines their page showed. Only those are edited or removed; every
- * other line (one they can't see, or one Uppdatera wrote meanwhile) stays as it is. False when
- * not an admin, invalid, or not saved.
+ * other line (one they can't see, or one Uppdatera wrote meanwhile) is kept as it is, and nothing
+ * is ever cut to make room. An edit of a line that is no longer there (the page is older than an
+ * Uppdatera) is refused as stale, never turned into a new line without its sources.
  */
-export async function saveMemoryEdits(db: SupabaseClient, admin: SupabaseClient, orgId: string, userId: string, edits: EditedLine[], seenIds: string[]): Promise<boolean> {
-  if (!(await isAdminOf(db, orgId, userId)) || !Array.isArray(seenIds)) return false;
+export async function saveMemoryEdits(db: SupabaseClient, admin: SupabaseClient, orgId: string, userId: string, edits: EditedLine[], seenIds: string[]): Promise<SaveResult> {
+  if (!(await isAdminOf(db, orgId, userId))) return { ok: false, reason: "forbidden" };
+  if (!Array.isArray(seenIds) || !Array.isArray(edits)) return { ok: false, reason: "invalid" };
   for (let attempt = 0; attempt < RETRIES; attempt++) {
     const row = await readRow(admin, orgId);
     const all = row?.memory.lines ?? [];
     // Only lines this admin may see now count as seen (a forged id can't touch a hidden line).
     const visibleIds = new Set((await filterFor(db, all)).lines.map((l) => l.id));
     const seen = new Set(seenIds.filter((id) => typeof id === "string" && visibleIds.has(id)));
+    if (edits.some((e) => e && typeof e.id === "string" && !seen.has(e.id))) return { ok: false, reason: "stale" };
     const edited = applyEdits(all.filter((l) => seen.has(l.id)), edits, newLineId);
-    if (!edited) return false;
-    const lines = [...edited, ...all.filter((l) => !seen.has(l.id))].slice(0, MAX_LINES);
-    if (await writeIfUnchanged(admin, orgId, userId, row ? row.version : null, { lines })) return true;
+    if (!edited) return { ok: false, reason: "invalid" };
+    const lines = [...edited, ...all.filter((l) => !seen.has(l.id))];
+    if (lines.length > MAX_LINES) return { ok: false, reason: "invalid" };
+    if (await writeIfUnchanged(admin, orgId, userId, row ? row.version : null, { lines })) return { ok: true };
   }
   console.error("org_memory: save gave up after conflicts");
-  return false;
+  return { ok: false, reason: "failed" };
 }
 
 export type RefreshResult = { ok: true; lines: number; meetings: number } | { ok: false; reason: "forbidden" | "cooldown" | "empty" | "spend" | "failed" };
@@ -155,22 +161,30 @@ export interface RefreshDeps {
 }
 
 /**
- * Take this org's Uppdatera slot: one conditional update (generated_at empty or older than the
- * cooldown), so two refreshes at once can't both run. False: in cooldown.
+ * Take this org's Uppdatera slot: one compare-and-set on generated_at (as read, and only when it is
+ * empty or older than the cooldown), so two refreshes at once can't both run. Null: in cooldown.
+ * `release()` gives the slot back (a failed run must not use up the cooldown).
  */
-export async function claimRefresh(admin: SupabaseClient, orgId: string, userId: string, now: Date): Promise<boolean> {
+export async function claimRefresh(admin: SupabaseClient, orgId: string, userId: string, now: Date): Promise<{ release: () => Promise<void> } | null> {
   const { error: e1 } = await admin.from("org_memory").upsert({ org_id: orgId, updated_by: userId }, { onConflict: "org_id", ignoreDuplicates: true });
   if (e1) throw new Error(`org_memory: claim row: ${e1.message}`);
-  const before = new Date(now.getTime() - MEMORY_COOLDOWN_S * 1000).toISOString();
-  // Two conditional updates (never built), then older than the cooldown: each one is atomic, and
-  // once one of them set generated_at to now, every other attempt matches neither.
-  for (const older of [null, before]) {
-    const q = admin.from("org_memory").update({ generated_at: now.toISOString() }).eq("org_id", orgId);
-    const { data, error } = await (older === null ? q.is("generated_at", null) : q.lt("generated_at", older)).select("org_id");
-    if (error) throw new Error(`org_memory: claim: ${error.message}`);
-    if ((data ?? []).length === 1) return true;
-  }
-  return false;
+  const { data: cur, error: e2 } = await admin.from("org_memory").select("generated_at").eq("org_id", orgId).single();
+  if (e2) throw new Error(`org_memory: claim read: ${e2.message}`);
+  const prev = (cur as { generated_at: string | null }).generated_at;
+  if (prev && now.getTime() - new Date(prev).getTime() < MEMORY_COOLDOWN_S * 1000) return null;
+  const mine = now.toISOString();
+  const q = admin.from("org_memory").update({ generated_at: mine }).eq("org_id", orgId);
+  const { data, error } = await (prev === null ? q.is("generated_at", null) : q.eq("generated_at", prev)).select("org_id");
+  if (error) throw new Error(`org_memory: claim: ${error.message}`);
+  if ((data ?? []).length !== 1) return null;
+  return {
+    release: async () => {
+      // Only our own claim, and only while nobody wrote a page since.
+      const back = admin.from("org_memory").update({ generated_at: prev }).eq("org_id", orgId).eq("generated_at", mine);
+      const { error: e3 } = await back;
+      if (e3) console.error(`org_memory: release: ${e3.message}`);
+    },
+  };
 }
 
 /** The meetings for a draft and what the app shows of each (visible(), summaryContent's lists). */
@@ -201,9 +215,22 @@ export async function draftMeetings(admin: SupabaseClient, orgId: string, limit 
  */
 export async function refreshMemory(db: SupabaseClient, org: { id: string; name: string }, userId: string, deps: RefreshDeps): Promise<RefreshResult> {
   if (!(await isAdminOf(db, org.id, userId))) return { ok: false, reason: "forbidden" };
-  if (!(await claimRefresh(deps.admin, org.id, userId, deps.now))) return { ok: false, reason: "cooldown" };
+  // Nothing to build from: no claim, so the cooldown isn't used up.
   const meetings = await draftMeetings(deps.admin, org.id);
   if (!meetings.length) return { ok: false, reason: "empty" };
+  const claim = await claimRefresh(deps.admin, org.id, userId, deps.now);
+  if (!claim) return { ok: false, reason: "cooldown" };
+  try {
+    const done = await runRefresh(org, userId, deps, meetings);
+    if (!done.ok) await claim.release();
+    return done;
+  } catch (err) {
+    await claim.release();
+    throw err;
+  }
+}
+
+async function runRefresh(org: { id: string; name: string }, userId: string, deps: RefreshDeps, meetings: MemoryMeeting[]): Promise<RefreshResult> {
   const allowed = new Set(meetings.map((m) => m.id));
   const before = (await readRow(deps.admin, org.id))?.memory.lines ?? [];
   const kept = before.filter((l) => l.edited && l.sources.every((s) => allowed.has(s)));

@@ -33,5 +33,6 @@
   "remove": "Remove the line",
   "edited": "Changed by you",
   "sources": "Sources",
-  "sourceLink": "Meeting {date}"
+  "sourceLink": "Meeting {date}",
+  "stale": "The page has changed since you opened it (someone pressed Update). Reload the page and make the change again."
 }

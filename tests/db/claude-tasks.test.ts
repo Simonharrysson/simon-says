@@ -163,9 +163,9 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: false, reason: "cooldown" });
     // A member can't read the page or edit; the admin can.
     expect(await loadMemoryFor(maja.db, admin, orgId, maja.id)).toBeNull();
-    expect(await saveMemoryEdits(maja.db, admin, orgId, maja.id, [{ section: "glossary", text: "MVP = minsta möjliga produkt" }], [])).toBe(false);
+    expect(await saveMemoryEdits(maja.db, admin, orgId, maja.id, [{ section: "glossary", text: "MVP = minsta möjliga produkt" }], [])).toMatchObject({ ok: false });
     const seen = saved.lines.map((l) => l.id);
-    expect(await saveMemoryEdits(anna.db, admin, orgId, anna.id, [...saved.lines.map((l) => ({ id: l.id, section: l.section, text: l.text })), { section: "glossary", text: "MVP = minsta möjliga produkt" }], seen)).toBe(true);
+    expect(await saveMemoryEdits(anna.db, admin, orgId, anna.id, [...saved.lines.map((l) => ({ id: l.id, section: l.section, text: l.text })), { section: "glossary", text: "MVP = minsta möjliga produkt" }], seen)).toEqual({ ok: true });
     expect((await loadMemoryFor(anna.db, admin, orgId, anna.id))!.memory.lines.map((l) => l.text)).toEqual(["Julfesten hålls i december", "MVP = minsta möjliga produkt"]);
   });
 
@@ -203,7 +203,7 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     const base = generated(meeting);
     // The admin saves a line of their own while Claude is still writing the draft.
     const slow = async () => {
-      expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "glossary", text: "Admin-rad under Uppdatera" }], [])).toBe(true);
+      expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "glossary", text: "Admin-rad under Uppdatera" }], [])).toEqual({ ok: true });
       return base();
     };
     expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: slow as never, now: new Date() })).toMatchObject({ ok: true });
@@ -214,8 +214,49 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
       saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "people", text: "Rad A" }], []),
       saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "people", text: "Rad B" }], []),
     ]);
-    expect([a, b]).toEqual([true, true]);
+    expect([a, b]).toEqual([{ ok: true }, { ok: true }]);
     expect(await texts()).toEqual(["Admin-rad under Uppdatera", "Medlemsavgiften är 200 kr", "Rad A", "Rad B"]);
+  });
+
+  it("a stale save (the page is older than an Uppdatera) is refused; the new lines keep their sources", async () => {
+    const { org, meeting } = await freshOrg("Inaktuella föreningen");
+    const t0 = new Date();
+    expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: generated(meeting) as never, now: t0 })).toMatchObject({ ok: true });
+    const old = (await loadMemoryFor(anna.db, admin, org.id, anna.id))!.memory.lines;
+    // Someone presses Uppdatera again (after the cooldown): the generated line gets a new id.
+    expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: generated(meeting) as never, now: new Date(t0.getTime() + 120_000) })).toMatchObject({ ok: true });
+    const stale = await saveMemoryEdits(anna.db, admin, org.id, anna.id, old.map((l) => ({ id: l.id, section: l.section, text: `${l.text} (ändrad)` })), old.map((l) => l.id));
+    expect(stale).toEqual({ ok: false, reason: "stale" });
+    const stored = must("stored", await admin.from("org_memory").select("lines").eq("org_id", org.id).single()) as { lines: { text: string; sources: string[]; edited: boolean }[] };
+    expect(stored.lines).toMatchObject([{ text: "Medlemsavgiften är 200 kr", sources: [meeting], edited: false }]);
+  });
+
+  it("a failed or empty Uppdatera doesn't use up the cooldown", async () => {
+    const { org, meeting } = await freshOrg("Misslyckade föreningen");
+    const fails = async () => ({ ok: false as const, reason: "request" as const, detail: "down", usage: null });
+    const now = new Date();
+    expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: fails as never, now })).toEqual({ ok: false, reason: "failed" });
+    expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: generated(meeting) as never, now })).toMatchObject({ ok: true });
+    // No meetings at all: no claim either.
+    const empty = (must("empty", await admin.from("orgs").insert({ name: "Tomma föreningen", created_by: anna.id }).select("id").single()) as { id: string }).id;
+    await admin.from("org_members").upsert({ org_id: empty, user_id: anna.id, role: "admin" }, { onConflict: "org_id,user_id", ignoreDuplicates: true });
+    expect(await refreshMemory(anna.db, { id: empty, name: "Tomma" }, anna.id, { admin, oneShot: generated(meeting) as never, now })).toEqual({ ok: false, reason: "empty" });
+    expect(must("no row", await admin.from("org_memory").select("generated_at").eq("org_id", empty))).toEqual([]);
+  });
+
+  it("a save never drops a line hidden from the editor (a full page is refused instead)", async () => {
+    const { org, meeting } = await freshOrg("Fulla föreningen");
+    const elsewhere = (must("other", await admin.from("orgs").insert({ name: "Grannföreningen", created_by: jonas.id }).select("id").single()) as { id: string }).id;
+    const hidden = (must("hidden", await admin.from("meetings").insert({ org_id: elsewhere, started_by: jonas.id, doc_id: "doc", notes_tab_id: "t.0", status: "done" }).select("id").single()) as { id: string }).id;
+    const shown = Array.from({ length: 199 }, (_, i) => ({ id: `s${i}`, section: "glossary", text: `Ord ${i}`, sources: [meeting], edited: false }));
+    must("memory", await admin.from("org_memory").insert({ org_id: org.id, lines: [...shown, { id: "h", section: "priorities", text: "Dold rad", sources: [hidden], edited: false }] }));
+    const seen = shown.map((l) => l.id);
+    const edits = shown.map((l) => ({ id: l.id, section: l.section, text: l.text }));
+    expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [...edits, { section: "people", text: "En rad till" }], seen)).toEqual({ ok: false, reason: "invalid" });
+    expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, edits.slice(1), seen)).toEqual({ ok: true });
+    const stored = must("stored", await admin.from("org_memory").select("lines").eq("org_id", org.id).single()) as { lines: { id: string }[] };
+    expect(stored.lines).toHaveLength(199);
+    expect(stored.lines.map((l) => l.id)).toContain("h");
   });
 
   it("the page, for an admin too, leaves out a line whose source they can't see; a save keeps it", async () => {
@@ -237,7 +278,7 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     expect(page.memory.lines.map((l) => l.id)).toEqual(["seen"]);
     expect(Object.keys(page.sources)).toEqual([meeting]);
     // Her save (even naming the hidden line's id) changes only what she saw.
-    expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ id: "seen", section: "decisions", text: "Avgiften är 200 kr" }], ["seen", "gone"])).toBe(true);
+    expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ id: "seen", section: "decisions", text: "Avgiften är 200 kr" }], ["seen", "gone"])).toEqual({ ok: true });
     const stored = must("stored", await admin.from("org_memory").select("lines").eq("org_id", org.id).single()) as { lines: { id: string; text: string }[] };
     expect(stored.lines.map((l) => [l.id, l.text])).toEqual([
       ["seen", "Avgiften är 200 kr"],

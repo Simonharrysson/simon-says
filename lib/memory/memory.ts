@@ -122,8 +122,10 @@ export function applyEdits(existing: MemoryLine[], edits: EditedLine[], newId: (
     const text = clean(e.text);
     if (text.length > MAX_LINE) return null;
     if (!text) continue;
+    // An id must name a line that is there, once: never a new line made from an old one.
+    if (typeof e.id === "string" && (!byId.has(e.id) || used.has(e.id))) return null;
     const before = typeof e.id === "string" ? byId.get(e.id) : undefined;
-    if (before && !used.has(before.id)) {
+    if (before) {
       used.add(before.id);
       const changed = before.text !== text || before.section !== e.section;
       out.push({ ...before, section: e.section, text, edited: before.edited || changed });

@@ -31,7 +31,8 @@ export async function saveMemoryAction(orgId: string, edits: EditedLine[], seenI
   const t = await getTranslations("memory");
   const a = await adminOf(orgId);
   if (!a || !Array.isArray(edits) || !Array.isArray(seenIds)) return { ok: false, message: t("saveFailed") };
-  if (!(await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits, seenIds.map(String)))) return { ok: false, message: t("saveFailed") };
+  const saved = await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits, seenIds.map(String));
+  if (!saved.ok) return { ok: false, message: saved.reason === "stale" ? t("stale") : t("saveFailed") };
   revalidatePath(`/orgs/${orgId}`);
   return { ok: true, message: t("saved") };
 }

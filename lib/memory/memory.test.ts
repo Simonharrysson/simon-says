@@ -63,6 +63,11 @@ describe("applyEdits (an admin's save)", () => {
       { id: "n1", section: "glossary", text: "MVP = minsta möjliga produkt", sources: [], edited: true },
     ]);
   });
+  it("an id that names no line (a page older than an Uppdatera) or the same line twice is refused", () => {
+    const a = line({ id: "a", text: "Kund A" });
+    expect(applyEdits([a], [{ id: "gone", section: "customers", text: "Kund A" }], id)).toBeNull();
+    expect(applyEdits([a], [{ id: "a", section: "customers", text: "x" }, { id: "a", section: "customers", text: "y" }], id)).toBeNull();
+  });
   it("an untouched line stays generated; a bad section or an overlong line refuses the whole save", () => {
     const a = line({ id: "a", text: "Kund A" });
     expect(applyEdits([a], [{ id: "a", section: "customers", text: "Kund A" }], id)).toEqual([a]);
