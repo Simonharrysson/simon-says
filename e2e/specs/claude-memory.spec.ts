@@ -41,4 +41,15 @@ test("Vad Claude ska veta: Uppdatera from the meetings, edit and add a line, sav
   await expect(page.getByRole("textbox", { name: "Kunder, rad 1" })).toHaveValue(SCRIPTED.memory.customer);
   await expect(page.getByText("Ändrad av er")).toHaveCount(2);
   await expectAccessible(page);
+
+  // A line built from a meeting the admin can't see (another förening's) never reaches the page.
+  const other = await seedOrg({ admin: "someone-else@e2e.test" });
+  const hidden = await seedMeeting(db, other, { startedBy: "someone-else@e2e.test" });
+  const { data: row } = await db.from("org_memory").select("lines").eq("org_id", org.id).single();
+  const lines = [...((row?.lines ?? []) as unknown[]), { id: "hidden1", section: "priorities", text: "Hemlig rad från en annan förening", sources: [hidden.id], edited: false }];
+  await db.from("org_memory").update({ lines }).eq("org_id", org.id);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Kunder, rad 1" })).toHaveValue(SCRIPTED.memory.customer);
+  await expect(page.getByRole("textbox", { name: "Prioriteringar, rad 1" })).toHaveCount(0);
+  await expect(page.getByText("Hemlig rad från en annan förening")).toHaveCount(0);
 });

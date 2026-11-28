@@ -23,7 +23,7 @@ const { connectAs, resultOf, ORIGIN } = await import("@/test/mcp-kit");
 const { dbStore } = await import("@/lib/mcp/store");
 const { dbReader } = await import("@/lib/mcp/reader");
 const { defaultToolDeps } = await import("@/lib/mcp/tools");
-const { draftMeetings, refreshMemory, saveMemoryEdits, loadMemory } = await import("@/lib/memory/store");
+const { draftMeetings, refreshMemory, saveMemoryEdits, loadMemoryFor } = await import("@/lib/memory/store");
 type McpDeps = import("@/lib/mcp/handler").McpDeps;
 type Client = Awaited<ReturnType<typeof connectAs>>["client"];
 
@@ -157,14 +157,92 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     const org = { id: orgId, name: "Agentbolaget" };
     expect(await refreshMemory(maja.db, org, maja.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: false, reason: "forbidden" });
     expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: true, lines: 1, meetings: 1 });
-    const saved = await loadMemory(anna.db, orgId);
+    const saved = (await loadMemoryFor(anna.db, admin, orgId, anna.id))!.memory;
     expect(saved.lines.map((l) => l.text)).toEqual(["Julfesten hålls i december"]);
     // Cooldown: a second Uppdatera right away is refused.
     expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: false, reason: "cooldown" });
-    // A member can't edit; the admin can.
-    expect(await saveMemoryEdits(maja.db, admin, orgId, maja.id, [{ section: "glossary", text: "MVP = minsta möjliga produkt" }])).toBe(false);
-    expect(await saveMemoryEdits(anna.db, admin, orgId, anna.id, [...saved.lines.map((l) => ({ id: l.id, section: l.section, text: l.text })), { section: "glossary", text: "MVP = minsta möjliga produkt" }])).toBe(true);
-    expect((await loadMemory(maja.db, orgId)).lines.map((l) => l.text)).toEqual(["Julfesten hålls i december", "MVP = minsta möjliga produkt"]);
+    // A member can't read the page or edit; the admin can.
+    expect(await loadMemoryFor(maja.db, admin, orgId, maja.id)).toBeNull();
+    expect(await saveMemoryEdits(maja.db, admin, orgId, maja.id, [{ section: "glossary", text: "MVP = minsta möjliga produkt" }], [])).toBe(false);
+    const seen = saved.lines.map((l) => l.id);
+    expect(await saveMemoryEdits(anna.db, admin, orgId, anna.id, [...saved.lines.map((l) => ({ id: l.id, section: l.section, text: l.text })), { section: "glossary", text: "MVP = minsta möjliga produkt" }], seen)).toBe(true);
+    expect((await loadMemoryFor(anna.db, admin, orgId, anna.id))!.memory.lines.map((l) => l.text)).toEqual(["Julfesten hålls i december", "MVP = minsta möjliga produkt"]);
+  });
+
+  /** A förening of Anna's with one finished meeting (a fresh org: its own cooldown). */
+  const freshOrg = async (name: string) => {
+    const id = (must("org", await admin.from("orgs").insert({ name, created_by: anna.id }).select("id").single()) as { id: string }).id;
+    await admin.from("org_members").upsert({ org_id: id, user_id: anna.id, role: "admin" }, { onConflict: "org_id,user_id", ignoreDuplicates: true });
+    const meeting = (must("m", await admin.from("meetings").insert({ org_id: id, started_by: anna.id, doc_id: "doc", notes_tab_id: "t.0", status: "done", title: "Styrelsemöte" }).select("id").single()) as { id: string }).id;
+    must("note", await admin.from("note_items").insert({ meeting_id: meeting, id: "d1", section: "decision", kind: "decision", text: "Medlemsavgiften är 200 kr" }));
+    return { org: { id, name }, meeting };
+  };
+  const generated = (meeting: string) => async () => ({
+    ok: true as const,
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0 },
+    value: { lines: [{ section: "decisions" as const, text: "Medlemsavgiften är 200 kr", sources: [meeting] }] },
+  });
+
+  it("two Uppdatera at once: only one runs (the cooldown is claimed atomically)", async () => {
+    const { org, meeting } = await freshOrg("Samtidiga föreningen");
+    let calls = 0;
+    const once = generated(meeting);
+    const counted = async () => {
+      calls++;
+      return once();
+    };
+    const now = new Date();
+    const results = await Promise.all([0, 1, 2].map(() => refreshMemory(anna.db, org, anna.id, { admin, oneShot: counted as never, now })));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok && r.reason === "cooldown")).toHaveLength(2);
+    expect(calls).toBe(1);
+  });
+
+  it("an admin's edit made while Claude works, or two saves at once, are never overwritten", async () => {
+    const { org, meeting } = await freshOrg("Redigerande föreningen");
+    const base = generated(meeting);
+    // The admin saves a line of their own while Claude is still writing the draft.
+    const slow = async () => {
+      expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "glossary", text: "Admin-rad under Uppdatera" }], [])).toBe(true);
+      return base();
+    };
+    expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: slow as never, now: new Date() })).toMatchObject({ ok: true });
+    const texts = async () => (await loadMemoryFor(anna.db, admin, org.id, anna.id))!.memory.lines.map((l) => l.text).sort();
+    expect(await texts()).toEqual(["Admin-rad under Uppdatera", "Medlemsavgiften är 200 kr"]);
+    // Two saves at once (each from a page that showed nothing new): both lines stay (version check, retried).
+    const [a, b] = await Promise.all([
+      saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "people", text: "Rad A" }], []),
+      saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ section: "people", text: "Rad B" }], []),
+    ]);
+    expect([a, b]).toEqual([true, true]);
+    expect(await texts()).toEqual(["Admin-rad under Uppdatera", "Medlemsavgiften är 200 kr", "Rad A", "Rad B"]);
+  });
+
+  it("the page, for an admin too, leaves out a line whose source they can't see; a save keeps it", async () => {
+    const { org, meeting } = await freshOrg("Filtrerade föreningen");
+    // A meeting of another org (its id is in a line, its content never is): Anna can't see it.
+    const elsewhere = (must("other org", await admin.from("orgs").insert({ name: "Annans förening", created_by: jonas.id }).select("id").single()) as { id: string }).id;
+    const hidden = (must("hidden", await admin.from("meetings").insert({ org_id: elsewhere, started_by: jonas.id, doc_id: "doc", notes_tab_id: "t.0", status: "done" }).select("id").single()) as { id: string }).id;
+    must(
+      "memory",
+      await admin.from("org_memory").insert({
+        org_id: org.id,
+        lines: [
+          { id: "seen", section: "decisions", text: "Medlemsavgiften är 200 kr", sources: [meeting], edited: false },
+          { id: "gone", section: "priorities", text: "Från ett möte hon inte ser", sources: [hidden], edited: false },
+        ],
+      }),
+    );
+    const page = (await loadMemoryFor(anna.db, admin, org.id, anna.id))!;
+    expect(page.memory.lines.map((l) => l.id)).toEqual(["seen"]);
+    expect(Object.keys(page.sources)).toEqual([meeting]);
+    // Her save (even naming the hidden line's id) changes only what she saw.
+    expect(await saveMemoryEdits(anna.db, admin, org.id, anna.id, [{ id: "seen", section: "decisions", text: "Avgiften är 200 kr" }], ["seen", "gone"])).toBe(true);
+    const stored = must("stored", await admin.from("org_memory").select("lines").eq("org_id", org.id).single()) as { lines: { id: string; text: string }[] };
+    expect(stored.lines.map((l) => [l.id, l.text])).toEqual([
+      ["seen", "Avgiften är 200 kr"],
+      ["gone", "Från ett möte hon inte ser"],
+    ]);
   });
 
   it("get_org_memory: a line with a source the reader can't see is left out", async () => {
@@ -207,6 +285,8 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     }
     expect((await jonas.db.from("agent_task_status").insert({ meeting_id: allMeeting, item_id: "a1", status: "done" })).error).not.toBeNull();
     expect((await jonas.db.from("agent_task_status").update({ status: "blocked" }).eq("meeting_id", devMeeting).select("item_id")).data ?? []).toEqual([]);
+    // No client reads org_memory through PostgREST (the page and get_org_memory filter by source).
+    for (const u of [maja, anna]) expect((await u.db.from("org_memory").select("lines").eq("org_id", orgId)).data ?? []).toEqual([]);
     // Not even an admin writes org_memory directly (sources, `edited` and the cooldown are the server's).
     for (const u of [maja, anna]) {
       expect((await u.db.from("org_memory").update({ lines: [] }).eq("org_id", orgId).select("org_id")).data ?? []).toEqual([]);

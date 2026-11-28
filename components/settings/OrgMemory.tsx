@@ -31,7 +31,7 @@ export function OrgMemory({
   memory: Memory;
   /** The source meetings the admin can see, for the links. */
   sources: Record<string, SourceMeeting>;
-  save?: (orgId: string, edits: { id: string | null; section: string; text: string }[]) => Promise<MemoryActionResult>;
+  save?: (orgId: string, edits: { id: string | null; section: string; text: string }[], seenIds: string[]) => Promise<MemoryActionResult>;
   refresh?: (orgId: string) => Promise<MemoryActionResult>;
 }) {
   const t = useTranslations("memory");
@@ -69,6 +69,8 @@ export function OrgMemory({
       const r = await save(
         orgId,
         lines.map((l) => ({ id: l.id, section: l.section, text: l.text })),
+        // The lines this page showed: only those are changed or removed by the save.
+        memory.lines.map((l) => l.id),
       );
       setMessage(r);
       if (r.ok) setDirty(false);

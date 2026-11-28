@@ -3,8 +3,8 @@
 --
 -- * agent_task_status: progress Claude reports on a task the meeting gave it (no row: open). Read by
 --   whoever sees the meeting (the note_items predicate); written only through mcp_set_agent_task.
--- * org_memory: one admin-curated page per org; members read it. Written only by the server after
---   its admin check (service role), so no client sets sources, `edited` or the cooldown by hand.
+-- * org_memory: one admin-curated page per org. Server only (service role): read with the
+--   reader's per-line source filter, written after the admin check, never by a client.
 -- * The mcp_* functions act as p_user (mcp_act_as, 0060) and ask the existing predicates; nothing
 --   here restates the Företag tree. org_memory_sources asks foretag_can_see for every member.
 
@@ -33,15 +33,17 @@ create table public.org_memory (
   sources_from timestamptz,
   sources_count int not null default 0,
   updated_at timestamptz not null default now(),
-  updated_by uuid references auth.users (id) on delete set null
+  updated_by uuid references auth.users (id) on delete set null,
+  -- Optimistic concurrency: every write is "where version = <read>" and bumps it.
+  version int not null default 0
 );
 
+-- No client access at all: every read goes through the server (the page, after its admin check)
+-- or mcp_org_memory, both with the per-line source filter for the reader, so a meeting that later
+-- turns private or moves into a group never leaks through a line built from it.
 alter table public.org_memory enable row level security;
 revoke all on table public.org_memory from anon, authenticated;
-grant select on table public.org_memory to authenticated;
 grant select, insert, update, delete on table public.org_memory to service_role;
-create policy org_memory_select on public.org_memory for select to authenticated
-  using (public.is_org_member(org_id));
 
 -- ---------------------------------------------------------------------------------------------
 -- Reads and writes as a user (service role only).
@@ -97,7 +99,7 @@ begin
 end;
 $$;
 
--- An org's memory for a member (org_memory_select: is_org_member).
+-- An org's memory for a member (is_org_member). The caller filters lines by their sources.
 create function public.mcp_org_memory(p_user uuid, p_org uuid)
 returns table (org_id uuid, lines jsonb, generated_at timestamptz, sources_from timestamptz, sources_count int, updated_at timestamptz)
 language plpgsql volatile security definer set search_path = ''

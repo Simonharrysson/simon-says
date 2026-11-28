@@ -27,11 +27,11 @@ async function adminOf(orgId: string) {
   return { db, user, org: org as { id: string; name: string; kind: string } };
 }
 
-export async function saveMemoryAction(orgId: string, edits: EditedLine[]): Promise<MemoryActionResult> {
+export async function saveMemoryAction(orgId: string, edits: EditedLine[], seenIds: string[]): Promise<MemoryActionResult> {
   const t = await getTranslations("memory");
   const a = await adminOf(orgId);
-  if (!a || !Array.isArray(edits)) return { ok: false, message: t("saveFailed") };
-  if (!(await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits))) return { ok: false, message: t("saveFailed") };
+  if (!a || !Array.isArray(edits) || !Array.isArray(seenIds)) return { ok: false, message: t("saveFailed") };
+  if (!(await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits, seenIds.map(String)))) return { ok: false, message: t("saveFailed") };
   revalidatePath(`/orgs/${orgId}`);
   return { ok: true, message: t("saved") };
 }
