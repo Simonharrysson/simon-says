@@ -46,6 +46,7 @@ export function MeetingFolderSetting({
       busy={folder.busy}
       message={folder.message}
       onPick={folder.pick}
+      pickReady={folder.ready}
       drive={{ view: driveAccount, result: driveResult, stuckShares, orgId, from, connect: connectDriveAccount, disconnect: disconnectDriveAccount }}
     />
   );

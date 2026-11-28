@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PickerError, usePicker } from "@/components/google/Picker";
 
@@ -15,6 +15,10 @@ export function useMeetingFolderPicker(orgId: string) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Server-rendered, the button does nothing until React has hydrated it: a press then was lost
+  // (seen on slow phones). It stays disabled until then, so a press always opens the Picker.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   const pick = async () => {
     setBusy(true);
@@ -42,5 +46,5 @@ export function useMeetingFolderPicker(orgId: string) {
     }
   };
 
-  return { pick, busy, message };
+  return { pick, busy, message, ready: hydrated };
 }

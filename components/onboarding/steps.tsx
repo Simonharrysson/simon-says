@@ -650,6 +650,8 @@ export interface FolderStepProps {
   busy?: boolean;
   message?: string | null;
   onPick: () => void;
+  /** False until the page is hydrated: the pick buttons stay disabled (a press before then is lost). */
+  pickReady?: boolean;
   drive?: FolderDriveAccount;
 }
 
@@ -711,7 +713,7 @@ export function FolderStep(p: FolderStepProps) {
             )}
           </span>
           {canPick && (
-            <Button variant={account && !account.folderPicked ? "secondary" : "ghost"} size="sm" onClick={p.onPick} loading={p.busy}>
+            <Button variant={account && !account.folderPicked ? "secondary" : "ghost"} size="sm" onClick={p.onPick} loading={p.busy} disabled={p.pickReady === false}>
               {account && !account.folderPicked ? t("pickShort") : t("change")}
             </Button>
           )}
@@ -723,7 +725,7 @@ export function FolderStep(p: FolderStepProps) {
             p.pickerEnabled ? (
               <div className="flex flex-wrap items-center justify-center gap-3">
                 {canPick && (
-                  <Button variant="secondary" icon={<IconFolder size={18} />} onClick={p.onPick} loading={p.busy}>
+                  <Button variant="secondary" icon={<IconFolder size={18} />} onClick={p.onPick} loading={p.busy} disabled={p.pickReady === false}>
                     {account ? t("pickIn", { email: account.email }) : t("pick")}
                   </Button>
                 )}
