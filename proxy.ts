@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getEnv } from "@/lib/env";
 import { isUuid } from "@/lib/db/ids";
+import { isAdminPath, mayOpenAdmin } from "@/lib/admin/gate";
 import { safeNextPath } from "@/lib/next-path";
 import { sessionCookieOptions } from "@/lib/supabase/cookie-options";
 
@@ -34,6 +35,21 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // The internal dashboard (/admin) does not exist for anyone outside ADMIN_EMAILS: a real 404
+  // status (signed out too, never a login redirect), every method and request kind. The page and
+  // its data loader check the same gate again (lib/admin/load.ts); this only gets the status right.
+  if (isAdminPath(request.nextUrl.pathname)) {
+    if (user && mayOpenAdmin(user.email, env)) {
+      response.headers.set("X-Robots-Tag", "noindex, nofollow");
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
+    }
+    // Exactly the 404 any unknown path gets (same rewrite, no extra headers): nothing tells /admin apart.
+    const notFound = NextResponse.rewrite(new URL("/_finns-inte", request.url), { status: 404 });
+    for (const cookie of response.cookies.getAll()) notFound.cookies.set(cookie);
+    return notFound;
+  }
 
   if (!user && request.method === "GET" && isSignedInArea(request.nextUrl.pathname)) {
     const to = request.nextUrl.clone();
