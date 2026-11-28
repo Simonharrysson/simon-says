@@ -56,7 +56,8 @@ test("settings: rename the förening (Spara) and stop sharing the transcript (sa
 
   // The account page.
   await page.goto("/installningar");
-  await expect(page.getByRole("main").getByText("admin@e2e.test")).toBeVisible();
+  // Every section starts closed; "Inloggad som" says the address in its header.
+  await expect(page.getByRole("region", { name: "Inloggad som" }).getByText("admin@e2e.test").first()).toBeVisible();
   await expectAccessible(page);
 });
 

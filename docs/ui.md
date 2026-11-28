@@ -157,6 +157,13 @@ tokens `--ease-spring` / `--ease-press`). Fast springs, never blocking a click:
 - *Press*: `press` (controls, 98 %) and `press-row` (rows, 99 %), on `scale`. *Lift*: clickable
   rows and cards rise 1 px onto `--shadow-lift` under a mouse (`lift`); static panels don't
   (no false click affordance).
+- *Sections* (Konto): every card is a shadcn Collapsible, closed by default, its header saying the
+  state in a few words ("4 av 6 på", "Kopplad"). Height on grid rows 0fr ↔ 1fr with the press
+  spring; content stays mounted and is `visibility: hidden` while closed. Remembered per account
+  in localStorage (try/catch), opened by `#id` or a server result, applied before the first paint
+  by an inline script (no shift after hydration). `components/views/AccountSection.tsx`.
+- *Copy*: `CopyCode`, a tinted code field (never framed inside a card) whose "Kopiera" turns into
+  "Kopierad ✓" with the tick drawing itself.
 - *Focus*: a task row that closes hands focus to the next row's checkbox (or the heading).
 Under reduced motion every one of these is instant (motion's transitions get duration 0).
 

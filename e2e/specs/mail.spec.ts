@@ -71,6 +71,8 @@ test("Konto: e-mail preferences are saved for the account", async ({ seedOrg, si
   const email = newEmail("konto");
   await seedOrg({ admin: email });
   const { page } = await signedIn(email, "/installningar");
+  // Konto's sections start closed: open Mejl (remembered, so it is open again after the reload).
+  await page.getByRole("button", { name: "Mejl från Simon Says" }).click();
   const summaries = page.getByRole("switch", { name: /^Sammanfattning efter möten/ });
   await expect(summaries).toBeChecked();
   await expectAccessible(page);

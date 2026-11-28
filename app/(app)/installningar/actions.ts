@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cleanOff, type EmailPrefs } from "@/lib/email/categories";
@@ -53,7 +54,7 @@ export async function saveLocaleAction(formData: FormData): Promise<void> {
   redirect(ok ? "/installningar" : "/installningar?fel=sprak");
 }
 
-/** Konto → Kopplade AI-assistenter → Återkalla (the user's own grant only: revoke_mcp_grant). */
+/** Konto → Koppla till din AI → Koppla från (the user's own grant only: revoke_mcp_grant). */
 export async function revokeConnectionAction(formData: FormData): Promise<void> {
   const id = formData.get("grant");
   const db = await createSupabaseServerClient();
@@ -62,5 +63,8 @@ export async function revokeConnectionAction(formData: FormData): Promise<void> 
   } = await db.auth.getUser();
   if (!user) redirect("/login");
   const ok = typeof id === "string" && isUuid(id) && (await revokeConnection(db, id));
+  // The redirect differs from the page only by its #hash, which the router treats as a scroll:
+  // without this the list would still show the connection that was just removed.
+  revalidatePath("/installningar");
   redirect(ok ? "/installningar#ai" : "/installningar?fel=aterkalla#ai");
 }

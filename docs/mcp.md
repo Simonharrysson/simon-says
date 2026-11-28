@@ -4,20 +4,23 @@ Simon Says is a remote MCP server at `https://simonsays.harrysson.co/api/mcp`, u
 
 > For every user: Privat, föreningar and Företag. Kill switch: `MCP_ENABLED=0` turns it off for everyone (503).
 
-## Lägg till i Claude
+## Lägg till i din AI
 
-**claude.ai and Claude Desktop**
-1. Settings → Connectors → **Add custom connector**.
-2. Name: `Simon Says`. URL: `https://simonsays.harrysson.co/api/mcp`. Leave the OAuth fields empty, because Claude registers itself.
-3. Click **Connect**. Simon Says opens: sign in with Google, check that the request comes from Claude (`claude.ai`), and click **Godkänn**.
+Konto → **Koppla till din AI** (`/installningar#ai`) has a tile per tool with numbered steps, the address to copy and one-click installs (`lib/mcp/clients.ts`). The address is `https://simonsays.harrysson.co/api/mcp`; every tool signs in with OAuth (Google, then **Godkänn** on `/koppla/<id>`).
 
-**Claude Code**
-```sh
-claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mcp
-# then, inside Claude Code: /mcp → simon-says → Authenticate (opens the browser)
-```
+| Tool | How |
+| --- | --- |
+| Claude (web, Desktop, mobile) | claude.ai → Customize → Connectors → + Add → Add custom connector, name `Simon Says`, paste the address, Connect (support.claude.com/en/articles/11175166) |
+| ChatGPT (Business, Enterprise, Edu; web) | Plugins → + → Add custom MCP server, paste the address under Connection, OAuth, Create as a plugin (help.openai.com/en/articles/12584461) |
+| Cursor | `cursor://anysphere.cursor-deeplink/mcp/install?name=simon-says&config=<base64 {"url": …}>`, or `mcpServers` in `mcp.json` (cursor.com/docs/context/mcp/install-links) |
+| VS Code (Copilot agent mode) | `vscode:mcp/install?<{"name":"simon-says","type":"http","url":…}>`, and `vscode-insiders:` (code.visualstudio.com/api/extension-guides/ai/mcp) |
+| Claude Code | `claude mcp add --transport http simon-says <address>`, then `/mcp` → simon-says → Authenticate |
+| Gemini CLI | `gemini mcp add --transport http simon-says <address>`, then `/mcp auth simon-says` (geminicli.com/docs/tools/mcp-server) |
+| Another tool | `{"mcpServers":{"simon-says":{"url":"<address>"}}}`; it needs MCP over HTTP with OAuth and a redirect URI on the allow-list (Operations below) |
 
-**Återkalla:** go to Konto → **Kopplade AI-assistenter** → Återkalla. The assistant loses access on its next call. The same panel lists the last 20 calls, showing tool and time only.
+Not offered: Windsurf (its OAuth redirect URI is not documented, so it can't be allow-listed).
+
+**Koppla från:** Konto → **Koppla till din AI** → Koppla från. The assistant loses access on its next call. The same section lists the last 20 calls, showing tool and time only. The list names each connection's app and shows its mark from the redirect URI the grant was approved for (`mcp_grants.redirect_uri`, 0068, mapped by `redirectAudience`, the consent page's rule). A loopback URI shows as "App på din dator". The name the client registered is its own claim, so it shows only as secondary text ("Kallar sig …").
 
 ## Tools
 
@@ -58,6 +61,7 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
 - **Env:** `AGENT_TASKS_ENABLED` (default `0`): agent tasks parked. Tools read as the user through the `mcp_*` SQL functions (service role only, explicit user, the RLS predicates). The audit is kept 90 days (daily cron `mcp_cleanup`).
 - **Migrations:**
   - `0060_mcp.sql`: tables `mcp_*`, the `mcp_*` read functions, `revoke_mcp_grant`, `mcp_rate_take`, `mcp_spend_refresh`, `mcp_cleanup`.
+  - `0068_mcp_grant_redirect.sql`: `mcp_grants.redirect_uri`, the redirect URI of the grant's latest approval (readable by its user). Older grants are filled when their client registered one URI.
   - `0065_claude_tasks_memory.sql`: tables `agent_task_status` and `org_memory`, and the functions `mcp_agent_task_status`, `mcp_set_agent_task`, `mcp_org_memory` and `org_memory_sources`. All of them are service role only.
 - **Endpoints:**
   - `/.well-known/oauth-protected-resource[/api/mcp]`
@@ -68,7 +72,18 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
   - `/api/mcp`
 - **Tokens:** access tokens live 1 h and refresh tokens 30 days. Refresh tokens rotate, and reusing one revokes the connection. Only SHA-256 hashes are stored.
 - **Limits:** 60 calls a minute per user (all their connections together). Per IP, per 10 minutes: 20 registrations, 30 authorizations and 60 token requests.
-- **Redirect URIs:** only `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback` and loopback `http://localhost|127.0.0.1:<any port>/…` (Claude Code). Anything else is refused at registration and at authorize. The consent page names the app from the redirect host, never from the name the client registered, and warns for loopback.
+- **Redirect URIs** (`lib/mcp/oauth.ts` `HOSTED_CALLBACKS`, exact strings, no patterns). Anything else is left out at registration (RFC 7591 §2: a list with Cursor's undocumented `cursor://` URI keeps only its allowed ones; a list with none allowed is refused) and refused at authorize. The consent page names the app from the redirect URI, never from the name the client registered, and warns for loopback.
+  | Client | Redirect URI | Source |
+  | --- | --- | --- |
+  | Claude (web, Desktop, mobile, Cowork) | `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback` | claude.com/docs/connectors/building/authentication |
+  | ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` (its stable callback, used because the metadata says `authorization_response_iss_parameter_supported` and every redirect carries `iss`; the per-connector `/connector/oauth/{id}` is not allowed) | developers.openai.com/apps-sdk/build/auth |
+  | Cursor (web, cloud agents) | `https://www.cursor.com/agents/mcp/oauth/callback` | cursor.com/docs/context/mcp ("Cursor uses fixed OAuth redirect URLs") |
+  | VS Code (vscode.dev, Insiders) | `https://vscode.dev/redirect`, `https://insiders.vscode.dev/redirect` | github.com/microsoft/vscode `src/vs/base/common/oauth.ts` (`fetchDynamicRegistration`) |
+  | Loopback: Claude Code, Cursor desktop (`localhost:8787/callback`), VS Code desktop (`127.0.0.1/`, `127.0.0.1:33418/`), Gemini CLI (`localhost:<port>/oauth/callback`) | `http://localhost\|127.0.0.1\|[::1]:<any port>/…` | code.claude.com/docs/en/mcp, the Cursor and VS Code sources above, geminicli.com/docs/tools/mcp-server |
+
+  Cursor: its docs (cursor.com/docs/context/mcp) give `https://www.cursor.com/…` with www, and Cursor staff on the forum say the desktop app uses loopback `localhost:8787`. The no-www `https://cursor.com/agents/mcp/oauth/callback` only shows up in a user's quote of older docs, so it is not allowed.
+
+  Left out (checked 2026-11-28): Windsurf (no documented redirect URI), Cursor's `cursor://anysphere.cursor-mcp/oauth/callback` (only a forum post, not Cursor's docs), and every custom scheme. The MCP endpoint's `Origin` check is unchanged (`allowedOrigin`: the app, claude.ai, claude.com). ChatGPT, Cursor, VS Code and Gemini CLI are allow-listed from their documentation and not yet tried end to end; if one of them sends an `Origin` header to `/api/mcp` it gets 403 after signing in, and that is the first thing to check. Also unverified: whether Cursor's desktop app authorizes on loopback (documented) or on its `cursor://` URI (dropped at registration), and the VS Code install link's `type: "http"` fields (the docs show only a stdio example).
 - **Cleanup (daily cron):** audit rows after 90 days, pending authorizations after 15 minutes, and registered clients that never got a grant after 24 hours.
 - **Banned or deleted accounts** get 401, whatever their tokens.
 - **Tests:**

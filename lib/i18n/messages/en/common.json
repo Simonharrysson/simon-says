@@ -45,5 +45,7 @@
   "metaNewMeeting": "New meeting",
   "metaMeeting": "Meeting",
   "metaKomIgang": "Get started",
-  "close": "Close"
+  "close": "Close",
+  "copiedToClipboard": "Copied to the clipboard",
+  "copyFailed": "Couldn't copy. Click the text to select it and copy it yourself."
 }

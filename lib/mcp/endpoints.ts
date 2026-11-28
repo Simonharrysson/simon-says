@@ -169,7 +169,7 @@ export async function token(form: URLSearchParams, store: McpStore, origin: stri
     if (redirect !== null && redirect !== row.redirect_uri) return oauthError(400, "invalid_grant", "redirect_uri does not match");
     if (!verifyPkce(verifier, row.code_challenge)) return oauthError(400, "invalid_grant", "code_verifier does not match");
     if (row.resource !== resourceUri(origin)) return oauthError(400, "invalid_target", "resource is not this server");
-    const grantId = await store.grantFor(row.user_id, client, row.resource);
+    const grantId = await store.grantFor(row.user_id, client, row.resource, row.redirect_uri);
     return issue(store, grantId, now);
   }
 
