@@ -10,18 +10,24 @@ useTestEnv();
 const m = vi.hoisted(() => ({
   user: { id: "u-admin" } as { id: string } | null,
   role: "admin" as string | null,
-  org: { id: "", kind: "forening" } as { id: string; kind?: string } | null,
+  org: { id: "", kind: "forening", name: "Ekdala IF" } as { id: string; kind?: string; name?: string } | null,
   foretag: false,
   exchange: vi.fn(),
   store: vi.fn(),
+  notify: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: async () => ({ auth: { getUser: async () => ({ data: { user: m.user } }) } }),
 }));
-vi.mock("@/lib/db/orgs", () => ({ getOrg: async () => m.org, myRole: async () => m.role }));
+vi.mock("@/lib/db/orgs", () => ({
+  getOrg: async () => m.org,
+  myRole: async () => m.role,
+  listPeople: async () => [{ member_user_id: "u-admin", name: "Anna Berg" }],
+}));
 vi.mock("@/lib/foretag/guard", () => ({ isForetagOrg: async () => m.foretag }));
 vi.mock("@/lib/google/drive-account", () => ({ storeOrgDriveAccount: m.store }));
+vi.mock("@/lib/google/drive-account-notify", () => ({ notifyDriveAccountReplaced: m.notify }));
 vi.mock("@/lib/google/drive-account-oauth", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/drive-account-oauth")>()),
   exchangeDriveAccountCode: m.exchange,
@@ -46,10 +52,11 @@ const location = (res: Response) => res.headers.get("location");
 beforeEach(() => {
   m.user = { id: "u-admin" };
   m.role = "admin";
-  m.org = { id: ORG, kind: "forening" };
+  m.org = { id: ORG, kind: "forening", name: "Ekdala IF" };
   m.foretag = false;
   m.exchange.mockReset().mockResolvedValue({ ok: true, account: ACCOUNT });
-  m.store.mockReset().mockResolvedValue(undefined);
+  m.store.mockReset().mockResolvedValue({ replaced: null });
+  m.notify.mockReset().mockResolvedValue(1);
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
 });
@@ -97,5 +104,13 @@ describe("GET /api/google/drive-account/callback", () => {
     m.exchange.mockRejectedValue(new Error("invalid_grant"));
     expect(location(await answer({ code: "c1" }))).toMatch(/drivekonto=fel$/);
     expect(m.store).not.toHaveBeenCalled();
+  });
+
+  it("replacing another admin's account tells the other admins; renewing your own tells no one", async () => {
+    await answer({ code: "c1" });
+    expect(m.notify).not.toHaveBeenCalled();
+    m.store.mockResolvedValue({ replaced: { email: "gamla@ekdala.test", connectedBy: "u-other" } });
+    expect(location(await answer({ code: "c1" }))).toMatch(/drivekonto=ok$/);
+    expect(m.notify).toHaveBeenCalledWith({ orgId: ORG, orgName: "Ekdala IF", byUserId: "u-admin", byName: "Anna Berg", oldEmail: "gamla@ekdala.test", newEmail: "styrelsen@ekdala.test" });
   });
 });

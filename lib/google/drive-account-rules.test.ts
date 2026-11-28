@@ -6,6 +6,7 @@ import {
   driveAccountView,
   driveResultOf,
   mayDisconnect,
+  memberNames,
   type DriveAccountState,
 } from "./drive-account-rules";
 import { docShareTargets } from "@/lib/meetings/share-targets";
@@ -77,7 +78,7 @@ describe("mayDisconnect, driveAccountView, driveResultOf", () => {
 
   it("the folder card's view: address and states only", () => {
     expect(driveAccountView(null, "u-admin", null)).toBeNull();
-    expect(driveAccountView(account(), "u-admin", "folderAAAAAAAAAA")).toEqual({ email: "styrelsen@ekdala.test", lost: false, folderPicked: true, mine: true });
+    expect(driveAccountView(account(), "u-admin", "folderAAAAAAAAAA")).toEqual({ email: "styrelsen@ekdala.test", lost: false, folderPicked: true, mine: true, connectedByName: null, replaced: null });
     expect(driveAccountView(account(), "u-other", "folderBBBBBBBBBB")).toMatchObject({ folderPicked: false, mine: false });
     expect(driveAccountView(account({ folderId: null }), "u-admin", null)).toMatchObject({ folderPicked: false });
   });
@@ -87,6 +88,23 @@ describe("mayDisconnect, driveAccountView, driveResultOf", () => {
     expect(driveResultOf("<script>")).toBeNull();
     expect(driveResultOf(["ok"])).toBeNull();
     expect(driveResultOf(undefined)).toBeNull();
+  });
+});
+
+describe("who connected it, and a replaced account (security review)", () => {
+  const names = memberNames([{ member_user_id: "u-admin", name: "Anna Berg" }], [{ userId: "u-admin", email: "anna@ekdala.test" }, { userId: "u-erik", email: "erik@ekdala.test" }]);
+  const NOW = new Date("2026-11-28T12:00:00Z");
+  const replaced = account({ connectedBy: "u-erik", replacedBy: "u-erik", replacedEmail: "gamla@ekdala.test", replacedAt: "2026-11-20T12:00:00Z" });
+
+  it("Kopplat av: the board name, else the address", () => {
+    expect(driveAccountView(account(), "u-x", null, names)?.connectedByName).toBe("Anna Berg");
+    expect(driveAccountView(account({ connectedBy: "u-erik" }), "u-x", null, names)?.connectedByName).toBe("erik@ekdala.test");
+  });
+
+  it("the other admins see who replaced which account for 30 days; the replacer does not", () => {
+    expect(driveAccountView(replaced, "u-admin", null, names, NOW)?.replaced).toEqual({ email: "gamla@ekdala.test", byName: "erik@ekdala.test", at: "2026-11-20T12:00:00Z" });
+    expect(driveAccountView(replaced, "u-erik", null, names, NOW)?.replaced).toBeNull();
+    expect(driveAccountView(replaced, "u-admin", null, names, new Date("2026-12-25T12:00:00Z"))?.replaced).toBeNull();
   });
 });
 

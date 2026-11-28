@@ -21,7 +21,8 @@ import type { InviteRow } from "@/lib/invites/rules";
 import { inviterNameFor, listInvites } from "@/lib/invites/send";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { orgDriveAccount } from "@/lib/google/drive-account";
-import { driveAccountView, driveResultOf } from "@/lib/google/drive-account-rules";
+import { driveAccountView, driveResultOf, memberNames } from "@/lib/google/drive-account-rules";
+import { blockedRevocationCount } from "@/lib/foretag/reconcile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export default async function OnboardingPage({ params, searchParams }: { params:
 
   // Service role for the invites: only after the admin check above.
   const locale = await getLocale();
-  const [state, people, members, format, formats, history, user, invites, driveAccount] = await Promise.all([
+  const [state, people, members, format, formats, history, user, invites, driveAccount, stuckShares] = await Promise.all([
     loadOnboarding(db, id),
     listPeople(db, id),
     orgMemberList(id).catch((): OrgMember[] => []),
@@ -65,6 +66,7 @@ export default async function OnboardingPage({ params, searchParams }: { params:
     listInvites(supabaseAdmin(), id).catch((): InviteRow[] => []),
     // Service role, after the admin check: the förening's Drive account (never its token).
     orgDriveAccount(id).catch(() => null),
+    blockedRevocationCount(id),
   ]);
   if (state?.dismissedAt) redirect(orgTabHref(id, "installningar"));
   const s = state ?? EMPTY;
@@ -88,7 +90,8 @@ export default async function OnboardingPage({ params, searchParams }: { params:
       invites={invites}
       inviterName={inviterNameFor(people.find((x) => x.member_user_id === user.data.user?.id)?.name, user.data.user?.user_metadata)}
       pickerEnabled={pickerEnabled(getEnv())}
-      driveAccount={driveAccountView(driveAccount, user.data.user?.id ?? "", org.meeting_folder_id ?? null)}
+      driveAccount={driveAccountView(driveAccount, user.data.user?.id ?? "", org.meeting_folder_id ?? null, memberNames(people, members))}
+      stuckShares={stuckShares}
       driveResult={driveResultOf(drivekonto)}
       formatCard={
         // Nothing saved yet: the card shows the Veckomöte that Fortsätt makes (as the step did).

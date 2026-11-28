@@ -15,6 +15,10 @@ export interface DriveAccountState {
   connectedBy: string;
   folderId: string | null;
   lostAt: string | null;
+  /** Another admin replaced the previous account (who, which address, when). */
+  replacedBy?: string | null;
+  replacedEmail?: string | null;
+  replacedAt?: string | null;
 }
 
 export type CreationChoice =
@@ -70,16 +74,41 @@ export interface DriveAccountView {
   folderPicked: boolean;
   /** The viewer connected it (only they get its Picker). */
   mine: boolean;
+  /** "Kopplat av <namn>": who connected it (their name in the förening, else their address). */
+  connectedByName: string | null;
+  /** Shown for 30 days after another admin replaced the account: the address it replaced and by whom. */
+  replaced: { email: string; byName: string | null; at: string } | null;
 }
 
-export function driveAccountView(account: DriveAccountState | null, userId: string, meetingFolderId: string | null): DriveAccountView | null {
+/** How long the folder card tells the other admins that the account was replaced. */
+export const REPLACED_NOTICE_DAYS = 30;
+
+export function driveAccountView(
+  account: DriveAccountState | null,
+  userId: string,
+  meetingFolderId: string | null,
+  nameOf: (userId: string) => string | null = () => null,
+  now = new Date(),
+): DriveAccountView | null {
   if (!account) return null;
+  const recent = account.replacedAt && now.getTime() - Date.parse(account.replacedAt) < REPLACED_NOTICE_DAYS * 86_400_000;
   return {
     email: account.googleEmail,
     lost: Boolean(account.lostAt),
     folderPicked: Boolean(meetingFolderId) && account.folderId === meetingFolderId,
     mine: account.connectedBy === userId,
+    connectedByName: nameOf(account.connectedBy),
+    // Not to the admin who replaced it: they know.
+    replaced:
+      recent && account.replacedEmail && account.replacedBy !== userId
+        ? { email: account.replacedEmail, byName: account.replacedBy ? nameOf(account.replacedBy) : null, at: account.replacedAt! }
+        : null,
   };
+}
+
+/** A member's name for the folder card: their name on the board, else their sign-in address. */
+export function memberNames(people: { member_user_id?: string | null; name?: string | null }[], members: { userId: string; email: string }[]): (userId: string) => string | null {
+  return (id) => people.find((p) => p.member_user_id === id && p.name)?.name ?? members.find((m) => m.userId === id)?.email ?? null;
 }
 
 /** `?drivekonto=` on the page the consent or "Koppla från" returned to; anything else: none. */

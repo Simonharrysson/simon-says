@@ -39,15 +39,21 @@ interface Row {
   folder_id: string | null;
   lost_at: string | null;
   updated_at: string;
+  replaced_by?: string | null;
+  replaced_email?: string | null;
+  replaced_at?: string | null;
 }
 
-const COLUMNS = "org_id, connected_by, google_sub, google_email, folder_id, lost_at, updated_at";
+const COLUMNS = "org_id, connected_by, google_sub, google_email, folder_id, lost_at, updated_at, replaced_by, replaced_email, replaced_at";
 const stateOf = (r: Row): DriveAccountState => ({
   googleSub: r.google_sub,
   googleEmail: r.google_email,
   connectedBy: r.connected_by,
   folderId: r.folder_id,
   lostAt: r.lost_at,
+  replacedBy: r.replaced_by ?? null,
+  replacedEmail: r.replaced_email ?? null,
+  replacedAt: r.replaced_at ?? null,
 });
 
 /** The förening's Drive account (no token), or null. A database without 0070: null. */
@@ -63,6 +69,8 @@ export async function orgDriveAccount(orgId: string): Promise<(DriveAccountState
 /**
  * Connect (or renew, or replace) the förening's account. The same Google account again keeps its
  * picked folder; another account starts without one (its Picker must pick the folder again).
+ * Replacing an account another admin connected is recorded (replaced_*) and returned, so the other
+ * admins are told.
  */
 export async function storeOrgDriveAccount(input: {
   orgId: string;
@@ -71,8 +79,9 @@ export async function storeOrgDriveAccount(input: {
   googleEmail: string;
   refreshToken: string;
   scope: string;
-}): Promise<void> {
+}): Promise<{ replaced: { email: string; connectedBy: string } | null }> {
   const before = await orgDriveAccount(input.orgId);
+  const replacedOther = before && before.connectedBy !== input.connectedBy;
   const { error } = await supabaseAdmin()
     .from("org_drive_accounts")
     .upsert({
@@ -85,8 +94,12 @@ export async function storeOrgDriveAccount(input: {
       folder_id: before && before.googleSub === input.googleSub ? before.folderId : null,
       lost_at: null,
       updated_at: new Date().toISOString(),
+      ...(replacedOther
+        ? { replaced_by: input.connectedBy, replaced_email: before.googleEmail, replaced_at: new Date().toISOString() }
+        : { replaced_by: before?.replacedBy ?? null, replaced_email: before?.replacedEmail ?? null, replaced_at: before?.replacedAt ?? null }),
     });
   if (error) throw new Error(`storeOrgDriveAccount: ${error.message}`);
+  return { replaced: replacedOther ? { email: before.googleEmail, connectedBy: before.connectedBy } : null };
 }
 
 /**

@@ -116,4 +116,12 @@ describe("storeOrgDriveAccount", () => {
     expect(g.upserts[1]).toMatchObject({ google_sub: "sub-new", folder_id: null });
     expect(JSON.stringify(g.upserts)).not.toContain('"rt2"');
   });
+
+  it("replacing an account another admin connected is recorded and reported; renewing your own is not", async () => {
+    expect(await storeOrgDriveAccount({ orgId: ORG, connectedBy: "u-admin", googleSub: "sub-ekdala", googleEmail: "styrelsen@ekdala.test", refreshToken: "r", scope: "s" })).toEqual({ replaced: null });
+    expect(g.upserts[0]).toMatchObject({ replaced_by: null, replaced_email: null });
+    const r = await storeOrgDriveAccount({ orgId: ORG, connectedBy: "u-other", googleSub: "sub-new", googleEmail: "ny@ekdala.test", refreshToken: "r", scope: "s" });
+    expect(r).toEqual({ replaced: { email: "styrelsen@ekdala.test", connectedBy: "u-admin" } });
+    expect(g.upserts[1]).toMatchObject({ replaced_by: "u-other", replaced_email: "styrelsen@ekdala.test", replaced_at: expect.any(String) });
+  });
 });

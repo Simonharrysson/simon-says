@@ -48,6 +48,7 @@ export interface OnboardingProps {
   /** 0070: the förening's own Drive account (admins), and `?drivekonto=` after connecting. */
   driveAccount?: DriveAccountView | null;
   driveResult?: DriveAccountResult | null;
+  stuckShares?: number;
   /** The format card (`FormatCard`), as on Inställningar → Möten. */
   formatCard: ReactNode;
   historyCount: number;
@@ -151,6 +152,7 @@ export function Onboarding(p: OnboardingProps) {
             pickerEnabled={p.pickerEnabled}
             driveAccount={p.driveAccount ?? null}
             driveResult={p.driveResult ?? null}
+            stuckShares={p.stuckShares ?? 0}
             from="kom-igang"
           />
         </OnboardingShell>

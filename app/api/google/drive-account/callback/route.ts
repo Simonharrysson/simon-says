@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { myRole, getOrg } from "@/lib/db/orgs";
+import { after } from "next/server";
+import { listPeople, myRole, getOrg } from "@/lib/db/orgs";
+import { notifyDriveAccountReplaced } from "@/lib/google/drive-account-notify";
 import { isForetagOrg } from "@/lib/foretag/guard";
 import { storeOrgDriveAccount } from "@/lib/google/drive-account";
 import {
@@ -62,7 +64,18 @@ export async function GET(request: NextRequest) {
       return result(exchanged.reason === "no_drive" ? "nej" : "fel");
     }
     const a = exchanged.account;
-    await storeOrgDriveAccount({ orgId: check.orgId, connectedBy: user!.id, googleSub: a.sub, googleEmail: a.email, refreshToken: a.refreshToken, scope: a.scope });
+    const { replaced } = await storeOrgDriveAccount({ orgId: check.orgId, connectedBy: user!.id, googleSub: a.sub, googleEmail: a.email, refreshToken: a.refreshToken, scope: a.scope });
+    if (replaced) {
+      // Another admin's account was replaced: the other admins are told (after the response).
+      const by = (await listPeople(db, check.orgId).catch(() => [])).find((p) => p.member_user_id === user!.id)?.name ?? user!.email ?? "En admin";
+      const notice = { orgId: check.orgId, orgName: org.name, byUserId: user!.id, byName: by, oldEmail: replaced.email, newEmail: a.email };
+      const notify = () => notifyDriveAccountReplaced(notice).then(() => undefined, (e: Error) => console.error(`drive account callback: notify: ${e.message}`));
+      try {
+        after(notify);
+      } catch {
+        await notify(); // outside a request (tests)
+      }
+    }
     console.info(`drive account callback: ${check.orgId} connected by ${user!.id}`);
     return result("ok");
   } catch (err) {

@@ -179,7 +179,12 @@
         "nej": "Inget kopplades. Tillåt Drive hos Google om du vill försöka igen.",
         "fel": "Kontot gick inte att koppla. Försök igen om en liten stund.",
         "bort": "Kontot är bortkopplat."
-      }
+      },
+      "by": "Kopplat av {name}",
+      "replaced": "{name} bytte kontot från {email} ({date}).",
+      "replacedNoName": "Kontot byttes från {email} ({date}).",
+      "stuckTitle": "{count, plural, one {# delning kunde inte tas bort} other {# delningar kunde inte tas bort}}",
+      "stuckText": "Konton som raderats kan fortfarande öppna dokument i föreningens Drive. Förnya eller koppla in kontot som äger dokumenten igen, så tas delningarna bort. Du kan också ta bort dem själv under Dela i Google Drive."
     },
     "pickShort": "Välj mapp"
   },

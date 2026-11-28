@@ -54,7 +54,8 @@ import { ReopenKomIgang } from "@/components/settings/ReopenKomIgang";
 import { MeetingFolderSetting, VoicesSetting } from "@/components/settings/MeetingSettings";
 import { DriveAccountLostBanner } from "@/components/settings/DriveAccountLostBanner";
 import { orgDriveAccount } from "@/lib/google/drive-account";
-import { driveAccountView, driveResultOf } from "@/lib/google/drive-account-rules";
+import { driveAccountView, driveResultOf, memberNames } from "@/lib/google/drive-account-rules";
+import { blockedRevocationCount } from "@/lib/foretag/reconcile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrgBoard } from "@/components/views/OrgBoard";
 import { SettingsHashRedirect } from "@/components/views/SettingsHashRedirect";
@@ -255,7 +256,8 @@ export default async function OrgPage({
   const settings = isAdmin && tab === "installningar";
   // 0070: the förening's own Drive account, for admins only (service role, never its token).
   const driveAccount = isAdmin ? await orgDriveAccount(id).catch(() => null) : null;
-  const driveView = driveAccountView(driveAccount, me ?? "", org.meeting_folder_id ?? null);
+  const driveView = driveAccountView(driveAccount, me ?? "", org.meeting_folder_id ?? null, memberNames(people, members ?? []));
+  const stuckShares = settings ? await blockedRevocationCount(id) : 0;
   const board = boardRows(people, members ?? []);
   // Grupper (0054): the tree and everyone's place, read as the admin (RLS).
   const tree = settings ? await loadGroupSettings(db, id) : null;
@@ -414,6 +416,7 @@ export default async function OrgPage({
             pickerEnabled={pickerEnabled(getEnv())}
             driveAccount={driveView}
             driveResult={driveResultOf(drivekonto)}
+            stuckShares={stuckShares}
           />
         ) : undefined
       }

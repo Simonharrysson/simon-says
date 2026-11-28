@@ -577,7 +577,7 @@ function FolderDriveDemo() {
     connect: noopAction,
     disconnect: noopAction,
   });
-  const account = { email: "styrelsen@exempelforeningen.se", lost: false, folderPicked: true, mine: true };
+  const account = { email: "styrelsen@exempelforeningen.se", lost: false, folderPicked: true, mine: true, connectedByName: "Anna Berg", replaced: null };
   const states: [string, ReactNode][] = [
     ["Inget eget konto, ingen mapp", <FolderStep key="a" folderName={null} folderSet={false} pickerEnabled onPick={() => {}} drive={drive(null)} />],
     ["Inget eget konto, mapp vald", <FolderStep key="b" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive(null)} />],
@@ -585,6 +585,21 @@ function FolderDriveDemo() {
     ["Kopplat, mapp vald", <FolderStep key="d" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive(account)} />],
     ["Kopplat av en annan admin", <FolderStep key="e" folderName={null} folderSet={false} pickerEnabled onPick={() => {}} drive={drive({ ...account, mine: false, folderPicked: false })} />],
     ["Behöver förnyas", <FolderStep key="f" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={drive({ ...account, lost: true })} />],
+    [
+      "Bytt av en annan admin",
+      <FolderStep
+        key="g"
+        folderName="Styrelsen 2026–2027"
+        folderSet
+        pickerEnabled
+        onPick={() => {}}
+        drive={drive({ ...account, mine: false, connectedByName: "Erik Lund", replaced: { email: "gamla@exempelforeningen.se", byName: "Erik Lund", at: "2026-11-20T09:30:00Z" } })}
+      />,
+    ],
+    [
+      "Delningar som väntar (kontot bortkopplat)",
+      <FolderStep key="h" folderName="Styrelsen 2026–2027" folderSet pickerEnabled onPick={() => {}} drive={{ ...drive(null), stuckShares: 3 }} />,
+    ],
   ];
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,26rem),1fr))] gap-6">

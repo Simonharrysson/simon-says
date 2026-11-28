@@ -637,6 +637,8 @@ export interface FolderDriveAccount {
   from: "kom-igang" | "installningar";
   /** `?drivekonto=` after the consent or the disconnect. */
   result?: DriveAccountResult | null;
+  /** Shares of deleted accounts on the förening account's Docs still waiting for that account (0070). */
+  stuckShares?: number;
 }
 
 export type DriveAccountResult = "ok" | "nej" | "fel" | "bort";
@@ -671,8 +673,22 @@ export function FolderStep(p: FolderStepProps) {
   // in their own Drive would take the folder away from the account.
   const canPick = p.pickerEnabled && (!account || (account.mine && !account.lost));
   const result = p.drive?.result ?? null;
+  const locale = useLocale();
+  const stuck = p.drive?.stuckShares ?? 0;
   return (
     <div className="flex flex-col gap-6">
+      {account?.replaced && (
+        <Banner tone="info" live={false}>
+          {account.replaced.byName
+            ? t("account.replaced", { name: account.replaced.byName, email: account.replaced.email, date: formatDateTime(account.replaced.at, locale) })
+            : t("account.replacedNoName", { email: account.replaced.email, date: formatDateTime(account.replaced.at, locale) })}
+        </Banner>
+      )}
+      {stuck > 0 && (
+        <Banner tone="warning" live={false} title={t("account.stuckTitle", { count: stuck })}>
+          {t("account.stuckText", { count: stuck })}
+        </Banner>
+      )}
       {result && (
         <Banner tone={result === "ok" || result === "bort" ? "success" : result === "fel" ? "danger" : "warning"}>{t(`account.result.${result}`)}</Banner>
       )}
@@ -725,7 +741,10 @@ export function FolderStep(p: FolderStepProps) {
             <span className="flex-none" aria-hidden="true">
               <IconUser size={16} />
             </span>
-            <span className="wrap-anywhere">{t("account.line", { email: account.email })}</span>
+            <span className="flex min-w-0 flex-col">
+              <span className="wrap-anywhere">{t("account.line", { email: account.email })}</span>
+              {account.connectedByName && <span className="text-ink-3 wrap-anywhere">{t("account.by", { name: account.connectedByName })}</span>}
+            </span>
           </span>
           <span className="flex flex-wrap items-center gap-2">
             {!account.lost && <DriveConnectForm drive={p.drive} label={t("account.switch")} variant="ghost" />}

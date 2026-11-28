@@ -179,7 +179,12 @@
         "nej": "Nothing was connected. Allow Drive at Google to try again.",
         "fel": "The account couldn't be connected. Try again in a little while.",
         "bort": "Account disconnected."
-      }
+      },
+      "by": "Connected by {name}",
+      "replaced": "{name} switched the account from {email} ({date}).",
+      "replacedNoName": "The account was switched from {email} ({date}).",
+      "stuckTitle": "{count, plural, one {# share couldn't be removed} other {# shares couldn't be removed}}",
+      "stuckText": "Deleted accounts can still open documents in the association's Drive. Renew or reconnect the account that owns the documents, and the shares are removed. You can also remove them yourself under Share in Google Drive."
     },
     "pickShort": "Choose folder"
   },

@@ -25,6 +25,7 @@ export function MeetingFolderSetting({
   driveAccount = null,
   driveResult = null,
   from = "installningar",
+  stuckShares = 0,
 }: {
   orgId: string;
   folderName: string | null;
@@ -33,6 +34,8 @@ export function MeetingFolderSetting({
   driveAccount?: DriveAccountView | null;
   driveResult?: DriveAccountResult | null;
   from?: "kom-igang" | "installningar";
+  /** 0070: shares of deleted accounts still waiting for the förening's account. */
+  stuckShares?: number;
 }) {
   const folder = useMeetingFolderPicker(orgId);
   return (
@@ -43,7 +46,7 @@ export function MeetingFolderSetting({
       busy={folder.busy}
       message={folder.message}
       onPick={folder.pick}
-      drive={{ view: driveAccount, result: driveResult, orgId, from, connect: connectDriveAccount, disconnect: disconnectDriveAccount }}
+      drive={{ view: driveAccount, result: driveResult, stuckShares, orgId, from, connect: connectDriveAccount, disconnect: disconnectDriveAccount }}
     />
   );
 }
