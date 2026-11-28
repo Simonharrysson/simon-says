@@ -10,7 +10,7 @@ import type { MomentLine } from "@/lib/meetings/moments";
 import { formatSaidAt } from "@/lib/notes/sources";
 import { cn } from "@/lib/utils";
 
-// "▶ 41:52" on a decision or task (0068) and the transcript sheet it opens: the lines around the
+// "▶ 41:52" on a decision or task (0069) and the transcript sheet it opens: the lines around the
 // moment, the source line(s) on a tint, scrolled into view. A side sheet from the right on wide
 // screens, a bottom sheet on a phone. Text only: no audio is stored. The lines are read on click
 // (the server re-checks who may read them) and kept for the visit, so a second open is instant.

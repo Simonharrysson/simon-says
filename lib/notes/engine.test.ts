@@ -511,7 +511,7 @@ describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
       expect(p).toContain('with owner "Claude"');
       expect(p).toContain("never give a task to Claude yourself, and never move a person's task to Claude");
     }
-    // The 0065 prompts, re-pinned for source moments (0068, "src").
+    // The 0065 prompts, re-pinned for source moments (0069, "src").
     expect(sha(SYSTEM_PROMPT_AGENT_TASKS)).toBe("e2f575792b79dd4dd1c6381a3de746ee5800bd262f5918cc4e9336c634929a4a");
     expect(sha(AGENDA_SYSTEM_PROMPT_AGENT_TASKS)).toBe("22822f680b2b54227685b56c26e80521b33051c5f604aad297355fe9a7c697e8");
   });
@@ -555,7 +555,7 @@ describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
   });
 });
 
-describe("source moments (0068) through updateNotes", () => {
+describe("source moments (0069) through updateNotes", () => {
   const sources = () => new Map([["00:00:05", [{ key: "el-1:3:0", startMs: 5200 }]]]);
   it("v1: a cited time becomes the item's moment; an unknown one is dropped silently", async () => {
     const ops = [
@@ -583,7 +583,7 @@ describe("source moments (0068) through updateNotes", () => {
 describe("v1 prompt and schema stay byte-identical", () => {
   // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when);
   // agent tasks (0065) are parked, so the default prompt is the one from before 0065; re-pinned
-  // for source moments (0068: the "src" field and its paragraph).
+  // for source moments (0069: the "src" field and its paragraph).
   it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
     expect(sha(SYSTEM_PROMPT)).toBe("77cd0d53057cfd1fec691a08bcbebc3287e66fbf8e69504ef294bf2c332855f0");
     expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("25e9bace40b9a668e75bbc579d01aac78252f540c8ce64f3bab384ec6f78aef6");

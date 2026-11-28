@@ -45,7 +45,7 @@ export interface BriefDecision {
   key: string;
   text: string;
   meeting: BriefMeetingRef;
-  /** 0068: where in the meeting it was said ("41:52"), only when the recipient may read that transcript. */
+  /** 0069: where in the meeting it was said ("41:52"), only when the recipient may read that transcript. */
   saidAt?: string;
 }
 
@@ -88,7 +88,7 @@ export interface BriefInput {
   /** The org's people (for "mine" and owner names). */
   people: HomePerson[];
   agenda: BriefAgenda | null;
-  /** 0068: meetings whose transcript the recipient may read; other meetings' decisions get no time. */
+  /** 0069: meetings whose transcript the recipient may read; other meetings' decisions get no time. */
   transcriptMeetings?: string[];
   /** Today in Stockholm (YYYY-MM-DD). */
   today: string;

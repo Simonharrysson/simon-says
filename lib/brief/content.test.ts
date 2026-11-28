@@ -42,7 +42,7 @@ const base = (over: Partial<BriefInput> = {}): BriefInput => ({
 });
 
 describe("briefContent", () => {
-  it("0068: a decision's moment only for meetings whose transcript the recipient may read", () => {
+  it("0069: a decision's moment only for meetings whose transcript the recipient may read", () => {
     const rows = [
       row("m1", "d1", "decision", "Hackathonet blir 14 feb", { source_segment_ids: ["el:1:0"], said_at_ms: 2_512_000 }),
       row("m0", "d0", "decision", "Vi byter bank", { source_segment_ids: ["el:2:0"], said_at_ms: 60_000 }),

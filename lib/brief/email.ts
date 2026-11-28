@@ -137,7 +137,7 @@ export function renderBriefHtml(i: BriefEmailInput): string {
       block(
         sectionTitle(x("emails.brief.decisions")) +
           list(
-            // 0068: where it was said ("▶ 41:52"), next to the decision.
+            // 0069: where it was said ("▶ 41:52"), next to the decision.
             i.decisions.map((d) => `${escapeHtml(d.text)} ${grey(`${d.saidAt ? `&#9654;&nbsp;${escapeHtml(d.saidAt)} ` : ""}&middot; ${link(d.meeting.href, dayMonth(d.meeting.at, i.locale))}`)}`),
             null,
           ),

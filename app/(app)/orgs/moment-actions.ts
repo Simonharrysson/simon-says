@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export type MomentResult = { ok: true; lines: MomentLine[] } | { ok: false };
 
 /**
- * The transcript around one decision's or task's moment (0068), for the signed-in user only:
+ * The transcript around one decision's or task's moment (0069), for the signed-in user only:
  * transcript_moment_lines() decides (sees the meeting as a member, the org shares its transcript,
  * not the Må-runda window). Read on click, never in the page's props.
  */

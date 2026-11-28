@@ -269,7 +269,7 @@ describe("format layout: transcript masking (Må-runda)", () => {
     expect(blocks.join("\n")).not.toMatch(/mår bra|trött/);
   });
 
-  it("0068: the citable lines are the real ones per block, never a Må-runda placeholder", () => {
+  it("0069: the citable lines are the real ones per block, never a Må-runda placeholder", () => {
     const open = { startMs: 2000, endMs: null, closed: false, failures: 0 };
     const { blocks, sources } = tick.buildTranscript(tick1, sessions, [], open);
     expect(sources).toHaveLength(blocks.length);
@@ -510,7 +510,7 @@ describe("format layout: the render list (F2) and Claude's view of own lines (F3
     expect(without.removed.has("info-narvarande")).toBe(false); // info cells are never removed
   });
 
-  it("0068: a moment survives two renders (primary and tasks copy), reads back unlocked and carried by the items", () => {
+  it("0069: a moment survives two renders (primary and tasks copy), reads back unlocked and carried by the items", () => {
     const { doc, plan } = anchoredDoc(M);
     const meeting = fmtMeeting(M, plan);
     const items: NotesItem[] = [
@@ -900,7 +900,7 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await events(id, "tick_ok")).toHaveLength(1);
   });
 
-  it("0068: a cited moment is stored, rendered and kept across a quiet tick (v1)", async () => {
+  it("0069: a cited moment is stored, rendered and kept across a quiet tick (v1)", async () => {
     const { applyOps } = await import("@/lib/notes/engine");
     const { id, sessionId } = await meeting();
     await say(id, sessionId, "Vi bestämmer budgeten", 1000);

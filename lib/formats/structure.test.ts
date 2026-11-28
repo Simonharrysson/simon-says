@@ -154,7 +154,7 @@ describe("docStructure privacy (final review I1)", () => {
 });
 
 describe("linePrefix", () => {
-  it("0068: a line's source time (41:52) never reads as a label", () => {
+  it("0069: a line's source time (41:52) never reads as a label", () => {
     for (const line of ["✓ Vi kör på fredag (41:52)", "Vi kör (41:52)", "Budget (1:05:10)", "Anna: Boka lokal (fredag). (41:52)"]) {
       expect(linePrefix(line) ?? "").not.toMatch(/\d|\(/);
     }

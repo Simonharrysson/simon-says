@@ -36,7 +36,7 @@ export interface McpReader {
   /** The org's "Vad Claude ska veta" (0065, is_org_member), or null when there is none. */
   orgMemory(orgId: string): Promise<McpOrgMemory | null>;
   /**
-   * 0068: the source lines of some items of one meeting, only when the user may read its transcript
+   * 0069: the source lines of some items of one meeting, only when the user may read its transcript
    * (transcript_moment_lines: the same rule as the meeting page's ▶ link).
    */
   moments?(meetingId: string, itemIds: string[]): Promise<Map<string, MomentLine[]>>;

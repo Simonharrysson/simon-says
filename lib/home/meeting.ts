@@ -17,11 +17,11 @@ export interface MeetingTask extends MyTask {
   owner: string | null;
   canTick: boolean;
   mine: boolean;
-  /** 0068: where in the meeting it was said (meeting-relative ms), only when the viewer may read that transcript. */
+  /** 0069: where in the meeting it was said (meeting-relative ms), only when the viewer may read that transcript. */
   saidAtMs?: number | null;
 }
 
-/** A decision with its moment (0068): `saidAtMs` only when the viewer may read that transcript. */
+/** A decision with its moment (0069): `saidAtMs` only when the viewer may read that transcript. */
 export interface MeetingDecision {
   itemId: string;
   text: string;
@@ -33,7 +33,7 @@ export interface OrgMeetingPage {
   org: { id: string; name: string; kind?: string };
   meeting: { id: string; startedAt: string; status: string; title: string | null; isTest: boolean; endedAt?: string | null };
   decisions: string[];
-  /** The same decisions with their item ids and moments (0068), in the same order. */
+  /** The same decisions with their item ids and moments (0069), in the same order. */
   decisionItems?: MeetingDecision[];
   /** The Närvarande rows (as written: one name or a typed list each). */
   attendees?: string[];
@@ -101,7 +101,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
 }
 
 /**
- * The moments of a meeting's decisions and tasks the viewer may follow (0068): rows with sources,
+ * The moments of a meeting's decisions and tasks the viewer may follow (0069): rows with sources,
  * checked by transcript_moment_lines() (the visibility rule, and that the segments exist). A failed
  * read shows no links rather than failing the page.
  */
@@ -153,7 +153,7 @@ export function buildOrgMeeting(input: {
   people: HomePerson[];
   /** Claude's progress on the tasks this meeting gave it (agent_task_status, 0065). */
   statuses?: AgentStatusRow[];
-  /** 0068: the moments the viewer may follow (`meetingMoments`); none = no links. */
+  /** 0069: the moments the viewer may follow (`meetingMoments`); none = no links. */
   moments?: Map<string, MomentLine[]>;
 }): OrgMeetingPage {
   const saidAt = (id: string) => firstSourceMs(input.moments?.get(id));

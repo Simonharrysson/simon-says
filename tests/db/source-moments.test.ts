@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 
-// Source moments (0068) against the real schema: who may read the transcript behind a decision's
+// Source moments (0069) against the real schema: who may read the transcript behind a decision's
 // "▶ 41:52" (a member who can see the meeting, an org that shares its transcript; never a guest,
 // an outsider or the Må-runda window), that a source must be a segment of THAT meeting, that the
 // page and MCP show nothing when the transcript is hidden, and that save_note_rows keeps the
@@ -28,7 +28,7 @@ const must = async <T,>(p: PromiseLike<{ data: T; error: { message: string } | n
   return data;
 };
 
-describe.skipIf(!hasLocalSupabase)("source moments (0068)", () => {
+describe.skipIf(!hasLocalSupabase)("source moments (0069)", () => {
   let owner: TestUser;
   let member: TestUser;
   let outsider: TestUser;

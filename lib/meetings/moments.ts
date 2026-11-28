@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
 
-// The transcript behind a decision's or task's moment (0068), read through
+// The transcript behind a decision's or task's moment (0069), read through
 // transcript_moment_lines(): that function holds the whole visibility rule (a member who can see
 // the meeting, an org that shares its transcript, never a guest or a Privat space, never the
 // Må-runda window, only segments of that meeting). Nothing here restates it. Called with the

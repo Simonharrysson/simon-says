@@ -235,7 +235,7 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
 
   const [rows, people] = await Promise.all([ctx.reader.noteItems([id]), ctx.reader.people([org.id])]);
   const sorted = [...rows].sort((a, b) => a.position - b.position);
-  // 0068: where each decision and task was said, only when the user may read the transcript.
+  // 0069: where each decision and task was said, only when the user may read the transcript.
   const sourced = sorted.filter((r) => !r.deleted_by_human && (r.section === "decision" || r.section === "action") && r.source_segment_ids?.length).map((r) => r.id);
   const moments = sourced.length && ctx.reader.moments ? await ctx.reader.moments(id, sourced) : new Map<string, MomentLine[]>();
   const page = buildOrgMeeting({ userId: ctx.user.id, org: { id: org.id, name: org.name }, meeting: m, role: org.role, rows: sorted, people, moments });

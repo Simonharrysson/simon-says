@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { auditBorders, formatOffenders } from "../border-audit";
 import { expect, expectAccessible, seedMeeting, test } from "../fixtures";
 
-// Source moments (0068): a decision and a task on a finished meeting's page show "▶ mm:ss"; a click
+// Source moments (0069): a decision and a task on a finished meeting's page show "▶ mm:ss"; a click
 // opens the transcript sheet (a side sheet, a bottom sheet on a phone) scrolled to that line,
 // highlighted, with a few lines around it. Text only. Once the förening stops sharing its
 // transcript, the links are gone. Fictional data.

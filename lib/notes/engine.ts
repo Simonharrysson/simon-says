@@ -104,7 +104,7 @@ export interface UpdateNotesInput {
    */
   agentTasks?: boolean;
   /**
-   * 0068: the transcript lines of `transcriptBlocks` by bracket time (buildTranscript's `sources`,
+   * 0069: the transcript lines of `transcriptBlocks` by bracket time (buildTranscript's `sources`,
    * for exactly the blocks sent). Claude's cited times are resolved against it; without it every
    * citation is dropped (no link, never a wrong one).
    */
@@ -302,7 +302,7 @@ export function applyOps(
     final?: boolean;
     nextId?: string;
     agenda?: { anchors: Map<string, ItemRole | "notes"> };
-    /** 0068: cited bracket times → segments; see `UpdateNotesInput.sources`. */
+    /** 0069: cited bracket times → segments; see `UpdateNotesInput.sources`. */
     sources?: SourceIndex;
   } = {},
 ): { ops: NotesOp[]; items: NotesItem[]; dropped: number; nextId: string; ruled?: number; ignored: number } {
@@ -317,7 +317,7 @@ export function applyOps(
   let ruled = 0;
   let removals = 0;
   let rewrites = 0;
-  /** Citation-only changes that changed nothing (0068): neither accepted nor a rejection. */
+  /** Citation-only changes that changed nothing (0069): neither accepted nor a rejection. */
   let ignored = 0;
 
   for (const op of ops) {
@@ -342,7 +342,7 @@ export function applyOps(
       }
       const id = `n${counter++}`;
       assigned.set(op.item.id, id);
-      // Sources only from the server's resolution of the cited times (0068), never from the op.
+      // Sources only from the server's resolution of the cited times (0069), never from the op.
       const { sources: _s, saidAtMs: _a, ...fields } = op.item;
       const src = sourced(fields.section) ? resolveSources(op.src, opts.sources) : null;
       const item: NotesItem = { ...fields, id, ...(src ? { sources: src.ids, saidAtMs: src.saidAtMs } : {}) };
@@ -390,7 +390,7 @@ export function applyOps(
     }
     if (change.done === true) target.done = true;
     else if (change.done === false) delete target.done;
-    // 0068: a cited moment is set where none is yet, or with a text the meeting changed; never on
+    // 0069: a cited moment is set where none is yet, or with a text the meeting changed; never on
     // a carried task (its moment is in another meeting).
     const src = cited && !target.carried && sourced(target.section) && (!target.sources?.length || rewrite) ? resolveSources(cited, opts.sources) : null;
     if (src) {
@@ -410,7 +410,7 @@ export function applyOps(
   return { ops: accepted, items: work, dropped, nextId: `n${counter}`, ignored, ...(opts.agenda ? { ruled } : {}) };
 }
 
-/** Decisions and tasks carry a moment (0068); attendees, "now" and notes don't. */
+/** Decisions and tasks carry a moment (0069); attendees, "now" and notes don't. */
 const sourced = (section: NotesItem["section"]) => section === "decision" || section === "action";
 
 /**

@@ -92,7 +92,7 @@ describe("segment ids", () => {
   });
 });
 
-describe("applyOps: sources (0068)", () => {
+describe("applyOps: sources (0069)", () => {
   const decision: NotesItem = { id: "n1", section: "decision", text: "Vi kör på fredag" };
   const sourced: NotesItem = { id: "n2", section: "action", text: "Boka lokal", owner: "Anna", sources: ["el-a:5:0"], saidAtMs: at(0, 42, 10) };
 
@@ -149,7 +149,7 @@ describe("applyOps: sources (0068)", () => {
   });
 });
 
-describe("Doc line and row (0068)", () => {
+describe("Doc line and row (0069)", () => {
   const row = (over: Partial<NoteItemRow> = {}): NoteItemRow => ({
     meeting_id: "m1",
     id: "n1",

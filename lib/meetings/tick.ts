@@ -236,7 +236,7 @@ export function buildTranscript(
 ): { blocks: string[]; speakerNames: Record<string, string>; sources: SegmentSource[][] } {
   const r = resolver(sessions, speakers);
   const byTick = new Map<number, string[]>();
-  // 0068: the real lines of each block (never a Må-runda placeholder), the moments Claude may cite.
+  // 0069: the real lines of each block (never a Må-runda placeholder), the moments Claude may cite.
   const srcByTick = new Map<number, SegmentSource[]>();
   const speakerNames: Record<string, string> = {};
   const sorted = sortSegments(segments, r.numbers);
@@ -958,7 +958,7 @@ export async function runTick(
     let out: UpdateNotesResult | null = null;
     let claudeFailed = false;
     const send = blocksForCall(blocks, sentTick);
-    // 0068: Claude may cite only the lines it is sent in this call.
+    // 0069: Claude may cite only the lines it is sent in this call.
     const sourceIndex = sources.slice(0, send.length).reduce<SourceIndex>((index, lines) => addToIndex(index, lines), new Map());
     // Claude only with something new to read (or the final pass over a non-empty transcript).
     if (claudeAllowed && send.length > 0 && (final || send.length > sentTick)) {

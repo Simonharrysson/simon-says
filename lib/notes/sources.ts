@@ -1,4 +1,4 @@
-// Where in the meeting a decision or task was said (0068, "source moments"). Pure helpers shared
+// Where in the meeting a decision or task was said (0069, "source moments"). Pure helpers shared
 // by the notes engine, the tick, the Doc render, the meeting page, the brief mail and MCP.
 //
 // Claude cites a transcript line by the bracket time it already starts with (`[00:41:52] S1-…`),

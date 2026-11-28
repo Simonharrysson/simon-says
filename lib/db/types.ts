@@ -235,9 +235,9 @@ export interface NoteItemRow {
   done_when?: string | null;
   /** 0049: `due` as a date (YYYY-MM-DD) when it names one; carried tasks keep their source's. */
   due_date?: string | null;
-  /** 0068: the transcript segments it was said in (lib/notes/sources.ts); null = unknown. */
+  /** 0069: the transcript segments it was said in (lib/notes/sources.ts); null = unknown. */
   source_segment_ids?: string[] | null;
-  /** 0068: the first source's meeting-relative start (ms); null = unknown. */
+  /** 0069: the first source's meeting-relative start (ms); null = unknown. */
   said_at_ms?: number | null;
 }
 

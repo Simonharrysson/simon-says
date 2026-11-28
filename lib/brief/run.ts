@@ -58,7 +58,7 @@ export interface BriefHistory {
   rows: HomeNoteRow[];
   people: HomePerson[];
   agenda: BriefAgenda | null;
-  /** 0068: the meetings whose transcript the user may read (transcript_visible_ids): their decisions show "▶ 41:52". */
+  /** 0069: the meetings whose transcript the user may read (transcript_visible_ids): their decisions show "▶ 41:52". */
   transcriptMeetings?: string[];
 }
 

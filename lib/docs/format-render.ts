@@ -98,7 +98,7 @@ export function formatLine(
       if (due) line += ` ${due}`;
       if (doneWhen) line += ` – ${doneWhen}`;
       if (due || doneWhen || !/[!?]$/.test(body)) line += ".";
-      // 0068: where it was said, after the sentence; never on a carried task (another meeting's).
+      // 0069: where it was said, after the sentence; never on a carried task (another meeting's).
       if (!item.carried) line += saidAtSuffix(item.saidAtMs);
       if (item.done) line += " ✓ klart";
       return line;

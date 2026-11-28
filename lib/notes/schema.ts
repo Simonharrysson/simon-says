@@ -27,19 +27,19 @@ export interface NotesItem {
   dueDate?: string;
   /** Render missing Vem/När/Klart när as visible placeholders (the space requires them, lib/notes/tasks.ts). Never stored. */
   placeholders?: boolean;
-  /** 0068: the transcript segments it was said in (segment keys, lib/notes/sources.ts). Decisions and tasks only. */
+  /** 0069: the transcript segments it was said in (segment keys, lib/notes/sources.ts). Decisions and tasks only. */
   sources?: string[];
-  /** 0068: the first source's meeting-relative start; rendered as " (41:52)". */
+  /** 0069: the first source's meeting-relative start; rendered as " (41:52)". */
   saidAtMs?: number;
 }
 
 export type NotesOp =
-  /** `src`: the bracket times Claude cited (0068); `applyOps` resolves them into `item.sources`. */
+  /** `src`: the bracket times Claude cited (0069); `applyOps` resolves them into `item.sources`. */
   | { op: "add"; item: NotesItem; src?: string[] }
   | {
       op: "change";
       id: string;
-      /** The bracket times Claude cited (0068); resolved by `applyOps`, never kept on the op. */
+      /** The bracket times Claude cited (0069); resolved by `applyOps`, never kept on the op. */
       src?: string[];
       text?: string;
       owner?: string;
@@ -89,7 +89,7 @@ export const OPS_JSON_SCHEMA = {
           owner: { type: "string" },
           due: { type: "string" },
           done_when: { type: "string" },
-          // 0068: bracket times of the transcript lines it was said in.
+          // 0069: bracket times of the transcript lines it was said in.
           src: { type: "array", items: { type: "string" } },
         },
         required: ["op", "id"],
@@ -103,7 +103,7 @@ export const OPS_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-/** Cited times, trimmed and non-empty (0068), or undefined. */
+/** Cited times, trimmed and non-empty (0069), or undefined. */
 const refs = (src: string[] | undefined) => {
   const out = (src ?? []).map((r) => r.trim()).filter(Boolean);
   return out.length ? out : undefined;
@@ -182,7 +182,7 @@ export const AGENDA_OPS_JSON_SCHEMA = {
           due: { type: "string" },
           done_when: { type: "string" },
           done: { type: "boolean" },
-          // 0068: bracket times of the transcript lines it was said in.
+          // 0069: bracket times of the transcript lines it was said in.
           src: { type: "array", items: { type: "string" } },
         },
         required: ["op", "id"],
