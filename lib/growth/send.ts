@@ -14,6 +14,7 @@ import { stockholmDay, taskMode } from "@/lib/notes/tasks";
 import { appOrigin } from "@/lib/origin";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { summaryContent, type SummaryItem } from "@/lib/summaries/content";
+import { sendSummaryFallbacks } from "@/lib/summaries/fallback";
 import type { SummaryMember, SummaryPerson, SummarySpeaker } from "@/lib/summaries/recipients";
 import { inviteFromName, renderInviteEmail } from "./email";
 import { REMINDER_AFTER_MS, REMINDER_UNTIL_MS, addressPaused, inviteRecipients, namedPeople, reminderHour } from "./recipients";
@@ -150,7 +151,6 @@ export async function queueMeetingInvites(input: QueueInput): Promise<void> {
   }
 }
 
-/** Every address this meeting invites (any status): never also in its summary list. */
 /** Invites that are, or may be, on their way: these addresses get the invite, not the summary. */
 export const ACTIVE_INVITE = ["queued", "sending", "sent", "uncertain"] as const;
 
@@ -444,13 +444,28 @@ export async function sendInviteReminders(deps: InviteDeps, opts: { orgId?: stri
   return sent;
 }
 
-/** The cron's step: queued invites, reminders, retention. Never throws. */
+/** Queued invites older than the window are never sent late: `skipped` (expired), so the fallback runs. */
+async function expireQueued(deps: InviteDeps, orgId?: string): Promise<void> {
+  const since = new Date(deps.now().getTime() - QUEUE_WINDOW_MS).toISOString();
+  let query = supabaseAdmin().from("meeting_invites").update({ status: "skipped", skip_reason: "expired" }).eq("status", "queued").lt("created_at", since);
+  if (orgId) query = query.eq("org_id", orgId);
+  const { error } = await query;
+  if (error) console.error(`invites: expire: ${error.message}`);
+}
+
+/** The cron's step: queued invites, expired ones, summary fallbacks, reminders, retention. Never throws. */
 export async function sendPendingInvites(deps: InviteDeps, opts: { orgId?: string; left?: () => boolean } = {}): Promise<number> {
   let n = 0;
   try {
     n += await sendQueuedInvites(deps, opts);
   } catch (e) {
     console.error(`invites: queued: ${(e as Error).message}`.slice(0, 300));
+  }
+  await expireQueued(deps, opts.orgId);
+  try {
+    await sendSummaryFallbacks(deps, { orgId: opts.orgId });
+  } catch (e) {
+    console.error(`invites: fallbacks: ${(e as Error).message}`.slice(0, 300));
   }
   try {
     n += await sendInviteReminders(deps, opts);
@@ -468,10 +483,17 @@ export async function sendPendingInvites(deps: InviteDeps, opts: { orgId?: strin
 
 /** Right after a meeting's summaries: its queued invites. Never throws. */
 export async function trySendMeetingInvites(meetingId: string, deps: InviteDeps): Promise<number> {
+  let n = 0;
   try {
-    return await sendQueuedInvites(deps, { meetingId });
+    n = await sendQueuedInvites(deps, { meetingId });
   } catch (e) {
     console.error(`invites ${meetingId}: ${(e as Error).message}`.slice(0, 300));
-    return 0;
   }
+  // Whoever lost their summary to an invite that didn't go out gets the summary now.
+  try {
+    await sendSummaryFallbacks(deps, { meetingId });
+  } catch (e) {
+    console.error(`invites ${meetingId}: fallbacks: ${(e as Error).message}`.slice(0, 300));
+  }
+  return n;
 }

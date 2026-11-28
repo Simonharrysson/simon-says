@@ -19,7 +19,7 @@ vi.mock("@/lib/env", async (importOriginal) => {
 
 const { createOrg, joinOrg } = await import("@/lib/db/orgs");
 const { sendMeetingSummaries } = await import("@/lib/summaries/send");
-const { sendQueuedInvites, sendInviteReminders } = await import("@/lib/growth/send");
+const { sendQueuedInvites, sendInviteReminders, sendPendingInvites, trySendMeetingInvites } = await import("@/lib/growth/send");
 const { claimInvite, loadInvite } = await import("@/lib/growth/claim");
 const { inviteToken } = await import("@/lib/growth/token");
 
@@ -147,6 +147,77 @@ describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
     await sendMeetingSummaries(id, f);
     expect((await invite(id, no))!.status).toBe("skipped");
     expect(f.sent.map((m) => m.to)).toContain(no);
+  });
+
+  describe("an invite that doesn't go out after all: the summary instead, once", () => {
+    /** A meeting whose only expected attendee is a fresh person without an account (mode all: a summary recipient). */
+    async function setup() {
+      const email = `fb-${randomUUID().slice(0, 8)}@exempel.se`;
+      const pid = await person(`Reserv ${email.slice(3, 9)}`, { email });
+      const id = await meeting({ calendar_event: { title: "Styrelsemöte november", expected: [pid], declined: [] } });
+      const first = fakeMailer();
+      await sendMeetingSummaries(id, first);
+      expect(first.sent.map((m) => m.to)).not.toContain(email);
+      expect((await db().from("meeting_invites").select("status, summary_fallback").eq("meeting_id", id).eq("email", email).single()).data).toEqual({ status: "queued", summary_fallback: true });
+      return { id, email };
+    }
+    const summariesTo = (f: ReturnType<typeof fakeMailer>, email: string) => f.sent.filter((m) => m.to === email && m.subject.startsWith("Sammanfattning:"));
+
+    it("an account was made meanwhile (skipped at send time)", async () => {
+      const { id, email } = await setup();
+      expect((await db().auth.admin.createUser({ email, email_confirm: true })).error).toBeNull();
+      const f = fakeMailer();
+      await trySendMeetingInvites(id, f);
+      expect((await invite(id, email))!.status).toBe("skipped");
+      expect(summariesTo(f, email)).toHaveLength(1);
+      expect(summariesTo(f, email)[0].idempotencyKey).toMatch(/^sum-/);
+      // Never twice: the meeting's hook and the cron again.
+      await trySendMeetingInvites(id, f);
+      await sendPendingInvites(f, { orgId });
+      expect(summariesTo(f, email)).toHaveLength(1);
+    });
+
+    it("the förening turned the invites off before they went", async () => {
+      const { id, email } = await setup();
+      await db().from("orgs").update({ invite_attendees: false }).eq("id", orgId);
+      const f = fakeMailer();
+      try {
+        await trySendMeetingInvites(id, f);
+      } finally {
+        await db().from("orgs").update({ invite_attendees: true }).eq("id", orgId);
+      }
+      expect((await invite(id, email))!.status).toBe("skipped");
+      expect(f.sent.map((m) => m.to)).toEqual([email]);
+      expect(summariesTo(f, email)).toHaveLength(1);
+    });
+
+    it("the provider refused the invite (failed)", async () => {
+      const { id, email } = await setup();
+      const sent: MailMessage[] = [];
+      const f = { sent, mailer: { send: async (m: MailMessage) => (sent.push(m), !m.subject.includes("bjöd in")) }, now: () => new Date(), sleep: async () => {} };
+      await trySendMeetingInvites(id, f);
+      expect((await invite(id, email))!.status).toBe("failed");
+      expect(summariesTo(f, email)).toHaveLength(1);
+    });
+
+    it("the queued invite aged out (never sent late)", async () => {
+      const { id, email } = await setup();
+      await db().from("meeting_invites").update({ created_at: new Date(Date.now() - 3 * 86_400_000).toISOString() }).eq("meeting_id", id);
+      const f = fakeMailer();
+      await sendPendingInvites(f, { orgId });
+      expect((await db().from("meeting_invites").select("status, skip_reason").eq("meeting_id", id).eq("email", email).single()).data).toEqual({ status: "skipped", skip_reason: "expired" });
+      expect(f.sent.filter((m) => m.to === email).map((m) => m.subject.startsWith("Sammanfattning:"))).toEqual([true]);
+      await sendPendingInvites(f, { orgId });
+      expect(summariesTo(f, email)).toHaveLength(1);
+    });
+
+    it("an invite that went out gets no summary", async () => {
+      const { id, email } = await setup();
+      const f = fakeMailer();
+      await trySendMeetingInvites(id, f);
+      expect((await invite(id, email))!.status).toBe("sent");
+      expect(f.sent.filter((m) => m.to === email).map((m) => m.subject)).toEqual(['Johanna bjöd in dig till "Styrelsemöte november"']);
+    });
   });
 
   it("the starter's toggle at Starta turns it off for that meeting", async () => {

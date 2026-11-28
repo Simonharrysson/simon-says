@@ -86,6 +86,12 @@ create table public.meeting_invites (
   claim_kind text check (claim_kind in ('new_account', 'existing_account')),
   -- The first signed-in page view 12 h to 7 days after the claim.
   returned_at timestamptz,
+  -- The person was taken off the meeting's summary list for this invite (and was "missed" there):
+  -- if the invite then fails, is skipped at send time or ages out, they get that summary instead,
+  -- once (summary_fallback_at claims it; meeting_summary_sends is the summary's own ledger).
+  summary_fallback boolean not null default false,
+  summary_missed boolean not null default false,
+  summary_fallback_at timestamptz,
   unique (meeting_id, email)
 );
 create index meeting_invites_org_email_idx on public.meeting_invites (org_id, email, sent_at desc);

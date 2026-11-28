@@ -209,7 +209,22 @@ export async function sendMeetingSummaries(
           members,
         });
         const invited = await inviteAddresses(m.id);
-        if (invited.size) recipients = recipients.filter((r) => !invited.has(r.email.trim().toLowerCase()));
+        if (invited.size) {
+          const removed = recipients.filter((r) => invited.has(r.email.trim().toLowerCase()));
+          recipients = recipients.filter((r) => !invited.has(r.email.trim().toLowerCase()));
+          // Remembered on the invite: should it not go out after all, the summary does (fallback.ts).
+          for (const r of removed) {
+            must(
+              "summary: fallback mark",
+              await db
+                .from("meeting_invites")
+                .update({ summary_fallback: true, summary_missed: r.missed })
+                .eq("meeting_id", m.id)
+                .eq("email", r.email.trim().toLowerCase())
+                .eq("summary_fallback", false),
+            );
+          }
+        }
       }
       state = recipients.length ? "sending" : mode === "missed" && !attendance.certain ? "uncertain" : "none";
     }
