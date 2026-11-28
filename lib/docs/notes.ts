@@ -4,6 +4,7 @@ import { kindOfSection, type MeetingRow, type NoteItemRow, type NoteSection } fr
 import type { FormatProfile } from "@/lib/formats/schema";
 import { docsApi, isRevisionConflict, replaceRange, type DocsRequest } from "@/lib/google/docs";
 import type { NotesItem } from "@/lib/notes/schema";
+import { saidAtSuffix, stripSaidAt } from "@/lib/notes/sources";
 import { DONE_WHEN_LABEL, PLACEHOLDER } from "@/lib/notes/tasks";
 
 // Notes items in the notes tab: one paragraph per item, one named range `ss-<meetingId>-<itemId>`
@@ -25,17 +26,21 @@ export function clean(s: string): string {
 }
 
 /** The single line we render for an item (what `last_rendered_text` stores). Never contains a newline. */
-export function formatItem(item: Pick<NotesItem, "section" | "text" | "owner" | "due"> & Partial<Pick<NotesItem, "doneWhen" | "placeholders">>): string {
+export function formatItem(
+  item: Pick<NotesItem, "section" | "text" | "owner" | "due"> & Partial<Pick<NotesItem, "doneWhen" | "placeholders" | "saidAtMs">>,
+): string {
   const text = clean(item.text);
+  // 0068: where it was said, after the line ("✓ Vi kör (41:52)"); decisions and tasks only.
+  const at = saidAtSuffix(item.saidAtMs);
   const ask = item.placeholders === true;
   const owner = item.owner ? clean(item.owner) : ask ? PLACEHOLDER.owner : "";
   const due = item.due ? `(${clean(item.due)})` : ask ? PLACEHOLDER.due : "";
   const doneWhen = item.doneWhen ? `${DONE_WHEN_LABEL} ${clean(item.doneWhen)}` : ask ? PLACEHOLDER.doneWhen : "";
   switch (item.section) {
     case "action":
-      return `☐ ${owner ? `${owner}: ` : ""}${text}${due ? ` ${due}` : ""}${doneWhen ? ` – ${doneWhen}` : ""}`;
+      return `☐ ${owner ? `${owner}: ` : ""}${text}${due ? ` ${due}` : ""}${doneWhen ? ` – ${doneWhen}` : ""}${at}`;
     case "decision":
-      return `✓ ${text}`;
+      return `✓ ${text}${at}`;
     default:
       return text;
   }
@@ -55,6 +60,9 @@ export function toNotesItem(row: NoteItemRow): NotesItem {
     ...(row.done ? { done: true } : {}),
     ...(row.copy_of ? { copyOf: row.copy_of } : {}),
     ...(row.carried_from_id != null ? { carried: true } : {}),
+    // 0068: never on a carried row (its moment was in another meeting).
+    ...(row.carried_from_id == null && row.source_segment_ids?.length ? { sources: row.source_segment_ids } : {}),
+    ...(row.carried_from_id == null && row.source_segment_ids?.length && typeof row.said_at_ms === "number" ? { saidAtMs: Number(row.said_at_ms) } : {}),
   };
 }
 
@@ -202,7 +210,8 @@ export function diffHumanEdits(
     } else if (row.section === "now") {
       // never locked: always reflects the current topic
     } else if (row.locked || cur !== row.last_rendered_text || suggested.has(row.id)) {
-      next = { ...row, locked: true, text: cur, owner: null, due: null, done_when: null, due_date: null };
+      // A person's line keeps their words, minus the " (41:52)" we appended (0068); the moment stays.
+      next = { ...row, locked: true, text: stripSaidAt(cur, row.said_at_ms), owner: null, due: null, done_when: null, due_date: null };
     }
     if (next.deleted_by_human) deletedIds.push(next.id);
     else if (next.locked) locked.push(toNotesItem(next));
@@ -527,6 +536,10 @@ export function renderedRows(
       owner: item.owner ?? null,
       due: item.due ?? null,
       done_when: item.doneWhen ?? null,
+      // 0068: set (or cleared) only when there is a moment to speak of, so older rows keep their shape.
+      ...(item.sources?.length || row?.source_segment_ids?.length
+        ? { source_segment_ids: item.sources?.length ? item.sources : null, said_at_ms: item.sources?.length ? (item.saidAtMs ?? null) : null }
+        : {}),
       locked: false,
       deleted_by_human: false,
       last_rendered_text: formatItem({ ...item, section }),

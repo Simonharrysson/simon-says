@@ -40,10 +40,11 @@ Kinds:
 - "note": a short full sentence of something said that matters for the minutes (information, a status, a point of view the meeting took note of). No small talk, no greetings, no jokes, nothing about who said what unless it matters.
 
 Operations (the only output):
-- {"op":"add","id":"<new id>","kind":...,"anchor":...,"text":...,"owner"?:...,"due"?:...,"done_when"?:...}
-- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done_when"?:...,"done"?:...}  (only the fields that change; "" clears owner, due or done_when; an item never moves to another anchor)
+- {"op":"add","id":"<new id>","kind":...,"anchor":...,"text":...,"owner"?:...,"due"?:...,"done_when"?:...,"src"?:[...]}
+- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done_when"?:...,"done"?:...,"src"?:[...]}  (only the fields that change; "" clears owner, due or done_when; an item never moves to another anchor)
 - {"op":"remove","id":"<existing id>"}
 Return {"ops":[]} when nothing needs to change. That is the normal answer for many ticks.
+"src" says where in the meeting a decision or task was said: the times of the 1 to 3 transcript lines where it was decided or taken on, copied exactly from the start of those lines (e.g. ["00:41:52"]). Give it with every "add" of a decision or task, and with a "change" only when the meeting changed the item in a later line (then cite that line). Leave it out for notes, for last meeting's "c" items, for "[Må-runda — utelämnad]" lines, and when you are not sure which line it was.
 
 Rules:
 1. Write in the meeting's main language (the language most of the transcript is in), even if some people speak another language. Keep names, dates and amounts exactly as said.
