@@ -136,5 +136,7 @@
     "limit": "Ni har hämtat från webbplatsen många gånger nyss. Försök igen om en stund.",
     "failed": "Vi kunde inte läsa webbplatsen just nu.",
     "robots": "Webbplatsen ber automatiska läsare att inte hämta sidorna, så vi lät bli."
-  }
+  },
+  "driveAccountLost": "Drive-kopplingen behöver förnyas. Välj ”Förnya” vid mötesmappen.",
+  "driveAccountLostStart": "Föreningens Drive-koppling behöver förnyas. En admin förnyar den under Inställningar › Möten."
 }

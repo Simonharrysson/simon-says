@@ -16,6 +16,14 @@ const root = () => {
 export const docsApi = (auth: OAuth2Client) => docs({ version: "v1", auth, ...root() });
 export const driveApi = (auth: OAuth2Client) => drive({ version: "v3", auth, ...root() });
 
+/**
+ * Shared drives ("Delade enheter"): on every Drive call that names a file (get, create, update,
+ * permissions), or Drive answers 404 for anything in a shared drive.
+ */
+export const ALL_DRIVES = { supportsAllDrives: true } as const;
+/** A files.list across My Drive and shared drives. */
+export const ALL_DRIVES_LIST = { supportsAllDrives: true, includeItemsFromAllDrives: true } as const;
+
 /** Insert items as consecutive paragraphs at `index`, with one named range per item (text only, no newline). */
 export function paragraphsWithRanges(
   tabId: string,

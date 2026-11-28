@@ -4,14 +4,16 @@ import { useLocale, useTranslations } from "next-intl";
 import { useId, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button, ButtonLink, Spinner } from "@/components/ui/button";
-import { ConfirmAction } from "@/components/ui/ConfirmAction";
+import { ConfirmAction, type FormAction } from "@/components/ui/ConfirmAction";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { CopyField } from "@/components/ui/CopyField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Check, Field, hintClass } from "@/components/ui/Field";
-import { IconCheck, IconChevronDown, IconFolder, IconLink, IconPencil, IconPlus, IconTrash, IconX } from "@/components/ui/icons";
+import { IconCheck, IconChevronDown, IconFolder, IconLink, IconPencil, IconPlus, IconTrash, IconUser, IconX } from "@/components/ui/icons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { STEPS, type StepId } from "@/lib/onboarding/steps";
+import type { DriveAccountView } from "@/lib/google/drive-account-rules";
 import { LOGO_TYPES } from "@/lib/orgs/logo";
 import { formatDateTime } from "@/lib/format";
 import type { InviteRow } from "@/lib/invites/rules";
@@ -622,6 +624,25 @@ function PersonForm({
 // ---------------------------------------------------------------------------------------------
 // 3. Mötesmapp
 
+/** The förening's own Drive account in the folder card (0070); admins only. */
+export interface FolderDriveAccount {
+  /** Null: none connected (the starter's own Drive, as before). */
+  view: DriveAccountView | null;
+  /** "Använd ett annat Google-konto" / "Byt konto" / "Förnya": Google's consent (a server action). */
+  connect: FormAction;
+  /** "Koppla från" (a server action). */
+  disconnect: FormAction;
+  orgId: string;
+  /** Where the consent returns. */
+  from: "kom-igang" | "installningar";
+  /** `?drivekonto=` after the consent or the disconnect. */
+  result?: DriveAccountResult | null;
+  /** Shares of deleted accounts on the förening account's Docs still waiting for that account (0070). */
+  stuckShares?: number;
+}
+
+export type DriveAccountResult = "ok" | "nej" | "fel" | "bort";
+
 export interface FolderStepProps {
   folderName: string | null;
   folderSet: boolean;
@@ -629,12 +650,55 @@ export interface FolderStepProps {
   busy?: boolean;
   message?: string | null;
   onPick: () => void;
+  /** False until the page is hydrated: the pick buttons stay disabled (a press before then is lost). */
+  pickReady?: boolean;
+  drive?: FolderDriveAccount;
+}
+
+/** One form posting the förening and where to return (connect / renew / switch). */
+function DriveConnectForm({ drive, label, variant }: { drive: FolderDriveAccount; label: string; variant: "secondary" | "ghost" }) {
+  return (
+    <form action={drive.connect}>
+      <input type="hidden" name="orgId" value={drive.orgId} />
+      <input type="hidden" name="from" value={drive.from} />
+      <SubmitButton variant={variant} size="sm" icon={<IconUser size={16} />}>
+        {label}
+      </SubmitButton>
+    </form>
+  );
 }
 
 export function FolderStep(p: FolderStepProps) {
   const t = useTranslations("onboarding.folder");
+  const account = p.drive?.view ?? null;
+  // The Picker shows the förening's account only to the admin who connected it: someone else picking
+  // in their own Drive would take the folder away from the account.
+  const canPick = p.pickerEnabled && (!account || (account.mine && !account.lost));
+  const result = p.drive?.result ?? null;
+  const locale = useLocale();
+  const stuck = p.drive?.stuckShares ?? 0;
   return (
     <div className="flex flex-col gap-6">
+      {account?.replaced && (
+        <Banner tone="info" live={false}>
+          {account.replaced.byName
+            ? t("account.replaced", { name: account.replaced.byName, email: account.replaced.email, date: formatDateTime(account.replaced.at, locale) })
+            : t("account.replacedNoName", { email: account.replaced.email, date: formatDateTime(account.replaced.at, locale) })}
+        </Banner>
+      )}
+      {stuck > 0 && (
+        <Banner tone="warning" live={false} title={t("account.stuckTitle", { count: stuck })}>
+          {t("account.stuckText", { count: stuck })}
+        </Banner>
+      )}
+      {result && (
+        <Banner tone={result === "ok" || result === "bort" ? "success" : result === "fel" ? "danger" : "warning"}>{t(`account.result.${result}`)}</Banner>
+      )}
+      {account?.lost && p.drive && (
+        <Banner tone="warning" title={t("account.lostTitle")} action={<DriveConnectForm drive={p.drive} label={t("account.renew")} variant="secondary" />}>
+          {t("account.lostText", { email: account.email })}
+        </Banner>
+      )}
       {p.folderSet ? (
         <div className="flex items-center gap-4 rounded-lg bg-surface p-4 shadow-panel in-card:bg-sunk/60 in-card:shadow-none">
           <span className="grid size-11 flex-none place-items-center rounded-md bg-sunk text-ink-2 in-card:bg-surface">
@@ -642,11 +706,15 @@ export function FolderStep(p: FolderStepProps) {
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="font-medium wrap-anywhere">{p.folderName ?? t("fallbackName")}</span>
-            <span className="text-sm text-green">{t("chosen")}</span>
+            {account && !account.lost && !account.folderPicked ? (
+              <span className="text-sm text-ink-3 wrap-anywhere">{account.mine ? t("account.pickInAccount", { email: account.email }) : t("account.otherAdmin")}</span>
+            ) : (
+              <span className="text-sm text-green">{t("chosen")}</span>
+            )}
           </span>
-          {p.pickerEnabled && (
-            <Button variant="ghost" size="sm" onClick={p.onPick} loading={p.busy}>
-              {t("change")}
+          {canPick && (
+            <Button variant={account && !account.folderPicked ? "secondary" : "ghost"} size="sm" onClick={p.onPick} loading={p.busy} disabled={p.pickReady === false}>
+              {account && !account.folderPicked ? t("pickShort") : t("change")}
             </Button>
           )}
         </div>
@@ -655,15 +723,53 @@ export function FolderStep(p: FolderStepProps) {
           title={t("noneTitle")}
           action={
             p.pickerEnabled ? (
-              <Button variant="secondary" icon={<IconFolder size={18} />} onClick={p.onPick} loading={p.busy}>
-                {t("pick")}
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {canPick && (
+                  <Button variant="secondary" icon={<IconFolder size={18} />} onClick={p.onPick} loading={p.busy} disabled={p.pickReady === false}>
+                    {account ? t("pickIn", { email: account.email }) : t("pick")}
+                  </Button>
+                )}
+                {p.drive && !account && <DriveConnectForm drive={p.drive} label={t("account.other")} variant="ghost" />}
+              </div>
             ) : undefined
           }
         >
-          <p>{t("noneText")}</p>
+          <p>{account && !account.mine ? t("account.otherAdmin") : t("noneText")}</p>
         </EmptyState>
       )}
+      {p.drive && p.pickerEnabled && (account ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <span className="flex min-w-48 flex-1 items-center gap-2 text-ink-2">
+            <span className="flex-none" aria-hidden="true">
+              <IconUser size={16} />
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <span className="wrap-anywhere">{t("account.line", { email: account.email })}</span>
+              {account.connectedByName && <span className="text-ink-3 wrap-anywhere">{t("account.by", { name: account.connectedByName })}</span>}
+            </span>
+          </span>
+          <span className="flex flex-wrap items-center gap-2">
+            {!account.lost && <DriveConnectForm drive={p.drive} label={t("account.switch")} variant="ghost" />}
+            <ConfirmAction
+              action={p.drive.disconnect}
+              hidden={{ orgId: p.drive.orgId, from: p.drive.from }}
+              trigger={t("account.disconnect")}
+              triggerVariant="ghost"
+              title={t("account.disconnectTitle", { email: account.email })}
+              description={t("account.disconnectText", { email: account.email })}
+              confirmLabel={t("account.disconnect")}
+              pendingLabel={t("account.disconnecting")}
+            />
+          </span>
+        </div>
+      ) : (
+        p.folderSet && (
+          <div className="flex flex-col items-start gap-2 text-sm text-ink-3">
+            <p>{t("account.otherHint")}</p>
+            <DriveConnectForm drive={p.drive} label={t("account.other")} variant="secondary" />
+          </div>
+        )
+      ))}
       {!p.pickerEnabled && (
         <Banner tone="neutral" live={false}>
           {t("pickerOff")}

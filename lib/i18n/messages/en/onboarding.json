@@ -158,7 +158,35 @@
     "noneTitle": "No meeting folder yet",
     "pick": "Choose a folder in Google Drive",
     "noneText": "Choose the folder where you already keep your minutes, or create a new one in Drive first (e.g. “Board 2026–2027”). Share it with the board, so everyone can reach the documents.",
-    "pickerOff": "The Google picker isn't set up yet. Without a meeting folder, the documents go in the Drive of whoever starts the meeting."
+    "pickerOff": "The Google picker isn't set up yet. Without a meeting folder, the documents go in the Drive of whoever starts the meeting.",
+    "pickIn": "Choose folder in {email}",
+    "account": {
+      "other": "Use another Google account",
+      "otherHint": "Is the folder in the association's own Google account? Connect it and choose the folder there.",
+      "line": "Documents live in {email}",
+      "switch": "Switch account",
+      "disconnect": "Disconnect",
+      "disconnecting": "Disconnecting …",
+      "disconnectTitle": "Disconnect {email}?",
+      "disconnectText": "New documents then go to the Drive of whoever starts the meeting. Existing documents stay in {email}.",
+      "pickInAccount": "Choose the meeting folder in {email}, and new documents go there.",
+      "otherAdmin": "Another admin connected this account and chooses the folder. Switch account to do it yourself.",
+      "lostTitle": "The Drive connection needs renewing",
+      "lostText": "Google no longer accepts the connection to {email}. No documents are written anywhere else meanwhile.",
+      "renew": "Renew",
+      "result": {
+        "ok": "Account connected. Now choose the meeting folder in that account.",
+        "nej": "Nothing was connected. Allow Drive at Google to try again.",
+        "fel": "The account couldn't be connected. Try again in a little while.",
+        "bort": "Account disconnected."
+      },
+      "by": "Connected by {name}",
+      "replaced": "{name} switched the account from {email} ({date}).",
+      "replacedNoName": "The account was switched from {email} ({date}).",
+      "stuckTitle": "{count, plural, one {# share couldn't be removed} other {# shares couldn't be removed}}",
+      "stuckText": "Deleted accounts can still open documents in the association's Drive. Renew or reconnect the account that owns the documents, and the shares are removed. You can also remove them yourself under Share in Google Drive."
+    },
+    "pickShort": "Choose folder"
   },
   "format": {
     "preview": [

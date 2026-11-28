@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { appCreatedDoc } from "@/lib/docs/access-state";
 import { shareWith, type ShareGrant } from "@/lib/docs/create";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { driveSubOf, orgDriveClient } from "@/lib/google/drive-account";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // Who can open a meeting's Doc (migration 0030, `meeting_doc_shares`). We don't ask Google per
@@ -15,6 +16,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 // we created (writersCanShare=false). The starter must still be a member of the förening. Simon
 // Says only ever shares Docs it created (`appCreatedDoc`): an agenda Doc the förening wrote is
 // theirs to share, so a member is told to ask the starter (no Drive call).
+// A Doc the förening's Drive account made (0070, meetings.drive_account_sub) is shared through THAT
+// account instead (it owns the Doc; the starter does not), and only while it is still connected.
 // Logs carry ids only, never emails or Doc names.
 
 export { appCreatedDoc };
@@ -67,6 +70,8 @@ interface ShareableMeeting {
   doc_id: string;
   started_by: string | null;
   agenda_doc: boolean;
+  /** 0070: the förening's Drive account that made the Doc; absent: read it (driveSubOf). */
+  drive_account_sub?: string | null;
 }
 
 export type ShareOutcome =
@@ -76,7 +81,7 @@ export type ShareOutcome =
   | "not_ours"
   /** The starter is gone (left the förening, account deleted) or never recorded. */
   | "no_starter"
-  /** The starter's Google connection has lapsed. */
+  /** The starter's Google connection has lapsed (or the förening's Drive account, for its Docs). */
   | "starter_google_lost"
   /** Google refused (e.g. not a Google account) or was unreachable. */
   | "failed";
@@ -113,10 +118,12 @@ export async function shareMeetingDocWith(meeting: ShareableMeeting, user: { id:
   if (!meeting.started_by) return "no_starter";
   if (meeting.started_by === user.id) return "shared";
   if (!appCreatedDoc(meeting)) return "not_ours";
-  if (!(await stillMembers(meeting.org_id, [meeting.started_by])).has(meeting.started_by)) return "no_starter";
+  const orgSub = meeting.drive_account_sub !== undefined ? meeting.drive_account_sub : await driveSubOf("meetings", meeting.id);
+  // The förening's account owns its Docs (0070): shared through it, whether or not the starter stayed.
+  if (!orgSub && !(await stillMembers(meeting.org_id, [meeting.started_by])).has(meeting.started_by)) return "no_starter";
   let auth: OAuth2Client;
   try {
-    auth = await getGoogleAuth(meeting.started_by);
+    auth = orgSub ? await orgDriveClient(meeting.org_id, orgSub) : await getGoogleAuth(meeting.started_by);
   } catch (err) {
     if (err instanceof GoogleAuthLostError) return "starter_google_lost";
     console.error(`meetings ${meeting.id}: starter auth: ${(err as Error).message}`);
@@ -136,21 +143,26 @@ export const JOIN_SHARE_LIMIT = 60;
  */
 export async function shareOrgDocsWithNewMember(orgId: string, user: { id: string; email: string }): Promise<number> {
   const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("meetings")
-    .select("id, org_id, doc_id, started_by, agenda_doc, app_created_doc")
-    .eq("org_id", orgId)
-    .not("started_by", "is", null)
-    .neq("started_by", user.id)
-    .order("started_at", { ascending: false })
-    .limit(JOIN_SHARE_LIMIT);
+  const query = (columns: string) =>
+    db
+      .from("meetings")
+      .select(columns)
+      .eq("org_id", orgId)
+      .not("started_by", "is", null)
+      .neq("started_by", user.id)
+      .order("started_at", { ascending: false })
+      .limit(JOIN_SHARE_LIMIT);
+  const BASE = "id, org_id, doc_id, started_by, agenda_doc, app_created_doc";
+  let { data, error } = await query(`${BASE}, drive_account_sub`);
+  // A database without 0070: no Doc of a förening account exists.
+  if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await query(BASE));
   if (error) {
     console.error(`join share: meetings: ${error.message}`);
     return 0;
   }
   // Only meetings the new member can see (0050/0054: the tree, a Privat möte), by the database's
   // own rule; a failed check shares nothing.
-  const rows = (data ?? []) as ShareableMeeting[];
+  const rows = ((data ?? []) as unknown as ShareableMeeting[]).map((m) => ({ ...m, drive_account_sub: m.drive_account_sub ?? null }));
   const { data: visible, error: ve } = rows.length
     ? await db.rpc("visible_meeting_ids", { p_user: user.id, p_ids: rows.map((m) => m.id) })
     : { data: [], error: null };
@@ -161,23 +173,26 @@ export async function shareOrgDocsWithNewMember(orgId: string, user: { id: strin
   const canSee = new Set((visible ?? []) as string[]);
   const all = rows.filter((m) => canSee.has(m.id) && m.doc_id && appCreatedDoc(m));
   // Only starters still in the förening: someone who left keeps their Drive, not our use of it.
-  const members = await stillMembers(orgId, [...new Set(all.map((m) => m.started_by!))]);
-  const meetings = all.filter((m) => members.has(m.started_by!));
+  // A Doc of the förening's Drive account (0070) is shared through that account instead.
+  const members = await stillMembers(orgId, [...new Set(all.filter((m) => !m.drive_account_sub).map((m) => m.started_by!))]);
+  const meetings = all.filter((m) => m.drive_account_sub || members.has(m.started_by!));
   const done = await sharedIdsFor(user.id, meetings.map((m) => m.id));
 
-  const byStarter = new Map<string, ShareableMeeting[]>();
+  // One grant per Doc owner: `org:<sub>` for the förening's account, else the starter's id.
+  const byOwner = new Map<string, ShareableMeeting[]>();
   for (const m of meetings) {
     if (done.has(m.id)) continue;
-    byStarter.set(m.started_by!, [...(byStarter.get(m.started_by!) ?? []), m]);
+    const key = m.drive_account_sub ? `org:${m.drive_account_sub}` : m.started_by!;
+    byOwner.set(key, [...(byOwner.get(key) ?? []), m]);
   }
   let shared = 0;
-  for (const [starter, list] of byStarter) {
+  for (const [owner, list] of byOwner) {
     let auth: OAuth2Client;
     try {
-      auth = await getGoogleAuth(starter);
+      auth = owner.startsWith("org:") ? await orgDriveClient(orgId, owner.slice(4)) : await getGoogleAuth(owner);
     } catch (err) {
       // Their meetings stay "ask" on the org page.
-      if (!(err instanceof GoogleAuthLostError)) console.error(`join share: starter auth: ${(err as Error).message}`);
+      if (!(err instanceof GoogleAuthLostError)) console.error(`join share: owner auth: ${(err as Error).message}`);
       continue;
     }
     for (const m of list) {

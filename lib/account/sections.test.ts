@@ -102,12 +102,12 @@ describe("pre-paint script", () => {
 
 describe("Mejl summary", () => {
   it("counts the switches that are on", () => {
-    expect(mailSummary({ allOff: false, off: [] })).toEqual({ on: 5, total: 5 });
-    expect(mailSummary({ allOff: false, off: ["invite"] }, true)).toEqual({ on: 5, total: 6 });
-    expect(mailSummary({ allOff: false, off: ["meeting_brief"] }, true)).toEqual({ on: 4, total: 6 });
-    expect(mailSummary({ allOff: false, off: [] }, false)).toEqual({ on: 5, total: 6 });
+    expect(mailSummary({ allOff: false, off: [] })).toEqual({ on: 6, total: 6 });
+    expect(mailSummary({ allOff: false, off: ["invite"] }, true)).toEqual({ on: 6, total: 7 });
+    expect(mailSummary({ allOff: false, off: ["meeting_brief"] }, true)).toEqual({ on: 5, total: 7 });
+    expect(mailSummary({ allOff: false, off: [] }, false)).toEqual({ on: 6, total: 7 });
   });
   it("Stäng av alla mejl: none on", () => {
-    expect(mailSummary({ allOff: true, off: [] }, true)).toEqual({ on: 0, total: 6 });
+    expect(mailSummary({ allOff: true, off: [] }, true)).toEqual({ on: 0, total: 7 });
   });
 });

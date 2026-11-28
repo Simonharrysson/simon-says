@@ -7,6 +7,7 @@ import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { isUuid } from "@/lib/db/ids";
 import { readNotesTab, type NotesTab } from "@/lib/docs/notes";
 import { getGoogleAuth } from "@/lib/google/client";
+import { driveSubOf, orgDriveClient } from "@/lib/google/drive-account";
 import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/docs";
 import { isCopy, isTask } from "@/lib/meetings/summary";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -29,6 +30,8 @@ export type CompleteResult = { ok: true; doc: DocOutcome } | { ok: false; error:
 export interface CompleteDeps {
   admin: () => SupabaseClient;
   getAuth: (userId: string) => Promise<OAuth2Client>;
+  /** 0070: the förening's Drive account that made the Doc (default orgDriveClient). */
+  getOrgAuth?: (orgId: string, driveAccountSub: string) => Promise<OAuth2Client>;
   readTab: (auth: OAuth2Client, docId: string, tabId: string) => Promise<NotesTab>;
   batchUpdate: (auth: OAuth2Client, docId: string, requests: DocsRequest[], revisionId: string) => Promise<void>;
 }
@@ -36,6 +39,7 @@ export interface CompleteDeps {
 const defaultDeps: CompleteDeps = {
   admin: supabaseAdmin,
   getAuth: getGoogleAuth,
+  getOrgAuth: orgDriveClient,
   readTab: readNotesTab,
   batchUpdate: async (auth, docId, requests, revisionId) => {
     await docsApi(auth).documents.batchUpdate({ documentId: docId, requestBody: { requests, writeControl: { requiredRevisionId: revisionId } } });
@@ -152,16 +156,17 @@ export async function propagateForward(meetingId: string, itemId: string, orgId:
 }
 
 async function writeDone(
-  meeting: { id: string; doc_id: string | null; notes_tab_id: string | null; started_by: string | null },
+  meeting: { id: string; org_id: string; doc_id: string | null; notes_tab_id: string | null; started_by: string | null },
   targets: NoteItemRow[],
   deps: CompleteDeps,
 ): Promise<DocOutcome> {
   if (!meeting.doc_id || !meeting.notes_tab_id) return "none";
   // Never rendered (no line of ours in the Doc): the person ticks it there.
   if (!targets[0].range_name) return "locked";
-  if (!meeting.started_by) return "failed";
-  // The starter's token, like the tick: the Doc is in their Drive.
-  const auth = await deps.getAuth(meeting.started_by);
+  // The grant that made the Doc, like the tick: the förening's Drive account (0070), else the starter's.
+  const orgSub = await driveSubOf("meetings", meeting.id, deps.admin());
+  if (!meeting.started_by && !orgSub) return "failed";
+  const auth = orgSub ? await (deps.getOrgAuth ?? orgDriveClient)(meeting.org_id, orgSub) : await deps.getAuth(meeting.started_by!);
   const docId = meeting.doc_id;
   const tabId = meeting.notes_tab_id;
   const { value: plan } = await writeWithRevisionGuard(

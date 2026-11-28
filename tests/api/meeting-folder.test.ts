@@ -7,6 +7,8 @@ import { createOrg, joinOrg } from "@/lib/db/orgs";
 // Against the local stack as real signed-in users, so RLS and the column grant decide.
 const current = vi.hoisted(() => ({ db: null as SupabaseClient | null }));
 vi.mock("@/lib/supabase/server", () => ({ createSupabaseServerClient: async () => current.db }));
+// No förening Drive account here (0070); its folder bookkeeping is covered in tests/db/drive-account.test.ts and e2e.
+vi.mock("@/lib/google/drive-account", () => ({ orgDriveAccount: async () => null, setOrgDriveFolder: async () => {} }));
 
 const { POST } = await import("@/app/api/orgs/[id]/meeting-folder/route");
 

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const fileId = typeof body?.fileId === "string" ? body.fileId : "";
   if (!DRIVE_ID.test(fileId)) return fail("bad_request", 400, t("api.pickStatutesAgain"));
 
-  const file = await readStadgarFile(user.id, fileId, "onboarding/stadgar");
+  const file = await readStadgarFile(user.id, fileId, "onboarding/stadgar", id);
   if (!file.ok) return fail(file.error, file.status, localizeMessage(file.message, requestLocale(request)));
 
   const res = await extractArsmoteItems(file.input, { orgId: id });

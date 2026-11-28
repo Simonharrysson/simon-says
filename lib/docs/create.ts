@@ -2,7 +2,7 @@ import type { OAuth2Client } from "google-auth-library";
 import type { NoteSection } from "@/lib/db/types";
 import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks, type SkeletonBlock } from "@/lib/formats/skeleton";
-import { docsApi, driveApi, paragraphsWithRanges, type DocsRequest } from "@/lib/google/docs";
+import { ALL_DRIVES, ALL_DRIVES_LIST, docsApi, driveApi, paragraphsWithRanges, type DocsRequest } from "@/lib/google/docs";
 import { MEETING_DOC_TAG, TEST_DOC_SUFFIX } from "@/lib/agenda/candidates";
 import { skeletonRequests, skeletonTableFill } from "./skeleton";
 import { parseNotesTab } from "./tab";
@@ -97,10 +97,11 @@ export async function findOrCreateFolder(auth: OAuth2Client, name: string): Prom
     fields: "files(id)",
     pageSize: 1,
     spaces: "drive",
+    ...ALL_DRIVES_LIST,
   });
   const existing = found.data.files?.[0]?.id;
   if (existing) return existing;
-  const created = await drive.files.create({ requestBody: { name, mimeType: FOLDER_MIME }, fields: "id" });
+  const created = await drive.files.create({ requestBody: { name, mimeType: FOLDER_MIME }, fields: "id", ...ALL_DRIVES });
   if (!created.data.id) throw new Error("createMeetingDoc: folder has no id");
   return created.data.id;
 }
@@ -112,7 +113,7 @@ export async function findOrCreateFolder(auth: OAuth2Client, name: string): Prom
  */
 export async function writableFolder(auth: OAuth2Client, folderId: string): Promise<{ id: string; sharedDrive: boolean } | null> {
   try {
-    const res = await driveApi(auth).files.get({ fileId: folderId, fields: "driveId,capabilities(canAddChildren)", supportsAllDrives: true });
+    const res = await driveApi(auth).files.get({ fileId: folderId, fields: "driveId,capabilities(canAddChildren)", ...ALL_DRIVES });
     return res.data.capabilities?.canAddChildren ? { id: folderId, sharedDrive: Boolean(res.data.driveId) } : null;
   } catch (err) {
     console.warn(`meeting folder not usable: ${(err as Error).message}`);
@@ -143,7 +144,7 @@ async function createDocFile(
           ...(sharedDrive ? {} : { writersCanShare: false }),
         },
         fields: "id",
-        supportsAllDrives: true,
+        ...ALL_DRIVES,
       })
     ).data.id;
 
@@ -185,13 +186,13 @@ export async function shareWith(auth: OAuth2Client, docId: string, emailAddress:
   const drive = driveApi(auth);
   if (opts.checkExisting) {
     const target = emailAddress.trim().toLowerCase();
-    const list = await drive.permissions.list({ fileId: docId, supportsAllDrives: true, fields: "permissions(id,emailAddress,role)" });
+    const list = await drive.permissions.list({ fileId: docId, ...ALL_DRIVES, fields: "permissions(id,emailAddress,role)" });
     if ((list.data.permissions ?? []).some((p) => (p.emailAddress ?? "").toLowerCase() === target)) return { permissionId: null, preexisting: true };
   }
   const res = await drive.permissions.create({
     fileId: docId,
     sendNotificationEmail: false,
-    supportsAllDrives: true,
+    ...ALL_DRIVES,
     requestBody: { role: "writer", type: "user", emailAddress },
   });
   return { permissionId: res?.data?.id ?? null, preexisting: false };
@@ -208,7 +209,7 @@ const notFound = (err: unknown) => {
  */
 export async function revokePermission(auth: OAuth2Client, docId: string, permissionId: string): Promise<void> {
   try {
-    await driveApi(auth).permissions.delete({ fileId: docId, permissionId, supportsAllDrives: true });
+    await driveApi(auth).permissions.delete({ fileId: docId, permissionId, ...ALL_DRIVES });
   } catch (err) {
     if (!notFound(err)) throw err;
   }
@@ -220,7 +221,7 @@ export async function revokePermission(auth: OAuth2Client, docId: string, permis
  */
 export async function revokeLegacyShare(auth: OAuth2Client, docId: string, emailAddress: string): Promise<void> {
   const drive = driveApi(auth);
-  const list = await drive.permissions.list({ fileId: docId, supportsAllDrives: true, fields: "permissions(id,emailAddress,role)" });
+  const list = await drive.permissions.list({ fileId: docId, ...ALL_DRIVES, fields: "permissions(id,emailAddress,role)" });
   const target = emailAddress.trim().toLowerCase();
   const hits = (list.data.permissions ?? []).filter((p) => (p.emailAddress ?? "").toLowerCase() === target && p.role !== "owner");
   for (const p of hits) await revokePermission(auth, docId, p.id!);
@@ -248,7 +249,7 @@ async function shareDoc(auth: OAuth2Client, docId: string, memberEmails: string[
 
 /** Best effort after a refused start: the unused new Doc goes to the trash (we created it, drive.file may). */
 export async function trashDoc(auth: OAuth2Client, docId: string): Promise<void> {
-  await driveApi(auth).files.update({ fileId: docId, requestBody: { trashed: true }, supportsAllDrives: true });
+  await driveApi(auth).files.update({ fileId: docId, requestBody: { trashed: true }, ...ALL_DRIVES });
 }
 
 const TRANSCRIPT_TAB: DocsRequest = { addDocumentTab: { tabProperties: { title: "Transkript" } } };

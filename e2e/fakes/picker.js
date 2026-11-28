@@ -13,13 +13,18 @@
   DocsView.prototype.setSelectFolderEnabled = function () { return this; };
   DocsView.prototype.setIncludeFolders = function () { return this; };
   DocsView.prototype.setMode = function () { return this; };
+  DocsView.prototype.setEnableDrives = function (on) { this.drives = on; return this; };
 
   function PickerBuilder() {
     this.views = [];
     this.title = "";
     this.cb = function () {};
+    this.features = [];
+    this.token = null;
   }
-  ["enableFeature", "setOAuthToken", "setDeveloperKey", "setAppId", "setLocale"].forEach(function (m) {
+  PickerBuilder.prototype.enableFeature = function (f) { this.features.push(f); return this; };
+  PickerBuilder.prototype.setOAuthToken = function (t) { this.token = t; return this; };
+  ["setDeveloperKey", "setAppId", "setLocale"].forEach(function (m) {
     PickerBuilder.prototype[m] = function () { return this; };
   });
   PickerBuilder.prototype.addView = function (v) { this.views.push(v); return this; };
@@ -31,7 +36,13 @@
       setVisible: function (on) {
         if (!on) return;
         window.__e2ePickerOpened = window.__e2ePickerOpened || [];
-        window.__e2ePickerOpened.push({ title: self.title, views: self.views.map(function (v) { return { viewId: v.viewId, mimeTypes: v.mimeTypes, parent: v.parent }; }) });
+        window.__e2ePickerOpened.push({
+          title: self.title,
+          // The access token's account (the fake's `e2e-at:<email>`), never a real token.
+          account: typeof self.token === "string" ? self.token.replace(/^e2e-at:/, "") : null,
+          features: self.features,
+          views: self.views.map(function (v) { return { viewId: v.viewId, mimeTypes: v.mimeTypes, parent: v.parent, drives: Boolean(v.drives) }; }),
+        });
         var picks = window.__e2ePicks || [];
         var next = picks.length ? picks.shift() : null;
         setTimeout(function () {
@@ -49,7 +60,7 @@
         DocsView: DocsView,
         PickerBuilder: PickerBuilder,
         ViewId: { DOCS: "docs", FOLDERS: "folders" },
-        Feature: { MULTISELECT_ENABLED: "multiselect" },
+        Feature: { MULTISELECT_ENABLED: "multiselect", SUPPORT_DRIVES: "supportDrives" },
         Action: { PICKED: "picked", CANCEL: "cancel" },
         DocsViewMode: { LIST: "list" },
       };

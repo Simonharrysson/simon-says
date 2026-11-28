@@ -12,6 +12,7 @@ import { planFormatRender } from "@/lib/docs/format-render";
 import { itemSpan, readNotesTab, renderItems, toNotesItem } from "@/lib/docs/notes";
 import { logEvent } from "@/lib/db/events";
 import { orgMemberList, type OrgMember } from "@/lib/db/members";
+import { docShareTargets } from "@/lib/meetings/share-targets";
 import { recordDocShares, type ShareDetail } from "@/lib/docs/access";
 import { getOrg, myRole } from "@/lib/db/orgs";
 import type { CheckinWindow, ItemRole, MeetingEventKind, MeetingRow, NoteItemRow } from "@/lib/db/types";
@@ -20,6 +21,7 @@ import { rolesFromSkeleton } from "@/lib/formats/skeleton";
 import { STANDARD } from "@/lib/formats/standard";
 import { ensureStandardRow, orgDefaultFormat } from "@/lib/formats/store";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { creationAuth, docAuth, DriveAccountLostError, driveSubOf } from "@/lib/google/drive-account";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { MAX_STARTS_PER_HOUR } from "@/lib/limits";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
@@ -125,6 +127,9 @@ type Failure = Extract<StartResult, { ok: false }>;
 const failed = (error: string, status: number, message: string): Failure => ({ ok: false, error, status, message });
 
 const authLost = () => failed("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
+/** The förening's Drive account (0070) was refused by Google: an admin renews it; no Doc goes anywhere else. */
+const driveAccountLost = () =>
+  failed("drive_account_lost", 409, "Föreningens Drive-koppling behöver förnyas. En admin förnyar den under Inställningar › Möten.");
 const googleDown = () => failed("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
 const agendaNotFound = () =>
   failed("agenda_not_found", 404, "Simon Says kommer inte åt dokumentet. Välj det i Google-väljaren igen.");
@@ -273,11 +278,27 @@ export async function startMeeting(
   const format = docless ? { id: null, profile: STANDARD.enkel, ensureKind: null } : await resolveFormat(orgId, opts);
   if (!format) return failed("bad_format", 400, "Mötesformatet finns inte i föreningen. Ladda om sidan och försök igen.");
 
+  // The tree: the starter's own folder, never a shared one (it would bypass who may see the meeting).
+  const meetingFolderId = foretag ? null : (org.meeting_folder_id ?? null);
+  const agendaMode = Boolean(opts.agendaDocId);
   let auth: OAuth2Client = null!;
+  // 0070: the förening's Drive account that makes (or made) this meeting's Doc; null: the starter's grant.
+  let driveAccount: { sub: string; email: string } | null = null;
   try {
     // A Doc-less Privat recording never talks to Google.
-    if (!docless) auth = await getGoogleAuth(user.id);
+    if (docless) {
+      // no auth
+    } else if (agendaMode) {
+      // The förening's own agenda Doc, picked with the starter's grant; a prepared one keeps the
+      // account it was made with.
+      const preparedSub = prepared ? await driveSubOf("prepared_agendas", prepared.id) : null;
+      auth = preparedSub ? await docAuth({ orgId, startedBy: user.id, driveAccountSub: preparedSub }) : await getGoogleAuth(user.id);
+      if (preparedSub) driveAccount = { sub: preparedSub, email: "" };
+    } else {
+      ({ auth, driveAccount } = await creationAuth(orgId, meetingFolderId, user.id));
+    }
   } catch (err) {
+    if (err instanceof DriveAccountLostError) return driveAccountLost();
     if (err instanceof GoogleAuthLostError) {
       return failed(
         "google_auth_lost",
@@ -293,7 +314,6 @@ export async function startMeeting(
   const meetingId = randomUUID();
   const startedAt = new Date();
   const isTest = opts.isTest ?? eventKind === "test_started";
-  const agendaMode = Boolean(opts.agendaDocId);
   const ctx: SetupCtx = {
     auth,
     meetingId,
@@ -301,8 +321,8 @@ export async function startMeeting(
     orgId,
     // Privat: the Doc and its folder are named after the context ("Simon Says – TDDE15").
     orgName: privat ? privat.name : org.name,
-    // The tree: the starter's own folder, never a shared one (it would bypass who may see the meeting).
-    meetingFolderId: foretag ? null : (org.meeting_folder_id ?? null),
+    meetingFolderId,
+    driveAccountEmail: driveAccount?.email || null,
     isTest,
     user,
     eventTitle: (company ? foretag?.eventTitle : calendarEvent?.title) || null,
@@ -355,9 +375,15 @@ export async function startMeeting(
   // capture_source only when it isn't the default, so a database without 0058 still takes room meetings.
   let { error: insertError } = await supabaseAdmin()
     .from("meetings")
-    .insert({ ...row, app_created_doc: appCreated, ...(captureSource === "call" ? { capture_source: captureSource } : {}) });
+    .insert({
+      ...row,
+      app_created_doc: appCreated,
+      ...(captureSource === "call" ? { capture_source: captureSource } : {}),
+      // 0070: only ever set when the förening's account exists, so a database without it never sees it.
+      ...(driveAccount ? { drive_account_sub: driveAccount.sub } : {}),
+    });
   // A database without 0030 (deploy order): the row without the column.
-  if (insertError && (insertError.code === "PGRST204" || insertError.code === "42703")) {
+  if (insertError && !driveAccount && (insertError.code === "PGRST204" || insertError.code === "42703")) {
     console.warn("meetings: app_created_doc or capture_source missing (0030/0058 not applied)");
     ({ error: insertError } = await supabaseAdmin().from("meetings").insert(row));
   }
@@ -608,14 +634,13 @@ interface SetupCtx {
   eventTitle?: string | null;
   /** The tree (0050, 0054): share the new Doc only with these accounts (the meeting's viewers). Null: every member. */
   shareTo?: Set<string> | null;
+  /** 0070: a new Doc is made by the förening's Drive account (this address), not the starter's. */
+  driveAccountEmail?: string | null;
 }
 
-/** The org's other members with an email (the starter owns the Doc). */
+/** Who the new Doc is shared with (lib/meetings/share-targets.ts). */
 async function otherMembers(ctx: SetupCtx): Promise<OrgMember[]> {
-  const me = (ctx.user.email ?? "").toLowerCase();
-  return (await orgMemberList(ctx.orgId)).filter(
-    (m) => m.userId !== ctx.user.id && m.email && m.email.toLowerCase() !== me && (!ctx.shareTo || ctx.shareTo.has(m.userId)),
-  );
+  return docShareTargets(await orgMemberList(ctx.orgId), ctx);
 }
 
 /** The user ids of `members` whose email is in `shared`. */

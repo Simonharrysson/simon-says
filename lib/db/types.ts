@@ -128,6 +128,8 @@ export interface MeetingRow {
   id: string;
   org_id: string;
   started_by: string | null;
+  /** 0070: the förening's Drive account (its google_sub) that made the Doc; null/absent: the starter's grant. */
+  drive_account_sub?: string | null;
   /**
    * The meeting's Google Doc. Typed as always set because every Doc code path needs it; a Privat
    * recording without a Doc (0045) has null here and never reaches that code: check with

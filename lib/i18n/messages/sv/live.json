@@ -27,7 +27,8 @@
     "at": "kl. {time}",
     "first": "Första anteckningarna kommer inom en minut",
     "open": "Öppna",
-    "newTab": "(Google-dokument, öppnas i ny flik)"
+    "newTab": "(Google-dokument, öppnas i ny flik)",
+    "pausedForening": "Pausat — Drive-kopplingen behöver förnyas"
   },
   "controls": {
     "resume": "Fortsätt",
@@ -67,7 +68,9 @@
     "audioWaiting": "Ljudet väntar i webbläsaren",
     "offline": "Ingen internetanslutning. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när nätet är tillbaka. Inget sparas på datorn.",
     "broken": "Anslutningen bröts. Ljudet hålls kvar i webbläsaren i upp till en minut och skickas när vi är tillbaka. Du behöver inte göra något.",
-    "more": "Visa {count, plural, one {1 varning} other {# varningar}} till"
+    "more": "Visa {count, plural, one {1 varning} other {# varningar}} till",
+    "docTitleForening": "Dokumentet pausat — föreningens Drive-koppling behöver förnyas",
+    "docForening": "En admin förnyar den under Inställningar › Möten. Transkriberingen fortsätter, och allt skrivs in i dokumentet när den är förnyad."
   },
   "limits": {
     "stop": {

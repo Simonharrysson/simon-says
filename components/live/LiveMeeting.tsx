@@ -50,6 +50,8 @@ export interface LiveMeetingProps {
   /** The page's first connection (not a reconnect): "Ansluter…". */
   firstConnect?: boolean;
   docPaused?: boolean;
+  /** 0070: paused because the förening's Drive account needs renewing: no "Logga in igen". */
+  docPausedForening?: boolean;
   staleMinutes?: number | null;
   minutesLeft?: number | null;
   /** The cap behind `minutesLeft` or an automatic stop (heartbeat reason / refusal). */
@@ -263,8 +265,9 @@ export function LiveMeeting(p: LiveMeetingProps) {
         retryInSeconds={p.retryInSeconds}
         streamError={p.streamError}
         refusal={p.refusal}
-        onReLogin={p.onReLogin}
+        onReLogin={p.docPausedForening ? undefined : p.onReLogin}
         onRetry={p.onRetry}
+        docPausedForening={p.docPausedForening}
       />
       {p.notice && !ending && (
         <Banner
@@ -316,6 +319,7 @@ export function LiveMeeting(p: LiveMeetingProps) {
               lastUpdatedAt={p.lastUpdatedAt}
               updatedMinutesAgo={p.updatedMinutesAgo}
               health={status.doc}
+              pausedForening={p.docPausedForening}
             />
             <PartialStrip text={p.partialText} speaker={p.partialSpeaker} mode={status.partial} level={p.micLevel} />
           </div>

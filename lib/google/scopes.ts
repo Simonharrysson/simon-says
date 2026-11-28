@@ -10,6 +10,13 @@ export const DRIVE_READONLY = "https://www.googleapis.com/auth/drive.readonly";
 /** The only scopes we ask for at sign-in. */
 export const GOOGLE_SCOPES = ["openid", "email", "profile", DRIVE_FILE] as const;
 
+/**
+ * The förening's own Drive account ("Använd ett annat Google-konto", 0070): identity (the address
+ * shown to admins) plus drive.file only, the sign-in's own Drive scope. Never wider: no profile,
+ * no drive.readonly, and asked without include_granted_scopes.
+ */
+export const DRIVE_ACCOUNT_SCOPES = ["openid", "email", DRIVE_FILE] as const;
+
 /** The incremental request for the protocol import: the sign-in scopes plus drive.readonly. */
 export const IMPORT_SCOPES = [...GOOGLE_SCOPES, DRIVE_READONLY] as const;
 

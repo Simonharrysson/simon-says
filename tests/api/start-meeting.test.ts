@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GoogleAuthLostError } from "@/lib/google/client";
 
 type Filter = [op: string, col: string, val: unknown];
@@ -19,6 +19,8 @@ const m = vi.hoisted(() => ({
   recordDocShares: vi.fn(),
   trashDoc: vi.fn(),
   getGoogleAuth: vi.fn(),
+  /** org_drive_accounts (0070): the förening's own Drive account, or none. */
+  driveAccount: null as null | Record<string, unknown>,
   createMeetingDoc: vi.fn(),
   createFormatDoc: vi.fn(),
   addTranscriptTab: vi.fn(),
@@ -88,6 +90,7 @@ async function adminAnswer(q: Query): Promise<{ data: unknown; error: null }> {
     );
   }
   if (q.table === "people") return ok(m.people.filter((p) => p.org_id === val(q, "org_id")));
+  if (q.table === "org_drive_accounts") return ok(m.driveAccount ? [m.driveAccount] : []);
   if (q.table === "prepared_agendas") return ok(m.prepared.filter((p) => p.org_id === val(q, "org_id") && p.doc_id === val(q, "doc_id")));
   if (q.table === "note_items") {
     if (q.op === "insert") return (m.noteInsert(q.payload), ok(null));
@@ -163,7 +166,10 @@ vi.mock("@/lib/env", () => ({ getEnv: () => ({ KILL_SWITCH: m.killSwitch }) }));
 vi.mock("@/lib/google/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/client")>()),
   getGoogleAuth: m.getGoogleAuth,
+  // The förening's account (0070): a client named after its label, never a real refresh.
+  clientForRefreshToken: async (label: string) => ({ who: label }),
 }));
+vi.mock("@/lib/crypto", () => ({ decrypt: (b: string) => b, encrypt: (b: string) => b }));
 
 vi.mock("@/lib/foretag/start", () => ({ planForetagStart: m.planForetag, saveAttendees: m.saveAttendees }));
 
@@ -205,6 +211,7 @@ beforeEach(() => {
   m.recordDocShares.mockReset().mockResolvedValue(undefined);
   m.trashDoc.mockReset().mockResolvedValue(undefined);
   m.getGoogleAuth.mockReset().mockResolvedValue({});
+  m.driveAccount = null;
   m.createMeetingDoc.mockReset().mockResolvedValue(doc);
   m.insert.mockReset().mockResolvedValue({ error: null });
   m.logEvent.mockReset().mockResolvedValue(undefined);
@@ -438,6 +445,55 @@ describe("POST /api/meetings", () => {
     m.insert.mockResolvedValue({ error: { message: "db down" } });
     expect((await call({ orgId: ORG, consent: true })).status).toBe(500);
     expect(m.trashDoc).toHaveBeenCalledWith({}, "doc1");
+  });
+
+  describe("the förening's own Drive account (0070)", () => {
+    const account = (over: Record<string, unknown> = {}) => ({
+      org_id: ORG,
+      connected_by: "u-admin",
+      google_sub: "sub-forening",
+      google_email: "styrelsen@forening.test",
+      folder_id: "meetFolder123",
+      lost_at: null,
+      updated_at: "2026-11-01T00:00:00Z",
+      refresh_token_enc: "enc",
+      ...over,
+    });
+    beforeEach(() => {
+      m.getOrg.mockResolvedValue({ id: ORG, name: "Styrelsen", share_transcript: true, meeting_folder_id: "meetFolder123" });
+      m.profiles = [{ id: "pdef", org_id: ORG, kind: "veckomote", profile: VECKOMOTE, is_default: true }];
+    });
+    afterEach(() => {
+      m.profiles = [];
+    });
+
+    it("its folder: the Doc is made by the förening's account, shared with the starter too, and the row records the account", async () => {
+      m.driveAccount = account();
+      expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+      const [auth, input] = m.createFormatDoc.mock.calls[0];
+      expect(auth).toEqual({ who: `org:${ORG}` });
+      expect(m.getGoogleAuth).not.toHaveBeenCalled();
+      expect(input.memberEmails).toEqual(["starter@x.se", "b@x.se"]);
+      expect(m.insert.mock.calls[0][0]).toMatchObject({ drive_account_sub: "sub-forening" });
+    });
+
+    it("a folder the account did not pick: the starter's own grant, exactly as before", async () => {
+      m.driveAccount = account({ folder_id: "otherFolder99" });
+      expect((await call({ orgId: ORG, consent: true })).status).toBe(200);
+      expect(m.getGoogleAuth).toHaveBeenCalledWith("u1");
+      expect(m.createFormatDoc.mock.calls[0][1].memberEmails).toEqual(["b@x.se"]);
+      expect(m.insert.mock.calls[0][0]).not.toHaveProperty("drive_account_sub");
+    });
+
+    it("a lost account: 409 drive_account_lost, no Doc anywhere (never the starter's Drive instead)", async () => {
+      m.driveAccount = account({ lost_at: "2026-11-20T00:00:00Z" });
+      const res = await call({ orgId: ORG, consent: true });
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe("drive_account_lost");
+      expect(m.createFormatDoc).not.toHaveBeenCalled();
+      expect(m.getGoogleAuth).not.toHaveBeenCalled();
+      expect(m.insert).not.toHaveBeenCalled();
+    });
   });
 
   it("creates the Doc in the förening's meeting folder, named after the format, and says where it went", async () => {

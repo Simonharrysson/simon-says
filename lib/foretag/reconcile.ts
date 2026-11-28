@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { recordDocShares } from "@/lib/docs/access";
 import { revokeLegacyShare, revokePermission, shareWith } from "@/lib/docs/create";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { DriveAccountLostError, orgDriveClient } from "@/lib/google/drive-account";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { holdCrossingTasks } from "./summary";
 import { hasTree } from "./tree";
@@ -45,9 +46,10 @@ export async function reconcileForetag(orgId: string): Promise<ReconcileResult> 
     return result;
   }
 
-  const { data: meetings, error: me } = await db.from("meetings").select("id, doc_id, started_by, status, started_at").eq("org_id", orgId);
+  // `*`: drive_account_sub (0070) when the database has it.
+  const { data: meetings, error: me } = await db.from("meetings").select("*").eq("org_id", orgId);
   if (me) throw new Error(`reconcile: meetings: ${me.message}`);
-  const rows = (meetings ?? []) as { id: string; doc_id: string | null; started_by: string | null; status: string; started_at: string }[];
+  const rows = (meetings ?? []) as { id: string; doc_id: string | null; started_by: string | null; status: string; started_at: string; drive_account_sub?: string | null }[];
   const ids = rows.map((m) => m.id);
   const { data: shares, error: se } = ids.length
     ? await db.from("meeting_doc_shares").select("meeting_id, user_id, email, permission_id, preexisting").in("meeting_id", ids)
@@ -88,9 +90,10 @@ export async function reconcileForetag(orgId: string): Promise<ReconcileResult> 
     if (!work.length) continue;
     let auth;
     try {
-      auth = await getGoogleAuth(m.started_by);
+      // The grant that owns the Doc: the förening's Drive account that made it (0070), else the starter's.
+      auth = m.drive_account_sub ? await orgDriveClient(orgId, m.drive_account_sub) : await getGoogleAuth(m.started_by);
     } catch (err) {
-      console.error(`reconcile ${m.id}: starter's Google grant unavailable${err instanceof GoogleAuthLostError ? " (lost)" : ""}`);
+      console.error(`reconcile ${m.id}: the Doc owner's Google grant unavailable${err instanceof GoogleAuthLostError ? " (lost)" : ""}`);
       result.failed += work.length;
       continue;
     }
@@ -179,14 +182,20 @@ export async function drainForetagQueues(): Promise<{ orgs: number; revocations:
     }
   }
 
-  const { data: revocations, error: re } = await db.from("doc_share_revocations").select("id, doc_id, owner_user_id, permission_id, attempts").order("queued_at").limit(DRAIN_LIMIT);
-  if (re) console.error(`revocation queue: ${re.message}`);
-  for (const r of (revocations ?? []) as { id: string; doc_id: string; owner_user_id: string; permission_id: string; attempts: number }[]) {
+  for (const r of await revocationBatch(db)) {
     try {
-      await revokePermission(await getGoogleAuth(r.owner_user_id), r.doc_id, r.permission_id);
+      const owner = r.org_id && r.drive_account_sub ? await orgDriveClient(r.org_id, r.drive_account_sub) : await getGoogleAuth(r.owner_user_id!);
+      await revokePermission(owner, r.doc_id, r.permission_id);
       await db.from("doc_share_revocations").delete().eq("id", r.id);
       done.revocations++;
     } catch (err) {
+      if (err instanceof DriveAccountLostError) {
+        // The förening's account (0070) is lost or disconnected: the share stays queued (never
+        // dropped) and admins see it; a renew or reconnect of that account lets a later run remove it.
+        if (!r.blocked_at) await db.from("doc_share_revocations").update({ blocked_at: new Date().toISOString() }).eq("id", r.id);
+        console.warn(`revocation ${r.id}: the förening's Drive account is unavailable; kept`);
+        continue;
+      }
       const lost = err instanceof GoogleAuthLostError;
       console.error(`revocation ${r.id}: ${lost ? "starter's Google grant lost" : (err as Error).message}`);
       if (lost || r.attempts + 1 >= MAX_ATTEMPTS) await db.from("doc_share_revocations").delete().eq("id", r.id);
@@ -194,6 +203,55 @@ export async function drainForetagQueues(): Promise<{ orgs: number; revocations:
     }
   }
   return done;
+}
+
+interface RevocationRow {
+  id: string;
+  doc_id: string;
+  owner_user_id: string | null;
+  permission_id: string;
+  attempts: number;
+  org_id?: string | null;
+  drive_account_sub?: string | null;
+  blocked_at?: string | null;
+}
+
+/**
+ * The next revocations: ready ones first, then a few waiting on a lost förening account (0070) so
+ * those never crowd out the rest. A database without 0070: the queue as before.
+ */
+async function revocationBatch(db: ReturnType<typeof supabaseAdmin>): Promise<RevocationRow[]> {
+  const ready = await db.from("doc_share_revocations").select("*").is("blocked_at", null).order("queued_at").limit(DRAIN_LIMIT);
+  if (ready.error && (ready.error.code === "42703" || ready.error.code === "PGRST204")) {
+    const all = await db.from("doc_share_revocations").select("*").order("queued_at").limit(DRAIN_LIMIT);
+    if (all.error) console.error(`revocation queue: ${all.error.message}`);
+    return (all.data ?? []) as RevocationRow[];
+  }
+  if (ready.error) console.error(`revocation queue: ${ready.error.message}`);
+  const blocked = await db.from("doc_share_revocations").select("*").not("blocked_at", "is", null).order("queued_at").limit(BLOCKED_RETRIES);
+  if (blocked.error) console.error(`revocation queue (waiting): ${blocked.error.message}`);
+  return [...((ready.data ?? []) as RevocationRow[]), ...((blocked.data ?? []) as RevocationRow[])];
+}
+
+/** Waiting revocations retried per run (no Google call while the account stays lost). */
+const BLOCKED_RETRIES = 20;
+
+/**
+ * Admins (0070): shares of a deleted account on the förening's Docs that could not be removed yet,
+ * because the förening's Drive account is lost or disconnected. Service role; 0 on a database
+ * without 0070.
+ */
+export async function blockedRevocationCount(orgId: string): Promise<number> {
+  const { count, error } = await supabaseAdmin()
+    .from("doc_share_revocations")
+    .select("id", { count: "exact", head: true })
+    .eq("org_id", orgId)
+    .not("blocked_at", "is", null);
+  if (error) {
+    if (error.code !== "42703" && error.code !== "PGRST204") console.error(`revocation queue: count: ${error.message}`);
+    return 0;
+  }
+  return count ?? 0;
 }
 
 /** For server actions: run after the response, never failing the action. */

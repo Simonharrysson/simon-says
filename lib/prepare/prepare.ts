@@ -16,7 +16,9 @@ import type { FormatProfile } from "@/lib/formats/schema";
 import { skeletonBlocks } from "@/lib/formats/skeleton";
 import { FORMAT_NAMES, STANDARD } from "@/lib/formats/standard";
 import { ensureStandardRow, formatById, orgDefaultFormat } from "@/lib/formats/store";
-import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { GoogleAuthLostError } from "@/lib/google/client";
+import { creationAuth, docAuth, DriveAccountLostError, driveSubOf } from "@/lib/google/drive-account";
+import { docShareTargets } from "@/lib/meetings/share-targets";
 import { docsApi, writeWithRevisionGuard, type DocsRequest } from "@/lib/google/docs";
 import { ownerLabel, resolveOwner, type RolePerson } from "@/lib/people/roles";
 import { hasTree } from "@/lib/foretag/tree";
@@ -50,6 +52,11 @@ export type PrepareFailure = { ok: false; error: string; status: number; message
 const failed = (error: string, status: number, message: string): PrepareFailure => ({ ok: false, error, status, message });
 const authLost = () => failed("google_auth_lost", 401, "Kopplingen till ditt Google-konto har gått ut. Logga ut och in igen.");
 const googleDown = () => failed("google_unavailable", 502, "Vi nådde inte Google just nu. Försök igen om en liten stund.");
+const driveAccountLost = () =>
+  failed("drive_account_lost", 409, "Föreningens Drive-koppling behöver förnyas. En admin förnyar den under Inställningar › Möten.");
+
+/** 0070: the förening's Drive account that makes (or made) the agenda Doc; null: the preparer's grant. */
+type DriveAccount = { sub: string; email: string } | null;
 
 /**
  * The file name: `2026-12-03 18.00 Dagordning – <förening>` (time when given), as the protocol
@@ -267,9 +274,17 @@ export async function savePrepared(
   }
 
   let auth: OAuth2Client;
+  let driveAccount: DriveAccount = null;
   try {
-    auth = await getGoogleAuth(user.id);
+    // An existing agenda keeps the account that made its Doc; a new one goes to the meeting folder
+    // through the förening's Drive account when that account picked it (0070).
+    const sub = existing ? await driveSubOf("prepared_agendas", existing.id) : null;
+    if (existing) {
+      auth = await docAuth({ orgId, startedBy: user.id, driveAccountSub: sub });
+      if (sub) driveAccount = { sub, email: "" };
+    } else ({ auth, driveAccount } = await creationAuth(orgId, org.meeting_folder_id ?? null, user.id));
   } catch (err) {
+    if (err instanceof DriveAccountLostError) return driveAccountLost();
     if (err instanceof GoogleAuthLostError) return authLost();
     console.error(`prepare: google auth: ${(err as Error).message}`);
     return googleDown();
@@ -293,12 +308,14 @@ export async function savePrepared(
         const { error } = await supabaseAdmin().from("prepared_agendas").delete().eq("id", existing.id).eq("org_id", orgId);
         if (error) throw new Error(`stale delete: ${error.message}`);
         console.info(`prepare: ${existing.id} dropped (its Doc is gone)`);
-        return await create(auth, user, org, items, desired, dropped, src, body, existing.kind);
+        const fresh = await creationAuth(orgId, org.meeting_folder_id ?? null, user.id);
+        return await create(fresh.auth, fresh.driveAccount, user, org, items, desired, dropped, src, body, existing.kind);
       }
       return await update(auth, orgId, existing, items, desired, dropped, src, body);
     }
-    return await create(auth, user, org, items, desired, dropped, src, body, type);
+    return await create(auth, driveAccount, user, org, items, desired, dropped, src, body, type);
   } catch (err) {
+    if (err instanceof DriveAccountLostError) return driveAccountLost();
     if (err instanceof GoogleAuthLostError) return authLost();
     console.error(`prepare: ${(err as Error).message}`);
     return googleDown();
@@ -358,6 +375,7 @@ async function writeCarried(
 
 async function create(
   auth: OAuth2Client,
+  driveAccount: DriveAccount,
   user: { id: string; email?: string | null },
   org: { id: string; name: string; meeting_folder_id?: string | null },
   items: DraftItem[],
@@ -370,8 +388,8 @@ async function create(
   const id = randomUUID();
   const key = prepKey(id);
   const formatId = src.formatId ?? (await ensureStandardRow(org.id, standardKindOf(type)));
-  const me = (user.email ?? "").toLowerCase();
-  const members = (await orgMemberList(org.id)).filter((m) => m.userId !== user.id && m.email && m.email.toLowerCase() !== me);
+  // Shared like a meeting's new Doc: with the förening's account as owner, the preparer too.
+  const members = docShareTargets(await orgMemberList(org.id), { user, driveAccountEmail: driveAccount?.email || null });
   const title = preparedTitle(org.name, body.date, body.time, body.eventTitle);
   const on = items.filter((i) => i.on);
   const doc = await createFormatDoc(auth, {
@@ -415,6 +433,7 @@ async function create(
       shared_with: sharedWith,
       share_grants: shareGrants,
       prepared_by: user.id,
+      ...(driveAccount ? { drive_account_sub: driveAccount.sub } : {}),
     });
     if (error) {
       if (missingTable(error.code)) throw new Error("prepared_agendas missing (0033 not applied)");

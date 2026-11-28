@@ -493,7 +493,7 @@ export function LearnFormatView({
  */
 export function useFormatFlow(orgId: string, current?: FormatProfile) {
   const t = useTranslations("formatEditor");
-  const picker = usePicker();
+  const picker = usePicker({ orgId });
   const [variant, setVariant] = useState<FlowVariant>("learn");
   const [view, setView] = useState<LearnPhase>({ phase: "idle" });
   const fail = (err: unknown) =>

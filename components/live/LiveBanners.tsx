@@ -22,6 +22,8 @@ export interface LiveBannersProps {
   refusal?: string | null;
   onReLogin?: () => void;
   onRetry?: () => void;
+  /** 0070: the Doc paused because the förening's Drive account needs renewing (an admin renews it). */
+  docPausedForening?: boolean;
 }
 
 /**
@@ -39,6 +41,7 @@ export function LiveBanners({
   refusal,
   onReLogin,
   onRetry,
+  docPausedForening,
 }: LiveBannersProps) {
   const t = useTranslations("live.banners");
   const locale = useLocale();
@@ -82,7 +85,7 @@ export function LiveBanners({
             key="doc"
             tone="danger"
             icon={<IconDoc />}
-            title={t("docTitle")}
+            title={docPausedForening ? t("docTitleForening") : t("docTitle")}
             action={
               onReLogin && (
                 <Button variant="primary" onClick={onReLogin}>
@@ -91,7 +94,7 @@ export function LiveBanners({
               )
             }
           >
-            {connected ? t("docConnected") : t("docOffline")}
+            {docPausedForening ? t("docForening") : connected ? t("docConnected") : t("docOffline")}
           </Banner>
         );
       case "time":

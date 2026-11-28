@@ -20,6 +20,10 @@
     "meeting_invite": {
       "label": "Anteckningar från möten du var med på",
       "description": "När någon skriver ett möte du var med på och du inte har ett konto: dina uppgifter från mötet och en länk in. Högst en påminnelse."
+    },
+    "admin_notice": {
+      "label": "Ändringar i föreningens inställningar",
+      "description": "Till admins: när en annan admin byter till exempel Google-kontot som föreningens mötesdokument sparas i."
     }
   },
   "allOff": "Stäng av alla mejl",

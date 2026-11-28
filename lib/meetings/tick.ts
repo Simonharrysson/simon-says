@@ -31,6 +31,7 @@ import { testPeople, usesTestPeople } from "@/lib/testmeeting/fixture";
 import { appendTranscript, formatTimestamp, type TranscriptLine } from "@/lib/docs/transcript";
 import { getEnv } from "@/lib/env";
 import { getGoogleAuth, GoogleAuthLostError } from "@/lib/google/client";
+import { orgDriveAccount, orgDriveClient } from "@/lib/google/drive-account";
 import { doclessRows, doclessState, isDocless } from "@/lib/privat/docless";
 import { retryDelayMs, sleep } from "@/lib/google/docs";
 import { defaultMailer, type Mailer } from "@/lib/mail";
@@ -81,6 +82,8 @@ export type TickResult = "ok" | "busy" | "doc_paused" | "conflict" | "failed" | 
 /** Everything outside the database a tick talks to; tests replace these. */
 export interface TickDeps {
   getAuth(userId: string): Promise<OAuth2Client>;
+  /** 0070: the förening's Drive account that made the Doc (default orgDriveClient: lost or replaced throws). */
+  getOrgAuth?(orgId: string, driveAccountSub: string): Promise<OAuth2Client>;
   readNotes(auth: OAuth2Client, meeting: MeetingRow): Promise<NotesTab>;
   render: typeof renderItems;
   appendTranscript: typeof appendTranscript;
@@ -101,6 +104,7 @@ export interface TickDeps {
 function defaultDeps(): TickDeps {
   return {
     getAuth: getGoogleAuth,
+    getOrgAuth: orgDriveClient,
     readNotes: (auth, m) => readNotesTab(auth, m.doc_id, m.notes_tab_id),
     render: renderItems,
     appendTranscript,
@@ -573,6 +577,12 @@ function must<T>(what: string, res: { data: T; error: { message: string } | null
   return res.data;
 }
 
+/** The förening's Drive account, when it is still the one that made the Doc and not lost: its updated_at. */
+async function renewedOrgAccount(orgId: string, sub: string): Promise<{ updated_at: string } | null> {
+  const account = await orgDriveAccount(orgId);
+  return account && account.googleSub === sub && !account.lostAt ? { updated_at: account.updatedAt } : null;
+}
+
 async function loadMeeting(id: string): Promise<MeetingRow | null> {
   return must("tick: meeting", await db().from("meetings").select("*").eq("id", id).maybeSingle()) as MeetingRow | null;
 }
@@ -875,9 +885,15 @@ export async function runTick(
     if (!final && meeting.status !== "live") return "busy";
     // A Privat recording without a Doc (0045) never talks to Google: no auth, the rows are the notes.
     const docless = isDocless(meeting);
-    if (!meeting.started_by && !docless) throw new GoogleAuthLostError("(deleted user)", "meeting has no starter");
-    // Auth first: a lost grant leaves the segments untouched.
-    const auth = docless ? null! : await deps.getAuth(meeting.started_by!);
+    const orgSub = docless ? null : (meeting.drive_account_sub ?? null);
+    if (!meeting.started_by && !docless && !orgSub) throw new GoogleAuthLostError("(deleted user)", "meeting has no starter");
+    // Auth first: a lost grant leaves the segments untouched. A Doc the förening's Drive account
+    // made is only ever written through that account (0070): lost or replaced pauses it.
+    const auth = docless
+      ? null!
+      : orgSub
+        ? await (deps.getOrgAuth ?? orgDriveClient)(meeting.org_id, orgSub)
+        : await deps.getAuth(meeting.started_by!);
 
     assigned = await assignTick(meetingId);
     const env = getEnv();
@@ -1530,17 +1546,21 @@ export async function finalizeSweep(
   const paused = scoped(
     must(
       "sweep: paused",
-      await db().from("meetings").select("id, org_id, started_by, doc_paused_at, status").not("doc_paused_at", "is", null),
-    ) as Pick<MeetingRow, "id" | "org_id" | "started_by" | "doc_paused_at" | "status">[],
+      await db().from("meetings").select("*").not("doc_paused_at", "is", null),
+    ) as Pick<MeetingRow, "id" | "org_id" | "started_by" | "doc_paused_at" | "status" | "drive_account_sub">[],
   );
   for (const m of paused) {
     // `ending` meetings are retried above (their final pass resumes the Doc).
-    if (!left() || !m.started_by || m.status === "ending") continue;
+    if (!left() || (!m.started_by && !m.drive_account_sub) || m.status === "ending") continue;
     try {
-      const token = must(
-        "sweep: token",
-        await db().from("google_tokens").select("updated_at").eq("user_id", m.started_by).maybeSingle(),
-      ) as { updated_at: string } | null;
+      // Resumed once the grant that writes the Doc was renewed after the pause: the starter's
+      // sign-in, or the förening's Drive account connected again (0070).
+      const token = m.drive_account_sub
+        ? await renewedOrgAccount(m.org_id, m.drive_account_sub)
+        : (must(
+            "sweep: token",
+            await db().from("google_tokens").select("updated_at").eq("user_id", m.started_by!).maybeSingle(),
+          ) as { updated_at: string } | null);
       if (!token || new Date(token.updated_at) <= new Date(m.doc_paused_at!)) continue;
       const result = await runTick(m.id, { final: m.status !== "live", deadlineAt }, opts.deps);
       if (result !== "doc_paused" && result !== "busy") {
