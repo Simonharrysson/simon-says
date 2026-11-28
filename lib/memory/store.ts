@@ -21,7 +21,7 @@ import {
   type MemoryLine,
   visibleLines,
 } from "./memory";
-import { MEMORY_SYSTEM_PROMPT, meetingOwners, memoryUserText, type MemoryMeeting } from "./prompt";
+import { MEMORY_SYSTEM_PROMPT, memoryUserText, type MemoryMeeting } from "./prompt";
 
 // "Vad Claude ska veta": the page's reads and writes, all on the server (0065 gives clients no
 // access to org_memory). Reads go through the service role after the admin check and keep only the
@@ -255,10 +255,9 @@ async function runRefresh(org: { id: string; name: string }, userId: string, dep
   });
   if (!result.ok) return { ok: false, reason: result.reason === "spend" ? "spend" : "failed" };
   const oldest = meetings.at(-1)!;
-  const owners = meetingOwners(meetings);
   for (let attempt = 0; attempt < RETRIES; attempt++) {
     const row = await readRow(deps.admin, org.id);
-    const lines = mergeGenerated(row?.memory.lines ?? [], result.value, allowed, newLineId, owners);
+    const lines = mergeGenerated(row?.memory.lines ?? [], result.value, allowed, newLineId);
     const saved = await writeIfUnchanged(deps.admin, org.id, userId, row ? row.version : null, {
       lines,
       generated_at: deps.now.toISOString(),

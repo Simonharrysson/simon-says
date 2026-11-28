@@ -15,8 +15,7 @@ import type { OrgMemory as Memory, SourceMeeting } from "@/lib/memory/store";
 // Inställningar → Vad Claude ska veta (0065): the admins' editor of what their members' Claude
 // reads (get_org_memory). Uppdatera asks Claude for a fresh draft from the meetings every member
 // can see; lines the admins wrote or changed stay. Every line is an attributed statement: under it,
-// who said it in which meeting (the date links to it), "Tillagt av <admin>", or for an older line
-// the meeting it came from.
+// the meeting it was said in (the date links to it) or "Tillagt av <admin>". Never a speaker's name.
 
 type Draft = { key: string; id: string | null; section: MemorySection; text: string; line: MemoryLine | null };
 
@@ -162,9 +161,9 @@ export function OrgMemory({
 }
 
 /**
- * Under a line: who said it in which meeting (the date links to the meeting page), "Tillagt av
- * <admin>", or "Från mötet <date>" for a line from before attribution. A line the admin is
- * changing (or a new one) is theirs once saved: "Tillagt av dig".
+ * Under a line: "Sades i mötet <date>" (the date links to the meeting page; an older line, all its
+ * source meetings) or "Tillagt av <admin>". A line the admin is changing (or a new one) is theirs
+ * once saved: "Tillagt av dig".
  */
 function Attribution({
   draft,

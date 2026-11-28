@@ -22,9 +22,8 @@ test("Vad Claude ska veta: Uppdatera from the meetings, edit and add a line, sav
   // The line citing a meeting Claude wasn't sent never lands.
   await expect(page.getByRole("textbox", { name: "Prioriteringar, rad 1" })).toHaveCount(0);
   await expect(page.locator(`a[href="/orgs/${org.id}/mote/${meeting.id}"]`).first()).toBeVisible();
-  // Every line is an attributed statement; an invented speaker is never named.
+  // Every line is an attributed statement: the meeting it was said in.
   await expect(page.locator("[data-memory-attribution]").filter({ hasText: /^Sades i mötet / })).toHaveCount(2);
-  await expect(page.getByText("Påhittad Persson")).toHaveCount(0);
   await expect(page.getByText(/^Byggd från 1 möte sedan /)).toBeVisible();
   const calls = await fake.claudeCalls("memory");
   expect(calls.some((c) => c.text.includes("Hackathonet hålls i Kårallen"))).toBe(true);

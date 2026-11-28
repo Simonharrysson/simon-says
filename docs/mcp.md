@@ -31,7 +31,7 @@ claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mc
 | `prepare_agenda(org_id \| meeting_id, point)` | Förening meetings only. Adds a point to the next agenda; creates it (Förbered möte's proposed date) when none is prepared |
 | `list_agent_tasks(status?, include_others?, cursor?, limit?)` | Tasks a meeting explicitly gave Claude (Vem: Claude / AI / Simon Says), open by default. **Parked:** meetings don't create new ones unless `AGENT_TASKS_ENABLED=1`, so this lists the existing ones. By default only the ones the user gave it (meetings they ran, or any as an admin). Each one a brief: the task, Klart när, due, status and note, the meeting (link to its page and Doc), and that meeting's decisions and Övrigt lines |
 | `update_agent_task(task_id, status, note?)` | `in_progress`, `blocked` or `done`, with a note that is shown on the meeting page. The meeting's runner (who gave Claude the task) or an admin may do this. `done` works like ticking the task, so the Doc gets "✓ klart" |
-| `get_org_memory(org_id)` | **Vad Claude ska veta**: customers, priorities, recurring decisions, glossary, and who is who, each line an attributed statement ("Anna Svensson sa i mötet 12 nov: …") with its source meetings. A line is left out when the user can't see all of its sources |
+| `get_org_memory(org_id)` | **Vad Claude ska veta**: customers, priorities, recurring decisions, glossary, and who is who, each line an attributed statement ("Sades i mötet 12 nov: …", "Tillagt av <admin>") with its source meetings. A line is left out when the user can't see all of its sources |
 
 **Write tools:** `complete_task`, `update_agent_task` and `prepare_agenda` change real things (a line in a Google Doc, an agenda Doc every member sees). They are annotated as non-read-only. **Don't set them to "Always allow"** in Claude; keep "Ask" so you confirm each one. The read tools can be allowed freely.
 
@@ -49,7 +49,7 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
 **Vad Claude ska veta** (Inställningar → Vad Claude ska veta; föreningar and Företag, admins)
 - **Uppdatera** asks Claude for lines built from at most 40 of the newest meetings that **every member** can see (`org_memory_sources`).
 - Lines an admin wrote or changed are never replaced.
-- Every line is an attributed statement that stays true: "Anna Svensson sa i mötet 12 nov: kunden vill ha leverans i mars", linking to that meeting. The speaker is named only when the meeting data ties it to a person (the server checks that Claude's name is a task owner, Vem, of that meeting), else "Sades i mötet 12 nov: …". An admin's own or changed line shows "Tillagt av <admin>". Lines generated before this show "Från mötet 12 nov: …". No approval step: Uppdatera writes the page directly.
+- Every line is an attributed statement that stays true: "Sades i mötet 12 nov: kunden vill ha leverans i mars", linking to that meeting (older lines: all their source meetings). No speaker is ever named: note rows aren't tied to a confirmed speaker of a statement, and the app never guesses one. An admin's own or changed line shows "Tillagt av <admin>". No approval step: Uppdatera writes the page directly.
 - Members read the page through their Claude, with `get_org_memory`. The table is server-only: the page and the tool both leave out a line when the reader can't see all of its sources.
 - Admins can run Uppdatera once a minute. Its usage is recorded on the org, under the kill switch and the daily cap.
 

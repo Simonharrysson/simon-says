@@ -167,16 +167,14 @@ export async function getOrgMemory(ctx: ToolCtx, args: { org_id: string }): Prom
         shown
           .filter((l) => l.section === s)
           .map((l) => {
-            // Every line is an attributed statement ("Anna Svensson sa i mötet 12 nov: …"), never a bare claim.
+            // Every line is an attributed statement ("Sades i mötet 12 nov: …"), never a bare claim.
             const a = attributionOf(l);
             return {
               text: attributedLine(l, dates, "sv"),
               statement: l.text,
               ...(a.kind === "said"
-                ? { said_by: a.speaker, said_in: { meeting_id: a.meetingId, date: date.get(a.meetingId) ?? null, url: meetingUrl(ctx, org.id, a.meetingId) } }
-                : a.kind === "admin"
-                  ? { added_by: a.by ?? "an admin" }
-                  : {}),
+                ? { said_in: a.meetingIds.map((id) => ({ meeting_id: id, date: date.get(id) ?? null, url: meetingUrl(ctx, org.id, id) })) }
+                : { added_by: a.by }),
               sources: l.sources.map((id) => ({ meeting_id: id, date: date.get(id) ?? null, url: meetingUrl(ctx, org.id, id) })),
             };
           }),

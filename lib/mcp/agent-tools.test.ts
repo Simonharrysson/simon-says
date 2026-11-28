@@ -135,6 +135,7 @@ describe("get_org_memory", () => {
       { id: "l2", section: "priorities", text: "Hemligt projekt", sources: [OTHER], edited: false },
       { id: "l3", section: "glossary", text: "KS = kommunikationsstyrelsen", sources: [], edited: true, addedBy: "Maja Admin" },
       { id: "l4", section: "decisions", text: "kunden vill ha leverans i mars", sources: [M], edited: false, saidIn: M, speaker: "Anna Svensson" },
+      { id: "l6", section: "glossary", text: "VD = vd", sources: [], edited: true },
       { id: "l5", section: "decisions", text: "lokalen är bokad", sources: [M], edited: false, saidIn: M },
     ],
     generated_at: "2026-11-27T10:00:00Z",
@@ -151,21 +152,24 @@ describe("get_org_memory", () => {
         built_from: { meetings: 12, since: "2026-10-01" },
         sections: {
           // A line from before attribution: its source meeting's date.
-          customers: [{ text: "Från mötet 26 nov: Kårallen hyr ut lokalen", statement: "Kårallen hyr ut lokalen", sources: [{ meeting_id: M, date: "2026-11-26", url: `https://simonsays.test/orgs/${ORG}/mote/${M}` }] }],
+          customers: [{ text: "Sades i mötet 26 nov: Kårallen hyr ut lokalen", statement: "Kårallen hyr ut lokalen", sources: [{ meeting_id: M, date: "2026-11-26", url: `https://simonsays.test/orgs/${ORG}/mote/${M}` }] }],
           priorities: [],
-          glossary: [{ text: "Tillagt av Maja Admin: KS = kommunikationsstyrelsen", added_by: "Maja Admin", sources: [] }],
+          glossary: [
+            { text: "Tillagt av Maja Admin: KS = kommunikationsstyrelsen", added_by: "Maja Admin", sources: [] },
+            // Unknown admin: the Swedish sentence says so; the field is null, never an English stand-in.
+            { text: "Tillagt av en admin: VD = vd", added_by: null, sources: [] },
+          ],
           decisions: [
-            {
-              text: "Anna Svensson sa i mötet 26 nov: kunden vill ha leverans i mars",
-              said_by: "Anna Svensson",
-              said_in: { meeting_id: M, date: "2026-11-26", url: `https://simonsays.test/orgs/${ORG}/mote/${M}` },
-            },
-            { text: "Sades i mötet 26 nov: lokalen är bokad", said_by: null },
+            // A stored speaker is never shown.
+            { text: "Sades i mötet 26 nov: kunden vill ha leverans i mars", said_in: [{ meeting_id: M, date: "2026-11-26", url: `https://simonsays.test/orgs/${ORG}/mote/${M}` }] },
+            { text: "Sades i mötet 26 nov: lokalen är bokad", said_in: [{ meeting_id: M, date: "2026-11-26", url: `https://simonsays.test/orgs/${ORG}/mote/${M}` }] },
           ],
         },
       },
     });
     expect(JSON.stringify(r)).not.toContain("Hemligt projekt");
+    expect(JSON.stringify(r)).not.toContain("Anna Svensson");
+    expect(JSON.stringify(r)).not.toContain("said_by");
   });
   it("refuses an org the user isn't in, and Privat", async () => {
     expect((await getOrgMemory(ctx().c, { org_id: OTHER })).ok).toBe(false);

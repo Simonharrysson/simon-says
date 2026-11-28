@@ -1,6 +1,6 @@
 # "Claude, gör det här" and "Vad Claude ska veta" — design (owner approved both 11-28; choices made here are marked **[choice]**)
 
-> **Update (owner, 11-28, later):** (A) agent tasks are parked: the notes engine marks no new ones unless `AGENT_TASKS_ENABLED=1`; existing ones keep working. (B) every memory line is an attributed statement ("Anna Svensson sa i mötet 12 nov: …", "Sades i mötet …", "Tillagt av <admin>", older lines "Från mötet …"); no approval step. See `docs/mcp.md`.
+> **Update (owner, 11-28, later):** (A) agent tasks are parked: the notes engine marks no new ones unless `AGENT_TASKS_ENABLED=1`; existing ones keep working. (B) every memory line is an attributed statement ("Sades i mötet 12 nov: …" linking the meeting, or "Tillagt av <admin>"; never a speaker's name, since no note row is tied to a confirmed speaker); no approval step. See `docs/mcp.md`.
 
 Two features on the MCP server (`docs/superpowers/specs/2026-11-27-mcp-design.md`). Both keep the MCP rule: **Claude sees only what the user sees**. Reads go through `mcp_*` functions (service role, explicit `p_user`, the existing predicates). Writes go through the app's own paths, behind `actorFor`. Migration **0065_claude_tasks_memory.sql**, additive.
 

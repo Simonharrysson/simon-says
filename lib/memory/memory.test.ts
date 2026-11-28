@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { attributedLine, attributionOf, attributionParts } from "./attribution";
 import { applyEdits, GENERATED_JSON_SCHEMA, mergeGenerated, parseLines, visibleLines, type MemoryLine } from "./memory";
-import { MEMORY_SYSTEM_PROMPT, meetingOwners, memoryUserText } from "./prompt";
+import { MEMORY_SYSTEM_PROMPT, memoryUserText } from "./prompt";
 
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
@@ -24,18 +24,19 @@ describe("parseLines", () => {
     ).toEqual([{ id: "a", section: "customers", text: "Kårallen hyr ut", sources: [A], edited: false }]);
     expect(parseLines(null)).toEqual([]);
   });
-  it("keeps who said a line only for a generated line said in one of its sources; the admin only on an edited one", () => {
+  it("keeps where a line was said only for a generated line said in one of its sources, never a speaker; the admin only on an edited one", () => {
     expect(
       parseLines([
-        { id: "a", section: "customers", text: "x", sources: [A], edited: false, saidIn: A, speaker: " Anna  Svensson " },
-        { id: "b", section: "customers", text: "y", sources: [A], edited: false, saidIn: B, speaker: "Erik" },
-        { id: "c", section: "customers", text: "z", sources: [], edited: true, saidIn: A, speaker: "Erik", addedBy: "Maja" },
+        // A stored speaker is never read back: no line names who said it.
+        { id: "a", section: "customers", text: "x", sources: [A], edited: false, saidIn: A, speaker: "Anna Svensson" },
+        { id: "b", section: "customers", text: "y", sources: [A], edited: false, saidIn: B },
+        { id: "c", section: "customers", text: "z", sources: [], edited: true, saidIn: A, addedBy: " Maja  Admin " },
         { id: "d", section: "customers", text: "w", sources: [A], edited: false, addedBy: "Maja" },
       ]),
     ).toEqual([
-      { id: "a", section: "customers", text: "x", sources: [A], edited: false, saidIn: A, speaker: "Anna Svensson" },
+      { id: "a", section: "customers", text: "x", sources: [A], edited: false, saidIn: A },
       { id: "b", section: "customers", text: "y", sources: [A], edited: false },
-      { id: "c", section: "customers", text: "z", sources: [], edited: true, addedBy: "Maja" },
+      { id: "c", section: "customers", text: "z", sources: [], edited: true, addedBy: "Maja Admin" },
       { id: "d", section: "customers", text: "w", sources: [A], edited: false },
     ]);
   });
@@ -61,40 +62,15 @@ describe("mergeGenerated (Uppdatera)", () => {
     expect(out).toEqual([kept, { id: "new", section: "customers", text: "Kårallen hyr ut lokalen", sources: [A], edited: false, saidIn: A }]);
   });
 
-  it("keeps a speaker only when it is a task owner of the meeting the line was said in", () => {
-    const owners = meetingOwners([
-      { id: A, date: "2026-11-12", title: null, attendees: ["Anna Svensson", "Erik Lund"], content: { decisions: [], tasks: [{ text: "Ring kunden", owner: "Anna Svensson", due: null, mine: false }, { text: "Sammanställ", owner: "Claude", due: null, mine: false }], other: [] } },
-      { id: B, date: "2026-11-05", title: null, attendees: [], content: { decisions: [], tasks: [{ text: "Boka lokal", owner: "Erik Lund", due: null, mine: false }], other: [] } },
-    ]);
-    expect(owners.get(A)).toEqual(["Anna Svensson"]);
+  it("never keeps a speaker: a name Claude sends anyway is ignored; the first allowed source is where it was said", () => {
     let k = 0;
     const out = mergeGenerated(
       [],
-      {
-        lines: [
-          { section: "customers", text: "kunden vill ha leverans i mars", sources: [A], speaker: "anna svensson" },
-          // Erik attended but owns no task in A: not tied to him by the data.
-          { section: "customers", text: "kunden har bytt kontaktperson", sources: [A, B], speaker: "Erik Lund" },
-          { section: "priorities", text: "hackathonet i mars", sources: [A], speaker: "Påhittad Persson" },
-          { section: "priorities", text: "sammanställningen görs av Claude", sources: [A], speaker: "Claude" },
-          { section: "decisions", text: "lokalen bokas av Erik", sources: [B], speaker: "Erik Lund" },
-          { section: "glossary", text: "KS = kommunikationsstyrelsen", sources: [A], speaker: "" },
-          { section: "people", text: "Anna är kassör", sources: [A] },
-        ],
-      },
+      { lines: [{ section: "customers", text: "kunden vill ha leverans i mars", sources: [C, B, A], speaker: "Anna Svensson" } as never] },
       new Set([A, B]),
       () => `g${++k}`,
-      owners,
     );
-    expect(out.map((l) => [l.text, l.saidIn, l.speaker])).toEqual([
-      ["kunden vill ha leverans i mars", A, "Anna Svensson"],
-      ["kunden har bytt kontaktperson", A, undefined],
-      ["hackathonet i mars", A, undefined],
-      ["sammanställningen görs av Claude", A, undefined],
-      ["lokalen bokas av Erik", B, "Erik Lund"],
-      ["KS = kommunikationsstyrelsen", A, undefined],
-      ["Anna är kassör", A, undefined],
-    ]);
+    expect(out).toEqual([{ id: "g1", section: "customers", text: "kunden vill ha leverans i mars", sources: [B, A], edited: false, saidIn: B }]);
   });
 });
 
@@ -138,7 +114,7 @@ function fakeAdmin(o: { meetings: unknown[]; rows: unknown[]; onWrite: (body: un
 }
 
 describe("Uppdatera, prompt contract (a fake Claude)", () => {
-  it("sends the schema with speaker and stores attributed lines: a named owner, an invented name and none", async () => {
+  it("asks for no speaker and stores every line as said in its meeting, even when Claude names someone", async () => {
     const { refreshMemory } = await import("./store");
     const M1 = A;
     const rows = [
@@ -153,24 +129,28 @@ describe("Uppdatera, prompt contract (a fake Claude)", () => {
       calls.push(input);
       const value = input.schema.parse({
         lines: [
+          // A task owner and an invented name: neither is ever shown as who said it.
           { section: "customers", text: "kunden vill ha leverans i mars", sources: [M1], speaker: "Anna Svensson" },
           { section: "priorities", text: "leveransen är viktigast", sources: [M1], speaker: "Bertil Okänd" },
-          { section: "glossary", text: "KS = kommunikationsstyrelsen", sources: [M1], speaker: "" },
+          { section: "glossary", text: "KS = kommunikationsstyrelsen", sources: [M1] },
         ],
       });
       return { ok: true as const, value, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0 } };
     };
     const r = await refreshMemory(db as never, { id: "org", name: "Bolaget" }, "u1", { admin: admin as never, oneShot: oneShot as never, now: new Date("2026-11-28T10:00:00Z") });
     expect(r).toEqual({ ok: true, lines: 3, meetings: 1 });
-    // The contract: the system prompt says the app adds who and when; the schema requires speaker.
+    // The contract: the app adds "Sades i mötet <date>"; the text never claims who said it; no speaker field.
     expect(calls[0].system).toBe(MEMORY_SYSTEM_PROMPT);
-    expect(calls[0].system).toContain('"speaker": who said it');
-    expect(calls[0].system).toContain('In every other case "" (the empty string)');
+    expect(calls[0].system).toContain('"Sades i mötet 12 nov: kunden vill ha leverans i mars"');
+    expect(calls[0].system).toContain("never claiming who said it");
+    expect(calls[0].system).not.toContain('"speaker"');
     expect(calls[0].user).toContain("- Ring kunden om leveransen · Vem: Anna Svensson");
-    expect((calls[0].jsonSchema as typeof GENERATED_JSON_SCHEMA).properties.lines.items.required).toContain("speaker");
+    const items = (calls[0].jsonSchema as typeof GENERATED_JSON_SCHEMA).properties.lines.items;
+    expect(Object.keys(items.properties)).toEqual(["section", "text", "sources"]);
+    expect(items.additionalProperties).toBe(false);
     const dates = { [M1]: "2026-11-12" };
     expect(written!.lines.map((l) => attributedLine(l, dates))).toEqual([
-      "Anna Svensson sa i mötet 12 nov: kunden vill ha leverans i mars",
+      "Sades i mötet 12 nov: kunden vill ha leverans i mars",
       "Sades i mötet 12 nov: leveransen är viktigast",
       "Sades i mötet 12 nov: KS = kommunikationsstyrelsen",
     ]);
@@ -194,9 +174,9 @@ describe("applyEdits (an admin's save)", () => {
       { id: "n1", section: "glossary", text: "MVP = minsta möjliga produkt", sources: [], edited: true },
     ]);
   });
-  it("stamps the admin on a line they write or change, and drops who said a changed line", () => {
-    const said = line({ id: "s", text: "kunden vill ha mars", sources: [A], saidIn: A, speaker: "Anna Svensson" });
-    const keep = line({ id: "k", text: "orörd", sources: [A], saidIn: A, speaker: "Anna Svensson" });
+  it("stamps the admin on a line they write or change, and drops where a changed line was said", () => {
+    const said = line({ id: "s", text: "kunden vill ha mars", sources: [A], saidIn: A });
+    const keep = line({ id: "k", text: "orörd", sources: [A], saidIn: A });
     const out = applyEdits(
       [said, keep],
       [
@@ -256,16 +236,13 @@ describe("the prompt", () => {
 
 describe("attribution (the page and get_org_memory)", () => {
   const dates = { [A]: "2026-11-12", [B]: "2026-11-05" };
-  it("a named speaker: who said it in which meeting", () => {
-    const l = line({ text: "kunden vill ha leverans i mars", sources: [A], saidIn: A, speaker: "Anna Svensson" });
-    expect(attributedLine(l, dates)).toBe("Anna Svensson sa i mötet 12 nov: kunden vill ha leverans i mars");
-    expect(attributedLine(l, dates, "en")).toBe("Anna Svensson said in the meeting on 12 Nov: kunden vill ha leverans i mars");
-    expect(attributionParts(attributionOf(l), dates)).toEqual({ lead: "Anna Svensson sa i mötet", meetings: [{ id: A, label: "12 nov" }] });
-  });
-  it("an unknown speaker: said in the meeting, never a made-up name", () => {
+  it("a generated line: said in its meeting, never a speaker's name", () => {
     const l = line({ text: "lokalen är bokad", sources: [A, B], saidIn: A });
     expect(attributedLine(l, dates)).toBe("Sades i mötet 12 nov: lokalen är bokad");
     expect(attributedLine(l, dates, "en")).toBe("Said in the meeting on 12 Nov: lokalen är bokad");
+    expect(attributionParts(attributionOf(l), dates)).toEqual({ lead: "Sades i mötet", meetings: [{ id: A, label: "12 nov" }] });
+    // Even a speaker stored by an older build is never shown.
+    expect(attributedLine({ ...l, speaker: "Anna Svensson" } as MemoryLine, dates)).toBe("Sades i mötet 12 nov: lokalen är bokad");
   });
   it("an admin's line: Tillagt av <admin>, or an admin when the name isn't known", () => {
     expect(attributedLine(line({ text: "VD = vd", sources: [], edited: true, addedBy: "Maja Admin" }), dates)).toBe("Tillagt av Maja Admin: VD = vd");
@@ -273,9 +250,9 @@ describe("attribution (the page and get_org_memory)", () => {
     // A generated line an admin changed is theirs now, even with its sources kept.
     expect(attributedLine(line({ text: "ändrad", sources: [A], edited: true, addedBy: "Maja Admin" }), dates, "en")).toBe("Added by Maja Admin: ändrad");
   });
-  it("a line from before attribution: the date of its source meeting(s)", () => {
-    expect(attributedLine(line({ text: "Kårallen hyr ut", sources: [A] }), dates)).toBe("Från mötet 12 nov: Kårallen hyr ut");
-    expect(attributedLine(line({ text: "Kårallen hyr ut", sources: [A, B] }), dates)).toBe("Från mötena 12 nov, 5 nov: Kårallen hyr ut");
-    expect(attributedLine(line({ text: "Kårallen hyr ut", sources: [A] }), dates, "en")).toBe("From the meeting on 12 Nov: Kårallen hyr ut");
+  it("a line from before attribution: the same wording, with the date(s) of its source meeting(s)", () => {
+    expect(attributedLine(line({ text: "Kårallen hyr ut", sources: [A] }), dates)).toBe("Sades i mötet 12 nov: Kårallen hyr ut");
+    expect(attributedLine(line({ text: "Kårallen hyr ut", sources: [A, B] }), dates)).toBe("Sades i mötena 12 nov, 5 nov: Kårallen hyr ut");
+    expect(attributedLine(line({ text: "Kårallen hyr ut", sources: [A] }), dates, "en")).toBe("Said in the meeting on 12 Nov: Kårallen hyr ut");
   });
 });

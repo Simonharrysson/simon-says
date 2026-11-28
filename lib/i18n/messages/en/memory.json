@@ -1,6 +1,6 @@
 {
   "title": "What Claude should know",
-  "intro": "Your members' Claude reads this before it helps: customers, priorities, recurring decisions, words and abbreviations, and who does what. Claude builds the page from the meetings every member can see. Each line says who said it and in which meeting (“Anna said in the meeting on 12 Nov: …”), so it stays true as it gets older. You can change any line, and your changes are never overwritten.",
+  "intro": "Your members' Claude reads this before it helps: customers, priorities, recurring decisions, words and abbreviations, and who does what. Claude builds the page from the meetings every member can see. Each line says which meeting it was said in (“Said in the meeting on 12 Nov: …”) or who added it, so it stays true as it gets older. You can change any line, and your changes are never overwritten.",
   "readers": "Every member reads the page in their own Claude (Simon Says in Claude). Only admins change it.",
   "sections": {
     "customers": "Customers",

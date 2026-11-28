@@ -1,6 +1,6 @@
 {
   "title": "Vad Claude ska veta",
-  "intro": "Det här läser era medlemmars Claude innan den hjälper till: kunder, prioriteringar, återkommande beslut, ord och förkortningar och vem som gör vad. Claude bygger sidan från mötena som alla medlemmar kan se. Varje rad säger vem som sa det och i vilket möte (”Anna Svensson sa i mötet 12 nov: …”), så den stämmer även när den blir gammal. Ni kan ändra varje rad, och era ändringar skrivs aldrig över.",
+  "intro": "Det här läser era medlemmars Claude innan den hjälper till: kunder, prioriteringar, återkommande beslut, ord och förkortningar och vem som gör vad. Claude bygger sidan från mötena som alla medlemmar kan se. Varje rad säger i vilket möte det sades (”Sades i mötet 12 nov: …”) eller vem som lade till den, så den stämmer även när den blir gammal. Ni kan ändra varje rad, och era ändringar skrivs aldrig över.",
   "readers": "Alla medlemmar läser sidan i sin egen Claude (Simon Says i Claude). Bara administratörer ändrar den.",
   "sections": {
     "customers": "Kunder",
