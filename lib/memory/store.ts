@@ -162,14 +162,15 @@ export async function claimRefresh(admin: SupabaseClient, orgId: string, userId:
   const { error: e1 } = await admin.from("org_memory").upsert({ org_id: orgId, updated_by: userId }, { onConflict: "org_id", ignoreDuplicates: true });
   if (e1) throw new Error(`org_memory: claim row: ${e1.message}`);
   const before = new Date(now.getTime() - MEMORY_COOLDOWN_S * 1000).toISOString();
-  const { data, error } = await admin
-    .from("org_memory")
-    .update({ generated_at: now.toISOString() })
-    .eq("org_id", orgId)
-    .or(`generated_at.is.null,generated_at.lt.${before}`)
-    .select("org_id");
-  if (error) throw new Error(`org_memory: claim: ${error.message}`);
-  return (data ?? []).length === 1;
+  // Two conditional updates (never built), then older than the cooldown: each one is atomic, and
+  // once one of them set generated_at to now, every other attempt matches neither.
+  for (const older of [null, before]) {
+    const q = admin.from("org_memory").update({ generated_at: now.toISOString() }).eq("org_id", orgId);
+    const { data, error } = await (older === null ? q.is("generated_at", null) : q.lt("generated_at", older)).select("org_id");
+    if (error) throw new Error(`org_memory: claim: ${error.message}`);
+    if ((data ?? []).length === 1) return true;
+  }
+  return false;
 }
 
 /** The meetings for a draft and what the app shows of each (visible(), summaryContent's lists). */
