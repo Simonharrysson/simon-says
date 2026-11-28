@@ -40,6 +40,7 @@ test("no double borders: Hem, Föreningar, a förening's tabs, a meeting's page,
     styrelsen: (p) => p.getByRole("list", { name: "Styrelsen" }),
     moten: (p) => p.getByRole("heading", { name: "Röster", exact: true }),
     "efter-motet": (p) => p.getByRole("group", { name: "Sammanfattning efter mötet" }),
+    claude: (p) => p.getByRole("heading", { name: "Vad Claude ska veta", exact: true }),
     radera: (p) => p.getByRole("heading", { name: "Radera föreningen" }),
   };
   for (const [del, ready] of Object.entries(sections)) {

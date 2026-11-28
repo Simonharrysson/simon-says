@@ -505,10 +505,20 @@ function agendaInput(over: Partial<UpdateNotesInput> = {}): UpdateNotesInput {
 }
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
+describe("agent tasks (0065): both prompts give Claude only what the meeting explicitly gives it", () => {
+  it("says owner Claude, only when explicit, never a person's task", () => {
+    for (const p of [SYSTEM_PROMPT, AGENDA_SYSTEM_PROMPT]) {
+      expect(p).toContain('with owner "Claude"');
+      expect(p).toContain("never give a task to Claude yourself, and never move a person's task to Claude");
+    }
+  });
+});
+
 describe("v1 prompt and schema stay byte-identical", () => {
-  // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when).
+  // Re-pinned for meeting titles (0048, top-level "title"), concrete tasks (0049, done_when) and
+  // tasks the meeting explicitly gives Claude (0065, owner "Claude").
   it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
-    expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
+    expect(sha(SYSTEM_PROMPT)).toBe("11a9922505d53ed6e5623834d7bd492055b47f6bc1216c2ba660db3ba132a2cd");
     expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("5f3da687b5c8b3dd2872b65f15bd98f410b2f8539a652017aca532d18647149a");
   });
 
@@ -595,7 +605,8 @@ describe("agenda mode: §-numbered board minutes (C2)", () => {
   const formatBlock = (tail: string) => tail.slice(tail.indexOf("<format>"), tail.indexOf("</format>"));
 
   it("the system prompt is untouched: the board-minutes rule lives in the tail only", () => {
-    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("39d11167bf8692d0b5e597c1830f03ae522c7d38f71dedfd6b61d68536b4baab");
+    // Re-pinned for tasks the meeting explicitly gives Claude (0065, owner "Claude").
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("201f8b7a533cc7adaa452ff2a2f13a87d8f672dd86d5903401616c53da562e1f");
     expect(AGENDA_SYSTEM_PROMPT).not.toContain("§-numbered");
   });
 

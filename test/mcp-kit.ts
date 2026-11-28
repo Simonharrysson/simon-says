@@ -137,6 +137,9 @@ export function fakeReader(userId: string, over: Partial<import("@/lib/mcp/reade
     handoffs: async () => [],
     setHandoffDone: async () => false,
     setPrivatTaskDone: async () => false,
+    agentStatuses: async () => [],
+    setAgentTask: async () => false,
+    orgMemory: async () => null,
     ...over,
   };
 }

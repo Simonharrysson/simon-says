@@ -1,0 +1,38 @@
+{
+  "title": "What Claude should know",
+  "intro": "Your members' Claude reads this before it helps: customers, priorities, recurring decisions, words and abbreviations, and who does what. Claude builds the page from the meetings every member can see, and each line shows which meetings it comes from. You can change any line, and your changes are never overwritten.",
+  "readers": "Every member reads the page in their own Claude (Simon Says in Claude). Only admins change it.",
+  "sections": {
+    "customers": "Customers",
+    "priorities": "Priorities",
+    "decisions": "Recurring decisions",
+    "glossary": "Glossary",
+    "people": "Who is who"
+  },
+  "empty": "Nothing here yet. Press Update from meetings and Claude reads your latest meetings.",
+  "sectionEmpty": "No lines yet.",
+  "builtFrom": "Built from {count, plural, one {# meeting} other {# meetings}} since {date}.",
+  "notBuilt": "Not built yet.",
+  "refreshButton": "Update from meetings",
+  "refreshing": "Claude is reading the meetings …",
+  "refreshed": "Done: {lines, plural, one {# line} other {# lines}} from {meetings, plural, one {# meeting} other {# meetings}}.",
+  "refreshReason": {
+    "cooldown": "The page was just updated. Wait a minute and try again.",
+    "empty": "There are no finished meetings every member can see yet.",
+    "spend": "Claude is paused right now. Try again later.",
+    "failed": "Couldn't update right now. Try again in a moment."
+  },
+  "refreshFailed": "Couldn't update.",
+  "save": "Save",
+  "saving": "Saving …",
+  "saved": "Saved.",
+  "saveFailed": "Couldn't save. Try again.",
+  "unsaved": "Unsaved changes",
+  "addLine": "Add line",
+  "lineLabel": "{section}, line {n}",
+  "remove": "Remove the line",
+  "edited": "Changed by you",
+  "sources": "Sources",
+  "sourceLink": "Meeting {date}",
+  "stale": "The page has changed since you opened it (someone pressed Update). Reload the page and make the change again."
+}

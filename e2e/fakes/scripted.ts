@@ -20,6 +20,12 @@ export const SCRIPTED = {
     { title: "Ett hackathon i februari", why: "Det har tagits upp på flera möten." },
   ],
   names: ["Anna Berg", "Erik Lund", "Lisa Holm", "Omar Said"],
+  /** "Vad Claude ska veta" (0065): what Uppdatera writes; `foreign` cites a meeting it wasn't sent. */
+  memory: {
+    customer: "Kårallen hyr ut lokalen till hackathonet",
+    glossary: "KS = kommunikationsstyrelsen",
+    foreign: "En rad från ett möte Claude inte fick",
+  },
   /** The Privat summary (0045): first recording in a context, then later ones. */
   privat: {
     summary: "Genomgång av labb 2 inför inlämningen.",

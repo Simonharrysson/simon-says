@@ -43,6 +43,7 @@ import { showCard } from "@/lib/onboarding/steps";
 import { logoUrl } from "@/lib/orgs/logo";
 import { dismissAction } from "../kom-igang/actions";
 import { Suspense, type ReactNode } from "react";
+import { OrgMemorySlot } from "@/components/settings/OrgMemorySlot";
 import { HeroCalendarSlot, OrgCalendarSlot } from "@/components/calendar/CalendarSlots";
 import { calendarResult } from "@/lib/calendar/events";
 import type { Notice } from "@/lib/ui/messages";
@@ -409,6 +410,13 @@ export default async function OrgPage({
           // placeholder holds the form's place, so nothing below it moves.
           <Suspense fallback={<Skeleton className="h-36 rounded-md" />}>
             <OrgCalendarSlot orgId={org.id} userId={me} org={org} />
+          </Suspense>
+        ) : undefined
+      }
+      memorySettings={
+        settings ? (
+          <Suspense fallback={<Skeleton className="h-64 rounded-md" />}>
+            <OrgMemorySlot orgId={org.id} />
           </Suspense>
         ) : undefined
       }

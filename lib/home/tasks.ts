@@ -1,3 +1,4 @@
+import { agentState, isAgentTask, statusKey, type AgentInfo, type AgentStatusRow } from "@/lib/agent/tasks";
 import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { isCopy, isDecision, isTask } from "@/lib/meetings/summary";
 import { resolveOwner, type RolePerson } from "@/lib/people/roles";
@@ -45,6 +46,8 @@ export interface HomeMeeting {
   agenda_roles?: Record<string, ItemRole> | null;
   /** meetings.title (0048), when the column exists and is set. */
   title?: string | null;
+  /** Who ran the meeting (pressed Start): the assigner of the tasks it gave Claude. */
+  started_by?: string | null;
 }
 
 /** A note row as read with `select("*")`: the concrete-tasks columns (0049) when present. */
@@ -87,6 +90,8 @@ export interface MyTask {
   position: number;
   /** A handoff (0050): who gave it ("Från Anna"). The meeting is never named or linked. */
   fromName?: string | null;
+  /** A task the meeting gave Claude ("Hos Claude"), shown to its assigner: where Claude is with it. */
+  agent?: AgentInfo;
 }
 
 /** A task_handoffs row (0050) as RLS shows it: approved ones to their owner, pending ones to approvers. */
@@ -208,6 +213,49 @@ export function myForeningTasks(input: {
       done: r.done,
       meetingAt: m.started_at,
       position: r.position,
+    });
+  }
+  return out;
+}
+
+/**
+ * Tasks the user's meetings gave Claude (lib/agent/tasks.ts), for the user who ran the meeting
+ * (their assigner): "Hos Claude" in Mina uppgifter, with Claude's progress. Ticked like their own.
+ */
+export function myAgentTasks(input: {
+  userId: string;
+  spaces: HomeSpace[];
+  meetings: HomeMeeting[];
+  rows: HomeNoteRow[];
+  people: HomePerson[];
+  statuses: AgentStatusRow[];
+}): MyTask[] {
+  const spaces = new Map(input.spaces.filter((s) => s.kind === "forening" || s.kind === "foretag").map((s) => [s.id, s]));
+  const meetings = input.meetings.filter((m) => spaces.has(m.org_id) && m.started_by === input.userId);
+  const byId = new Map(meetings.map((m) => [m.id, m]));
+  const statuses = new Map(input.statuses.map((r) => [statusKey(r.meeting_id, r.item_id), r]));
+  const out: MyTask[] = [];
+  for (const r of taskTips(input.rows, meetings)) {
+    const m = byId.get(r.meeting_id)!;
+    const space = spaces.get(m.org_id)!;
+    if (!isAgentTask(r, input.people.filter((p) => p.org_id === m.org_id))) continue;
+    out.push({
+      key: `n:${r.meeting_id}:${r.id}`,
+      kind: "note",
+      spaceId: space.id,
+      spaceName: space.name,
+      spaceKind: space.kind,
+      meetingId: r.meeting_id,
+      itemId: r.id,
+      text: trimmed(r.text)!,
+      due: trimmed(r.due),
+      dueDate: r.due_date ?? null,
+      doneWhen: trimmed(r.done_when),
+      contextName: null,
+      done: r.done,
+      meetingAt: m.started_at,
+      position: r.position,
+      agent: agentState(r.done, statuses.get(statusKey(r.meeting_id, r.id))),
     });
   }
   return out;

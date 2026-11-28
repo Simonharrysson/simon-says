@@ -36,7 +36,7 @@ export function orgTabHref(orgId: string, tab: OrgTabId): string {
 // Inställningar's sections (`?flik=installningar&del=`): every setting of the förening lives in
 // exactly one of them. Without `del`, a settings form's message picks the section it is about.
 
-export const SETTINGS_SECTIONS = ["foreningen", "styrelsen", "moten", "efter-motet", "radera"] as const;
+export const SETTINGS_SECTIONS = ["foreningen", "styrelsen", "moten", "efter-motet", "claude", "radera"] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number];
 
 export const isSettingsSection = (v: unknown): v is SettingsSectionId => typeof v === "string" && (SETTINGS_SECTIONS as readonly string[]).includes(v);
