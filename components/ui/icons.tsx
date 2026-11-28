@@ -45,6 +45,19 @@ export const IconX = (p: IconProps) => (
   </Svg>
 );
 
+export const IconMenu = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 8h16M4 16h16" />
+  </Svg>
+);
+
+export const IconMail = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" />
+    <path d="M4 7l8 6 8-6" />
+  </Svg>
+);
+
 export const IconArrowRight = (p: IconProps) => (
   <Svg {...p}>
     <path d="M5 12h14M13 6l6 6-6 6" />

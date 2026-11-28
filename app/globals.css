@@ -276,6 +276,16 @@
   }
 }
 
+/* Landing hero demo: the mic level breathes while the example meeting runs. */
+@keyframes mic-bar {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
 /* En-dash list markers: lists never use discs (no dots). */
 @utility list-dash {
   list-style-type: "–  ";
