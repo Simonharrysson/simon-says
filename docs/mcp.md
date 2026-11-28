@@ -1,6 +1,6 @@
 # Simon Says i Claude (MCP)
 
-Simon Says is a remote MCP server at `https://simonsays.harrysson.co/api/mcp`, using Streamable HTTP and OAuth 2.1. Once it is connected, your own Claude can search your meetings and Privat recordings, read one, list your tasks and tick them off, and add a point to the next agenda. **Claude sees only what you see in the app.** Design: `docs/superpowers/specs/2026-11-27-mcp-design.md`.
+Simon Says is a remote MCP server at `https://simonsays.harrysson.co/api/mcp`, using Streamable HTTP and OAuth 2.1. Once it is connected, your own Claude can search your meetings and Privat recordings, read one, list your tasks and tick them off, add a point to the next agenda, work on tasks a meeting gave Claude, and read what Claude should know about your organisation. **Claude sees only what you see in the app.** Design: `docs/superpowers/specs/2026-11-27-mcp-design.md`.
 
 > For every user: Privat, föreningar and Företag. Kill switch: `MCP_ENABLED=0` turns it off for everyone (503).
 
@@ -29,15 +29,35 @@ claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mc
 | `my_tasks(status?, due_before?, cursor?, limit?)` | Mina uppgifter (open by default) |
 | `complete_task(task_id)` | Same as ticking on /hem: the owner or an admin, and the Doc gets "✓ klart" |
 | `prepare_agenda(org_id \| meeting_id, point)` | Förening meetings only. Adds a point to the next agenda; creates it (Förbered möte's proposed date) when none is prepared |
+| `list_agent_tasks(status?, cursor?, limit?)` | Tasks a meeting explicitly gave Claude (Vem: Claude / AI / Simon Says), open by default, each one a brief: the task, Klart när, due, status and note, the meeting (link to its page and Doc), and that meeting's decisions and Övrigt lines |
+| `update_agent_task(task_id, status, note?)` | `in_progress`, `blocked` or `done`, with a note that is shown on the meeting page. The meeting's runner (who gave Claude the task) or an admin may do this. `done` works like ticking the task, so the Doc gets "✓ klart" |
+| `get_org_memory(org_id)` | **Vad Claude ska veta**: customers, priorities, recurring decisions, glossary, and who is who, each line with its source meetings. A line is left out when the user can't see all of its sources |
 
-**Write tools:** `complete_task` and `prepare_agenda` change real things (a line in a Google Doc, an agenda Doc every member sees). They are annotated as non-read-only. **Don't set them to "Always allow"** in Claude; keep "Ask" so you confirm each one. The read tools can be allowed freely.
+**Write tools:** `complete_task`, `update_agent_task` and `prepare_agenda` change real things (a line in a Google Doc, an agenda Doc every member sees). They are annotated as non-read-only. **Don't set them to "Always allow"** in Claude; keep "Ask" so you confirm each one. The read tools can be allowed freely.
 
 Claude cannot change or delete notes, and it cannot see more than you can. Every call is logged with tool, ids and time, never content.
+
+## Claude, gör det här and Vad Claude ska veta
+
+Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
+
+**Agent tasks**
+- A task is Claude's when its Vem is exactly Claude, AI, AI:n or Simon Says and nobody in the org has that name or role.
+- The notes engine writes that owner only when the meeting says it explicitly ("Claude ska …").
+- The runner sees the task in Mina uppgifter as **Hos Claude**, with Claude's status and note. So does everyone who sees the meeting, on its page.
+
+**Vad Claude ska veta** (Inställningar → Vad Claude ska veta; föreningar and Företag, admins)
+- **Uppdatera** asks Claude for lines built from at most 40 of the newest meetings that **every member** can see (`org_memory_sources`).
+- Lines an admin wrote or changed are never replaced.
+- Members read the page through their Claude, with `get_org_memory`.
+- Admins can run Uppdatera once a minute. Its usage is recorded on the org, under the kill switch and the daily cap.
 
 ## Operations
 
 - **No new env.** Tools read as the user through the `mcp_*` SQL functions (service role only, explicit user, the RLS predicates). The audit is kept 90 days (daily cron `mcp_cleanup`).
-- **Migration:** `0060_mcp.sql` (tables `mcp_*`, the `mcp_*` read functions, `revoke_mcp_grant`, `mcp_rate_take`, `mcp_spend_refresh`, `mcp_cleanup`).
+- **Migrations:**
+  - `0060_mcp.sql`: tables `mcp_*`, the `mcp_*` read functions, `revoke_mcp_grant`, `mcp_rate_take`, `mcp_spend_refresh`, `mcp_cleanup`.
+  - `0065_claude_tasks_memory.sql`: tables `agent_task_status` and `org_memory`, and the functions `mcp_agent_task_status`, `mcp_set_agent_task`, `mcp_org_memory` and `org_memory_sources`. All of them are service role only.
 - **Endpoints:**
   - `/.well-known/oauth-protected-resource[/api/mcp]`
   - `/.well-known/oauth-authorization-server`
@@ -53,3 +73,4 @@ Claude cannot change or delete notes, and it cannot see more than you can. Every
 - **Tests:**
   - `lib/mcp/*.test.ts` (unit, plus the SDK client through the whole flow in-process)
   - `tests/db/mcp.test.ts` (RLS through the tools: Företag tree, removed member, revoke, audit)
+  - `tests/db/claude-tasks.test.ts` (agent tasks and memory through the tools: Företag tree, who may update, memory sources, the source filter)
