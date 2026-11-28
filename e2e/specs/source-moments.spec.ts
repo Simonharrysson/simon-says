@@ -77,6 +77,16 @@ test("▶ on a decision opens the transcript at that line, highlighted; hidden t
   await expect(page.getByRole("dialog", { name: "Sagt vid 42:52" }).locator("[data-source]")).toContainText("Jag bokar festlokalen till fredag");
   await page.keyboard.press("Escape");
 
+  // Dark: the highlighted line still reads (axe contrast), and a second open is instant (cached) and scrolled.
+  await page.emulateMedia({ colorScheme: "dark" });
+  await decisionLink.click();
+  const dark = page.getByRole("dialog", { name: "Sagt vid 42:22" });
+  await expect(dark.locator("[data-source]")).toBeInViewport();
+  await expectAccessible(page);
+  await page.keyboard.press("Escape");
+  await expect(dark).toBeHidden();
+  await page.emulateMedia({ colorScheme: "light" });
+
   // The förening stops sharing its transcript: no links at all.
   must("share off", await db.from("orgs").update({ share_transcript: false }).eq("id", org.id));
   await page.reload();

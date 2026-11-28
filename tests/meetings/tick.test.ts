@@ -510,6 +510,28 @@ describe("format layout: the render list (F2) and Claude's view of own lines (F3
     expect(without.removed.has("info-narvarande")).toBe(false); // info cells are never removed
   });
 
+  it("0068: a moment survives two renders (primary and tasks copy), reads back unlocked and carried by the items", () => {
+    const { doc, plan } = anchoredDoc(M);
+    const meeting = fmtMeeting(M, plan);
+    const items: NotesItem[] = [
+      { id: "n1", section: "action", text: "Boka sal", owner: "Anna Berg", anchor: "ag-4", sources: ["el:5:0"], saidAtMs: 2_512_000 },
+      { id: "n2", section: "decision", text: "Höstfesten blir 14 november", anchor: "ag-4", sources: ["el:4:0"], saidAtMs: 2_480_000 },
+    ];
+    let rows: NoteItemRow[] = plan.rows.map((r) => ({ ...r, meeting_id: M }));
+    for (let t = 0; t < 2; t++) {
+      const out = renderInto(doc, meeting, rows, tick.formatDesired(items, emptyDiff(rows), [], VECKOMOTE));
+      if (t === 1) expect(out.plan.requests).toEqual([]);
+      rows = out.rows;
+    }
+    const lines = linesOf(doc);
+    expect(lines.filter((l) => l.endsWith("Boka sal. (41:52)"))).toHaveLength(2); // the item and its tasks copy
+    expect(lines.some((l) => l.endsWith("Höstfesten blir 14 november. (41:20)"))).toBe(true);
+    for (const id of ["n1", "n1-t", "n2"]) expect(rows.find((r) => r.id === id)).toMatchObject({ locked: false, source_segment_ids: expect.any(Array), said_at_ms: expect.any(Number) });
+    const back = tick.readState(parseNotesTab(doc, TAB), rows);
+    expect(back.diff.locked).toEqual([]);
+    expect(back.items.find((i) => i.id === "n1")).toMatchObject({ sources: ["el:5:0"], saidAtMs: 2_512_000 });
+  });
+
   it("a server row a human edited or deleted stays theirs: only the locked version, never re-added", () => {
     const server: NotesItem[] = [{ id: "checkin-done", section: "note", text: "Må-runda genomförd.", anchor: "ag-2" }];
     const locked = { id: "checkin-done", section: "note" as const, text: "Må-runda klar" };
@@ -876,6 +898,34 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     const sum = (rows: { claude_input_tokens: number }[] | null) => (rows ?? []).reduce((s, r) => s + Number(r.claude_input_tokens), 0);
     expect(sum(after) - sum(before)).toBe(1000);
     expect(await events(id, "tick_ok")).toHaveLength(1);
+  });
+
+  it("0068: a cited moment is stored, rendered and kept across a quiet tick (v1)", async () => {
+    const { applyOps } = await import("@/lib/notes/engine");
+    const { id, sessionId } = await meeting();
+    await say(id, sessionId, "Vi bestämmer budgeten", 1000);
+    const f = fakes();
+    const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, usd: 0 };
+    let cite = true;
+    f.deps.updateNotes = async (input) => {
+      f.calls.push(input);
+      const ops = cite ? [{ op: "add" as const, item: { id: "n1", section: "decision" as const, text: "Budgeten antas" }, src: ["00:00:01"] }] : [];
+      const r = applyOps(input.items, ops, { nextId: input.nextId, sources: input.sources });
+      return { ops: r.ops, items: r.items, usage, stopReason: "end_turn", dropped: r.dropped, nextId: r.nextId, failure: null };
+    };
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.calls[0].sources?.get("00:00:01")?.length).toBe(1);
+    const row = async () =>
+      (await adminClient().from("note_items").select("locked, last_rendered_text, source_segment_ids, said_at_ms").eq("meeting_id", id).eq("id", "n1").single()).data as Partial<NoteItemRow>;
+    const first = await row();
+    expect(first).toMatchObject({ locked: false, last_rendered_text: "✓ Budgeten antas (00:01)", said_at_ms: 1000 });
+    expect(first.source_segment_ids).toEqual([`${sessionId}:${segCounter - 1}:0`]);
+    cite = false;
+    await say(id, sessionId, "Nästa punkt", 5000);
+    await backdate(id);
+    expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+    expect(f.calls[1].items.find((i) => i.id === "n1")).toMatchObject({ sources: first.source_segment_ids, saidAtMs: 1000 });
+    expect(await row()).toEqual(first);
   });
 
   it("concurrent runTick: one ok, one busy", async () => {

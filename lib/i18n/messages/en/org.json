@@ -105,7 +105,7 @@
   "removePersonText": "The name disappears from the people list. What already stands in the meeting documents doesn't change.",
   "settingsName": "Name",
   "shareTranscript": "Share the transcript in the document",
-  "shareTranscriptText": "The full transcript goes in a tab of its own in the meeting document. Turn this off if you only want to share the notes.",
+  "shareTranscriptText": "The full transcript goes in a tab of its own in the meeting document, and members can see where in the meeting each decision and task was said. Turn this off if you only want to share the notes.",
   "showOnStatus": "Show the name on the status page",
   "showOnStatusText": "The status page is public. Without the tick it only says \"an association\" when you have a meeting.",
   "saveChanges": "Save changes",

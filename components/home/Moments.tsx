@@ -22,12 +22,14 @@ interface Open {
   saidAtMs: number;
 }
 
-const Ctx = createContext<((m: Open) => void) | null>(null);
+const Ctx = createContext<((m: Open, from: HTMLElement) => void) | null>(null);
 
 export function MomentsProvider({ meetingId, children }: { meetingId: string; children: ReactNode }) {
   const [open, setOpen] = useState<Open | null>(null);
   const [shown, setShown] = useState(false);
   const cache = useRef(new Map<string, Load>());
+  // The ▶ that opened the sheet: focus goes back to it on close (there is no Dialog.Trigger).
+  const from = useRef<HTMLElement | null>(null);
   const [, rerender] = useState(0);
 
   const fetchLines = useCallback(
@@ -43,7 +45,8 @@ export function MomentsProvider({ meetingId, children }: { meetingId: string; ch
   );
 
   const show = useCallback(
-    (m: Open) => {
+    (m: Open, el: HTMLElement) => {
+      from.current = el;
       setOpen(m);
       setShown(true);
       const have = cache.current.get(m.itemId);
@@ -57,7 +60,17 @@ export function MomentsProvider({ meetingId, children }: { meetingId: string; ch
     <Ctx.Provider value={show}>
       {children}
       <DialogPrimitive.Root open={shown} onOpenChange={setShown}>
-        <TranscriptSheet open={open} load={load} onRetry={() => open && fetchLines(open.itemId)} />
+        <TranscriptSheet
+          open={open}
+          shown={shown}
+          load={load}
+          onRetry={() => open && fetchLines(open.itemId)}
+          onCloseFocus={(e) => {
+            if (!from.current?.isConnected) return;
+            e.preventDefault();
+            from.current.focus();
+          }}
+        />
       </DialogPrimitive.Root>
     </Ctx.Provider>
   );
@@ -73,7 +86,7 @@ export function MomentLink({ itemId, saidAtMs, className }: { itemId: string; sa
     <button
       type="button"
       data-moment={itemId}
-      onClick={() => show({ itemId, saidAtMs })}
+      onClick={(e) => show({ itemId, saidAtMs }, e.currentTarget)}
       aria-label={t("meeting.momentLink", { time })}
       aria-haspopup="dialog"
       className={cn(
@@ -91,17 +104,30 @@ export function MomentLink({ itemId, saidAtMs, className }: { itemId: string; sa
   );
 }
 
-function TranscriptSheet({ open, load, onRetry }: { open: Open | null; load: Load | null; onRetry: () => void }) {
+function TranscriptSheet({
+  open,
+  shown,
+  load,
+  onRetry,
+  onCloseFocus,
+}: {
+  open: Open | null;
+  shown: boolean;
+  load: Load | null;
+  onRetry: () => void;
+  onCloseFocus: (e: Event) => void;
+}) {
   const t = useTranslations("home");
   const list = useRef<HTMLOListElement>(null);
   const lines = load?.state === "ok" ? load.lines : null;
 
-  // The source line in the middle of the view once the lines are there (instant: no scroll animation).
+  // The source line in the middle of the view once the lines are there, on every open (instant: no scroll animation).
+  const itemId = open?.itemId;
   useEffect(() => {
-    if (!lines) return;
-    const first = list.current?.querySelector<HTMLElement>("[data-source]");
-    first?.scrollIntoView({ block: "center" });
-  }, [lines]);
+    if (!lines || !shown) return;
+    const frame = requestAnimationFrame(() => list.current?.querySelector<HTMLElement>("[data-source]")?.scrollIntoView({ block: "center" }));
+    return () => cancelAnimationFrame(frame);
+  }, [lines, shown, itemId]);
 
   const time = open ? formatSaidAt(open.saidAtMs) : "";
   return (
@@ -109,6 +135,7 @@ function TranscriptSheet({ open, load, onRetry }: { open: Open | null; load: Loa
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
       <DialogPrimitive.Content
         data-testid="transcript-sheet"
+        onCloseAutoFocus={onCloseFocus}
         className={cn(
           "fixed z-50 flex flex-col bg-surface text-ink shadow-lift outline-none",
           // Phone: a bottom sheet. Wide: a side sheet from the right.
@@ -123,7 +150,15 @@ function TranscriptSheet({ open, load, onRetry }: { open: Open | null; load: Loa
           <DialogPrimitive.Title className="text-lg font-semibold tabular-nums">{t("meeting.momentTitle", { time })}</DialogPrimitive.Title>
           <DialogPrimitive.Description className="text-sm text-ink-2">{t("meeting.momentNoAudio")}</DialogPrimitive.Description>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 max-[30rem]:px-1" aria-live="polite" aria-busy={load?.state === "loading"}>
+        <div
+          // Focusable, so the transcript scrolls from the keyboard too.
+          tabIndex={0}
+          role="region"
+          aria-label={t("meeting.momentTitle", { time })}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md px-3 pb-4 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink max-[30rem]:px-1"
+          aria-live="polite"
+          aria-busy={load?.state === "loading"}
+        >
           {load?.state === "error" ? (
             <div className="flex flex-col items-start gap-3 px-3 py-2">
               <p className="text-sm text-ink-2">{t("meeting.momentError")}</p>

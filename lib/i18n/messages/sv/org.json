@@ -105,7 +105,7 @@
   "removePersonText": "Namnet försvinner ur personlistan. Det som redan står i mötesdokumenten ändras inte.",
   "settingsName": "Namn",
   "shareTranscript": "Dela transkriptionen i dokumentet",
-  "shareTranscriptText": "Hela transkriptionen hamnar i en egen flik i mötesdokumentet. Stäng av om ni bara vill dela anteckningarna.",
+  "shareTranscriptText": "Hela transkriptionen hamnar i en egen flik i mötesdokumentet, och medlemmarna kan se var i mötet varje beslut och uppgift sades. Stäng av om ni bara vill dela anteckningarna.",
   "showOnStatus": "Visa namnet på statussidan",
   "showOnStatusText": "Statussidan är offentlig. Utan kryss står det bara \"en förening\" när ni har möte.",
   "saveChanges": "Spara ändringar",

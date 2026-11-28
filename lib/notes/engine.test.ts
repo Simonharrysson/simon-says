@@ -555,6 +555,31 @@ describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
   });
 });
 
+describe("source moments (0068) through updateNotes", () => {
+  const sources = () => new Map([["00:00:05", [{ key: "el-1:3:0", startMs: 5200 }]]]);
+  it("v1: a cited time becomes the item's moment; an unknown one is dropped silently", async () => {
+    const ops = [
+      { op: "add", id: "n9", section: "decision", text: "Budgeten antas", src: ["00:00:05"] },
+      { op: "add", id: "n10", section: "decision", text: "Vi byter bank", src: ["09:09:09"] },
+    ];
+    const r = await updateNotes(input({ sources: sources() }), { client: fakeClient(message({ text: JSON.stringify({ ops }) })).client });
+    expect(r.failure).toBeNull();
+    expect(r.items.find((i) => i.text === "Budgeten antas")).toMatchObject({ sources: ["el-1:3:0"], saidAtMs: 5200 });
+    expect(r.items.find((i) => i.text === "Vi byter bank")!.sources).toBeUndefined();
+  });
+
+  it("agenda: the same; a lone citation on an item that has its moment is a quiet tick, not all_dropped", async () => {
+    const add = [{ op: "add", id: "n9", kind: "task", anchor: "ag-4", text: "Boka bussen", owner: "Anna Berg", src: ["00:00:05"] }];
+    const r = await updateNotes(agendaInput({ sources: sources() }), { client: fakeClient(message({ text: JSON.stringify({ ops: add }) })).client });
+    const added = r.items.find((i) => i.text === "Boka bussen")!;
+    expect(added).toMatchObject({ sources: ["el-1:3:0"], saidAtMs: 5200 });
+    const again = [{ op: "change", id: added.id, src: ["00:00:05"] }];
+    const q = await updateNotes(agendaInput({ items: r.items, sources: sources() }), { client: fakeClient(message({ text: JSON.stringify({ ops: again }) })).client });
+    expect(q.failure).toBeNull();
+    expect(q.ops).toEqual([]);
+  });
+});
+
 describe("v1 prompt and schema stay byte-identical", () => {
   // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when);
   // agent tasks (0065) are parked, so the default prompt is the one from before 0065; re-pinned
