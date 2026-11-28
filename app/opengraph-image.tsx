@@ -74,7 +74,7 @@ export default async function OpengraphImage() {
             {line("check", d.d2)}
             {heading(d.tasks)}
             {line("box", `${d.t1Who}: ${d.t1What} (${d.t1When})`)}
-            {line("done", `${d.t2Who}: ${d.t2What} (${d.t2When}) ${d.doneMark}`)}
+            {line("done", `${d.t2Who}: ${d.t2What} (${d.t2When}) – ${d.doneMark.replace("✓", "").trim()}`)}
           </div>
           <div
             style={{
