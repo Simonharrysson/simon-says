@@ -5,6 +5,8 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enAdmin from "./en/admin.json";
+import svAdmin from "./sv/admin.json";
 import enCalendar from "./en/calendar.json";
 import enHome from "./en/home.json";
 import svHome from "./sv/home.json";
@@ -75,6 +77,7 @@ import svConnect from "./sv/connect.json";
 import svTasks from "./sv/tasks.json";
 
 export const sv = {
+  admin: svAdmin,
   calendar: svCalendar,
   home: svHome,
   privat: svPrivat,
@@ -114,6 +117,7 @@ export const sv = {
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  admin: enAdmin,
   calendar: enCalendar,
   home: enHome,
   privat: enPrivat,

@@ -15,6 +15,7 @@ import { privatLiveViews, privatViews } from "./privat-views";
 import { homeViews } from "./home-demo";
 import { treeCanvasViews } from "./tree-canvas-demo";
 import { briefViews } from "./brief-demo";
+import { adminViews } from "./admin-demo";
 
 export const designViews: DesignView[] = [
   { id: "tokens", title: "Färger och typografi", group: "Grunder" },
@@ -108,6 +109,7 @@ export const designViews: DesignView[] = [
   ...privatViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...treeCanvasViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...briefViews.map((v) => ({ ...v, group: "Sidor" as const })),
+  ...adminViews.map((v) => ({ ...v, group: "Sidor" as const })),
   ...privatLiveViews.map((v) => ({ ...v, group: "Mötet live" as const })),
   { id: "live-consent", title: "Före start · samtycke", group: "Mötet live" },
   { id: "live-consent-settings", title: "Före start · inställningar för mötet", group: "Mötet live" },
