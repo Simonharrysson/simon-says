@@ -111,6 +111,11 @@ describe("token", () => {
     expect((await revoke(new URLSearchParams({ token: t.refresh_token as string }), m.store)).status).toBe(200);
     expect(await m.store.grantForAccess(hashToken(t.access_token as string), new Date())).toBeNull();
   });
+  it("the grant records the redirect URI it was approved for (Konto names the app from it)", async () => {
+    const { exchange, codeFor, m } = await setup();
+    await exchange(await codeFor());
+    expect([...m.grants.values()].map((g) => g.redirect_uri)).toEqual([CB]);
+  });
   it("one grant per user and client on reconnect", async () => {
     const { exchange, codeFor, m } = await setup();
     await exchange(await codeFor());

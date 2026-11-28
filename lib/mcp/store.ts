@@ -37,6 +37,8 @@ export interface GrantRow {
   client_name: string;
   resource: string;
   revoked_at: string | null;
+  /** The redirect URI of the latest approval (0068): Konto names the app from it. */
+  redirect_uri?: string | null;
 }
 
 export interface AuditRow {
@@ -57,8 +59,8 @@ export interface McpStore {
   createCode(row: CodeRow): Promise<void>;
   /** Single use: the row, deleted; null when it was not there (or already taken). */
   takeCode(hash: string): Promise<CodeRow | null>;
-  /** The user's active grant for this client (reused on reconnect), else a new one. */
-  grantFor(userId: string, client: ClientRow, resource: string): Promise<string>;
+  /** The user's active grant for this client (reused on reconnect), else a new one; either way it records `redirectUri`. */
+  grantFor(userId: string, client: ClientRow, resource: string, redirectUri: string): Promise<string>;
   getGrant(id: string): Promise<GrantRow | null>;
   addTokens(grantId: string, tokens: { hash: string; kind: "access" | "refresh"; expiresAt: string }[]): Promise<void>;
   /** Spend a refresh token once: its grant, `reused` when it had been spent before; null when unknown or expired. */
@@ -125,7 +127,7 @@ export function dbStore(admin: SupabaseClient): McpStore {
       if (error) fail("code take", error);
       return ((data ?? [])[0] as CodeRow | undefined) ?? null;
     },
-    async grantFor(userId, client, resource) {
+    async grantFor(userId, client, resource, redirectUri) {
       const { data, error } = await admin
         .from("mcp_grants")
         .select("id")
@@ -135,10 +137,15 @@ export function dbStore(admin: SupabaseClient): McpStore {
         .is("revoked_at", null)
         .limit(1);
       if (error) fail("grant lookup", error);
-      if (data?.length) return data[0].id as string;
+      if (data?.length) {
+        const id = data[0].id as string;
+        const { error: e3 } = await admin.from("mcp_grants").update({ redirect_uri: redirectUri }).eq("id", id);
+        if (e3) fail("grant redirect", e3);
+        return id;
+      }
       const { data: row, error: e2 } = await admin
         .from("mcp_grants")
-        .insert({ user_id: userId, client_id: client.id, client_name: client.client_name, resource })
+        .insert({ user_id: userId, client_id: client.id, client_name: client.client_name, resource, redirect_uri: redirectUri })
         .select("id")
         .single();
       if (e2) fail("grant insert", e2);
@@ -238,10 +245,15 @@ export function memoryStore() {
     async takeCode(hash) {
       return take(codes, hash);
     },
-    async grantFor(userId, client, resource) {
-      for (const g of grants.values()) if (g.user_id === userId && g.client_id === client.id && g.resource === resource && !g.revoked_at) return g.id;
+    async grantFor(userId, client, resource, redirectUri) {
+      for (const g of grants.values()) {
+        if (g.user_id === userId && g.client_id === client.id && g.resource === resource && !g.revoked_at) {
+          g.redirect_uri = redirectUri;
+          return g.id;
+        }
+      }
       const id = `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
-      grants.set(id, { id, user_id: userId, client_id: client.id, client_name: client.client_name, resource, revoked_at: null });
+      grants.set(id, { id, user_id: userId, client_id: client.id, client_name: client.client_name, resource, revoked_at: null, redirect_uri: redirectUri });
       return id;
     },
     async getGrant(id) {

@@ -20,7 +20,7 @@ Konto → **Koppla till din AI** (`/installningar#ai`) has a tile per tool with 
 
 Not offered: Windsurf (its OAuth redirect URI is not documented, so it can't be allow-listed).
 
-**Koppla från:** Konto → **Koppla till din AI** → Koppla från. The assistant loses access on its next call. The same section lists the last 20 calls, showing tool and time only. The list names each connection by the name its client registered (with a monogram when it matches a known tool): that name is the client's own claim, so it only labels, never decides.
+**Koppla från:** Konto → **Koppla till din AI** → Koppla från. The assistant loses access on its next call. The same section lists the last 20 calls, showing tool and time only. The list names each connection's app and shows its mark from the redirect URI the grant was approved for (`mcp_grants.redirect_uri`, 0068, mapped by `redirectAudience`, the consent page's rule). A loopback URI shows as "App på din dator". The name the client registered is its own claim, so it shows only as secondary text ("Kallar sig …").
 
 ## Tools
 
@@ -61,6 +61,7 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
 - **Env:** `AGENT_TASKS_ENABLED` (default `0`): agent tasks parked. Tools read as the user through the `mcp_*` SQL functions (service role only, explicit user, the RLS predicates). The audit is kept 90 days (daily cron `mcp_cleanup`).
 - **Migrations:**
   - `0060_mcp.sql`: tables `mcp_*`, the `mcp_*` read functions, `revoke_mcp_grant`, `mcp_rate_take`, `mcp_spend_refresh`, `mcp_cleanup`.
+  - `0068_mcp_grant_redirect.sql`: `mcp_grants.redirect_uri`, the redirect URI of the grant's latest approval (readable by its user). Older grants are filled when their client registered one URI.
   - `0065_claude_tasks_memory.sql`: tables `agent_task_status` and `org_memory`, and the functions `mcp_agent_task_status`, `mcp_set_agent_task`, `mcp_org_memory` and `org_memory_sources`. All of them are service role only.
 - **Endpoints:**
   - `/.well-known/oauth-protected-resource[/api/mcp]`
@@ -79,6 +80,8 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
   | Cursor (web, cloud agents) | `https://www.cursor.com/agents/mcp/oauth/callback` | cursor.com/docs/context/mcp ("Cursor uses fixed OAuth redirect URLs") |
   | VS Code (vscode.dev, Insiders) | `https://vscode.dev/redirect`, `https://insiders.vscode.dev/redirect` | github.com/microsoft/vscode `src/vs/base/common/oauth.ts` (`fetchDynamicRegistration`) |
   | Loopback: Claude Code, Cursor desktop (`localhost:8787/callback`), VS Code desktop (`127.0.0.1/`, `127.0.0.1:33418/`), Gemini CLI (`localhost:<port>/oauth/callback`) | `http://localhost\|127.0.0.1\|[::1]:<any port>/…` | code.claude.com/docs/en/mcp, the Cursor and VS Code sources above, geminicli.com/docs/tools/mcp-server |
+
+  Cursor: its docs (cursor.com/docs/context/mcp) give `https://www.cursor.com/…` with www, and Cursor staff on the forum say the desktop app uses loopback `localhost:8787`. The no-www `https://cursor.com/agents/mcp/oauth/callback` only shows up in a user's quote of older docs, so it is not allowed.
 
   Left out (checked 2026-11-28): Windsurf (no documented redirect URI), Cursor's `cursor://anysphere.cursor-mcp/oauth/callback` (only a forum post, not Cursor's docs), and every custom scheme. The MCP endpoint's `Origin` check is unchanged (`allowedOrigin`: the app, claude.ai, claude.com). ChatGPT, Cursor, VS Code and Gemini CLI are allow-listed from their documentation and not yet tried end to end; if one of them sends an `Origin` header to `/api/mcp` it gets 403 after signing in, and that is the first thing to check. Also unverified: whether Cursor's desktop app authorizes on loopback (documented) or on its `cursor://` URI (dropped at registration), and the VS Code install link's `type: "http"` fields (the docs show only a stdio example).
 - **Cleanup (daily cron):** audit rows after 90 days, pending authorizations after 15 minutes, and registered clients that never got a grant after 24 hours.
