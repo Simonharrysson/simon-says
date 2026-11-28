@@ -18,7 +18,7 @@
       "description": "Ten minutes before a meeting in your calendar: the last meeting, the key decisions and open tasks. For customer meetings in a Company."
     },
     "meeting_invite": {
-      "label": "Invitations after meetings",
+      "label": "Notes from meetings you attended",
       "description": "When someone writes up a meeting you attended and you have no account: your tasks from the meeting and a link in. At most one reminder."
     }
   },
