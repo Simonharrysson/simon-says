@@ -33,15 +33,16 @@ export function CopyCode({ value, label, block = false }: { value: string; label
   const copied = state === "copied";
   return (
     <div className="flex flex-col gap-1">
-      {/* Narrow (a phone, the side panel): the button drops under the value instead of breaking it. */}
-      <div className="flex flex-wrap items-start justify-end gap-x-2 rounded-md bg-sunk py-1 pr-1 pl-3">
+      {/* One row: the value (one line, ellipsis when it doesn't fit; the copy is always the full value), Kopiera on the right. */}
+      <div className={cn("flex gap-2 rounded-md bg-sunk py-1 pr-1 pl-3", block ? "items-start" : "items-center")}>
         <code
           aria-label={label}
           // A block can scroll sideways: reachable by keyboard.
           tabIndex={block ? 0 : undefined}
+          title={block ? undefined : value}
           className={cn(
-            "min-w-[min(100%,42ch)] flex-1 py-2 font-mono text-xs leading-relaxed text-ink select-all",
-            block ? "min-w-0 overflow-x-auto whitespace-pre rounded-sm focus-visible:outline-2 focus-visible:outline-focus" : "wrap-anywhere",
+            "min-w-0 flex-1 py-2 font-mono text-xs leading-relaxed text-ink select-all",
+            block ? "overflow-x-auto whitespace-pre rounded-sm focus-visible:outline-2 focus-visible:outline-focus" : "truncate",
           )}
         >
           {value}
@@ -50,7 +51,7 @@ export function CopyCode({ value, label, block = false }: { value: string; label
           variant="ghost"
           size="sm"
           onClick={copy}
-          className="mt-0.5 text-ink hover:bg-surface"
+          className={cn("shrink-0 text-ink hover:bg-surface", block && "mt-0.5")}
           icon={copied ? <DrawnCheck key={round} /> : <IconCopy size={16} />}
         >
           {/* Both labels share one cell, so the button keeps its width. */}
