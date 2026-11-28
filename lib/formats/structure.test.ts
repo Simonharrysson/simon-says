@@ -154,6 +154,13 @@ describe("docStructure privacy (final review I1)", () => {
 });
 
 describe("linePrefix", () => {
+  it("0068: a line's source time (41:52) never reads as a label", () => {
+    for (const line of ["✓ Vi kör på fredag (41:52)", "Vi kör (41:52)", "Budget (1:05:10)", "Anna: Boka lokal (fredag). (41:52)"]) {
+      expect(linePrefix(line) ?? "").not.toMatch(/\d|\(/);
+    }
+    expect(linePrefix("Vi kör (41:52)")).toBeNull();
+    expect(linePrefix("Beslut: Att godkänna budgeten. (41:52)")).toBe("Beslut");
+  });
   it("keeps short labels before a colon", () => {
     expect(linePrefix("Kassör: Mejla klubben")).toBe("Kassör");
     expect(linePrefix("Beslut: Vi köper bollar.")).toBe("Beslut");

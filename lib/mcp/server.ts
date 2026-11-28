@@ -85,7 +85,7 @@ export function buildServer(ctx: Omit<ToolCtx, "ids">, audit: { store: McpStore;
     {
       title: "Get a meeting or recording",
       description:
-        "One finished meeting or Privat recording: title, date, space, attendance, decisions, tasks (owner = Vem, due = När, done_when = Klart när, done, and whether the user may complete it), its summary and the link to its Google Doc. Read-only; notes can't be edited here.",
+        "One finished meeting or Privat recording: title, date, space, attendance, decisions, tasks (owner = Vem, due = När, done_when = Klart när, done, and whether the user may complete it), its summary and the link to its Google Doc. In a förening or Företag each decision and task also says where in the meeting it was said (said_at, mm:ss from the start) with the transcript excerpt, when the user may read the transcript; otherwise both are null. Read-only; notes can't be edited here.",
       inputSchema: { meeting_id: uuid.describe("A meeting or recording id, from search_meetings or my_tasks") },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },

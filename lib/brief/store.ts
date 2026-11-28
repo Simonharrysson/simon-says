@@ -113,6 +113,8 @@ export async function loadBriefHistory(user: BriefUser, scope: BriefScope, start
       ? db.from("prepared_agendas").select("doc_id, items, meeting_time").eq("org_id", orgId).eq("meeting_date", stockholmDateTime(startsAt).date)
       : Promise.resolve({ data: [], error: null }),
   ]);
+  // 0068: the meetings whose transcript the recipient may read (their decisions show "▶ 41:52").
+  const transcriptMeetings = ids.length ? ((must("transcripts", await db.rpc("transcript_visible_ids", { p_user: user.id, p_ids: ids })) ?? []) as string[]) : [];
   const a = pickAgenda((must("agenda", agenda) ?? []) as { doc_id: string; items: unknown; meeting_time: string | null }[], stockholmDateTime(startsAt).time);
   const labels = a ? agendaLabels(a.items) : [];
   return {
@@ -120,6 +122,7 @@ export async function loadBriefHistory(user: BriefUser, scope: BriefScope, start
     rows: must("rows", rows) as HomeNoteRow[],
     people: must("people", people) as HomePerson[],
     agenda: a && labels.length ? { labels, href: docUrl(a.doc_id) } : null,
+    transcriptMeetings,
   };
 }
 

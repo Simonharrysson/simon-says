@@ -91,7 +91,7 @@ export function renderBriefText(i: BriefEmailInput): string {
   const out: string[] = [title, "", lead, ""];
   if (c.last) out.push(upper(x("emails.brief.last")), lastTitle(i), c.last.href, "");
   if (i.decisions.length) {
-    out.push(upper(x("emails.brief.decisions")), ...i.decisions.map((d) => `- ${d.text} (${x("emails.brief.from", { date: dayMonth(d.meeting.at, i.locale) })}: ${d.meeting.href})`), "");
+    out.push(upper(x("emails.brief.decisions")), ...i.decisions.map((d) => `- ${d.text}${d.saidAt ? ` ▶ ${d.saidAt}` : ""} (${x("emails.brief.from", { date: dayMonth(d.meeting.at, i.locale) })}: ${d.meeting.href})`), "");
   }
   const task = (t: BriefTask) => {
     const w = taskWords(t, i);
@@ -137,7 +137,8 @@ export function renderBriefHtml(i: BriefEmailInput): string {
       block(
         sectionTitle(x("emails.brief.decisions")) +
           list(
-            i.decisions.map((d) => `${escapeHtml(d.text)} ${grey(`&middot; ${link(d.meeting.href, dayMonth(d.meeting.at, i.locale))}`)}`),
+            // 0068: where it was said ("▶ 41:52"), next to the decision.
+            i.decisions.map((d) => `${escapeHtml(d.text)} ${grey(`${d.saidAt ? `&#9654;&nbsp;${escapeHtml(d.saidAt)} ` : ""}&middot; ${link(d.meeting.href, dayMonth(d.meeting.at, i.locale))}`)}`),
             null,
           ),
       ),

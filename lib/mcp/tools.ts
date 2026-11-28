@@ -6,6 +6,8 @@ import { localDate } from "@/lib/docs/create";
 import { getEnv } from "@/lib/env";
 import { completeNoteTask } from "@/lib/home/complete";
 import { buildOrgMeeting } from "@/lib/home/meeting";
+import { excerpt, firstSourceMs, type MomentLine } from "@/lib/meetings/moments";
+import { formatSaidAt } from "@/lib/notes/sources";
 import { myForeningTasks, myHandoffTasks, myPrivatTasks, sortTasks, visible, type HomeNoteRow, type HomeSpace } from "@/lib/home/tasks";
 import { addItem, bodyItems } from "@/lib/prepare/edit";
 import { loadDraft, savePrepared } from "@/lib/prepare/prepare";
@@ -233,7 +235,15 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
 
   const [rows, people] = await Promise.all([ctx.reader.noteItems([id]), ctx.reader.people([org.id])]);
   const sorted = [...rows].sort((a, b) => a.position - b.position);
-  const page = buildOrgMeeting({ userId: ctx.user.id, org: { id: org.id, name: org.name }, meeting: m, role: org.role, rows: sorted, people });
+  // 0068: where each decision and task was said, only when the user may read the transcript.
+  const sourced = sorted.filter((r) => !r.deleted_by_human && (r.section === "decision" || r.section === "action") && r.source_segment_ids?.length).map((r) => r.id);
+  const moments = sourced.length && ctx.reader.moments ? await ctx.reader.moments(id, sourced) : new Map<string, MomentLine[]>();
+  const page = buildOrgMeeting({ userId: ctx.user.id, org: { id: org.id, name: org.name }, meeting: m, role: org.role, rows: sorted, people, moments });
+  const said = (itemId: string) => {
+    const lines = moments.get(itemId);
+    const at = firstSourceMs(lines);
+    return at === null ? { said_at: null, excerpt: null } : { said_at: formatSaidAt(at), excerpt: lines ? excerpt(lines) : null };
+  };
   const roles = (m.agenda_roles ?? {}) as Record<string, ItemRole>;
   const attendance = sorted.filter((r) => r.section === "attendees" && visible(r, roles)).map((r) => clean(r.text));
   const other = summaryContent(sorted.filter((r) => r.section === "note"), { agendaRoles: roles });
@@ -244,7 +254,7 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
     title: page.meeting.title,
     started_at: page.meeting.startedAt,
     attendance,
-    decisions: page.decisions,
+    decisions: (page.decisionItems ?? []).map((d) => ({ text: d.text, ...said(d.itemId) })),
     tasks: page.tasks.map((t) => ({
       task_id: t.key,
       text: t.text,
@@ -255,6 +265,7 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
       done: t.done,
       mine: t.mine,
       can_complete: t.canTick,
+      ...said(t.itemId),
     })),
     summary: other.other.slice(0, MAX_SUMMARY_LINES),
     doc_url: page.docUrl,

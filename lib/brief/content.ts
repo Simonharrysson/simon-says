@@ -1,5 +1,6 @@
 import type { ItemRole } from "@/lib/db/types";
 import { isDecision } from "@/lib/meetings/summary";
+import { formatSaidAt } from "@/lib/notes/sources";
 import {
   countsMeeting,
   isMine,
@@ -44,6 +45,8 @@ export interface BriefDecision {
   key: string;
   text: string;
   meeting: BriefMeetingRef;
+  /** 0068: where in the meeting it was said ("41:52"), only when the recipient may read that transcript. */
+  saidAt?: string;
 }
 
 export interface BriefTask {
@@ -85,6 +88,8 @@ export interface BriefInput {
   /** The org's people (for "mine" and owner names). */
   people: HomePerson[];
   agenda: BriefAgenda | null;
+  /** 0068: meetings whose transcript the recipient may read; other meetings' decisions get no time. */
+  transcriptMeetings?: string[];
   /** Today in Stockholm (YYYY-MM-DD). */
   today: string;
   /** The in-app meeting page of a meeting. */
@@ -111,13 +116,19 @@ export function briefContent(input: BriefInput): BriefContent | null {
   const rows = input.rows.filter((r) => byId.has(r.meeting_id));
   const rolesOf = (meetingId: string) => (byId.get(meetingId)?.agenda_roles ?? {}) as Record<string, ItemRole>;
   const order = new Map(meetings.map((m, i) => [m.id, i]));
+  const transcripts = new Set(input.transcriptMeetings ?? []);
 
   const decisions: BriefDecision[] = rows
     .filter((r) => visible(r, rolesOf(r.meeting_id)))
     .filter((r) => isDecision({ ...r, kind: r.kind ?? null, done: r.done ?? false, copy_of: r.copy_of ?? null, carried_from_meeting: r.carried_from_meeting ?? null, carried_from_id: r.carried_from_id ?? null }))
     .sort((a, b) => order.get(a.meeting_id)! - order.get(b.meeting_id)! || a.position - b.position)
     .slice(0, DECISION_CANDIDATES)
-    .map((r, i) => ({ key: `d${i + 1}`, text: clean(r.text)!, meeting: ref(byId.get(r.meeting_id)!) }));
+    .map((r, i) => ({
+      key: `d${i + 1}`,
+      text: clean(r.text)!,
+      meeting: ref(byId.get(r.meeting_id)!),
+      ...(transcripts.has(r.meeting_id) && r.source_segment_ids?.length && typeof r.said_at_ms === "number" ? { saidAt: formatSaidAt(Number(r.said_at_ms)) } : {}),
+    }));
 
   const orgPeople = input.people.filter((p) => p.org_id === input.orgId);
   const names = new Map(orgPeople.map((p) => [p.id, p.name]));

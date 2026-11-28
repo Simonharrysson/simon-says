@@ -25,6 +25,13 @@ const input: BriefEmailInput = {
 };
 
 describe("the Inför möten e-mail", () => {
+  it("0068: the moment next to a decision, in text and HTML", () => {
+    const mail = renderBriefEmail({ ...input, decisions: [{ ...input.decisions[0], saidAt: "41:52" }] });
+    expect(mail.text).toContain("- Hackathonet blir 14 feb ▶ 41:52 (från mötet 20 november");
+    expect(mail.html).toContain("&#9654;&nbsp;41:52");
+    expect(renderBriefEmail(input).text).not.toContain("▶");
+  });
+
   it("Swedish: subject 'Inför <titel> kl 14.00', every section with its meeting, unsubscribe", () => {
     const mail = renderBriefEmail(input);
     expect(mail.subject).toBe("Inför Styrelsemöte kl 14.00");

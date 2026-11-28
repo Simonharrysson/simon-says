@@ -42,6 +42,19 @@ const base = (over: Partial<BriefInput> = {}): BriefInput => ({
 });
 
 describe("briefContent", () => {
+  it("0068: a decision's moment only for meetings whose transcript the recipient may read", () => {
+    const rows = [
+      row("m1", "d1", "decision", "Hackathonet blir 14 feb", { source_segment_ids: ["el:1:0"], said_at_ms: 2_512_000 }),
+      row("m0", "d0", "decision", "Vi byter bank", { source_segment_ids: ["el:2:0"], said_at_ms: 60_000 }),
+    ];
+    const hidden = briefContent(base({ rows }))!;
+    expect(hidden.decisions.map((d) => d.saidAt)).toEqual([undefined, undefined]);
+    const shown = briefContent(base({ rows, transcriptMeetings: ["m1"] }))!;
+    expect(shown.decisions.map((d) => d.saidAt)).toEqual(["41:52", undefined]);
+    // An old row without sources: no time, no error.
+    expect(briefContent(base({ transcriptMeetings: ["m1", "m0"] }))!.decisions.every((d) => d.saidAt === undefined)).toBe(true);
+  });
+
   it("last meeting, decisions newest first, promised vs open, mine marked", () => {
     const c = briefContent(base())!;
     expect(c.last).toEqual({ id: "m1", at: "2026-11-20T17:00:00Z", title: "Budget", href: "https://app.test/orgs/org1/mote/m1" });
