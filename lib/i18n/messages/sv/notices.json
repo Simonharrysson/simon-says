@@ -23,7 +23,7 @@
   },
   "orgs": {
     "limit": {
-      "text": "Du kan ha högst tio föreningar som du har skapat. Radera en du inte använder, eller be någon annan skapa den."
+      "text": "Du kan ha högst tio föreningar som du har skapat (företag räknas inte). Radera en du inte använder, eller be någon annan skapa den."
     },
     "cap": {
       "text": "Du har skapat många föreningar på kort tid. Mejla simon@harrysson.co om du behöver fler."

@@ -122,6 +122,7 @@
     "name": "Företagets namn",
     "namePlaceholder": "t.ex. Harrysson & Company AB",
     "create": "Skapa företag",
+    "limit": "Företag räknas inte in i gränsen på 10 föreningar du själv skapat.",
     "creating": "Skapar…",
     "rootName": "Ledning"
   },

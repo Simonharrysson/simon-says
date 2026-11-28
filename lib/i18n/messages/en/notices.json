@@ -23,7 +23,7 @@
   },
   "orgs": {
     "limit": {
-      "text": "You can have at most ten associations that you've created. Delete one you don't use, or ask someone else to create it."
+      "text": "You can have at most ten associations that you've created (companies don't count). Delete one you don't use, or ask someone else to create it."
     },
     "cap": {
       "text": "You have created many associations in a short time. E-mail simon@harrysson.co if you need more."
