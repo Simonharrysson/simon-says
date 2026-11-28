@@ -1,0 +1,11 @@
+{
+  "badge": "Hos Claude",
+  "status": {
+    "open": "Väntar",
+    "in_progress": "Pågår",
+    "blocked": "Blockerad",
+    "done": "Klar"
+  },
+  "note": "Claude: {note}",
+  "label": "Hos Claude · {status}"
+}

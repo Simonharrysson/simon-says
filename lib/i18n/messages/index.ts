@@ -5,6 +5,8 @@
 // Glossary and rules: docs/ui.md "Language".
 
 import type { Locale } from "../config";
+import enAdmin from "./en/admin.json";
+import svAdmin from "./sv/admin.json";
 import enCalendar from "./en/calendar.json";
 import enHome from "./en/home.json";
 import svHome from "./sv/home.json";
@@ -73,8 +75,13 @@ import enTasks from "./en/tasks.json";
 import enConnect from "./en/connect.json";
 import svConnect from "./sv/connect.json";
 import svTasks from "./sv/tasks.json";
+import enMemory from "./en/memory.json";
+import svMemory from "./sv/memory.json";
+import enAgent from "./en/agent.json";
+import svAgent from "./sv/agent.json";
 
 export const sv = {
+  admin: svAdmin,
   calendar: svCalendar,
   home: svHome,
   privat: svPrivat,
@@ -108,12 +115,15 @@ export const sv = {
   mailPrefs: svMailPrefs,
   notices: svNotices,
   tasks: svTasks,
+  memory: svMemory,
+  agent: svAgent,
   connect: svConnect,
 };
 
 export type Messages = typeof sv;
 
 export const en: Messages = {
+  admin: enAdmin,
   calendar: enCalendar,
   home: enHome,
   privat: enPrivat,
@@ -147,6 +157,8 @@ export const en: Messages = {
   mailPrefs: enMailPrefs,
   notices: enNotices,
   tasks: enTasks,
+  memory: enMemory,
+  agent: enAgent,
   connect: enConnect,
 };
 

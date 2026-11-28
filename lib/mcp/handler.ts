@@ -58,7 +58,7 @@ export async function handleMcp(request: Request, deps: McpDeps): Promise<Respon
   }
   deps.store.touchGrant(grant.id).catch((err) => console.error(`mcp: touch: ${(err as Error).message}`));
 
-  const server = buildServer({ reader: deps.reader(user.id), user, deps: deps.toolDeps, now }, { store: deps.store, grantId: grant.id });
+  const server = buildServer({ reader: deps.reader(user.id), user, deps: deps.toolDeps, now, origin: deps.origin }, { store: deps.store, grantId: grant.id });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   try {
     await server.connect(transport);

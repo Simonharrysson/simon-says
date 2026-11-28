@@ -1,0 +1,11 @@
+{
+  "badge": "With Claude",
+  "status": {
+    "open": "Waiting",
+    "in_progress": "In progress",
+    "blocked": "Blocked",
+    "done": "Done"
+  },
+  "note": "Claude: {note}",
+  "label": "With Claude · {status}"
+}

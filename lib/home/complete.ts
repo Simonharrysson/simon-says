@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OAuth2Client } from "google-auth-library";
+import { isAgentTask } from "@/lib/agent/tasks";
 import { propagateDone } from "@/lib/agenda/followup";
 import type { ItemRole, NoteItemRow } from "@/lib/db/types";
 import { isUuid } from "@/lib/db/ids";
@@ -14,7 +15,8 @@ import { canTick, countsMeeting, isMine, myPersonIds, visible, type HomePerson }
 
 // Ticking a task done in the app (Mina uppgifter, the meeting page). Checked as the user (their
 // own client: RLS shows only what membership allows), written by the server:
-// - a förening task: only its owner (person link or role) or an admin of the förening, only in a
+// - a förening task: only its owner (person link or role; for a task given to Claude, the meeting's
+//   runner who assigned it) or an admin of the förening, only in a
 //   finished real meeting (a live one is still written by its tick). The row and its tasks copies
 //   are marked done, the done flows back up the "Från förra veckan" chain (propagateDone), and the
 //   Doc gets "✓ klart" on every line that is still ours (human edit wins: an edited line is left
@@ -83,7 +85,9 @@ export async function completeNoteTask(
   if (!row || !isTask(chainOf(row)) || !visible(row, (meeting.agenda_roles ?? {}) as Record<string, ItemRole>)) return { ok: false, error: "not_found" };
   const orgPeople = (people ?? []) as HomePerson[];
   const mine = isMine(row, orgPeople, myPersonIds(orgPeople, meeting.org_id, userId));
-  if (!canTick({ mine, isAdmin: member.role === "admin" })) return { ok: false, error: "forbidden" };
+  // A task the meeting gave Claude (lib/agent/tasks.ts): its assigner, the meeting's runner, stands in as owner.
+  const assigner = meeting.started_by === userId && isAgentTask(row, orgPeople);
+  if (!canTick({ mine: mine || assigner, isAdmin: member.role === "admin" })) return { ok: false, error: "forbidden" };
 
   const copies = all.filter((r) => isCopy(r) && (r.copy_of ?? r.id.slice(0, -2)) === row.id);
   const admin = deps.admin();

@@ -3,9 +3,11 @@ import { hasTree } from "@/lib/foretag/tree";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ItemRole } from "@/lib/db/types";
 import { docUrl } from "@/lib/ui/meetings";
+import { readAgentStatuses } from "@/lib/agent/status";
 import {
   countsMeeting,
   meetingCounts,
+  myAgentTasks,
   myForeningTasks,
   myHandoffTasks,
   myPrivatTasks,
@@ -156,8 +158,12 @@ export async function loadHome(db: SupabaseClient, userId: string): Promise<Home
         "task_handoffs",
       )
     : [];
+  // Tasks the user's own meetings gave Claude ("Hos Claude"), with Claude's progress (0065).
+  const ran = foreningMeetings.filter((m) => m.started_by === userId).map((m) => m.id);
+  const statuses = await readAgentStatuses(db, ran);
   const tasks = sortTasks([
     ...myForeningTasks({ userId, spaces, meetings: foreningMeetings, rows, people }),
+    ...myAgentTasks({ userId, spaces, meetings: foreningMeetings, rows, people, statuses }),
     ...myHandoffTasks({ userId, spaces, handoffs, people }),
     ...privatTasks,
   ]);

@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { dueDayLabel, isOverdue, meetingDayLabel, nextDay, type MyTask } from "@/lib/home/tasks";
 import { SPRING_EXIT } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { AgentStatus } from "./AgentStatus";
 
 // The task list of Mina uppgifter. Ticking a task shows it done at once, with "Ångra" for 5
 // seconds; only then is it saved (so undo never has to take "✓ klart" back out of a Doc). A tick
@@ -410,6 +411,7 @@ function TaskRow({
             )}
           </p>
           {task.doneWhen && <p className="text-sm text-ink-2 wrap-anywhere">{t("doneWhen", { text: task.doneWhen })}</p>}
+          {task.agent && <AgentStatus agent={task.agent} />}
           <p className="text-xs text-ink-3">
             <span className="font-medium text-ink-2">{space}</span>
             {" · "}

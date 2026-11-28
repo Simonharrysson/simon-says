@@ -1,4 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { Suspense } from "react";
+import { OrgMemorySlot } from "@/components/settings/OrgMemorySlot";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ForetagView, type ForetagTab } from "@/components/foretag/ForetagView";
 import type { OrgRow } from "@/lib/db/types";
 import { CompanyDetailsForm } from "@/components/settings/OrgDetails";
@@ -33,6 +36,7 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
   const t = await getTranslations("org");
   const notice = orgNotice(fel, klart, locale);
   const isAdmin = role === "admin";
+  const tab = foretagTab(flik, isAdmin, notice?.code);
   const data = await loadForetagPage(db, org.id, userId, t("titleAnd"));
   // The Möten tab's Nästa möte card: the viewer's own running or just-ended meeting (a company runs
   // several at once), else Starta. From the meetings read above as the viewer (RLS).
@@ -57,12 +61,19 @@ export async function ForetagPage({ org, role, userId, flik, fel, klart }: { org
       org={{ id: org.id, name: org.name, logoUrl: logoUrl(org.id, org.logo_updated_at), website_url: org.website_url ?? null }}
       isAdmin={isAdmin}
       userId={userId}
-      tab={foretagTab(flik, isAdmin, notice?.code)}
+      tab={tab}
       tabHref={tabHref(org.id)}
       inviteUrl={`${appOrigin()}/join/${org.invite_code}`}
       notice={notice}
       data={data}
       hero={hero}
+      memorySettings={
+        isAdmin && tab === "installningar" ? (
+          <Suspense fallback={<Skeleton className="h-64 rounded-md" />}>
+            <OrgMemorySlot orgId={org.id} />
+          </Suspense>
+        ) : undefined
+      }
       detailsSettings={
         isAdmin ? (
           <CompanyDetailsForm

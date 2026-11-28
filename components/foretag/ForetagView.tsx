@@ -54,6 +54,8 @@ export interface ForetagViewProps {
   actions: ForetagActions;
   /** Admins, Inställningar: the logo and website editor (`CompanyDetailsForm`). */
   detailsSettings?: ReactNode;
+  /** Admins, Inställningar: "Vad Claude ska veta" (`OrgMemory`, 0065). */
+  memorySettings?: ReactNode;
   /** Möten: the Nästa möte card (the viewer's own running or just-ended meeting, else Starta). */
   hero?: { state: HeroState; meeting?: HeroMeetingInfo | null; summary?: SummaryStatus | null };
 }
@@ -231,7 +233,7 @@ function PeopleTab({ org, isAdmin, userId, data, actions }: ForetagViewProps) {
   );
 }
 
-function SettingsTab({ org, userId, inviteUrl, data, actions, detailsSettings }: ForetagViewProps) {
+function SettingsTab({ org, userId, inviteUrl, data, actions, detailsSettings, memorySettings }: ForetagViewProps) {
   const t = useTranslations("foretag.settings");
   const tp = useTranslations("foretag.people");
   const names = new Map(data.people.flatMap((p) => (p.member_user_id ? [[p.member_user_id, p.name] as const] : [])));
@@ -252,6 +254,8 @@ function SettingsTab({ org, userId, inviteUrl, data, actions, detailsSettings }:
           {detailsSettings}
         </Panel>
       )}
+
+      {memorySettings}
 
       <Panel title={t("inviteTitle")} titleId="invite-title">
         <div className="flex flex-col gap-4">

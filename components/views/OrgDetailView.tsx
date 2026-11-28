@@ -95,6 +95,8 @@ export interface OrgDetailViewProps {
   calendarSettings?: ReactNode;
   /** Inställningar → Styrelsen och medlemmar: Grupper (0054, admins), right after the board. */
   groupSettings?: ReactNode;
+  /** Admins: "Vad Claude ska veta" (`OrgMemory`, 0065), Inställningar → its own section. */
+  memorySettings?: ReactNode;
   /**
    * Link into a meeting's live page (Task 7), e.g. id => `/meetings/${id}`. Any member may
    * continue a running meeting (and one abandoned < 2 h ago) there. Hidden when absent.
