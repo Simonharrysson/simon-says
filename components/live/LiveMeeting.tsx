@@ -93,7 +93,7 @@ export interface LiveMeetingProps {
   source?: CaptureSource;
   onSourceChange?: (s: CaptureSource) => void;
   foretag?: boolean;
-  /** Consent step, a förening only: the growth loop's per-meeting toggle (0063); see ConsentStep. */
+  /** Consent step, a förening only: the growth loop's per-meeting toggle (0067); see ConsentStep. */
   inviteGuests?: { on: boolean; onChange: (on: boolean) => void };
   callSetup?: ReactNode;
   callReady?: boolean;

@@ -53,7 +53,7 @@ export async function proxy(request: NextRequest) {
   const org = orgPageId(request.nextUrl.pathname);
   if (user && org !== null && request.method === "GET" && request.headers.get("sec-fetch-dest") === "document" && !request.headers.get("rsc")) {
     let known = isUuid(org) && (await supabase.from("orgs").select("id").eq("id", org).maybeSingle()).data !== null;
-    // A guest (0063) is no member, but may see one meeting's page (RLS: guest_can_see_meeting).
+    // A guest (0067) is no member, but may see one meeting's page (RLS: guest_can_see_meeting).
     const guestMeeting = known ? null : orgMeetingId(request.nextUrl.pathname);
     if (guestMeeting && isUuid(org) && isUuid(guestMeeting)) {
       known = (await supabase.from("meetings").select("id").eq("id", guestMeeting).eq("org_id", org).maybeSingle()).data !== null;

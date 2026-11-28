@@ -1,4 +1,4 @@
--- 0063: the growth loop (docs/superpowers/specs/2026-11-27-growth-loop-design.md).
+-- 0067: the growth loop (docs/superpowers/specs/2026-11-27-growth-loop-design.md).
 --
 -- After a meeting, every attendee WITHOUT an account gets one invite mail ("Johanna bjöd in dig till
 -- …") with their own tasks and one button; at most one reminder. Attendees with an account keep the

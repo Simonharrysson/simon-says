@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { adminClient, createTestUser, hasLocalSupabase, type TestUser } from "@/test/local-supabase";
 import type { MailMessage } from "@/lib/mail";
 
-// The growth loop (0063) against the real schema, with a fake mailer (no e-mail leaves):
+// The growth loop (0067) against the real schema, with a fake mailer (no e-mail leaves):
 // the invite list replaces the summary for attendees without an account, the per-meeting guest
 // grant (RLS: only that meeting, never a private one, revocable by admins, the shared visibility
 // functions not widened), the claim (only the invited address, single use), the one reminder.
@@ -35,7 +35,7 @@ function noonStockholm(): Date {
   return d;
 }
 
-describe.skipIf(!hasLocalSupabase)("growth loop (0063)", () => {
+describe.skipIf(!hasLocalSupabase)("growth loop (0067)", () => {
   let admin: TestUser;
   let member: TestUser;
   let guest: TestUser;

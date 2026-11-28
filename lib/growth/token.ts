@@ -2,7 +2,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { getEnv } from "@/lib/env";
 
-// The invite link's token (0063): "<invite id, 32 hex><HMAC, 22 base64url>", 54 characters of
+// The invite link's token (0067): "<invite id, 32 hex><HMAC, 22 base64url>", 54 characters of
 // [0-9a-zA-Z_-] only, so it survives safeNextPath and the sign-in's `next` round trip. The HMAC
 // covers the id AND the invited address: the token is bound to that address (the claim also
 // requires a Google-confirmed sign-in with it, so a forwarded link gives nobody else access).

@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 /**
- * After "Fortsätt med Google" (0063): the sign-in returns here (next=/in/<token>/klar). The claim
+ * After "Fortsätt med Google" (0067): the sign-in returns here (next=/in/<token>/klar). The claim
  * is a side effect of this GET, a deliberate exception to "joining is a POST" (one tap for the
  * invitee): it is safe because nothing happens without a signed-in session whose CONFIRMED address
  * is the invited one (claim_meeting_invite checks it), so a prefetching scanner or a forwarded

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { MAX_INVITES, addressPaused, inviteRecipients, maskEmail, namedPeople, reminderHour, type InvitePerson } from "./recipients";
 
-// The growth loop's recipients (0063). Fictional data.
+// The growth loop's recipients (0067). Fictional data.
 
 const people: InvitePerson[] = [
   { id: "p-anna", name: "Anna Berg", email: "anna@exempel.se" },

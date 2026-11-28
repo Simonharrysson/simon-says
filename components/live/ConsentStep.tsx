@@ -114,7 +114,7 @@ export function ConsentStep({
   /** Why Start waits on the video call (default: share the tab first). */
   callHint?: string;
   /**
-   * The growth loop (0063), a förening only: "Gäster utan konto får en sammanfattning från dig",
+   * The growth loop (0067), a förening only: "Gäster utan konto får en sammanfattning från dig",
    * on by default, for this meeting. Absent: no notice (Privat, Företag, Testmöte).
    */
   inviteGuests?: { on: boolean; onChange: (on: boolean) => void };

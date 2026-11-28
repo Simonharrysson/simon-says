@@ -3,7 +3,7 @@ import { translator, type Translator } from "@/lib/i18n/translator";
 import { dayMonth, escapeHtml, genitive, weekdayDayMonth, type RenderedEmail } from "@/lib/summaries/email";
 import type { SummaryTask } from "@/lib/summaries/content";
 
-// The growth loop's invite mail (0063), and its one reminder. The mock (design A, owner-approved):
+// The growth loop's invite mail (0067), and its one reminder. The mock (design A, owner-approved):
 // ~/simon-says-private/growth-loop/. The shell is the summary mail's (lib/summaries/email.ts): one
 // white card on #fafafa, the serif wordmark, one black button. Real text, no image: the eyebrow,
 // the title, one lead line, a counts chip, the recipient's own tasks in full (Vem, När, Klart när),

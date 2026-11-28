@@ -68,7 +68,7 @@ export interface StartOptions {
    */
   calendarEventId?: string;
   /**
-   * The growth loop (0063): "Gäster utan konto får en sammanfattning från dig" at Starta. False:
+   * The growth loop (0067): "Gäster utan konto får en sammanfattning från dig" at Starta. False:
    * nobody without an account is invited after this meeting. Default (absent): on.
    */
   inviteAttendees?: boolean;
@@ -523,7 +523,7 @@ async function saveCalendarEvent(meetingId: string, event: MeetingCalendarEvent)
   const { guests, ...stored } = event;
   const { error } = await supabaseAdmin().from("meetings").update({ calendar_event: stored }).eq("id", meetingId);
   if (error) console.warn(`meetings ${meetingId}: calendar event not saved (${error.code ?? ""}): ${error.message}`);
-  // The guests outside the people list (0063): server only, never in the row members read.
+  // The guests outside the people list (0067): server only, never in the row members read.
   const rows = (guests ?? [])
     .filter((g) => g.email)
     .slice(0, 100)

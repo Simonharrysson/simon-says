@@ -6,7 +6,7 @@ import { appOrigin } from "@/lib/origin";
 export const dynamic = "force-dynamic";
 
 /**
- * The invite mail's button (0063): our own signed redirect. A GET only logs the click (mail
+ * The invite mail's button (0067): our own signed redirect. A GET only logs the click (mail
  * scanners prefetch links, so nothing is claimed here) and goes on to the landing, /in/<token>.
  * `?till=eget` (the footer's "starta ett eget möte") goes to the start page instead.
  */

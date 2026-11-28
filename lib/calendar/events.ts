@@ -138,7 +138,7 @@ export interface MeetingCalendarEvent {
   declined: string[];
   /**
    * At start only, never stored in meetings.calendar_event: guests outside the people list (with an
-   * address, not declined), written to meeting_calendar_guests (0063, server only).
+   * address, not declined), written to meeting_calendar_guests (0067, server only).
    */
   guests?: CalendarAttendee[];
 }
@@ -180,7 +180,7 @@ export function matchAttendees(
 
 /**
  * Guests the förening's people list doesn't know (the same matching as matchAttendees), with an
- * address and not declined: the growth loop's calendar-only guests (0063, meeting_calendar_guests).
+ * address and not declined: the growth loop's calendar-only guests (0067, meeting_calendar_guests).
  * Never the organiser's own row twice; one per address.
  */
 export function unmatchedGuests(attendees: CalendarAttendee[], people: MatchPerson[], memberEmails: Map<string, string>): CalendarAttendee[] {

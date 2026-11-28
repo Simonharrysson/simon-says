@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { inviteFromName, renderInviteEmail, type InviteEmailInput } from "./email";
 
-// The invite mail and its reminder (0063), as in the owner-approved mock. Fictional data.
+// The invite mail and its reminder (0067), as in the owner-approved mock. Fictional data.
 
 const base: InviteEmailInput = {
   orgName: "Sjöstadens Kanotklubb",

@@ -111,7 +111,7 @@ describe("the signed-in area", () => {
   });
 });
 
-describe("a guest's meeting page (0063)", () => {
+describe("a guest's meeting page (0067)", () => {
   const org = "1e2969d6-c2ba-435f-a1f9-56c89534609c";
   const meeting = "2e2969d6-c2ba-435f-a1f9-56c89534609c";
   it("names the meeting of /orgs/<id>/mote/<meetingId> only", () => {

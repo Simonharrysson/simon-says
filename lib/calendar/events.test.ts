@@ -153,7 +153,7 @@ describe("which calendars a förening may use", () => {
   });
 });
 
-describe("unmatchedGuests (0063)", () => {
+describe("unmatchedGuests (0067)", () => {
   it("guests the people list doesn't know: by address or exact full name, not declined, once", () => {
     const people = [
       { id: "a", name: "Anna Berg", email: "anna@exempel.se" },

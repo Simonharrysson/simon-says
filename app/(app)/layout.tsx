@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
-  // The growth loop's "came back within 7 days" (0063): only for a browser that claimed an invite.
+  // The growth loop's "came back within 7 days" (0067): only for a browser that claimed an invite.
   if ((await cookies()).has(RETURN_COOKIE)) after(() => markInviteReturn(user.id).catch(() => {}));
   // Företag (0050) is its own section, shown to a company's members and to those who may create one.
   const companyIds = await myForetagIds(supabase, user.id).catch(() => []);

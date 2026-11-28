@@ -164,7 +164,7 @@ export function LiveMeetingController(props: LiveMeetingControllerProps) {
   const [foretagChoice, setForetagChoice] = useState<ForetagChoice | null>(null);
   /** A förening with groups (0054): "Möte för" and Privat möte, sent with the agenda choice. */
   const [groupChoice, setGroupChoice] = useState<ForetagChoice | null>(null);
-  // The growth loop (0063): invite attendees without an account after this meeting (default on).
+  // The growth loop (0067): invite attendees without an account after this meeting (default on).
   const [inviteGuests, setInviteGuests] = useState(true);
   /** Remounts the AgendaStep on "new Doc", confirmed (after an agenda_* error). */
   const [agendaKey, setAgendaKey] = useState(0);

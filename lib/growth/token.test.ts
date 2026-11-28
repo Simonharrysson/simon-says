@@ -3,7 +3,7 @@ import { useTestEnv } from "@/test/env";
 import { safeNextPath } from "@/lib/next-path";
 import { checkInviteToken, inviteIdOf, inviteToken } from "./token";
 
-describe("invite tokens (0063)", () => {
+describe("invite tokens (0067)", () => {
   beforeAll(useTestEnv);
   const id = "0b1c2d3e-4f50-4617-8899-aabbccddeeff";
 

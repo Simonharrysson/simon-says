@@ -80,7 +80,7 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
           "efter-motet": summarySettings ? (
             <>
               <Panel>{summarySettings}</Panel>
-              {/* The growth loop (0063): the starter can still turn it off per meeting at Starta. */}
+              {/* The growth loop (0067): the starter can still turn it off per meeting at Starta. */}
               <Panel title={t("inviteAttendeesTitle")} titleId="invite-attendees-title">
                 <OrgFlag name="invite_attendees" id="settings-invite-attendees" title={t("inviteAttendees")}>
                   {t("inviteAttendeesText")}

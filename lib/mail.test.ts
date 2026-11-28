@@ -30,7 +30,7 @@ describe("resendMailer outcomes", () => {
   });
 });
 
-describe("withFromName (0063: \"Johanna via Simon Says\")", () => {
+describe("withFromName (0067: \"Johanna via Simon Says\")", () => {
   it("swaps the display name, keeps our address, strips header tricks", () => {
     expect(withFromName("Simon Says <noreply@harrysson.co>", "Johanna via Simon Says")).toBe('"Johanna via Simon Says" <noreply@harrysson.co>');
     expect(withFromName("noreply@harrysson.co", 'Ev"il <x@y>\r\nBcc: z')).toBe('"Evil x@yBcc: z" <noreply@harrysson.co>');

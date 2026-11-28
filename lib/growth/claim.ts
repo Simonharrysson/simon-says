@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { maskEmail } from "./recipients";
 import { checkInviteToken, inviteIdOf } from "./token";
 
-// The landing after the invite's button (0063). The token only names the invite and carries
+// The landing after the invite's button (0067). The token only names the invite and carries
 // attribution: it never grants access by itself. Access needs a Google-confirmed sign-in with the
 // invited address (claim_meeting_invite checks it in the database, in one transaction with the
 // link or the grant). A forwarded mail therefore shows the next person nothing but the förening's

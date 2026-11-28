@@ -13,7 +13,7 @@ export interface OrgFlagsOrg {
   share_transcript: boolean;
   show_on_status: boolean;
   require_task_fields?: boolean;
-  /** 0063: invite attendees without an account after a meeting (default on). */
+  /** 0067: invite attendees without an account after a meeting (default on). */
   invite_attendees?: boolean;
 }
 

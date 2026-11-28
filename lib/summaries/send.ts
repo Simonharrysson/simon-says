@@ -196,7 +196,7 @@ export async function sendMeetingSummaries(
       } else {
         recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
       }
-      // The growth loop (0063): attendees WITHOUT an account get the invite instead (queued here,
+      // The growth loop (0067): attendees WITHOUT an account get the invite instead (queued here,
       // sent right after), so the summary list loses every invited address, on every run.
       if (!isForetag && !m.private) {
         await queueMeetingInvites({
@@ -343,7 +343,7 @@ export async function trySendMeetingSummaries(
   } catch (e) {
     console.error(`summary ${meetingId}: ${(e as Error).message}`.slice(0, 300));
   }
-  // The invites it queued (0063), best effort.
+  // The invites it queued (0067), best effort.
   await trySendMeetingInvites(meetingId, deps);
   return result;
 }
@@ -373,7 +373,7 @@ export async function sendPendingSummaries(
     if (opts.left && !opts.left()) break;
     if (await trySendMeetingSummaries(r.id, deps, { deadlineAt: opts.deadlineAt })) handled++;
   }
-  // The growth loop (0063): queued invites a run missed, the one reminder, retention.
+  // The growth loop (0067): queued invites a run missed, the one reminder, retention.
   if (!opts.left || opts.left()) await sendPendingInvites(deps, { orgId: opts.orgId, left: opts.left });
   return handled;
 }

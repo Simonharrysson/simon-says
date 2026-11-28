@@ -38,7 +38,7 @@ export function OrgMeetingView({
   summary?: SummaryStatus | null;
   /** Ended a little while ago: the recap says "Mötet är avslutat". */
   justEnded?: boolean;
-  /** Admins: take a guest's access away or give it back (0063). */
+  /** Admins: take a guest's access away or give it back (0067). */
   setGuestAccess?: FormAction;
 }) {
   const t = useTranslations("home");

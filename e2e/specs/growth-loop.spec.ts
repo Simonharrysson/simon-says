@@ -4,7 +4,7 @@ import { auditBorders, formatOffenders } from "../border-audit";
 import { ADMIN_EMAIL, APP_URL } from "../env";
 import { ensureUser, expect, expectAccessible, fake, guardContext, test, type SeededOrg } from "../fixtures";
 
-// The growth loop (0063): after a meeting, attendees WITHOUT an account get the invite mail
+// The growth loop (0067): after a meeting, attendees WITHOUT an account get the invite mail
 // (their tasks, one button); the link signs them in with (fake) Google and lands them on the
 // meeting. A forwarded link gives the next person nothing; the reminder goes once.
 

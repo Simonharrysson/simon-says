@@ -4,7 +4,7 @@ import { inviteIdOf } from "@/lib/growth/token";
 
 export const dynamic = "force-dynamic";
 
-/** The landing's beacon (0063): a browser that ran our script opened the invite. 204 either way. */
+/** The landing's beacon (0067): a browser that ran our script opened the invite. 204 either way. */
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as { token?: unknown } | null;
   const token = typeof body?.token === "string" ? body.token : "";

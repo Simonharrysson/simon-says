@@ -45,7 +45,7 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
   // A video call (0058): the call tab + mic, consented to as such. Absent: the room.
   const captureSource = opt("captureSource");
   if (captureSource !== undefined && captureSource !== "room" && captureSource !== "call") return null;
-  // The growth loop (0063): the starter's "Gäster utan konto får en sammanfattning från dig" toggle.
+  // The growth loop (0067): the starter's "Gäster utan konto får en sammanfattning från dig" toggle.
   const inviteAttendees = opt("inviteAttendees");
   if (inviteAttendees !== undefined && typeof inviteAttendees !== "boolean") return null;
   const attendeeIds = opt("attendeeIds");

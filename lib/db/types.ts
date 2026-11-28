@@ -84,7 +84,7 @@ export interface OrgRow {
   instagram_url?: string | null;
   /** 0049: "Kräv vem, när och klart när" for tasks (default true). */
   require_task_fields?: boolean;
-  /** 0063: the growth loop's invite mail to attendees without an account (default on). */
+  /** 0067: the growth loop's invite mail to attendees without an account (default on). */
   invite_attendees?: boolean;
   /** 0046: the förening's meeting calendar (Google id, name as chosen, title filter); null = none. Never logged. */
   calendar_id?: string | null;

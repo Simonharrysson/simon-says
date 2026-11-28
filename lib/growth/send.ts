@@ -19,7 +19,7 @@ import { inviteFromName, renderInviteEmail } from "./email";
 import { REMINDER_AFTER_MS, REMINDER_UNTIL_MS, addressPaused, inviteRecipients, namedPeople, reminderHour } from "./recipients";
 import { inviteToken } from "./token";
 
-// The growth loop's sender (0063). Two steps, so the summary flow stays the one place that decides
+// The growth loop's sender (0067). Two steps, so the summary flow stays the one place that decides
 // who gets what after a meeting:
 // 1. queueMeetingInvites(): from sendMeetingSummaries, once it knows the meeting has notes and the
 //    förening mails at all. The invite list is computed and written as `queued` ledger rows (one

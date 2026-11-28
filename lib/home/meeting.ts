@@ -27,11 +27,11 @@ export interface OrgMeetingPage {
   isAdmin: boolean;
   docUrl: string | null;
   /**
-   * The viewer is a guest (0063): a calendar guest outside the people list who signed in through
+   * The viewer is a guest (0067): a calendar guest outside the people list who signed in through
    * their invite mail and holds a grant to THIS meeting only. Read-only; no Doc, no förening links.
    */
   guest?: boolean;
-  /** Admins only: the meeting's guest grants (0063), live or revoked, for the attendee list. */
+  /** Admins only: the meeting's guest grants (0067), live or revoked, for the attendee list. */
   guests?: MeetingGuest[];
 }
 
@@ -67,7 +67,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     rows: (rows ?? []) as HomeNoteRow[],
     people: (people ?? []) as HomePerson[],
   });
-  // Admins see the meeting's guest grants (0063) and can take them away.
+  // Admins see the meeting's guest grants (0067) and can take them away.
   let guests: MeetingGuest[] | undefined;
   if (member.role === "admin") {
     const { data: g, error: e6 } = await db.from("meeting_guests").select("user_id, email, name, revoked_at").eq("meeting_id", meetingId).order("granted_at");
@@ -83,7 +83,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
 }
 
 /**
- * A guest's view (0063): the meeting row and its notes are readable through the guest policies
+ * A guest's view (0067): the meeting row and its notes are readable through the guest policies
  * (guest_can_see_meeting: a live grant, never a private meeting); the förening's name comes with
  * the service role once that is proven. No people list: nothing is "mine", nothing to tick.
  */

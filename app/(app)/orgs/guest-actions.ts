@@ -5,7 +5,7 @@ import { isUuid } from "@/lib/db/ids";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
- * An admin takes a guest's access to one meeting away, or gives it back (0063,
+ * An admin takes a guest's access to one meeting away, or gives it back (0067,
  * set_meeting_guest_access: the database checks the admin). As the signed-in user.
  */
 export async function setGuestAccessAction(form: FormData): Promise<void> {

@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * The invite's landing (0063). Opening it never claims anything (a GET); "Fortsätt med Google"
+ * The invite's landing (0067). Opening it never claims anything (a GET); "Fortsätt med Google"
  * signs in and returns to /in/<token>/klar, which claims for the invited address only.
  */
 export default async function InviteLandingPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ fel?: string }> }) {

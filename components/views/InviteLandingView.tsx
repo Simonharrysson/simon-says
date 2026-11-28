@@ -5,7 +5,7 @@ import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
 import { GoogleSignIn } from "./GoogleButton";
 
-// The landing after the invite mail's button (/in/<token>, 0063). It shows only the förening, the
+// The landing after the invite mail's button (/in/<token>, 0067). It shows only the förening, the
 // meeting's title and the invited address masked: never tasks or decisions, so a forwarded mail's
 // link shows the next person nothing they could not read in the mail itself. Every state labelled.
 

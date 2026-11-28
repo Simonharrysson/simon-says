@@ -1,7 +1,7 @@
 import { resolveSpeaker } from "@/lib/segments/resolve";
 import type { SummarySpeaker } from "@/lib/summaries/recipients";
 
-// Who gets the growth loop's invite after a meeting (0063, docs/superpowers/specs/2026-11-27-growth-loop-design.md).
+// Who gets the growth loop's invite after a meeting (0067, docs/superpowers/specs/2026-11-27-growth-loop-design.md).
 // Pure over rows; lib/growth/send.ts reads them. Owner's rules (2026-11-27):
 // - candidates: everyone who attended. The guests of the meeting's matched calendar event who did
 //   not decline (people in the list by id, `expected`; others by address, meeting_calendar_guests)
