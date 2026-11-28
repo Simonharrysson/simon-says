@@ -70,7 +70,8 @@ test("Konto: sections start closed with a summary, open and are remembered, #ai 
   await tile("VS Code").click();
   await expect(ai.getByRole("link", { name: /Lägg till i VS Code/ })).toHaveAttribute("href", /^vscode:mcp\/install\?/);
   await tile("Claude Code").click();
-  await expect(ai.getByText(`claude mcp add --transport http simon-says ${APP_URL}/api/mcp`)).toBeVisible();
+  // The steps render once beside the tiles (1024 px and up) and once under the row (below); only one shows.
+  await expect(ai.getByText(`claude mcp add --transport http simon-says ${APP_URL}/api/mcp`).filter({ visible: true })).toBeVisible();
   await expectAccessible(page);
 
   // No double borders with every section open.
