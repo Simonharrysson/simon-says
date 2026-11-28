@@ -11,6 +11,6 @@
   "namePlaceholder": "e.g. LiU AI Society",
   "creating": "Creating…",
   "create": "Create",
-  "limit": "You can have at most 10 associations you created yourself. Joining other people's doesn't count.",
+  "limit": "You can have at most 10 associations you created yourself. Joining other people's doesn't count, and neither do companies.",
   "toYours": "Go to your associations"
 }
