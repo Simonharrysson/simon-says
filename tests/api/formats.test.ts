@@ -23,6 +23,11 @@ vi.mock("@/lib/google/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/client")>()),
   getGoogleAuth: m.getGoogleAuth,
 }));
+vi.mock("@/lib/google/drive-account", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/google/drive-account")>()),
+  // No förening Drive account here (0070): the admin's own grant, as before (lib/google/drive-account.test.ts covers the rest).
+  pickerAuth: async (userId: string) => ({ auth: await (m.getGoogleAuth as (id: string) => unknown)(userId), account: null }),
+}));
 vi.mock("@/lib/google/docs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/google/docs")>()),
   docsApi: () => ({ documents: { get: m.documentsGet } }),
