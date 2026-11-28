@@ -1,23 +1,25 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { ButtonLink, buttonVariants } from "@/components/ui/button";
-import type { FormAction } from "@/components/ui/ConfirmAction";
-import { IconArrowRight, IconCheck, IconGoogle, IconPause, IconStop } from "@/components/ui/icons";
-import { SubmitButton } from "@/components/ui/SubmitButton";
-import { cn } from "@/lib/utils";
+import { CONTACT_EMAIL, REPO_URL, TESTIMONIALS } from "@/components/landing/config";
+import { HeroDemo } from "@/components/landing/HeroDemo";
 import {
-  docAttendClass,
-  docBoxClass,
-  docCheckClass,
-  docHeadingClass,
-  docLineClass,
-  docLiveClass,
-  docNowClass,
-  docPaperClass,
-  docTitleClass,
-} from "./doc-paper";
-
-const REPO = "https://github.com/Simonharrysson/simon-says";
+  AgendaMock,
+  AssistantTiles,
+  BriefMock,
+  CallMock,
+  ChatMock,
+  MyTasksMock,
+  PrivatMock,
+  RoomMock,
+  Stage,
+  TaskMock,
+  TreeMock,
+} from "@/components/landing/mocks";
+import { StartAction } from "@/components/landing/StartAction";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import type { FormAction } from "@/components/ui/ConfirmAction";
+import { IconArrowRight, IconCheck, IconMail } from "@/components/ui/icons";
+import { cn } from "@/lib/utils";
 
 export interface LandingViewProps {
   /** Signed-in user, if any. */
@@ -25,131 +27,285 @@ export interface LandingViewProps {
   signIn: FormAction;
 }
 
-const sectionY = "py-[clamp(4rem,9vw,7.5rem)]";
-const h2Class = "max-w-[20ch] text-[clamp(1.875rem,1.3rem+2vw,2.75rem)] leading-[1.08] tracking-[-0.04em] text-balance";
-const eyebrowClass = "text-sm font-medium text-ink-3";
+/** The FAQ's questions, in order (the FAQPage JSON-LD in app/page.tsx uses the same list). */
+export const FAQ_KEYS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+
+const wrap = "mx-auto w-full max-w-page px-gutter";
+const sectionY = "py-[clamp(4.5rem,10vw,8.5rem)]";
+const h2Class = "max-w-[18ch] text-[clamp(2rem,1.25rem+3vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.035em] text-balance";
+const leadClass = "max-w-[40rem] text-lg text-ink-2 min-[48rem]:text-xl min-[48rem]:leading-[1.5]";
+const h3Class = "text-lg font-semibold tracking-[-0.015em]";
+const mailto = (subject: string) => `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}`;
 
 /**
- * The public front page: föreningar first (the hero and "före, under, efter"), Privat second, then
- * how it works, the trust points and one call to action. Mockups are drawn in HTML/CSS after the
- * real UI (no images), hidden from screen readers, with their text in the catalog.
+ * The public front page. One big idea per section, each with a picture of the real product:
+ * the live demo, then before/during/after, room or Meet, Företag, Föreningar, Privat, your AI,
+ * trust, price, questions and one last call to action. Every claim is something the app does
+ * today; the pictures use fictional names (docs/ui.md, PRODUCT.md).
  */
 export function LandingView({ user, signIn }: LandingViewProps) {
   const t = useTranslations("landing");
+  const signedIn = Boolean(user);
   return (
     <>
-      <section className="pt-[clamp(2rem,6vw,5rem)] pb-[clamp(2.5rem,5vw,4rem)]" aria-labelledby="hero-title">
-        <div className="mx-auto grid w-full max-w-page grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] items-center gap-[clamp(2rem,5vw,4.5rem)] px-gutter max-[60rem]:grid-cols-[minmax(0,1fr)]">
-          <div className="flex flex-col gap-6">
-            <p className={eyebrowClass}>{t("eyebrow")}</p>
-            <h1 id="hero-title" className="-mt-2 text-display leading-[1.05] font-semibold tracking-[-0.045em] [overflow-wrap:break-word] hyphens-manual">
-              {t("heroTitle")}
-            </h1>
-            <p className="max-w-[38rem] text-lg text-ink-2">{t("heroText")}</p>
-            <div className="flex flex-wrap gap-2 max-[30rem]:[&>*]:w-full max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
-              <PrimaryAction user={user} signIn={signIn} />
-              <a className={buttonVariants({ variant: "ghost", size: "lg" })} href="#sa-funkar-det">
-                {t("howItWorks")}
+      {/* ---------- Hero ---------- */}
+      <section className="pt-[clamp(2rem,4vw,3.5rem)] pb-[clamp(3rem,6vw,5rem)]" aria-labelledby="hero-title">
+        <div className={cn(wrap, "flex flex-col items-start gap-[clamp(1.25rem,2vw,1.5rem)]")}>
+          <h1
+            id="hero-title"
+            className="text-[clamp(2.125rem,1.1rem+4.4vw,5rem)] max-[48rem]:text-[clamp(2.125rem,1.3rem+5.2vw,2.75rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
+          >
+            {/* One sentence per line, so the line count never depends on which font has loaded (no shift on swap). */}
+            {t("heroTitle")
+              .split(/(?<=\.)\s+/)
+              .map((sentence, i) => (
+                <span key={sentence}>
+                  {i > 0 && " "}
+                  <span className="block">{sentence}</span>
+                </span>
+              ))}
+          </h1>
+          <p className="max-w-[46rem] text-lg text-ink-2 min-[48rem]:text-xl min-[48rem]:leading-[1.5]">{t("heroText")}</p>
+          <div className="flex w-full flex-col items-start gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-2 max-[30rem]:w-full max-[30rem]:flex-col max-[30rem]:items-stretch max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
+              <StartAction signedIn={signedIn} signIn={signIn} google={!signedIn} />
+              <a
+                className="press inline-flex min-h-12 items-center justify-center gap-2 rounded-md px-5 text-base font-medium text-ink-2 no-underline hover:bg-sunk hover:text-ink hover:no-underline"
+                href="#funktioner"
+              >
+                {t("seeHow")}
               </a>
             </div>
             <p className="text-sm text-ink-3">{user ? t("signedInAs", { email: user.email }) : t("freeLine")}</p>
           </div>
-
-          <BoardDemo />
+        </div>
+        <div className={cn(wrap, "mt-[clamp(2rem,3.5vw,3rem)]")}>
+          <HeroDemo />
         </div>
       </section>
 
-      <section id="foreningar" className={sectionY} aria-labelledby="org-title">
-        <div className="mx-auto w-full max-w-page px-gutter">
-          <div className="flex max-w-[40rem] flex-col gap-3">
-            <p className={eyebrowClass}>{t("orgEyebrow")}</p>
-            <h2 id="org-title" className={h2Class}>
-              {t("orgTitle")}
-            </h2>
-            <p className="text-lg text-ink-2">{t("orgText")}</p>
+      {/* ---------- Före, under och efter ---------- */}
+      <Section id="funktioner" title={t("phases.title")} lead={t("phases.text")}>
+        <PhaseStage />
+        <ol className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-x-[clamp(1.5rem,3vw,2.5rem)] gap-y-12 min-[56rem]:mt-12 min-[56rem]:grid-cols-3">
+          {(
+            [
+              ["before", <BriefMock key="b" />],
+              ["during", <TaskMock key="d" />],
+              ["after", <MyTasksMock key="a" />],
+            ] as const
+          ).map(([phase, mock]) => (
+            <li key={phase} className="flex flex-col gap-2 border-t border-ink pt-4">
+              <span className="font-mono text-sm text-ink-3 tabular-nums">{t(`phases.${phase}When`)}</span>
+              <h3 className={h3Class}>{t(`phases.${phase}Title`)}</h3>
+              <p className="text-ink-2">{t(`phases.${phase}Text`)}</p>
+              {/* On a phone each phase carries its own picture. */}
+              <Stage className="mt-4 min-[56rem]:hidden">{mock}</Stage>
+            </li>
+          ))}
+        </ol>
+      </Section>
+
+      {/* ---------- I rummet eller i Google Meet ---------- */}
+      <Section id="rum-eller-meet" title={t("where.title")} lead={t("where.text")} tinted>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-[clamp(1.5rem,3vw,2.5rem)] gap-y-12 min-[56rem]:grid-cols-2">
+          <WhereCard title={t("where.roomTitle")} text={t("where.roomText")}>
+            <RoomMock />
+          </WhereCard>
+          <WhereCard title={t("where.callTitle")} text={t("where.callText")}>
+            <CallMock />
+          </WhereCard>
+        </div>
+      </Section>
+
+      {/* ---------- Företag ---------- */}
+      <Split
+        id="foretag"
+        title={t("foretag.title")}
+        lead={t("foretag.text")}
+        picture={
+          <Stage label={t("foretag.treeLabel")}>
+            <TreeMock />
+          </Stage>
+        }
+      >
+        <Points
+          items={[
+            [t("foretag.point1Title"), t("foretag.point1Text")],
+            [t("foretag.point2Title"), t("foretag.point2Text")],
+            [t("foretag.point3Title"), t("foretag.point3Text")],
+          ]}
+        />
+        <p className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-2">
+          {t("foretag.pilot")}
+          <a href={mailto(t("pricing.mailSubject"))} className="inline-flex min-h-11 items-center gap-1 font-medium">
+            {t("foretag.contact")}
+            <IconArrowRight size={16} />
+          </a>
+        </p>
+      </Split>
+
+      {/* ---------- Föreningar ---------- */}
+      <Split
+        id="foreningar"
+        title={t("foreningar.title")}
+        lead={t("foreningar.text")}
+        reverse
+        picture={
+          <Stage>
+            <AgendaMock />
+          </Stage>
+        }
+      >
+        <Points
+          items={[
+            [t("foreningar.point1Title"), t("foreningar.point1Text")],
+            [t("foreningar.point2Title"), t("foreningar.point2Text")],
+            [t("foreningar.point3Title"), t("foreningar.point3Text")],
+          ]}
+        />
+      </Split>
+
+      {/* ---------- Privat ---------- */}
+      <Split
+        id="privat"
+        title={t("privat.title")}
+        lead={t("privat.text")}
+        picture={
+          <Stage label={t("privat.mailLabel")}>
+            <PrivatMock />
+          </Stage>
+        }
+      >
+        <ul className="flex flex-col gap-3 text-ink-2">
+          {(["point1", "point2", "point3"] as const).map((key) => (
+            <li key={key} className="flex items-center gap-3">
+              <IconCheck size={18} className="flex-none text-green" />
+              {t(`privat.${key}`)}
+            </li>
+          ))}
+        </ul>
+      </Split>
+
+      {/* ---------- Din AI ---------- */}
+      <Section id="ai" title={t("ai.title")} lead={t("ai.text")} tinted>
+        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-x-[clamp(2rem,5vw,4rem)] gap-y-10 min-[60rem]:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <Stage label={t("ai.chatLabel")} className="bg-surface dark:bg-board">
+            <ChatMock />
+          </Stage>
+          <div className="flex flex-col gap-4">
+            <AssistantTiles />
+            <p className="text-sm text-ink-3">{t("ai.how")}</p>
           </div>
-          <ol className="mt-12 grid grid-cols-3 gap-[clamp(1rem,2vw,1.5rem)] max-[56rem]:grid-cols-1">
-            <Phase title={t("beforeTitle")} text={t("beforeText")}>
-              <AgendaMock />
-            </Phase>
-            <Phase title={t("duringTitle")} text={t("duringText")}>
-              <TaskMock />
-            </Phase>
-            <Phase title={t("afterTitle")} text={t("afterText")}>
-              <MyTasksMock />
-            </Phase>
-          </ol>
         </div>
-      </section>
+      </Section>
 
-      <section id="privat" className={cn("bg-sunk", sectionY)} aria-labelledby="privat-title">
-        <div className="mx-auto grid w-full max-w-page grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-[clamp(2.5rem,6vw,5rem)] px-gutter max-[56rem]:grid-cols-1">
-          <div className="reveal flex flex-col gap-4">
-            <p className={eyebrowClass}>{t("privatEyebrow")}</p>
-            <h2 id="privat-title" className={h2Class}>
-              {t("privatTitle")}
-            </h2>
-            <p className="max-w-[36rem] text-lg text-ink-2">{t("privatText")}</p>
-            <ul className="mt-2 flex flex-col gap-2 text-ink-2">
-              {(["privatPoint1", "privatPoint2", "privatPoint3"] as const).map((key) => (
-                <li key={key} className="flex items-center gap-3">
-                  <IconCheck size={18} className="flex-none text-green" />
-                  {t(key)}
+      {/* ---------- Trygghet ---------- */}
+      <Section id="trygghet" title={t("trust.title")}>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-[clamp(2rem,6vw,6rem)] gap-y-14 min-[60rem]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+          <FounderNote />
+          <dl className="flex flex-col [&_dd]:text-ink-2 [&_dt]:font-semibold [&_dt]:tracking-[-0.01em]">
+            <Fact title={t("trust.audioTitle")}>{t("trust.audioText")}</Fact>
+            <Fact title={t("trust.docTitle")}>{t("trust.docText")}</Fact>
+            <Fact title={t("trust.aiTitle")}>{t("trust.aiText")}</Fact>
+            <Fact title={t("trust.gdprTitle")}>{t.rich("trust.gdprText", { link: (chunks) => <a href="/integritet">{chunks}</a> })}</Fact>
+            <Fact title={t("trust.openTitle")}>
+              {t.rich("trust.openText", {
+                repo: (chunks) => (
+                  <a href={REPO_URL} rel="noopener">
+                    {chunks}
+                  </a>
+                ),
+                status: (chunks) => <a href="/status">{chunks}</a>,
+              })}
+            </Fact>
+          </dl>
+        </div>
+      </Section>
+
+      {/* ---------- Från användare (hidden while TESTIMONIALS is empty; never invented) ---------- */}
+      {TESTIMONIALS.length > 0 && (
+        <Section id="omdomen" title={t("testimonials.title")}>
+          <ul className="grid grid-cols-[minmax(0,1fr)] gap-6 min-[56rem]:grid-cols-3">
+            {TESTIMONIALS.map((q) => (
+              <li key={q.name} className="flex flex-col gap-4 border-t border-ink pt-5">
+                <blockquote className="text-lg leading-snug">{q.quote}</blockquote>
+                <p className="text-sm text-ink-3">
+                  <span className="font-semibold text-ink">{q.name}</span>, {q.role}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {/* ---------- Pris ---------- */}
+      <Section id="pris" title={t("pricing.title")} lead={t("pricing.text")} tinted>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 min-[56rem]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div data-card className="flex flex-col gap-6 rounded-2xl bg-surface p-[clamp(1.5rem,3vw,2.5rem)] shadow-[0_1px_2px_rgb(0_0_0/0.05),0_16px_40px_-20px_rgb(0_0_0/0.25)]">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-base font-semibold text-ink-2">{t("pricing.betaName")}</h3>
+              <p className="text-[clamp(2.5rem,2rem+2vw,3.5rem)] leading-none font-semibold tracking-[-0.04em]">{t("pricing.betaPrice")}</p>
+              <p className="mt-2 text-ink-2">{t("pricing.betaFor")}</p>
+            </div>
+            <ul className="flex flex-col">
+              {(["betaPoint1", "betaPoint2", "betaPoint3", "betaPoint4", "betaPoint5"] as const).map((key) => (
+                <li key={key} className="flex items-start gap-3 border-t border-line py-3">
+                  <IconCheck size={18} className="mt-0.5 flex-none text-green" />
+                  {t(`pricing.${key}`)}
                 </li>
               ))}
             </ul>
+            <div className="mt-auto max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full max-[30rem]:[&_form]:w-full">
+              <StartAction signedIn={signedIn} signIn={signIn} />
+            </div>
           </div>
-          <MailMock />
+          <div className="flex flex-col gap-6 rounded-2xl bg-board p-[clamp(1.5rem,3vw,2.5rem)]">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-base font-semibold text-ink-2">{t("pricing.foretagName")}</h3>
+              <p className="text-[clamp(2rem,1.6rem+1.6vw,2.75rem)] leading-none font-semibold tracking-[-0.035em]">{t("pricing.foretagPrice")}</p>
+              <p className="mt-2 text-ink-2">{t("pricing.foretagFor")}</p>
+            </div>
+            <p className="text-ink-2">{t("pricing.foretagText")}</p>
+            <a
+              href={mailto(t("pricing.mailSubject"))}
+              className="press mt-auto inline-flex min-h-12 items-center justify-center gap-2 self-start rounded-md border border-control bg-surface px-6 text-base font-medium text-ink no-underline hover:bg-sunk hover:no-underline max-[30rem]:self-stretch"
+            >
+              <IconMail size={18} />
+              {t("pricing.foretagCta")}
+            </a>
+          </div>
         </div>
-      </section>
+      </Section>
 
-      <section id="sa-funkar-det" className={cn("scroll-mt-16", sectionY)} aria-labelledby="steps-title">
-        <div className="mx-auto w-full max-w-page px-gutter">
-          <h2 id="steps-title" className={h2Class}>
-            {t("stepsTitle")}
+      {/* ---------- FAQ ---------- */}
+      <section id="faq" className={cn("scroll-mt-16", sectionY)} aria-labelledby="faq-title">
+        <div className={cn(wrap, "grid grid-cols-[minmax(0,1fr)] gap-x-[clamp(2rem,6vw,6rem)] gap-y-8 min-[60rem]:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]")}>
+          <h2 id="faq-title" className={cn(h2Class, "min-[60rem]:sticky min-[60rem]:top-28 min-[60rem]:self-start")}>
+            {t("faq.title")}
           </h2>
-          <ol className="mt-12 grid grid-cols-3 gap-[clamp(1.5rem,3vw,2.5rem)] max-md:grid-cols-1">
-            {([1, 2, 3] as const).map((n) => (
-              <li key={n} className="reveal flex flex-col gap-2 border-t border-ink pt-4">
-                <span className="font-mono text-sm text-ink-3 tabular-nums" aria-hidden="true">
-                  0{n}
-                </span>
-                <h3 className="text-lg tracking-[-0.015em]">{t(`step${n}Title`)}</h3>
-                <p className="text-ink-2">{t(`step${n}Text`)}</p>
-              </li>
+          <Accordion type="single" collapsible className="border-t border-line">
+            {FAQ_KEYS.map((n) => (
+              <AccordionItem key={n} value={`q${n}`}>
+                <AccordionTrigger>{t(`faq.q${n}`)}</AccordionTrigger>
+                <AccordionContent>{t.rich(`faq.a${n}`, { link: (chunks) => <a href="/integritet">{chunks}</a> })}</AccordionContent>
+              </AccordionItem>
             ))}
-          </ol>
+          </Accordion>
         </div>
       </section>
 
-      <section className={cn("border-t border-line", sectionY)} aria-labelledby="trust-title">
-        <div className="mx-auto w-full max-w-page px-gutter">
-          <h2 id="trust-title" className={h2Class}>
-            {t("trustTitle")}
-          </h2>
-          <dl className="mt-12 grid grid-cols-4 gap-x-8 gap-y-10 max-[60rem]:grid-cols-2 max-[34rem]:grid-cols-1 [&_dd]:text-ink-2 [&_dt]:text-lg [&_dt]:font-semibold [&_dt]:tracking-[-0.01em]">
-            <Trust title={t("trust1Title")}>{t("trust1Text")}</Trust>
-            <Trust title={t("trust2Title")}>{t("trust2Text")}</Trust>
-            <Trust title={t("trust3Title")}>{t("trust3Text")}</Trust>
-            <Trust title={t("trust4Title")}>{t.rich("trust4Text", { link: (chunks) => <a href="/integritet">{chunks}</a> })}</Trust>
-          </dl>
-          <p className="mt-12 max-w-[48rem] text-sm text-ink-3 [&_a]:text-ink-2">
-            {t.rich("openLine", {
-              repo: (chunks) => <a href={REPO}>{chunks}</a>,
-              status: (chunks) => <a href="/status">{chunks}</a>,
-            })}
-          </p>
-        </div>
-      </section>
-
-      <section className={cn("border-t border-line", sectionY)} aria-labelledby="close-title">
-        <div className="mx-auto flex w-full max-w-page flex-col items-start gap-4 px-gutter max-[30rem]:[&_button]:w-full max-[30rem]:[&>div]:w-full max-[30rem]:[&_a]:w-full">
-          <h2 id="close-title" className="text-[clamp(2.25rem,1.5rem+3vw,3.75rem)] leading-[1.05] tracking-[-0.045em]">
-            {t("closeTitle")}
-          </h2>
-          <p className="text-lg text-ink-2">{t("closeText")}</p>
-          <div className="mt-2">
-            <PrimaryAction user={user} signIn={signIn} />
+      {/* ---------- Sista uppmaningen ---------- */}
+      <section className="pb-[clamp(3rem,8vw,6rem)]" aria-labelledby="close-title">
+        <div className={wrap}>
+          <div className="flex flex-col items-start gap-5 rounded-3xl bg-ink px-[clamp(1.5rem,6vw,5rem)] py-[clamp(3rem,8vw,6rem)] text-on-ink">
+            <h2 id="close-title" className="max-w-[16ch] text-[clamp(2.25rem,1.4rem+3.6vw,4.25rem)] leading-[1.02] font-semibold tracking-[-0.04em] text-balance">
+              {t("close.title")}
+            </h2>
+            <p className="max-w-[34rem] text-lg text-on-ink/80">{signedIn ? t("close.signedIn") : t("close.text")}</p>
+            <div className="mt-3 max-[30rem]:w-full max-[30rem]:[&_a]:w-full max-[30rem]:[&_button]:w-full">
+              <StartAction signedIn={signedIn} signIn={signIn} google={!signedIn} variant="secondary" />
+            </div>
           </div>
         </div>
       </section>
@@ -157,219 +313,118 @@ export function LandingView({ user, signIn }: LandingViewProps) {
   );
 }
 
-/** The one call to action: "Kom igång med Google", or the way in when already signed in. */
-function PrimaryAction({ user, signIn }: LandingViewProps) {
-  const t = useTranslations("landing");
-  const login = useTranslations("login");
-  if (user) {
-    return (
-      <ButtonLink href="/orgs" variant="primary" size="lg" icon={<IconArrowRight />}>
-        {t("toOrgs")}
-      </ButtonLink>
-    );
-  }
+/** A section: heading and lead over its content. `tinted` sets it on the sunk band. */
+function Section({ id, title, lead, tinted = false, children }: { id: string; title: string; lead?: string; tinted?: boolean; children: ReactNode }) {
   return (
-    <form action={signIn}>
-      <input type="hidden" name="next" value="/hem" />
-      <SubmitButton variant="primary" size="lg" icon={<IconGoogle />} pendingLabel={login("sendingToGoogle")}>
-        {t("signIn")}
-      </SubmitButton>
-    </form>
+    <section id={id} className={cn("scroll-mt-16", sectionY, tinted && "bg-sunk")} aria-labelledby={`${id}-title`}>
+      <div className={wrap}>
+        <div className="mb-[clamp(2.5rem,5vw,4rem)] flex flex-col gap-4">
+          <h2 id={`${id}-title`} className={h2Class}>
+            {title}
+          </h2>
+          {lead && <p className={leadClass}>{lead}</p>}
+        </div>
+        {children}
+      </div>
+    </section>
   );
 }
 
-function Trust({ title, children }: { title: string; children: ReactNode }) {
+/** Text on one side, the big picture on the other (`reverse` puts the picture first on wide screens). */
+function Split({ id, title, lead, picture, reverse = false, children }: { id: string; title: string; lead: string; picture: ReactNode; reverse?: boolean; children: ReactNode }) {
   return (
-    <div className="reveal flex flex-col gap-2 border-t border-rail pt-4">
+    <section id={id} className={cn("scroll-mt-16", sectionY)} aria-labelledby={`${id}-title`}>
+      <div className={cn(wrap, "grid grid-cols-[minmax(0,1fr)] items-center gap-x-[clamp(2.5rem,6vw,6rem)] gap-y-12 min-[60rem]:grid-cols-2")}>
+        <div className={cn("flex flex-col", reverse && "min-[60rem]:order-2")}>
+          <h2 id={`${id}-title`} className={h2Class}>
+            {title}
+          </h2>
+          <p className={cn(leadClass, "mt-4 mb-8")}>{lead}</p>
+          {children}
+        </div>
+        <div className={cn(reverse && "min-[60rem]:order-1")}>{picture}</div>
+      </div>
+    </section>
+  );
+}
+
+/** The room or the call: its picture on a white stage, then what to do. */
+function WhereCard({ title, text, children }: { title: string; text: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <Stage className="min-h-[19rem] bg-surface min-[56rem]:h-[21rem] dark:bg-board">{children}</Stage>
+      <div className="flex flex-col gap-2">
+        <h3 className={h3Class}>{title}</h3>
+        <p className="max-w-[34rem] text-ink-2">{text}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Three short points, divided by hairlines. */
+function Points({ items }: { items: [string, string][] }) {
+  return (
+    <ul className="flex flex-col">
+      {items.map(([title, text]) => (
+        <li key={title} className="flex flex-col gap-1 border-t border-line py-4">
+          <h3 className="font-semibold tracking-[-0.01em]">{title}</h3>
+          <p className="text-ink-2">{text}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Fact({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 border-t border-line py-5 first:border-t-0 first:pt-0">
       <dt>{title}</dt>
       <dd>{children}</dd>
     </div>
   );
 }
 
-/** One phase of a förening's week: a drawn piece of the real UI above its title and text. */
-function Phase({ title, text, children }: { title: string; text: string; children: ReactNode }) {
+/** Before, during, after on one wide stage (wide screens; phones show each with its phase). */
+function PhaseStage() {
   return (
-    <li className="reveal flex flex-col overflow-hidden rounded-lg bg-surface shadow-panel">
-      <div className="flex min-h-60 items-center justify-center border-b min-[56rem]:h-[19rem] border-line bg-board px-[clamp(1rem,3vw,1.5rem)] py-6" aria-hidden="true">
-        {children}
+    <Stage className="hidden grid-cols-3 items-start gap-[clamp(1rem,2.5vw,2rem)] min-[56rem]:grid">
+      <BriefMock />
+      <div className="w-full pt-10">
+        <TaskMock />
       </div>
-      <div className="flex flex-col gap-2 p-[clamp(1.25rem,3vw,1.75rem)]">
-        <h3 className="text-lg tracking-[-0.015em]">{title}</h3>
-        <p className="text-ink-2">{text}</p>
+      <div className="w-full pt-20">
+        <MyTasksMock />
       </div>
-    </li>
-  );
-}
-
-/** Förbered möte: the agenda Doc with last week's tasks already in it. */
-function AgendaMock() {
-  const t = useTranslations("landing");
-  return (
-    <div className={cn(docPaperClass, "w-full max-w-[20rem] -rotate-1 text-[0.8125rem]")}>
-      <p className={cn(docHeadingClass, "mt-0")}>{t("mock.agenda")}</p>
-      <ol className="mt-2 flex flex-col gap-1 [counter-reset:item] [&>li]:[counter-increment:item] [&>li]:before:mr-2 [&>li]:before:text-[#5f6368] [&>li]:before:content-[counter(item)'.']">
-        <li>{t("mock.agenda1")}</li>
-        <li>
-          {t("mock.agenda2")}
-          <span className="mt-1 ml-5 flex flex-col gap-1 text-[#3c4043]">
-            <span className="flex items-baseline gap-2">
-              <span className={docBoxClass} />
-              {t("doc.todo1")}
-            </span>
-            <span className="flex items-baseline gap-2">
-              <span className={docCheckClass}>✓</span>
-              {t("doc.todo2")}
-            </span>
-          </span>
-        </li>
-        <li>{t("mock.agenda3")}</li>
-        <li>{t("mock.agenda4")}</li>
-      </ol>
-    </div>
-  );
-}
-
-/** A task during the meeting: Vem, När, Klart när, as on the live page. */
-function TaskMock() {
-  const t = useTranslations("landing");
-  const row = (label: string, value: string) => (
-    <div className="grid grid-cols-[6rem_1fr] gap-2 border-t border-line py-2 text-sm">
-      <span className="text-ink-3">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
-  );
-  return (
-    <div className="w-full max-w-[20rem] rounded-md bg-surface p-4 shadow-lift">
-      <p className="mb-3 flex items-center gap-2 font-medium">
-        <span className="size-4 flex-none rounded-[4px] border-[1.5px] border-control" />
-        {t("mock.taskTitle")}
-      </p>
-      {row(t("mock.who"), t("mock.taskWho"))}
-      {row(t("mock.when"), t("mock.taskWhen"))}
-      {row(t("mock.doneWhen"), t("mock.taskDoneWhen"))}
-    </div>
-  );
-}
-
-/** Mina uppgifter: each person's own list after the meeting. */
-function MyTasksMock() {
-  const t = useTranslations("landing");
-  return (
-    <div className="w-full max-w-[20rem] rounded-md bg-surface p-4 shadow-lift">
-      <p className="text-sm font-semibold">{t("mock.myTasks")}</p>
-      <ul className="mt-3 flex flex-col">
-        <li className="flex items-start gap-3 border-t border-line py-2.5">
-          <span className="mt-0.5 size-4 flex-none rounded-[4px] border-[1.5px] border-control" />
-          <span className="flex flex-col">
-            <span className="text-sm font-medium">{t("mock.myTask1")}</span>
-            <span className="text-xs text-ink-3">{t("mock.myTask1Meta")}</span>
-          </span>
-        </li>
-        <li className="flex items-start gap-3 border-t border-line py-2.5">
-          <span className="mt-0.5 grid size-4 flex-none place-items-center rounded-[4px] bg-green text-on-green">
-            <IconCheck size={12} />
-          </span>
-          <span className="flex flex-col">
-            <span className="text-sm text-ink-3 line-through">{t("mock.myTask2")}</span>
-            <span className="text-xs text-ink-3">{t("mock.myTask2Meta")}</span>
-          </span>
-        </li>
-      </ul>
-    </div>
-  );
-}
-
-/** Privat: the summary e-mail after a recording, with the recording's context. */
-function MailMock() {
-  const t = useTranslations("landing");
-  return (
-    <figure className="reveal flex flex-col gap-3" aria-label={t("mock.mailLabel")}>
-      <div className="flex flex-wrap items-center gap-2 text-xs" aria-hidden="true">
-        <span className="text-ink-3">{t("mock.contexts")}</span>
-        <span className="rounded-full bg-ink px-3 py-1 font-medium text-on-ink">{t("mock.context1")}</span>
-        <span className="rounded-full bg-surface px-3 py-1 text-ink-2 shadow-panel">{t("mock.context2")}</span>
-        <span className="rounded-full bg-surface px-3 py-1 text-ink-2 shadow-panel">{t("mock.context3")}</span>
-      </div>
-      <div className="overflow-hidden rounded-lg bg-surface shadow-lift" aria-hidden="true">
-        <div className="flex items-center gap-3 border-b border-line px-5 py-4">
-          <span className="grid size-9 flex-none place-items-center rounded-full bg-ink font-logo text-xl leading-none text-on-ink">S</span>
-          <span className="flex min-w-0 flex-col">
-            <span className="text-sm font-semibold">{t("mock.mailFrom")}</span>
-            <span className="truncate text-sm text-ink-2">{t("mock.mailSubject")}</span>
-          </span>
-        </div>
-        <div className="flex flex-col gap-4 px-5 py-5 text-sm">
-          <div className="flex flex-col gap-1">
-            <p className="text-2xs font-semibold tracking-[0.06em] text-ink-3 uppercase">{t("mock.mailSummary")}</p>
-            <p className="text-ink-2">{t("mock.mailSummaryText")}</p>
-          </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-2xs font-semibold tracking-[0.06em] text-ink-3 uppercase">{t("mock.mailTasks")}</p>
-            <p className="flex items-center gap-2">
-              <span className="size-3.5 flex-none rounded-[3px] border-[1.5px] border-control" />
-              {t("mock.mailTask1")}
-            </p>
-            <p className="flex items-center gap-2">
-              <span className="size-3.5 flex-none rounded-[3px] border-[1.5px] border-control" />
-              {t("mock.mailTask2")}
-            </p>
-          </div>
-        </div>
-      </div>
-    </figure>
+    </Stage>
   );
 }
 
 /**
- * The hero's proof: a Doc pinned to the board, writing itself, and the laptop's control
- * strip under it. Synthetic example content, labelled as such. Lines reveal once, like a
- * marker stroke (clip-path), and are fully visible without motion.
+ * OWNER: Simon, edit this note (landing.json trust.founder1 / founder2). Plain first person,
+ * nothing beyond what is true. No photo yet: an initials mark stands in.
  */
-function BoardDemo() {
-  const t = useTranslations("landing");
+function FounderNote() {
+  const t = useTranslations("landing.trust");
   return (
-    <figure className="relative flex flex-col gap-4 rounded-lg bg-sunk px-[clamp(1rem,3vw,2.25rem)] pt-[clamp(1.25rem,3vw,2.25rem)] pb-4 shadow-panel" aria-label={t("demoLabel")}>
-      <div className="relative">
-        <div className={docPaperClass}>
-          <p className={docTitleClass}>{t("doc.title")}</p>
-          <p className={docLiveClass}>{t("doc.live")}</p>
-          <p className={cn(docAttendClass, "animate-write [animation-delay:0.3s] motion-reduce:animate-none")}>{t("doc.attendance")}</p>
-
-          <p className={cn(docHeadingClass, "animate-write [animation-delay:1.0s] motion-reduce:animate-none")}>{t("doc.decisions")}</p>
-          <p className={cn(docLineClass, "animate-write [animation-delay:1.4s] motion-reduce:animate-none")}>
-            <span className={docCheckClass} aria-hidden="true">
-              ✓
-            </span>
-            {t("doc.decision1")}
-          </p>
-
-          <p className={cn(docHeadingClass, "animate-write [animation-delay:2.4s] motion-reduce:animate-none")}>{t("doc.todo")}</p>
-          <p className={cn(docLineClass, "animate-write [animation-delay:2.8s] motion-reduce:animate-none")}>
-            <span className={docBoxClass} aria-hidden="true" />
-            {t("doc.todo1")}
-          </p>
-          <p className={cn(docLineClass, "animate-write [animation-delay:3.6s] motion-reduce:animate-none")}>
-            <span className={docBoxClass} aria-hidden="true" />
-            {t("doc.todo2")}
-          </p>
-
-          <p className={cn(docHeadingClass, "animate-write [animation-delay:4.6s] motion-reduce:animate-none")}>{t("doc.now")}</p>
-          <p className={cn(docLineClass, docNowClass, "animate-write [animation-delay:5.0s] motion-reduce:animate-none")}>{t("doc.now1")}</p>
-        </div>
-      </div>
-
-      <div className="mx-[clamp(0rem,4vw,2.5rem)] flex items-center gap-3 rounded-md bg-surface py-2 pr-2 pl-3 text-xs shadow-panel" aria-hidden="true">
-        <span className="inline-flex items-center gap-2 font-mono font-medium text-red tabular-nums">LIVE 42:10</span>
-        <span className="min-w-0 flex-1 truncate text-ink-3">{t("doc.partial")}</span>
-        <span className="grid size-8 place-items-center rounded-md border border-rail text-ink-2">
-          <IconPause size={16} />
+    <figure className="flex flex-col gap-6">
+      <p className="text-sm font-medium text-ink-3">{t("founderLabel")}</p>
+      <blockquote className="flex flex-col gap-4 text-[clamp(1.25rem,1.05rem+0.8vw,1.625rem)] leading-[1.4] tracking-[-0.015em] text-ink">
+        <p>{t("founder1")}</p>
+        <p>{t("founder2")}</p>
+      </blockquote>
+      <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span aria-hidden="true" className="grid size-12 flex-none place-items-center rounded-full bg-ink font-logo text-xl text-on-ink">
+          SH
         </span>
-        <span className="grid size-8 place-items-center rounded-md border border-rail text-ink-2">
-          <IconStop size={14} />
+        <span className="flex flex-col">
+          <span className="font-semibold">{t("founderName")}</span>
+          <span className="text-sm text-ink-3">{t("founderRole")}</span>
         </span>
-      </div>
-      <figcaption className="text-center text-xs text-ink-3">{t("demoCaption")}</figcaption>
+        <a href={`mailto:${CONTACT_EMAIL}`} className="inline-flex min-h-11 items-center gap-2 text-sm font-medium min-[30rem]:ml-auto">
+          <IconMail size={16} />
+          {t("founderMail")}
+        </a>
+      </figcaption>
     </figure>
   );
 }

@@ -60,3 +60,13 @@ export function softwareApplicationJsonLd(description: string): string {
   // Inside <script>: escape "<" so no string can close the tag.
   return JSON.stringify(data).replace(/</g, "\\u003c");
 }
+
+/** JSON-LD for the landing's FAQ: the questions and answers as shown (answers as plain text). */
+export function faqJsonLd(items: { question: string; answer: string }[]): string {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((i) => ({ "@type": "Question", name: i.question, acceptedAnswer: { "@type": "Answer", text: i.answer } })),
+  };
+  return JSON.stringify(data).replace(/</g, "\\u003c");
+}

@@ -293,6 +293,29 @@
   }
 }
 
+/* Landing hero demo: the mic level breathes while the example meeting runs. */
+@keyframes mic-bar {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+/* Reduced motion, also before hydration: the hero demo's whole conversation (the last line only on
+   a phone, where the captions share one slot). */
+@media (prefers-reduced-motion: reduce) {
+  [data-hero-caption] {
+    opacity: 1 !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 60rem) {
+  [data-hero-caption]:not([data-last]) {
+    opacity: 0 !important;
+  }
+}
+
 /* En-dash list markers: lists never use discs (no dots). */
 @utility list-dash {
   list-style-type: "–  ";
