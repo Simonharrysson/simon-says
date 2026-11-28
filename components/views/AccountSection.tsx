@@ -154,7 +154,7 @@ export function AccountSection({
                 "transition-opacity duration-200 ease-out group-data-[state=open]/section:opacity-0",
               )}
             >
-              {shown}
+              {typeof shown === "string" ? <span className="truncate">{shown}</span> : shown}
             </span>
           )}
           <IconChevronDown
