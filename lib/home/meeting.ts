@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ItemRole } from "@/lib/db/types";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isCopy, isDecision, isTask } from "@/lib/meetings/summary";
 import { docUrl } from "@/lib/ui/meetings";
 import { canTick, countsMeeting, isMine, myPersonIds, type HomeMeeting, type HomeNoteRow, type HomePerson, type MyTask } from "./tasks";
@@ -25,6 +26,20 @@ export interface OrgMeetingPage {
   tasks: MeetingTask[];
   isAdmin: boolean;
   docUrl: string | null;
+  /**
+   * The viewer is a guest (0063): a calendar guest outside the people list who signed in through
+   * their invite mail and holds a grant to THIS meeting only. Read-only; no Doc, no förening links.
+   */
+  guest?: boolean;
+  /** Admins only: the meeting's guest grants (0063), live or revoked, for the attendee list. */
+  guests?: MeetingGuest[];
+}
+
+export interface MeetingGuest {
+  userId: string;
+  email: string;
+  name: string | null;
+  revoked: boolean;
 }
 
 const text = (s: string | null | undefined) => (s ?? "").normalize("NFC").replace(/\s+/g, " ").trim() || null;
@@ -36,7 +51,8 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     db.from("org_members").select("role").eq("org_id", orgId).eq("user_id", userId).maybeSingle(),
   ]);
   if (e1 || e2 || e3) throw new Error(`loadOrgMeeting: ${(e1 ?? e2 ?? e3)!.message}`);
-  if (!org || org.kind === "privat" || !meeting || !member) return null;
+  if (!member) return meeting ? loadGuestMeeting(db, userId, orgId, meeting as HomeMeeting & { ended_at?: string | null }) : null;
+  if (!org || org.kind === "privat" || !meeting) return null;
   const m = meeting as HomeMeeting & { notes_tab_id?: string | null; ended_at?: string | null };
   const [{ data: rows, error: e4 }, { data: people, error: e5 }] = await Promise.all([
     db.from("note_items").select("*").eq("meeting_id", meetingId).order("position"),
@@ -51,7 +67,43 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     rows: (rows ?? []) as HomeNoteRow[],
     people: (people ?? []) as HomePerson[],
   });
-  return { ...page, org: { ...page.org, kind: org.kind as string } };
+  // Admins see the meeting's guest grants (0063) and can take them away.
+  let guests: MeetingGuest[] | undefined;
+  if (member.role === "admin") {
+    const { data: g, error: e6 } = await db.from("meeting_guests").select("user_id, email, name, revoked_at").eq("meeting_id", meetingId).order("granted_at");
+    if (e6) console.error(`loadOrgMeeting: guests: ${e6.message}`);
+    guests = ((g ?? []) as { user_id: string; email: string; name: string | null; revoked_at: string | null }[]).map((r) => ({
+      userId: r.user_id,
+      email: r.email,
+      name: r.name,
+      revoked: Boolean(r.revoked_at),
+    }));
+  }
+  return { ...page, org: { ...page.org, kind: org.kind as string }, ...(guests?.length ? { guests } : {}) };
+}
+
+/**
+ * A guest's view (0063): the meeting row and its notes are readable through the guest policies
+ * (guest_can_see_meeting: a live grant, never a private meeting); the förening's name comes with
+ * the service role once that is proven. No people list: nothing is "mine", nothing to tick.
+ */
+async function loadGuestMeeting(
+  db: SupabaseClient,
+  userId: string,
+  orgId: string,
+  meeting: HomeMeeting & { ended_at?: string | null },
+): Promise<OrgMeetingPage | null> {
+  const { data: grant, error } = await db.from("meeting_guests").select("revoked_at").eq("meeting_id", meeting.id).eq("user_id", userId).maybeSingle();
+  if (error) throw new Error(`loadOrgMeeting: guest: ${error.message}`);
+  if (!grant || (grant as { revoked_at: string | null }).revoked_at) return null;
+  const [{ data: rows, error: e1 }, { data: org, error: e2 }] = await Promise.all([
+    db.from("note_items").select("*").eq("meeting_id", meeting.id).order("position"),
+    supabaseAdmin().from("orgs").select("id, name, kind").eq("id", orgId).maybeSingle(),
+  ]);
+  if (e1 || e2) throw new Error(`loadOrgMeeting: guest: ${(e1 ?? e2)!.message}`);
+  if (!org || org.kind === "privat") return null;
+  const page = buildOrgMeeting({ userId, org: { id: org.id, name: org.name }, meeting, role: "guest", rows: (rows ?? []) as HomeNoteRow[], people: [] });
+  return { ...page, org: { ...page.org, kind: org.kind as string }, docUrl: null, guest: true, tasks: page.tasks.map((x) => ({ ...x, canTick: false })) };
 }
 
 /**

@@ -9,7 +9,7 @@
 // utan slutpass" in lib/alarm.ts and lib/meetings/tick.ts). Those go to ALARM_EMAIL, the
 // operator's env address, never to users, so there is nothing for a user to turn off.
 
-export const EMAIL_CATEGORIES = ["meeting_summary", "invite", "private_summary", "meeting_brief"] as const;
+export const EMAIL_CATEGORIES = ["meeting_summary", "invite", "private_summary", "meeting_brief", "meeting_invite"] as const;
 
 export type EmailCategory = (typeof EMAIL_CATEGORIES)[number];
 

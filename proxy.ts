@@ -52,7 +52,12 @@ export async function proxy(request: NextRequest) {
   // Documents only (a client navigation still gets the page's notFound view); RLS decides.
   const org = orgPageId(request.nextUrl.pathname);
   if (user && org !== null && request.method === "GET" && request.headers.get("sec-fetch-dest") === "document" && !request.headers.get("rsc")) {
-    const known = isUuid(org) && (await supabase.from("orgs").select("id").eq("id", org).maybeSingle()).data !== null;
+    let known = isUuid(org) && (await supabase.from("orgs").select("id").eq("id", org).maybeSingle()).data !== null;
+    // A guest (0063) is no member, but may see one meeting's page (RLS: guest_can_see_meeting).
+    const guestMeeting = known ? null : orgMeetingId(request.nextUrl.pathname);
+    if (guestMeeting && isUuid(org) && isUuid(guestMeeting)) {
+      known = (await supabase.from("meetings").select("id").eq("id", guestMeeting).eq("org_id", org).maybeSingle()).data !== null;
+    }
     if (!known) {
       const notFound = NextResponse.rewrite(new URL("/_finns-inte", request.url), { status: 404 });
       for (const cookie of response.cookies.getAll()) notFound.cookies.set(cookie);
@@ -86,6 +91,11 @@ export function privatGuardedOrgId(pathname: string): string | null {
 /** The förening id of an org page (`/orgs/<id>` and below), or null. */
 export function orgPageId(pathname: string): string | null {
   return /^\/orgs\/([^/]+)(\/|$)/.exec(pathname)?.[1] ?? null;
+}
+
+/** The meeting id of a meeting page (`/orgs/<id>/mote/<meetingId>`), or null. */
+export function orgMeetingId(pathname: string): string | null {
+  return /^\/orgs\/[^/]+\/mote\/([^/]+)\/?$/.exec(pathname)?.[1] ?? null;
 }
 
 /** The pages of app/(app) (its layout requires a user). */

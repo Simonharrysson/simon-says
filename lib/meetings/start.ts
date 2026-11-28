@@ -68,6 +68,11 @@ export interface StartOptions {
    */
   calendarEventId?: string;
   /**
+   * The growth loop (0063): "Gäster utan konto får en sammanfattning från dig" at Starta. False:
+   * nobody without an account is invited after this meeting. Default (absent): on.
+   */
+  inviteAttendees?: boolean;
+  /**
    * A Privat space only (0045): the context the recording belongs to (required there), and
    * whether to also write a Google Doc ("Skriv även i ett Google-dokument"). Without a Doc the
    * notes live in note_items only and no Google call is made.
@@ -341,6 +346,7 @@ export async function startMeeting(
       is_test: isTest,
       agenda_roles: agendaRoles,
       checkin_window: checkinWindow,
+      ...(opts.inviteAttendees === false ? { invite_attendees: false } : {}),
       ...(privat ? { context_id: privat.id } : {}),
       ...(foretag ? { group_id: foretag.groupId, private: foretag.private, context_id: foretag.customerId } : {}),
   };
@@ -514,8 +520,18 @@ export async function startMeeting(
  * attendance. Best effort: a database without 0046, or any failure, only logs.
  */
 async function saveCalendarEvent(meetingId: string, event: MeetingCalendarEvent): Promise<void> {
-  const { error } = await supabaseAdmin().from("meetings").update({ calendar_event: event }).eq("id", meetingId);
+  const { guests, ...stored } = event;
+  const { error } = await supabaseAdmin().from("meetings").update({ calendar_event: stored }).eq("id", meetingId);
   if (error) console.warn(`meetings ${meetingId}: calendar event not saved (${error.code ?? ""}): ${error.message}`);
+  // The guests outside the people list (0063): server only, never in the row members read.
+  const rows = (guests ?? [])
+    .filter((g) => g.email)
+    .slice(0, 100)
+    .map((g) => ({ meeting_id: meetingId, email: g.email!, name: g.name ? g.name.slice(0, 120) : null, response: g.response ? g.response.slice(0, 20) : null }));
+  if (rows.length) {
+    const { error: guestError } = await supabaseAdmin().from("meeting_calendar_guests").upsert(rows, { onConflict: "meeting_id,email", ignoreDuplicates: true });
+    if (guestError) console.warn(`meetings ${meetingId}: calendar guests not saved (${guestError.code ?? ""}): ${guestError.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

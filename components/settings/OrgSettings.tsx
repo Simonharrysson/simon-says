@@ -77,7 +77,17 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
               {calendarSettings && <Panel>{calendarSettings}</Panel>}
             </>
           ),
-          "efter-motet": summarySettings ? <Panel>{summarySettings}</Panel> : null,
+          "efter-motet": summarySettings ? (
+            <>
+              <Panel>{summarySettings}</Panel>
+              {/* The growth loop (0063): the starter can still turn it off per meeting at Starta. */}
+              <Panel title={t("inviteAttendeesTitle")} titleId="invite-attendees-title">
+                <OrgFlag name="invite_attendees" id="settings-invite-attendees" title={t("inviteAttendees")}>
+                  {t("inviteAttendeesText")}
+                </OrgFlag>
+              </Panel>
+            </>
+          ) : null,
           radera: (
             <Panel title={t("deleteOrgTitle")} titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
               <div className="flex flex-wrap items-center justify-between gap-4">

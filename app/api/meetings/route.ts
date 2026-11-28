@@ -45,10 +45,14 @@ function startOptions(body: Record<string, unknown>): StartOptions | null {
   // A video call (0058): the call tab + mic, consented to as such. Absent: the room.
   const captureSource = opt("captureSource");
   if (captureSource !== undefined && captureSource !== "room" && captureSource !== "call") return null;
+  // The growth loop (0063): the starter's "Gäster utan konto får en sammanfattning från dig" toggle.
+  const inviteAttendees = opt("inviteAttendees");
+  if (inviteAttendees !== undefined && typeof inviteAttendees !== "boolean") return null;
   const attendeeIds = opt("attendeeIds");
   if (attendeeIds !== undefined && (!Array.isArray(attendeeIds) || attendeeIds.length > 100 || !attendeeIds.every((a) => typeof a === "string" && isUuid(a)))) return null;
   return {
     ...(captureSource === "call" ? { captureSource: "call" as const } : {}),
+    ...(inviteAttendees === false ? { inviteAttendees: false } : {}),
     ...(attendeeIds !== undefined ? { attendeeIds: attendeeIds as string[] } : {}),
     ...(groupId !== undefined ? { groupId: groupId as string | null } : {}),
     ...(priv !== undefined ? { private: priv as boolean } : {}),

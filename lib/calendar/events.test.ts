@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  unmatchedGuests,
   cleanTitle,
   eventForNow,
   isNow,
@@ -149,5 +150,28 @@ describe("which calendars a förening may use", () => {
         { id: "c_1@group.calendar.google.com", name: "Föreningen", primary: false },
       ]).map((c) => c.id),
     ).toEqual(["c_1@group.calendar.google.com"]);
+  });
+});
+
+describe("unmatchedGuests (0063)", () => {
+  it("guests the people list doesn't know: by address or exact full name, not declined, once", () => {
+    const people = [
+      { id: "a", name: "Anna Berg", email: "anna@exempel.se" },
+      { id: "k", name: "Karin Sjö", member_user_id: "u-k" },
+    ];
+    const guests = unmatchedGuests(
+      [
+        { email: "anna@exempel.se", name: null, response: "accepted" },
+        { email: "karin.konto@exempel.se", name: null, response: null },
+        { email: "kalle@gast.se", name: "Karin Sjö", response: null },
+        { email: "oskar@gast.se", name: "Oskar Ek", response: "needsAction" },
+        { email: "oskar@gast.se", name: "Oskar", response: "accepted" },
+        { email: "nej@gast.se", name: "Nej", response: "declined" },
+        { email: null, name: "Utan adress", response: null },
+      ],
+      people,
+      new Map([["u-k", "karin.konto@exempel.se"]]),
+    );
+    expect(guests).toEqual([{ email: "oskar@gast.se", name: "Oskar Ek", response: "needsAction" }]);
   });
 });

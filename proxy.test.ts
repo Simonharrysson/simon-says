@@ -32,7 +32,7 @@ beforeAll(() => {
   });
 });
 
-const { proxy, privatGuardedOrgId, isSignedInArea } = await import("./proxy");
+const { proxy, privatGuardedOrgId, isSignedInArea, orgMeetingId } = await import("./proxy");
 
 describe("proxy", () => {
   it("refreshes an expired session and writes the new cookie httpOnly", async () => {
@@ -108,5 +108,17 @@ describe("the signed-in area", () => {
     expect(isSignedInArea("/installningar")).toBe(true);
     expect(isSignedInArea("/foretagare")).toBe(false);
     expect(isSignedInArea("/login")).toBe(false);
+  });
+});
+
+describe("a guest's meeting page (0063)", () => {
+  const org = "1e2969d6-c2ba-435f-a1f9-56c89534609c";
+  const meeting = "2e2969d6-c2ba-435f-a1f9-56c89534609c";
+  it("names the meeting of /orgs/<id>/mote/<meetingId> only", () => {
+    expect(orgMeetingId(`/orgs/${org}/mote/${meeting}`)).toBe(meeting);
+    expect(orgMeetingId(`/orgs/${org}/mote/${meeting}/`)).toBe(meeting);
+    expect(orgMeetingId(`/orgs/${org}`)).toBeNull();
+    expect(orgMeetingId(`/orgs/${org}/protokoll`)).toBeNull();
+    expect(orgMeetingId(`/orgs/${org}/mote/${meeting}/x`)).toBeNull();
   });
 });

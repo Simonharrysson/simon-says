@@ -170,5 +170,8 @@
     "dismiss": "Not now",
     "addFailed": "This person couldn't be added. Try again.",
     "added": "{count, plural, =0 {Nobody was added.} one {# person was added to the board.} other {# people were added to the board.}}"
-  }
+  },
+  "inviteAttendeesTitle": "Attendees without an account",
+  "inviteAttendees": "Send the notes to attendees without an account",
+  "inviteAttendeesText": "Those who were at the meeting or on its guest list but have no account get their own tasks by e-mail from whoever started the meeting, with a link in. At most one reminder. The starter can turn it off for one meeting."
 }

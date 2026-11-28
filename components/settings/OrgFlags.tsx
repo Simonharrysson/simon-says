@@ -13,6 +13,8 @@ export interface OrgFlagsOrg {
   share_transcript: boolean;
   show_on_status: boolean;
   require_task_fields?: boolean;
+  /** 0063: invite attendees without an account after a meeting (default on). */
+  invite_attendees?: boolean;
 }
 
 const FlagsContext = createContext<OrgFlagsOrg | null>(null);
@@ -25,7 +27,7 @@ export function OrgFlagsProvider({ org, children }: { org: OrgFlagsOrg; children
 export function OrgFlag({ name, id, title, children }: { name: OrgFlagName; id: string; title: ReactNode; children?: ReactNode }) {
   const org = useContext(FlagsContext);
   if (!org) throw new Error("OrgFlag outside OrgFlagsProvider");
-  const server = name === "require_task_fields" ? org.require_task_fields !== false : org[name];
+  const server = name === "require_task_fields" || name === "invite_attendees" ? org[name] !== false : org[name];
   const flag = useSavedValue(server, async (value) => {
     const r = await setOrgFlagAction(org.id, name, value);
     return r.ok ? null : r.message;

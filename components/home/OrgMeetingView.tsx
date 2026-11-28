@@ -2,6 +2,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { CountUp } from "@/components/motion/CountUp";
 import { Enter } from "@/components/motion/Enter";
 import { ButtonLink } from "@/components/ui/button";
+import type { FormAction } from "@/components/ui/ConfirmAction";
+import { SubmitButton } from "@/components/ui/SubmitButton";
 import { IconCheck, IconClock, IconExternal, IconUsers } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel, panelPadClass } from "@/components/ui/Panel";
@@ -26,6 +28,7 @@ export function OrgMeetingView({
   initialStates,
   summary,
   justEnded = false,
+  setGuestAccess,
 }: {
   page: OrgMeetingPage;
   today: string;
@@ -35,6 +38,8 @@ export function OrgMeetingView({
   summary?: SummaryStatus | null;
   /** Ended a little while ago: the recap says "Mötet är avslutat". */
   justEnded?: boolean;
+  /** Admins: take a guest's access away or give it back (0063). */
+  setGuestAccess?: FormAction;
 }) {
   const t = useTranslations("home");
   const locale = useLocale() === "en" ? "en" : "sv";
@@ -56,7 +61,7 @@ export function OrgMeetingView({
   return (
     <div className="mx-auto flex w-full max-w-[44rem] flex-col gap-6 px-gutter">
       <PageHeader
-        back={{ href: `/orgs/${org.id}`, label: t("meeting.back", { name: org.name }) }}
+        back={page.guest ? { href: "/hem", label: t("meeting.guestBack") } : { href: `/orgs/${org.id}`, label: t("meeting.back", { name: org.name }) }}
         title={meeting.title ?? t("meetingFallback", { day: meetingDayLabel(meeting.startedAt, locale) })}
         meta={
           <p className="text-ink-2">
@@ -71,6 +76,8 @@ export function OrgMeetingView({
           )
         }
       />
+
+      {page.guest && <p className="-mt-2 text-sm text-ink-2">{t("meeting.guestNote", { org: org.name })}</p>}
 
       <Enter>
         <Panel
@@ -109,6 +116,39 @@ export function OrgMeetingView({
               </div>
             )}
           </dl>
+          {page.guests && page.guests.length > 0 && (
+            <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4">
+              <h3 id="guests-title" className="text-sm font-semibold">
+                {t("meeting.guestsTitle")}
+              </h3>
+              <p className="text-sm text-ink-2">{t("meeting.guestsHint")}</p>
+              <ul aria-labelledby="guests-title" className="flex flex-col divide-y divide-line">
+                {page.guests.map((g) => {
+                  const name = g.name ?? g.email;
+                  return (
+                    <li key={g.userId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
+                      <span className="min-w-0 wrap-anywhere">
+                        <span className={g.revoked ? "text-ink-3 line-through" : "font-medium"}>{name}</span>
+                        {g.name && <span className="text-ink-3"> · {g.email}</span>}
+                        {g.revoked && <span className="text-ink-3"> · {t("meeting.guestRevoked")}</span>}
+                      </span>
+                      {setGuestAccess && (
+                        <form action={setGuestAccess}>
+                          <input type="hidden" name="orgId" value={org.id} />
+                          <input type="hidden" name="meetingId" value={meeting.id} />
+                          <input type="hidden" name="userId" value={g.userId} />
+                          <input type="hidden" name="on" value={g.revoked ? "1" : "0"} />
+                          <SubmitButton variant="ghost" size="sm" aria-label={t(g.revoked ? "meeting.guestRestoreLabel" : "meeting.guestRevokeLabel", { name })}>
+                            {t(g.revoked ? "meeting.guestRestore" : "meeting.guestRevoke")}
+                          </SubmitButton>
+                        </form>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {(attendees.length > 0 || mail) && (
             <div className="mt-5 flex flex-col gap-2 border-t border-line pt-4 text-sm text-ink-2">
               {attendees.length > 0 && (

@@ -14,7 +14,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type SettingResult = { ok: true } | { ok: false; message: string };
 
-const FLAGS = ["share_transcript", "show_on_status", "require_task_fields"] as const;
+const FLAGS = ["share_transcript", "show_on_status", "require_task_fields", "invite_attendees"] as const;
 export type OrgFlagName = (typeof FLAGS)[number];
 
 async function failed(): Promise<SettingResult> {

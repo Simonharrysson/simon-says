@@ -55,7 +55,8 @@ export type MeetingEventKind =
   | "checkin"
   | "summary"
   | "end_tasks"
-  | "task_setting";
+  | "task_setting"
+  | "invites";
 
 /** 0045: a förening (the default), the user's own Privat space, or (later) a company. */
 export type SpaceKind = "forening" | "privat" | "foretag";
@@ -83,6 +84,8 @@ export interface OrgRow {
   instagram_url?: string | null;
   /** 0049: "Kräv vem, när och klart när" for tasks (default true). */
   require_task_fields?: boolean;
+  /** 0063: the growth loop's invite mail to attendees without an account (default on). */
+  invite_attendees?: boolean;
   /** 0046: the förening's meeting calendar (Google id, name as chosen, title filter); null = none. Never logged. */
   calendar_id?: string | null;
   calendar_name?: string | null;

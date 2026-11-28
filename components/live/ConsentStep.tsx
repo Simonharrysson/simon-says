@@ -6,6 +6,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { Banner } from "@/components/ui/Banner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { IconChevronDown, IconMic, IconMicOff } from "@/components/ui/icons";
 import { tileClass } from "@/components/ui/tile";
 import type { CaptureSource } from "@/lib/audio/call";
@@ -71,6 +72,7 @@ export function ConsentStep({
   callSetup,
   callReady = true,
   callHint,
+  inviteGuests,
 }: {
   orgName: string;
   /** Started from a calendar event (todo #14): its title, as read on the server (Privat only; the AgendaStep line shows it otherwise). */
@@ -111,6 +113,11 @@ export function ConsentStep({
   callReady?: boolean;
   /** Why Start waits on the video call (default: share the tab first). */
   callHint?: string;
+  /**
+   * The growth loop (0063), a förening only: "Gäster utan konto får en sammanfattning från dig",
+   * on by default, for this meeting. Absent: no notice (Privat, Företag, Testmöte).
+   */
+  inviteGuests?: { on: boolean; onChange: (on: boolean) => void };
 }) {
   const t = useTranslations("live.consent");
   const tCal = useTranslations("calendar");
@@ -227,6 +234,25 @@ export function ConsentStep({
         <p id={`${id}-why`} className="-mt-3 text-center text-xs text-ink-3">
           {call && !callReady ? (callHint ?? tc("shareFirst")) : !confirmed ? t("tickFirst") : privat ? tp("contextFirst") : t("agendaFirst")}
         </p>
+      )}
+
+      {inviteGuests && (
+        <div className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-0.5 text-sm">
+          <label htmlFor={`${id}-invite`} className="cursor-pointer font-medium">
+            {t("inviteGuests")}
+          </label>
+          <Switch
+            id={`${id}-invite`}
+            className="row-span-2"
+            checked={inviteGuests.on}
+            onCheckedChange={(on) => inviteGuests.onChange(on === true)}
+            disabled={starting}
+            aria-describedby={`${id}-invite-hint`}
+          />
+          <p id={`${id}-invite-hint`} className="text-ink-2" aria-live="polite">
+            {inviteGuests.on ? t("inviteGuestsOn") : t("inviteGuestsOff")}
+          </p>
+        </div>
       )}
 
       {/* Outside the fold: a closed <details> hides its content from screen readers too. */}

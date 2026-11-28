@@ -22,6 +22,7 @@ import { hasTree } from "@/lib/foretag/tree";
 import { viewerIds } from "@/lib/db/foretag";
 import type { SummarizeFn } from "@/lib/privat/summary";
 import { presentPeople, summaryRecipients, type Recipient, type SummaryPerson, type SummarySpeaker } from "./recipients";
+import { inviteAddresses, queueMeetingInvites, sendPendingInvites, trySendMeetingInvites } from "@/lib/growth/send";
 
 // Sends a finished meeting's summary e-mails (migration 0037). Called after the end sets the
 // meeting `done` (lib/meetings/tick.ts finishMeeting) and by the 5-minute cron for whatever that
@@ -195,6 +196,21 @@ export async function sendMeetingSummaries(
       } else {
         recipients = summaryRecipients({ mode, people, members, attendance, expected: new Set(calendar?.expected ?? []) });
       }
+      // The growth loop (0063): attendees WITHOUT an account get the invite instead (queued here,
+      // sent right after), so the summary list loses every invited address, on every run.
+      if (!isForetag && !m.private) {
+        await queueMeetingInvites({
+          meeting: m,
+          org: space as { kind?: string; groups_enabled?: boolean | null },
+          mode,
+          people: must("summary: people", peopleRows) as SummaryPerson[],
+          speakers: must("summary: speakers", speakers) as SummarySpeaker[],
+          expected: calendar?.expected ?? [],
+          members,
+        });
+        const invited = await inviteAddresses(m.id);
+        if (invited.size) recipients = recipients.filter((r) => !invited.has(r.email.trim().toLowerCase()));
+      }
       state = recipients.length ? "sending" : mode === "missed" && !attendance.certain ? "uncertain" : "none";
     }
   }
@@ -321,12 +337,15 @@ export async function trySendMeetingSummaries(
   deps: SummaryDeps,
   opts: { deadlineAt?: Date } = {},
 ): Promise<SummaryResult | null> {
+  let result: SummaryResult | null = null;
   try {
-    return await sendMeetingSummaries(meetingId, deps, opts);
+    result = await sendMeetingSummaries(meetingId, deps, opts);
   } catch (e) {
     console.error(`summary ${meetingId}: ${(e as Error).message}`.slice(0, 300));
-    return null;
   }
+  // The invites it queued (0063), best effort.
+  await trySendMeetingInvites(meetingId, deps);
+  return result;
 }
 
 /**
@@ -354,6 +373,8 @@ export async function sendPendingSummaries(
     if (opts.left && !opts.left()) break;
     if (await trySendMeetingSummaries(r.id, deps, { deadlineAt: opts.deadlineAt })) handled++;
   }
+  // The growth loop (0063): queued invites a run missed, the one reminder, retention.
+  if (!opts.left || opts.left()) await sendPendingInvites(deps, { orgId: opts.orgId, left: opts.left });
   return handled;
 }
 
