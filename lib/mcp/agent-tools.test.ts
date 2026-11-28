@@ -81,6 +81,11 @@ describe("list_agent_tasks", () => {
     expect(JSON.stringify(r)).not.toContain("Raderad hemlighet");
     expect(JSON.stringify(r)).not.toContain("Boka lokal");
   });
+  it("by default only the user's own (meetings they ran); include_others for the rest they see", async () => {
+    const { c } = ctx({ startedBy: "u2" });
+    expect(((await listAgentTasks(c, {})) as { data: { tasks: unknown[] } }).data.tasks).toEqual([]);
+    expect(((await listAgentTasks(c, { include_others: true })) as { data: { tasks: { can_update: boolean }[] } }).data.tasks).toMatchObject([{ can_update: false }]);
+  });
   it("filters by status (done ones only on request)", async () => {
     const { c } = ctx({ reader: { agentStatuses: async () => [{ meeting_id: M, item_id: "n1", status: "blocked", note: "Saknar priset", updated_at: "x" }] } });
     expect(((await listAgentTasks(c, { status: "blocked" })) as { data: { tasks: unknown[] } }).data.tasks).toHaveLength(1);

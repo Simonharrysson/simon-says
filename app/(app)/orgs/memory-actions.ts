@@ -31,7 +31,7 @@ export async function saveMemoryAction(orgId: string, edits: EditedLine[]): Prom
   const t = await getTranslations("memory");
   const a = await adminOf(orgId);
   if (!a || !Array.isArray(edits)) return { ok: false, message: t("saveFailed") };
-  if (!(await saveMemoryEdits(a.db, orgId, a.user.id, edits))) return { ok: false, message: t("saveFailed") };
+  if (!(await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits))) return { ok: false, message: t("saveFailed") };
   revalidatePath(`/orgs/${orgId}`);
   return { ok: true, message: t("saved") };
 }
@@ -44,7 +44,7 @@ export async function refreshMemoryAction(orgId: string): Promise<MemoryActionRe
     console.error(`memory refresh: ${(err as Error).message}`);
     return { ok: false as const, reason: "failed" as const };
   });
-  if (!result.ok) return { ok: false, message: t(`refreshReason.${result.reason}`) };
+  if (!result.ok) return { ok: false, message: result.reason === "forbidden" ? t("refreshFailed") : t(`refreshReason.${result.reason}`) };
   revalidatePath(`/orgs/${orgId}`);
   return { ok: true, message: t("refreshed", { lines: result.lines, meetings: result.meetings }) };
 }

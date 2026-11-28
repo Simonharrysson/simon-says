@@ -3,7 +3,8 @@
 --
 -- * agent_task_status: progress Claude reports on a task the meeting gave it (no row: open). Read by
 --   whoever sees the meeting (the note_items predicate); written only through mcp_set_agent_task.
--- * org_memory: one admin-curated page per org; members read it, admins write it.
+-- * org_memory: one admin-curated page per org; members read it. Written only by the server after
+--   its admin check (service role), so no client sets sources, `edited` or the cooldown by hand.
 -- * The mcp_* functions act as p_user (mcp_act_as, 0060) and ask the existing predicates; nothing
 --   here restates the Företag tree. org_memory_sources asks foretag_can_see for every member.
 
@@ -27,7 +28,7 @@ create policy agent_task_status_select on public.agent_task_status for select to
 create table public.org_memory (
   org_id uuid primary key references public.orgs (id) on delete cascade,
   -- [{id, section, text, sources: [meeting uuid], edited}], checked by the app (lib/memory).
-  lines jsonb not null default '[]'::jsonb check (jsonb_typeof(lines) = 'array' and jsonb_array_length(lines) <= 200),
+  lines jsonb not null default '[]'::jsonb check (jsonb_typeof(lines) = 'array' and jsonb_array_length(lines) <= 200 and pg_column_size(lines) <= 200000),
   generated_at timestamptz,
   sources_from timestamptz,
   sources_count int not null default 0,
@@ -37,14 +38,10 @@ create table public.org_memory (
 
 alter table public.org_memory enable row level security;
 revoke all on table public.org_memory from anon, authenticated;
-grant select, insert, update on table public.org_memory to authenticated;
+grant select on table public.org_memory to authenticated;
 grant select, insert, update, delete on table public.org_memory to service_role;
 create policy org_memory_select on public.org_memory for select to authenticated
   using (public.is_org_member(org_id));
-create policy org_memory_insert on public.org_memory for insert to authenticated
-  with check (public.is_org_admin(org_id) and not exists (select 1 from public.orgs o where o.id = org_id and o.kind = 'privat'));
-create policy org_memory_update on public.org_memory for update to authenticated
-  using (public.is_org_admin(org_id)) with check (public.is_org_admin(org_id));
 
 -- ---------------------------------------------------------------------------------------------
 -- Reads and writes as a user (service role only).

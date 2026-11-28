@@ -21,7 +21,7 @@ The notes engine gets one sentence in both system prompts (plain and agenda mode
 **MCP tools**
 | Tool | Does |
 | --- | --- |
-| `list_agent_tasks(status?: open\|in_progress\|blocked\|done\|all, cursor?, limit?)` | Agent tasks in meetings the user can see (`taskTips`, so carried copies show once; `visible()`). Default `open` means not done. Each one is a **brief**: `task_id`, task, Klart när, due, status and note, the meeting (title, date, space), that meeting's decisions and Övrigt lines (`buildOrgMeeting` + `summaryContent`, capped; never the transcript), the meeting page URL and the Doc URL, and `can_update`. |
+| `list_agent_tasks(status?: open\|in_progress\|blocked\|done\|all, include_others?, cursor?, limit?)` | Agent tasks in meetings the user can see. **[choice, security review]** By default only the ones the user may update (they ran the meeting, or they're an admin), because a line anyone says in a meeting is no assignment from this user; `include_others` lists the rest read-only. The tool and server instructions tell Claude to confirm with the user before acting (`taskTips`, so carried copies show once; `visible()`). Default `open` means not done. Each one is a **brief**: `task_id`, task, Klart när, due, status and note, the meeting (title, date, space), that meeting's decisions and Övrigt lines (`buildOrgMeeting` + `summaryContent`, capped; never the transcript), the meeting page URL and the Doc URL, and `can_update`. |
 | `update_agent_task(task_id, status, note?)` | `mcp_set_agent_task` (acting as the user: `is_meeting_member`, plus assigner or admin). `done` then goes through `completeNoteTask` → "✓ klart" in the Doc. The note is shown on the meeting page and never audited. |
 
 **In the app**
@@ -41,7 +41,7 @@ A per-org page (Företag and föreningar, not Privat) under **Inställningar →
 
 Each line is short text with its **sources** (links to meetings).
 
-- **Storage.** One row per org, `org_memory (org_id pk, lines jsonb, generated_at, sources_from, sources_count, updated_at, updated_by)`. A line is `{id, section, text, sources: meeting uuid[], edited}`. Members select it (`is_org_member`). Admins insert and update it (`is_org_admin`) through their own client.
+- **Storage.** One row per org, `org_memory (org_id pk, lines jsonb, generated_at, sources_from, sources_count, updated_at, updated_by)`. A line is `{id, section, text, sources: meeting uuid[], edited}`. Members select it (`is_org_member`). **[security review]** Clients get no writes at all. The server writes it with the service role after its admin check, so no one can set `sources`, `edited` or the cooldown by hand. The size is capped.
 - **Visibility.** **[choice: owner's "simplest"]** The memory is admin-curated and readable by every member.
   - A generated draft may use only meetings **every current member can see**. That is `org_memory_sources(p_org, p_limit)` in SQL: done, not a Testmöte, and no `org_members` row for whom `foretag_can_see(member, meeting)` is false. The tree rule isn't restated anywhere.
   - Rows are filtered by the app's `visible()` (never deleted lines, Må-runda or info cells).

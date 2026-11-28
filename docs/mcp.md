@@ -29,7 +29,7 @@ claude mcp add --transport http simon-says https://simonsays.harrysson.co/api/mc
 | `my_tasks(status?, due_before?, cursor?, limit?)` | Mina uppgifter (open by default) |
 | `complete_task(task_id)` | Same as ticking on /hem: the owner or an admin, and the Doc gets "✓ klart" |
 | `prepare_agenda(org_id \| meeting_id, point)` | Förening meetings only. Adds a point to the next agenda; creates it (Förbered möte's proposed date) when none is prepared |
-| `list_agent_tasks(status?, cursor?, limit?)` | Tasks a meeting explicitly gave Claude (Vem: Claude / AI / Simon Says), open by default, each one a brief: the task, Klart när, due, status and note, the meeting (link to its page and Doc), and that meeting's decisions and Övrigt lines |
+| `list_agent_tasks(status?, include_others?, cursor?, limit?)` | Tasks a meeting explicitly gave Claude (Vem: Claude / AI / Simon Says), open by default. By default only the ones the user gave it (meetings they ran, or any as an admin). Each one a brief: the task, Klart när, due, status and note, the meeting (link to its page and Doc), and that meeting's decisions and Övrigt lines |
 | `update_agent_task(task_id, status, note?)` | `in_progress`, `blocked` or `done`, with a note that is shown on the meeting page. The meeting's runner (who gave Claude the task) or an admin may do this. `done` works like ticking the task, so the Doc gets "✓ klart" |
 | `get_org_memory(org_id)` | **Vad Claude ska veta**: customers, priorities, recurring decisions, glossary, and who is who, each line with its source meetings. A line is left out when the user can't see all of its sources |
 

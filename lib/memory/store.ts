@@ -74,8 +74,21 @@ export async function sourceMeetings(db: SupabaseClient, ids: string[]): Promise
   return out;
 }
 
-async function write(db: SupabaseClient, orgId: string, userId: string, patch: Record<string, unknown>): Promise<boolean> {
-  const { error } = await db
+/** Is `userId` an admin of this förening or Företag (read as them: RLS), never Privat. */
+async function isAdminOf(db: SupabaseClient, orgId: string, userId: string): Promise<boolean> {
+  const [{ data: m }, { data: o }] = await Promise.all([
+    db.from("org_members").select("role").eq("org_id", orgId).eq("user_id", userId).maybeSingle(),
+    db.from("orgs").select("kind").eq("id", orgId).maybeSingle(),
+  ]);
+  return m?.role === "admin" && Boolean(o) && o!.kind !== "privat";
+}
+
+/**
+ * Writes go through the service role, only after the admin check (0065 gives clients no write on
+ * org_memory, so nobody can set sources, `edited` or the cooldown by hand through the API).
+ */
+async function write(admin: SupabaseClient, orgId: string, userId: string, patch: Record<string, unknown>): Promise<boolean> {
+  const { error } = await admin
     .from("org_memory")
     .upsert({ org_id: orgId, ...patch, updated_at: new Date().toISOString(), updated_by: userId }, { onConflict: "org_id" });
   if (error) {
@@ -86,14 +99,15 @@ async function write(db: SupabaseClient, orgId: string, userId: string, patch: R
 }
 
 /** An admin's edits (RLS: admins only). False when invalid or not saved. */
-export async function saveMemoryEdits(db: SupabaseClient, orgId: string, userId: string, edits: EditedLine[]): Promise<boolean> {
+export async function saveMemoryEdits(db: SupabaseClient, admin: SupabaseClient, orgId: string, userId: string, edits: EditedLine[]): Promise<boolean> {
+  if (!(await isAdminOf(db, orgId, userId))) return false;
   const current = await loadMemory(db, orgId);
   const lines = applyEdits(current.lines, edits, newLineId);
   if (!lines) return false;
-  return write(db, orgId, userId, { lines });
+  return write(admin, orgId, userId, { lines });
 }
 
-export type RefreshResult = { ok: true; lines: number; meetings: number } | { ok: false; reason: "cooldown" | "empty" | "spend" | "failed" };
+export type RefreshResult = { ok: true; lines: number; meetings: number } | { ok: false; reason: "forbidden" | "cooldown" | "empty" | "spend" | "failed" };
 
 export interface RefreshDeps {
   /** The service-role client (org_memory_sources and the source rows). */
@@ -127,6 +141,7 @@ export async function draftMeetings(admin: SupabaseClient, orgId: string, limit 
  * Lines an admin wrote or changed are kept and shown to Claude; the generated ones are replaced.
  */
 export async function refreshMemory(db: SupabaseClient, org: { id: string; name: string }, userId: string, deps: RefreshDeps): Promise<RefreshResult> {
+  if (!(await isAdminOf(db, org.id, userId))) return { ok: false, reason: "forbidden" };
   const current = await loadMemory(db, org.id);
   if (current.generatedAt && deps.now.getTime() - new Date(current.generatedAt).getTime() < MEMORY_COOLDOWN_S * 1000) return { ok: false, reason: "cooldown" };
   const meetings = await draftMeetings(deps.admin, org.id);
@@ -145,7 +160,7 @@ export async function refreshMemory(db: SupabaseClient, org: { id: string; name:
   if (!result.ok) return { ok: false, reason: result.reason === "spend" ? "spend" : "failed" };
   const lines = mergeGenerated(current.lines, result.value, new Set(meetings.map((m) => m.id)), newLineId);
   const oldest = meetings.at(-1)!;
-  const saved = await write(db, org.id, userId, {
+  const saved = await write(deps.admin, org.id, userId, {
     lines,
     generated_at: deps.now.toISOString(),
     sources_from: `${oldest.date}T00:00:00Z`,

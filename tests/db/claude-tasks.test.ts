@@ -85,7 +85,9 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
 
   it("lists the agent tasks of meetings the user can see, as briefs (never an Utveckling one for Kommunikation)", async () => {
     const { client } = await connectAs(maja.id, deps);
-    const r = await call(client, "list_agent_tasks");
+    // By default only the tasks the user gave Claude: Maja ran none.
+    expect(((await call(client, "list_agent_tasks")).data as { tasks: Brief[] }).tasks).toEqual([]);
+    const r = await call(client, "list_agent_tasks", { include_others: true });
     const tasks = (r.data as { tasks: Brief[] }).tasks;
     expect(tasks.map((t) => t.task_id)).toEqual([`n:${allMeeting}:a1`]);
     expect(tasks[0]).toMatchObject({ task: "Skriv ett utkast till julbrevet", status: "open", can_update: false, context: { decisions: ["Julfest den 18 december"] } });
@@ -93,7 +95,8 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     await client.close();
 
     const { client: dev } = await connectAs(jonas.id, deps);
-    const mine = ((await call(dev, "list_agent_tasks")).data as { tasks: Brief[] }).tasks;
+    expect(((await call(dev, "list_agent_tasks")).data as { tasks: Brief[] }).tasks.map((t) => t.task_id)).toEqual([`n:${devMeeting}:t1`]);
+    const mine = ((await call(dev, "list_agent_tasks", { include_others: true })).data as { tasks: Brief[] }).tasks;
     expect(mine.map((t) => t.task_id).sort()).toEqual([`n:${allMeeting}:a1`, `n:${devMeeting}:t1`].sort());
     expect(mine.find((t) => t.task_id === `n:${devMeeting}:t1`)).toMatchObject({ can_update: true, context: { decisions: ["Vi lanserar hemligprojektet i mars"] } });
     await dev.close();
@@ -152,15 +155,15 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
       },
     });
     const org = { id: orgId, name: "Agentbolaget" };
-    expect(await refreshMemory(maja.db, org, maja.id, { admin, oneShot: fake as never, now: new Date() })).toMatchObject({ ok: false });
+    expect(await refreshMemory(maja.db, org, maja.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: false, reason: "forbidden" });
     expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: true, lines: 1, meetings: 1 });
     const saved = await loadMemory(anna.db, orgId);
     expect(saved.lines.map((l) => l.text)).toEqual(["Julfesten hålls i december"]);
     // Cooldown: a second Uppdatera right away is refused.
     expect(await refreshMemory(anna.db, org, anna.id, { admin, oneShot: fake as never, now: new Date() })).toEqual({ ok: false, reason: "cooldown" });
     // A member can't edit; the admin can.
-    expect(await saveMemoryEdits(maja.db, orgId, maja.id, [{ section: "glossary", text: "MVP = minsta möjliga produkt" }])).toBe(false);
-    expect(await saveMemoryEdits(anna.db, orgId, anna.id, [...saved.lines.map((l) => ({ id: l.id, section: l.section, text: l.text })), { section: "glossary", text: "MVP = minsta möjliga produkt" }])).toBe(true);
+    expect(await saveMemoryEdits(maja.db, admin, orgId, maja.id, [{ section: "glossary", text: "MVP = minsta möjliga produkt" }])).toBe(false);
+    expect(await saveMemoryEdits(anna.db, admin, orgId, anna.id, [...saved.lines.map((l) => ({ id: l.id, section: l.section, text: l.text })), { section: "glossary", text: "MVP = minsta möjliga produkt" }])).toBe(true);
     expect((await loadMemory(maja.db, orgId)).lines.map((l) => l.text)).toEqual(["Julfesten hålls i december", "MVP = minsta möjliga produkt"]);
   });
 
@@ -204,7 +207,11 @@ describe.skipIf(!hasLocalSupabase)("agent tasks and org memory (0065)", () => {
     }
     expect((await jonas.db.from("agent_task_status").insert({ meeting_id: allMeeting, item_id: "a1", status: "done" })).error).not.toBeNull();
     expect((await jonas.db.from("agent_task_status").update({ status: "blocked" }).eq("meeting_id", devMeeting).select("item_id")).data ?? []).toEqual([]);
-    expect((await maja.db.from("org_memory").update({ lines: [] }).eq("org_id", orgId).select("org_id")).data ?? []).toEqual([]);
+    // Not even an admin writes org_memory directly (sources, `edited` and the cooldown are the server's).
+    for (const u of [maja, anna]) {
+      expect((await u.db.from("org_memory").update({ lines: [] }).eq("org_id", orgId).select("org_id")).data ?? []).toEqual([]);
+      expect((await u.db.from("org_memory").upsert({ org_id: orgId, lines: [] }, { onConflict: "org_id" })).error).not.toBeNull();
+    }
     // mcp_set_agent_task as Pelle (sees it, not the runner, not an admin): refused at the last line too.
     expect(must("pelle", await admin.rpc("mcp_set_agent_task", { p_user: pelle.id, p_meeting: allMeeting, p_item: "a1", p_status: "in_progress", p_note: null }))).toBe(false);
     expect(must("anna", await admin.rpc("mcp_set_agent_task", { p_user: anna.id, p_meeting: allMeeting, p_item: "a1", p_status: "in_progress", p_note: null }))).toBe(true);

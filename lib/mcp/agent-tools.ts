@@ -40,8 +40,11 @@ async function noteSpaces(ctx: ToolCtx, onlyOrg?: string) {
   return { orgs, meetings };
 }
 
-export async function listAgentTasks(ctx: ToolCtx, args: { status?: Filter; cursor?: string; limit?: number }): Promise<ToolResult> {
+export async function listAgentTasks(ctx: ToolCtx, args: { status?: Filter; include_others?: boolean; cursor?: string; limit?: number }): Promise<ToolResult> {
   const filter: Filter = args.status ?? "open";
+  // By default only the tasks this user gave Claude (or may move as an admin): a line anyone said in
+  // a meeting the user merely sees is no assignment from the user.
+  const others = args.include_others === true;
   const { orgs, meetings } = await noteSpaces(ctx);
   if (!meetings.length) return ok({ tasks: [], next_cursor: null });
   const orgOf = new Map<string, McpOrg>(orgs.map((o) => [o.id, o]));
@@ -53,6 +56,7 @@ export async function listAgentTasks(ctx: ToolCtx, args: { status?: Filter; curs
     .filter((r) => isAgentTask(r, people.filter((p) => p.org_id === byMeeting.get(r.meeting_id)!.org_id)))
     .map((r) => ({ r, m: byMeeting.get(r.meeting_id)!, state: agentState(r.done, statuses.get(statusKey(r.meeting_id, r.id))) }))
     .filter((t) => (filter === "all" ? true : filter === "open" ? isOpen(t.state.status) : t.state.status === filter))
+    .filter((t) => others || canUpdateAgentTask({ userId: ctx.user.id, startedBy: t.m.started_by, isAdmin: orgOf.get(t.m.org_id)?.role === "admin" }))
     .sort((a, b) => b.m.started_at.localeCompare(a.m.started_at) || a.r.position - b.r.position);
   const { items, next_cursor } = page(found, args.cursor, args.limit);
 
