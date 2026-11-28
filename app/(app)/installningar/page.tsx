@@ -40,6 +40,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const showAi = mcpConfigured() || ai.connections.length > 0;
   return (
     <AccountView
+      userId={user.id}
+      openSections={[...(kalender ? (["kalender"] as const) : []), ...(fel === "aterkalla" ? (["ai"] as const) : [])]}
       email={user.email ?? ""}
       signOut={signOut}
       emailPrefs={emailPrefs}
@@ -48,25 +50,33 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       saveLocale={saveLocaleAction}
       localeFailed={fel === "sprak"}
       ai={
-        showAi ? (
-          <AiConnections
-            connections={ai.connections}
-            audit={ai.audit}
-            revoke={revokeConnectionAction}
-            revokeFailed={fel === "aterkalla"}
-            mcpUrl={resourceUri(appOrigin())}
+        showAi
+          ? {
+              connected: ai.connections.length,
+              node: (
+                <AiConnections
+                  connections={ai.connections}
+                  audit={ai.audit}
+                  revoke={revokeConnectionAction}
+                  revokeFailed={fel === "aterkalla"}
+                  mcpUrl={resourceUri(appOrigin())}
+                />
+              ),
+            }
+          : undefined
+      }
+      calendar={{
+        connected: calendarConnected,
+        node: (
+          <CalendarConnect
+            connected={calendarConnected}
+            connect={requestCalendarAccess}
+            disconnect={disconnectCalendar}
+            back="/installningar"
+            result={calendarResult(kalender)}
           />
-        ) : undefined
-      }
-      calendar={
-        <CalendarConnect
-          connected={calendarConnected}
-          connect={requestCalendarAccess}
-          disconnect={disconnectCalendar}
-          back="/installningar"
-          result={calendarResult(kalender)}
-        />
-      }
+        ),
+      }}
     />
   );
 }

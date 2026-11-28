@@ -5,10 +5,20 @@ import type { FormAction } from "@/components/ui/ConfirmAction";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import type { Audience } from "@/lib/mcp/oauth";
 
 // The MCP consent page (/koppla/<id>): where the access goes (the redirect host, prominently),
 // what the app will and won't be able to do, and Godkänn / Avbryt. The app is named from the
 // redirect URI (lib/mcp/oauth.ts redirectAudience), never from the name the client registered.
+
+const APP_LABEL = {
+  claude: "appClaude",
+  chatgpt: "appChatgpt",
+  cursor: "appCursor",
+  vscode: "appVscode",
+  local: "appLocal",
+  unknown: "appUnknown",
+} as const satisfies Record<Audience, string>;
 
 export function ConnectView({
   requestId,
@@ -20,8 +30,8 @@ export function ConnectView({
   deny,
 }: {
   requestId: string;
-  /** From the redirect URI: Claude's hosted callback, a loopback app, or (never registrable) unknown. */
-  audience: "claude" | "local" | "unknown";
+  /** From the redirect URI: a known hosted callback (Claude, ChatGPT, Cursor, VS Code), a loopback app, or (never registrable) unknown. */
+  audience: Audience;
   host: string;
   email: string;
   /** MCP is on (MCP_ENABLED); otherwise only Avbryt. */
@@ -30,7 +40,7 @@ export function ConnectView({
   deny: FormAction;
 }) {
   const t = useTranslations("connect");
-  const app = audience === "claude" ? t("appClaude") : audience === "local" ? t("appLocal") : t("appUnknown");
+  const app = t(APP_LABEL[audience]);
   const can = allowed && audience !== "unknown";
   return (
     <div className="mx-auto w-full px-gutter max-w-[36rem] flex flex-col gap-6">
@@ -51,7 +61,7 @@ export function ConnectView({
           ) : allowed ? (
             <>
               <div>
-                <h2 className="text-sm font-semibold">{t("canTitle")}</h2>
+                <h2 className="text-sm font-semibold first-letter:uppercase">{t("canTitle", { app })}</h2>
                 <ul className="mt-2 list-disc pl-5 text-ink-2 flex flex-col gap-1">
                   <li>{t("canSearch")}</li>
                   <li>{t("canTasks")}</li>
@@ -59,7 +69,7 @@ export function ConnectView({
                 </ul>
               </div>
               <div>
-                <h2 className="text-sm font-semibold">{t("cannotTitle")}</h2>
+                <h2 className="text-sm font-semibold first-letter:uppercase">{t("cannotTitle", { app })}</h2>
                 <ul className="mt-2 list-disc pl-5 text-ink-2 flex flex-col gap-1">
                   <li>{t("cannotEdit")}</li>
                   <li>{t("cannotMore")}</li>

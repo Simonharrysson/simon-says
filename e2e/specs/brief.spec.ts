@@ -52,7 +52,8 @@ test("Inför möten: opt in under Konto, one brief before the förening's meetin
   expect((await cron(request)).status()).toBe(200);
   expect(await fake.mail(member)).toEqual([]);
 
-  // Konto → Mejl: "Inför möten" is on, "Även inför föreningsmöten" off until turned on.
+  // Konto → Mejl (sections start closed; ?kalender=ok opened Kalender): "Inför möten" is on, "Även inför föreningsmöten" off until turned on.
+  await page.getByRole("button", { name: "Mejl från Simon Says" }).click();
   const brief = page.getByRole("switch", { name: "Inför möten" });
   await expect(brief).toBeChecked();
   const orgs = page.getByRole("switch", { name: "Även inför föreningsmöten" });

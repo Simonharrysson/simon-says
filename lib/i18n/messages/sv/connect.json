@@ -2,14 +2,14 @@
   "metaTitle": "Koppla Claude till Simon Says",
   "title": "Ge {app} tillgång till dina möten i Simon Says",
   "signedInAs": "Du är inloggad som {email}.",
-  "canTitle": "Claude kommer att kunna",
+  "canTitle": "{app} kommer att kunna",
   "canSearch": "söka i och läsa de möten och inspelningar du själv kan se i Simon Says, även dina privata",
   "canTasks": "se dina uppgifter och bocka av dem, som när du bockar av i appen",
   "canAgenda": "lägga till punkter på nästa dagordning i en förening, och förbereda den om det behövs",
-  "cannotTitle": "Claude kommer inte att kunna",
+  "cannotTitle": "{app} kommer inte att kunna",
   "cannotEdit": "ändra eller radera anteckningar och protokoll",
   "cannotMore": "se mer än du själv ser i Simon Says",
-  "revokeHint": "Du kan återkalla åtkomsten när som helst under Konto → Kopplade AI-assistenter.",
+  "revokeHint": "Du kan koppla från när som helst under Konto → Koppla till din AI.",
   "approve": "Godkänn",
   "approving": "Godkänner…",
   "deny": "Avbryt",
@@ -20,17 +20,16 @@
   "errorTitle": "Kopplingen kunde inte startas",
   "errorClient": "Simon Says känner inte igen appen som försökte koppla sig. Ta bort kopplingen i Claude och lägg till den igen.",
   "errorRedirect": "Appen försökte skicka dig vidare till en adress den inte har registrerat. Av säkerhetsskäl stoppades det.",
-  "panelTitle": "Kopplade AI-assistenter",
-  "panelIntro": "AI-assistenter som du har gett tillgång till dina möten, till exempel Claude. De ser bara det du själv ser.",
-  "panelEmpty": "Inga kopplade assistenter.",
-  "panelHowTo": "Lägg till i Claude: Settings → Connectors → Add custom connector med adressen {url}. I Claude Code: claude mcp add --transport http simon-says {url}",
+  "panelTitle": "Koppla till din AI",
+  "panelIntro": "Fråga din AI om dina möten, beslut och uppgifter. Den ser bara det du själv ser, och du kan koppla från när du vill.",
+  "panelEmpty": "Inget kopplat än.",
   "connectedAt": "Kopplad {date}",
   "lastUsed": "senast använd {date}",
   "neverUsed": "inte använd än",
-  "revoke": "Återkalla",
-  "revoking": "Återkallar…",
-  "revokeConfirm": "Återkalla åtkomsten för {client}? Assistenten kommer inte längre åt dina möten.",
-  "revokeFailed": "Åtkomsten kunde inte återkallas. Försök igen.",
+  "revoke": "Koppla från",
+  "revoking": "Kopplar från…",
+  "revokeConfirm": "{client} kommer inte längre åt dina möten. Du kan koppla igen när du vill.",
+  "revokeFailed": "Det gick inte att koppla från. Försök igen.",
   "auditTitle": "Senaste anrop",
   "auditIntro": "Vad assistenterna har gjort: verktyg och tid, aldrig innehåll.",
   "auditFailed": "misslyckades",
@@ -39,5 +38,93 @@
   "appLocal": "en app på din dator",
   "appUnknown": "Okänd app",
   "localWarning": "Åtkomsten går till ett program på den här datorn (till exempel Claude Code). Godkänn bara om du själv just startade kopplingen.",
-  "unknownWarning": "Simon Says känner inte igen vart åtkomsten skulle gå, så den kan inte godkännas."
+  "unknownWarning": "Simon Says känner inte igen vart åtkomsten skulle gå, så den kan inte godkännas.",
+  "appChatgpt": "ChatGPT",
+  "appCursor": "Cursor",
+  "appVscode": "VS Code",
+  "connectedTitle": "Kopplat nu",
+  "addAnother": "Koppla en till",
+  "pickLabel": "Välj ditt AI-verktyg",
+  "stepsTitle": "Koppla {tool}",
+  "addressLabel": "Adressen till Simon Says",
+  "commandLabel": "Kommando",
+  "configLabel": "MCP-inställning",
+  "newTab": "(öppnas i en ny flik)",
+  "openClaude": "Öppna Claude",
+  "openChatgpt": "Öppna ChatGPT",
+  "addToCursor": "Lägg till i Cursor",
+  "addToVscode": "Lägg till i VS Code",
+  "addToVscodeInsiders": "VS Code Insiders",
+  "tryIt": "Testa: fråga <b>”Vad beslutade vi på senaste mötet?”</b>",
+  "revokeTitle": "Koppla från {client}?",
+  "tools": {
+    "claude": {
+      "desc": "Webben, datorn och mobilen"
+    },
+    "chatgpt": {
+      "desc": "Business och Enterprise"
+    },
+    "cursor": {
+      "desc": "Ett klick i editorn"
+    },
+    "vscode": {
+      "desc": "Copilot i agentläge"
+    },
+    "claude-code": {
+      "desc": "Ett kommando i terminalen"
+    },
+    "gemini": {
+      "desc": "Ett kommando i terminalen"
+    },
+    "other": {
+      "name": "Annat verktyg",
+      "desc": "Allt som stöder MCP med inloggning"
+    }
+  },
+  "steps": {
+    "claude": {
+      "1": "Öppna Claude och gå till <b>Customize → Connectors</b>.",
+      "2": "Klicka på <b>+ Add</b> och välj <b>Add custom connector</b>.",
+      "3": "Döp den till <b>Simon Says</b> och klistra in adressen:",
+      "4": "Klicka på <b>Connect</b>, logga in med Google och godkänn."
+    },
+    "chatgpt": {
+      "note": "Kräver ChatGPT Business, Enterprise eller Edu, på webben. I Business är det en admin som lägger till den.",
+      "1": "Öppna ChatGPT och gå till <b>Plugins</b>.",
+      "2": "Klicka på <b>+</b> och välj <b>Add custom MCP server</b>.",
+      "3": "Döp den till <b>Simon Says</b> och klistra in adressen under <b>Connection</b>:",
+      "4": "Välj OAuth som inloggning, kryssa i <b>I understand and want to continue</b> och klicka på <b>Create as a plugin</b>.",
+      "5": "Logga in med Google och godkänn."
+    },
+    "cursor": {
+      "1": "Klicka på <b>Lägg till i Cursor</b>. Cursor öppnas och frågar om du vill installera <b>simon-says</b>.",
+      "2": "Installera och logga in med Google när Cursor ber om det, och godkänn. Servern syns sedan under <b>Customize</b> i Cursors sidomeny.",
+      "3": "Fungerar inte länken? Lägg in det här i <b>~/.cursor/mcp.json</b>:"
+    },
+    "vscode": {
+      "1": "Klicka på <b>Lägg till i VS Code</b> och välj <b>Install</b>.",
+      "2": "Eller: kör <b>MCP: Add Server</b> i kommandopaletten, välj <b>HTTP</b> och klistra in adressen:",
+      "3": "Tillåt inloggningen när VS Code frågar, logga in med Google och godkänn. Fråga sedan i Copilot Chat, i agentläge."
+    },
+    "claude-code": {
+      "1": "Kör i terminalen:",
+      "2": "Starta Claude Code, skriv <b>/mcp</b>, välj <b>simon-says</b> och sedan <b>Authenticate</b>.",
+      "3": "Logga in med Google och godkänn i webbläsaren."
+    },
+    "gemini": {
+      "1": "Kör i terminalen:",
+      "2": "Skriv <b>/mcp auth simon-says</b> i Gemini CLI.",
+      "3": "Logga in med Google och godkänn i webbläsaren."
+    },
+    "other": {
+      "1": "Lägg till en MCP-server med adressen:",
+      "2": "Eller klistra in det här i verktygets MCP-inställningar:",
+      "3": "Verktyget behöver stödja MCP över HTTP med OAuth. Logga in med Google och godkänn."
+    }
+  },
+  "pickHint": "Välj ett verktyg för att se hur du kopplar det.",
+  "officialGuide": "Officiell guide från {tool}",
+  "mcpGuide": "Om MCP (modelcontextprotocol.io)",
+  "appLocalShort": "App på din dator",
+  "registeredAs": "Kallar sig ”{client}”"
 }
