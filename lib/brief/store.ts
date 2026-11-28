@@ -114,7 +114,17 @@ export async function loadBriefHistory(user: BriefUser, scope: BriefScope, start
       : Promise.resolve({ data: [], error: null }),
   ]);
   // 0069: the meetings whose transcript the recipient may read (their decisions show "▶ 41:52").
-  const transcriptMeetings = ids.length ? ((must("transcripts", await db.rpc("transcript_visible_ids", { p_user: user.id, p_ids: ids })) ?? []) as string[]) : [];
+  // Never fails the brief (e.g. the function not deployed yet): then no times, nothing else changes.
+  let transcriptMeetings: string[] = [];
+  if (ids.length) {
+    try {
+      const { data, error } = await db.rpc("transcript_visible_ids", { p_user: user.id, p_ids: ids });
+      if (error) console.error(`brief: transcripts: ${error.code ?? error.message}`);
+      else transcriptMeetings = ((data ?? []) as string[]).filter((id) => typeof id === "string");
+    } catch (err) {
+      console.error(`brief: transcripts: ${(err as Error).message}`);
+    }
+  }
   const a = pickAgenda((must("agenda", agenda) ?? []) as { doc_id: string; items: unknown; meeting_time: string | null }[], stockholmDateTime(startsAt).time);
   const labels = a ? agendaLabels(a.items) : [];
   return {

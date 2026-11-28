@@ -45,6 +45,8 @@ describe("formatSaidAt (mm:ss)", () => {
     // A person's own parenthesis, or another time, is theirs.
     expect(stripSaidAt("✓ Vi kör (12:00)", at(0, 41, 52))).toBe("✓ Vi kör (12:00)");
     expect(stripSaidAt("✓ Vi kör", null)).toBe("✓ Vi kör");
+    expect(stripSaidAt("Anna: Boka sal. (41:52) ✓ klart", at(0, 41, 52))).toBe("Anna: Boka sal. ✓ klart");
+    expect(stripSaidAt("Anna: Boka sal. (12:00) ✓ klart", at(0, 41, 52))).toBe("Anna: Boka sal. (12:00) ✓ klart");
   });
 });
 

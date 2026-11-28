@@ -228,6 +228,8 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
       attendance: summary?.people ?? [],
       summary: summary?.summary ?? null,
       decisions: summary?.decisions ?? [],
+      // 0069: a Privat recording has no moments (another pipeline): the same shape, all null.
+      decision_moments: (summary?.decisions ?? []).map((text) => ({ text, said_at: null, excerpt: null })),
       tasks: tasks.map((t) => ({ task_id: `p:${t.id}`, text: t.text, owner: t.owner, done: t.done, can_complete: !t.done })),
       doc_url: doc,
     });
@@ -254,7 +256,9 @@ export async function getMeeting(ctx: ToolCtx, args: { meeting_id: string }): Pr
     title: page.meeting.title,
     started_at: page.meeting.startedAt,
     attendance,
-    decisions: (page.decisionItems ?? []).map((d) => ({ text: d.text, ...said(d.itemId) })),
+    decisions: page.decisions,
+    // 0069: the same decisions, in the same order, with where they were said (null when unknown or hidden).
+    decision_moments: (page.decisionItems ?? []).map((d) => ({ text: d.text, ...said(d.itemId) })),
     tasks: page.tasks.map((t) => ({
       task_id: t.key,
       text: t.text,

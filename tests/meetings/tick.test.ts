@@ -928,6 +928,28 @@ describe.skipIf(!hasLocalSupabase)("ticks, end and finalize", () => {
     expect(await row()).toEqual(first);
   });
 
+  it("0069: an org that doesn't share its transcript gets no moment and no (mm:ss) in the Doc", async () => {
+    const { applyOps } = await import("@/lib/notes/engine");
+    await adminClient().from("orgs").update({ share_transcript: false }).eq("id", orgId);
+    try {
+      const { id, sessionId } = await meeting();
+      await say(id, sessionId, "Vi bestämmer budgeten", 1000);
+      const f = fakes();
+      f.deps.updateNotes = async (input) => {
+        f.calls.push(input);
+        const ops = [{ op: "add" as const, item: { id: "n1", section: "decision" as const, text: "Budgeten antas" }, src: ["00:00:01"] }];
+        const r = applyOps(input.items, ops, { nextId: input.nextId, sources: input.sources });
+        return { ops: r.ops, items: r.items, usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, usd: 0 }, stopReason: "end_turn", dropped: r.dropped, nextId: r.nextId, failure: null };
+      };
+      expect(await tick.runTick(id, { final: false }, f.deps)).toBe("ok");
+      expect(f.calls[0].sources).toBeUndefined();
+      const row = (await adminClient().from("note_items").select("last_rendered_text, source_segment_ids, said_at_ms").eq("meeting_id", id).eq("id", "n1").single()).data;
+      expect(row).toEqual({ last_rendered_text: "✓ Budgeten antas", source_segment_ids: null, said_at_ms: null });
+    } finally {
+      await adminClient().from("orgs").update({ share_transcript: true }).eq("id", orgId);
+    }
+  });
+
   it("concurrent runTick: one ok, one busy", async () => {
     const { id, sessionId } = await meeting();
     await say(id, sessionId, "hej", 1000);

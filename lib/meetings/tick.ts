@@ -663,11 +663,17 @@ async function loadContext(meeting: MeetingRow) {
     // "*": taskMode also reads the space kind once there is one (orgs.kind, Privat).
     db().from("orgs").select("*").eq("id", meeting.org_id).maybeSingle(),
   ]);
+  const o = must("tick: org", org) as { share_transcript?: boolean; kind?: string } | null;
+  // 0069: moments only where the org shares its transcript (the ▶ link's rule): otherwise no new
+  // citation is resolved and no " (41:52)" is rendered in the Doc (the segment ids are kept).
+  const shareTranscript = Boolean(o) && o!.share_transcript !== false && o!.kind !== "privat";
+  const noteRows = must("tick: note items", rows) as NoteItemRow[];
   return {
     segments,
     sessions: must("tick: sessions", sessions) as SessionRead[],
     speakers: must("tick: speakers", speakers) as SpeakerRead[],
-    rows: must("tick: note items", rows) as NoteItemRow[],
+    rows: shareTranscript ? noteRows : noteRows.map((r) => (r.said_at_ms == null ? r : { ...r, said_at_ms: null })),
+    shareTranscript,
     orgName: (must("tick: org", org) as { name: string } | null)?.name ?? "Föreningen",
     taskMode: taskMode(must("tick: org", org) as { require_task_fields?: boolean; kind?: string } | null),
   };
@@ -959,7 +965,9 @@ export async function runTick(
     let claudeFailed = false;
     const send = blocksForCall(blocks, sentTick);
     // 0069: Claude may cite only the lines it is sent in this call.
-    const sourceIndex = sources.slice(0, send.length).reduce<SourceIndex>((index, lines) => addToIndex(index, lines), new Map());
+    const sourceIndex = ctx.shareTranscript
+      ? sources.slice(0, send.length).reduce<SourceIndex>((index, lines) => addToIndex(index, lines), new Map())
+      : undefined;
     // Claude only with something new to read (or the final pass over a non-empty transcript).
     if (claudeAllowed && send.length > 0 && (final || send.length > sentTick)) {
       out = await deps.updateNotes(

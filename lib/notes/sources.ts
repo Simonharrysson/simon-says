@@ -96,10 +96,19 @@ export function saidAtSuffix(ms: number | null | undefined): string {
   return typeof ms === "number" && Number.isFinite(ms) && ms >= 0 ? ` (${formatSaidAt(ms)})` : "";
 }
 
-/** `text` without the " (41:52)" we appended for `ms` (a human-edited line keeps its own words only). */
+/** The done mark a task line may end with after its moment ("… (41:52) ✓ klart"). */
+const DONE_TAIL = "✓ klart";
+
+/**
+ * `text` without the " (41:52)" we appended for `ms` (a human-edited line keeps its own words
+ * only), also when the done mark follows it: "Boka sal. (41:52) ✓ klart" → "Boka sal. ✓ klart".
+ */
 export function stripSaidAt(text: string, ms: number | null | undefined): string {
   const suffix = saidAtSuffix(ms).trim();
   if (!suffix) return text;
   const t = text.trimEnd();
-  return t.endsWith(suffix) ? t.slice(0, -suffix.length).trimEnd() : text;
+  if (t.endsWith(suffix)) return t.slice(0, -suffix.length).trimEnd();
+  const withDone = `${suffix} ${DONE_TAIL}`;
+  if (t.endsWith(withDone)) return `${t.slice(0, -withDone.length).trimEnd()} ${DONE_TAIL}`;
+  return text;
 }

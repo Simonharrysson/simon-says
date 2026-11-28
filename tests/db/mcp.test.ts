@@ -109,7 +109,9 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
     expect((hit.data as { meetings: { meeting_id: string; match: string }[] }).meetings).toMatchObject([{ meeting_id: devMeeting, match: "Vi lanserar hemligprojektet" }]);
     const get = await call(client, "get_meeting", { meeting_id: devMeeting });
     expect(get.isError).toBe(false);
-    expect(get.data).toMatchObject({ title: "Sprintmöte", org_kind: "foretag", decisions: [{ text: "Vi lanserar hemligprojektet", said_at: null, excerpt: null }] });
+    expect(get.data).toMatchObject({ title: "Sprintmöte", org_kind: "foretag", decisions: ["Vi lanserar hemligprojektet"] });
+    // 0069: decisions stay strings (backward compatible); the moments come alongside.
+    expect((get.data as { decision_moments: unknown }).decision_moments).toEqual([{ text: "Vi lanserar hemligprojektet", said_at: null, excerpt: null }]);
     // Never a hit from a deleted line or a Må-runda row (the app's own visible() rule).
     expect((await call(client, "search_meetings", { query: "dolkstöt" })).data).toMatchObject({ meetings: [] });
     const spaces = await call(client, "list_spaces");
@@ -119,7 +121,7 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
 
   it("a member removed from a förening loses its meetings on the next call", async () => {
     const { client } = await connectAs(fmember.id, deps);
-    expect((await call(client, "get_meeting", { meeting_id: fMeeting })).data).toMatchObject({ decisions: [{ text: "Budgeten antas", said_at: null, excerpt: null }] });
+    expect((await call(client, "get_meeting", { meeting_id: fMeeting })).data).toMatchObject({ decisions: ["Budgeten antas"] });
     must("remove", await admin.from("org_members").delete().eq("org_id", fOrg).eq("user_id", fmember.id));
     expect((await call(client, "get_meeting", { meeting_id: fMeeting })).isError).toBe(true);
     await client.close();
