@@ -190,6 +190,37 @@ test("Mina uppgifter: a done task closes out of the list and the rows below foll
   await expect(list).toContainText("Läsa kap 4");
 });
 
+test("Mina uppgifter: the last open task closes the same way, then the empty state comes in", async ({ db, signedIn, newEmail }) => {
+  test.setTimeout(120_000);
+  const email = newEmail("motion-last");
+  const me = await ensureUser(db, email);
+  const space = must("privat", await db.from("orgs").insert({ name: "Privat", kind: "privat", created_by: me, share_transcript: false, summary_mode: "off" }).select("id").single()) as { id: string };
+  const ctx = must("context", await db.from("contexts").insert({ org_id: space.id, name: "TDDE15" }).select("id").single()) as { id: string };
+  const rec = must(
+    "meeting",
+    await db.from("meetings").insert({ org_id: space.id, started_by: me, status: "done", context_id: ctx.id, ended_at: new Date().toISOString() }).select("id").single(),
+  ) as { id: string };
+  must("task", await db.from("context_tasks").insert({ context_id: ctx.id, meeting_id: rec.id, text: "Lämna in tentan" }));
+
+  const { page } = await signedIn(email, "/hem");
+  expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(false);
+  const list = page.getByRole("list", { name: "Mina uppgifter" });
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  const full = (await list.getByRole("listitem").boundingBox())!.height;
+
+  const frames = sample(page, "row", "Lämna in tentan", 20_000);
+  await page.getByRole("checkbox", { name: "Lämna in tentan" }).check();
+  await expect(page.getByText("Markerad som klar.")).toBeVisible();
+  // The only row closes like any other (it isn't swapped out for the empty state at once).
+  const rows = await frames;
+  const closing = rows.filter(([h]) => h > 2 && h < full - 2);
+  expect(closing.length, `heights: ${rows.map(([h]) => Math.round(h)).join(",")}`).toBeGreaterThan(1);
+  expect(closing.some(([, o]) => o > 0.05 && o < 0.95)).toBe(true);
+  // Then the empty state is there, and the list is gone.
+  await expect(page.getByText("Allt är klart")).toBeVisible();
+  await expect(list).toHaveCount(0);
+});
+
 test.describe("reduced motion", () => {
   test.use({ contextOptions: { reducedMotion: "reduce" } });
 
