@@ -31,6 +31,8 @@ left over from it and now mean what the table below says.)
 - **The Google Doc keeps its own look.** Wherever we draw the Doc (landing, edit demo, format
   preview) it is white paper in a system face, so people recognise "that's the Doc", not our UI.
 - Refused on purpose: gradients, glass, cards-with-icons grids, eyebrow labels, heavy shadows.
+  One exception: the landing's own header blurs what scrolls under it (92 % board, Simon's brief
+  2026-11-28). The landing's demo Doc and mocks follow the page language (an example meeting, not a real Doc).
 
 ### Principles
 
@@ -203,7 +205,7 @@ Todo #10: the web app is Swedish by default and can be switched to English. Buil
 - **Not translated, on purpose:** everything written into Google Docs (meeting notes, agenda Docs,
   headings, agenda items such as "Godkänn dagordning", "Må-runda", "Från förra veckan", task lines,
   speaker labels "Talare 1") follows the förening's meeting language, which is Swedish for now; the
-  Claude prompts; stored labels ("Dokument 1, möte 2 av 3"); the landing page's Doc mock; the
+  Claude prompts; stored labels ("Dokument 1, möte 2 av 3"); the
   `/design` gallery's chrome and fake data; role names people type.
 - **Lint-ish guard:** `lib/i18n/no-swedish-literals.test.ts` fails on å/ä/ö in string literals or
   JSX text in `components/**` and `app/**` (comments ignored; `components/design/` allowed).
@@ -221,7 +223,7 @@ Voice in English: the same as Swedish (short, warm, concrete, "you"), British sp
 Two kinds of files live here:
 
 - **shadcn primitives**, lowercase (`button.tsx`, `badge.tsx`, `input.tsx`, `label.tsx`,
-  `native-select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`).
+  `native-select.tsx`, `checkbox.tsx`, `switch.tsx`, `card.tsx`, `alert.tsx`, `dialog.tsx`, `dropdown-menu.tsx`, `skeleton.tsx`, `accordion.tsx` (the landing's FAQ)).
   They came from `npx shadcn add` (style `radix-nova`, Radix underneath) and were then restyled
   to the tokens. They are our code now: edit them, don't re-add them over the top.
 - **App components**, PascalCase, built on the primitives and keeping their old APIs.

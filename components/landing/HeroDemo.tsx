@@ -179,7 +179,11 @@ export function HeroDemo() {
         {!reduced && (
           <button
             type="button"
-            onClick={() => setPaused((p) => !p)}
+            onClick={() => {
+              // Paused in the fade-out: hold the finished meeting, not a blank stage.
+              if (!paused && step === FADE) setStep(FINAL);
+              setPaused((p) => !p);
+            }}
             aria-pressed={paused}
             className="press inline-flex min-h-11 flex-none items-center gap-2 rounded-md px-3 text-xs font-medium whitespace-nowrap text-ink-2 hover:bg-sunk hover:text-ink"
           >

@@ -53,14 +53,15 @@ export function LandingView({ user, signIn }: LandingViewProps) {
         <div className={cn(wrap, "flex flex-col gap-[clamp(1.5rem,3vw,2.5rem)]")}>
           <h1
             id="hero-title"
-            className="text-[clamp(2.625rem,1.3rem+5.2vw,6rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
+            className="text-[clamp(2.125rem,1.3rem+5.2vw,6rem)] leading-[0.98] font-semibold tracking-[-0.04em] text-balance [overflow-wrap:break-word] hyphens-manual"
           >
             {/* One sentence per line, so the line count never depends on which font has loaded (no shift on swap). */}
             {t("heroTitle")
               .split(/(?<=\.)\s+/)
-              .map((sentence) => (
-                <span key={sentence} className="block">
-                  {sentence}
+              .map((sentence, i) => (
+                <span key={sentence}>
+                  {i > 0 && " "}
+                  <span className="block">{sentence}</span>
                 </span>
               ))}
           </h1>
