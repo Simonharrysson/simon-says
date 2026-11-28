@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { isUuid } from "@/lib/db/ids";
@@ -73,5 +74,6 @@ export async function disconnectDriveAccount(formData: FormData): Promise<void> 
     console.error(`org drive ${orgId}: disconnect: ${(err as Error).message}`);
     result = "fel";
   }
+  revalidatePath(`/orgs/${orgId}`, "layout");
   redirect(withParam(back, "drivekonto", result));
 }
