@@ -36,7 +36,9 @@ test("folder step: connect the förening's Google account, pick its folder, disc
   const folder = await fake.createDoc({ name: `Styrelsen ${org.name}`, mimeType: "application/vnd.google-apps.folder", owner: ACCOUNT });
   await queuePick(page, [{ id: folder.id, name: folder.name, mimeType: "application/vnd.google-apps.folder" }]);
   await page.getByRole("button", { name: `Välj mapp i ${ACCOUNT}` }).click();
-  await expect(page.getByText(folder.name)).toBeVisible();
+  // Saved first (the server's 204), then the card shows it after its refresh.
+  await expect.poll(async () => (await db.from("org_drive_accounts").select("folder_id").eq("org_id", org.id).single()).data?.folder_id, { timeout: 20_000 }).toBe(folder.id);
+  await expect(page.getByText(folder.name)).toBeVisible({ timeout: 20_000 });
   const opened = await page.evaluate(() => (window as unknown as { __e2ePickerOpened: { account: string; features: string[]; views: { drives: boolean }[] }[] }).__e2ePickerOpened.at(-1));
   expect(opened?.account).toBe(ACCOUNT);
   expect(opened?.features).toContain("supportDrives");
