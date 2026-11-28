@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { CountUp } from "@/components/motion/CountUp";
-import { Lazy, motionReady } from "@/components/motion/Lazy";
+import { Lazy } from "@/components/motion/Lazy";
 import { PresenceDiv, PresenceLi } from "@/components/motion/Presence";
 import { useFlip } from "@/components/motion/useFlip";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -113,7 +113,7 @@ export function MyTasks({
     (box ?? document.getElementById("my-tasks-title"))?.focus();
   });
   const switchId = useId();
-  // The list and its empty state crossfade (instant under reduced motion).
+  // The list fades out when the empty state takes its place (instant under reduced motion).
   const fade = useReducedMotion() ? { duration: 0 } : SPRING_EXIT;
 
   // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
@@ -146,6 +146,17 @@ export function MyTasks({
   const hasDone = settledHere.length > 0 || tasks.some((x) => x.done);
 
   useFlip(listRef, visible.map((x) => x.key));
+
+  // The empty state waits until the last row has closed (the rows' AnimatePresence says when), so
+  // the last row closes like any other, and only then does the empty state open in its place.
+  const [drained, setDrained] = useState(visible.length === 0);
+  if (visible.length > 0 && drained) setDrained(false);
+  const empty = visible.length === 0 && drained;
+  const visibleCount = useRef(visible.length);
+  visibleCount.current = visible.length;
+  const onRowsGone = () => {
+    if (visibleCount.current === 0) setDrained(true);
+  };
 
   const shownOpen = openTasks.filter(inFilter);
   const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
@@ -215,28 +226,24 @@ export function MyTasks({
           </p>
         )}
         <AnimatePresence initial={false} mode="popLayout">
-          {visible.length === 0 ? (
-            <m.div
-              key="empty"
-              initial={motionReady() ? { opacity: 0 } : false}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={fade}
-              data-enter-item
-              className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2"
-            >
-              {filter !== "all" ? (
-                <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
-              ) : (
-                <>
-                  <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
-                  <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
-                </>
-              )}
-            </m.div>
+          {empty ? (
+            // Opens to its height as it fades in (the box with its dashed border sits inside the
+            // opening wrapper), so whatever is below moves down smoothly instead of jumping.
+            <PresenceDiv key="empty" data-enter-item>
+              <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
+                {filter !== "all" ? (
+                  <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
+                ) : (
+                  <>
+                    <p className="text-base font-semibold text-ink">{hasDone ? t("allDoneTitle") : t("emptyTitle")}</p>
+                    <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
+                  </>
+                )}
+              </div>
+            </PresenceDiv>
           ) : (
             <m.ul key="list" ref={listRef} onFocus={onListFocus} onBlur={onListBlur} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
-              <AnimatePresence initial={false}>
+              <AnimatePresence initial={false} onExitComplete={onRowsGone}>
                 {visible.map((task) => (
                   <TaskRow
                     key={task.key}
