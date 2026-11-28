@@ -2,7 +2,7 @@ import type { TestInfo } from "@playwright/test";
 import { auditBorders, formatOffenders } from "../border-audit";
 import { expect, expectAccessible, seedMeeting, test } from "../fixtures";
 
-// /admin (Insikter, migration 0066): the internal dashboard. The shared signed-in admin is in
+// /admin (Insikter, migration 0064): the internal dashboard. The shared signed-in admin is in
 // ADMIN_EMAILS (e2e/env.ts); everyone else, signed in or not, gets a real 404. Other specs seed
 // orgs in parallel on the same stack, so this checks its own org's row, never global totals.
 

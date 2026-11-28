@@ -1,4 +1,4 @@
-// The internal dashboard's data (supabase/migrations/0066_admin_dashboard.sql), parsed from the
+// The internal dashboard's data (supabase/migrations/0064_admin_dashboard.sql), parsed from the
 // two aggregate functions. Counts, dates and org names only.
 
 export type OrgKind = "forening" | "foretag" | "privat";

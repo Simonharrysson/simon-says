@@ -92,10 +92,13 @@ describe("proxy", () => {
     const signedOut = await proxy(new NextRequest("https://simonsays.example/admin"));
     expect(signedOut.status).toBe(404);
     expect(signedOut.headers.get("location")).toBeNull();
-    expect(signedOut.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    // Headers like any other 404: nothing reveals that /admin exists.
+    expect(signedOut.headers.get("x-robots-tag")).toBeNull();
+    expect(signedOut.headers.get("cache-control")).toBeNull();
 
     const member = await proxy(new NextRequest("https://simonsays.example/admin", { headers: cookie("u1") }));
     expect(member.status).toBe(404);
+    expect(member.headers.get("x-robots-tag")).toBeNull();
     // Below /admin and for client (RSC) requests too.
     const rsc = await proxy(new NextRequest("https://simonsays.example/admin/x", { headers: { ...cookie("u1"), rsc: "1" } }));
     expect(rsc.status).toBe(404);

@@ -40,12 +40,15 @@ export async function proxy(request: NextRequest) {
   // status (signed out too, never a login redirect), every method and request kind. The page and
   // its data loader check the same gate again (lib/admin/load.ts); this only gets the status right.
   if (isAdminPath(request.nextUrl.pathname)) {
-    const ok = Boolean(user) && mayOpenAdmin(user?.email, env);
-    const out = ok ? response : NextResponse.rewrite(new URL("/_finns-inte", request.url), { status: 404 });
-    if (!ok) for (const cookie of response.cookies.getAll()) out.cookies.set(cookie);
-    out.headers.set("X-Robots-Tag", "noindex, nofollow");
-    out.headers.set("Cache-Control", "private, no-store");
-    return out;
+    if (user && mayOpenAdmin(user.email, env)) {
+      response.headers.set("X-Robots-Tag", "noindex, nofollow");
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
+    }
+    // Exactly the 404 any unknown path gets (same rewrite, no extra headers): nothing tells /admin apart.
+    const notFound = NextResponse.rewrite(new URL("/_finns-inte", request.url), { status: 404 });
+    for (const cookie of response.cookies.getAll()) notFound.cookies.set(cookie);
+    return notFound;
   }
 
   if (!user && request.method === "GET" && isSignedInArea(request.nextUrl.pathname)) {

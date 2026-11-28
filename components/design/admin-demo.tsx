@@ -1,4 +1,4 @@
-// The internal dashboard (/admin, 0066) in the /design gallery, with fictional numbers and orgs.
+// The internal dashboard (/admin, 0064) in the /design gallery, with fictional numbers and orgs.
 
 import { AdminView } from "@/components/admin/AdminView";
 import type { AdminOrgRow, AdminOverview, AdminWeek } from "@/lib/admin/stats";

@@ -2,7 +2,7 @@
 --
 -- Two read-only aggregate functions for the service role. They return counts, dates and org
 -- names only: never transcripts, notes, task text, e-mail addresses or user ids. Strictly
--- additive (two new functions, nothing else changes).
+-- additive (two new functions and three indexes).
 --
 -- * admin_overview(p_now): the KPI tiles, two weekly series and the health line, as one jsonb.
 --   p_now is "now" (a parameter so tests can place their seeded rows in a known window).
@@ -20,34 +20,54 @@
 --   provider refused (meeting_summary_sends.sent = false), meeting briefs that failed
 --   (meeting_brief_sends.state 'failed') and invite mails that failed (org_invite_sends 'failed').
 
+-- The time-bounded reads below: meetings and failures by time (the other tables are small or
+-- already indexed by time: meeting_brief_sends.created_at, org_invite_sends (org_id, at)).
+create index if not exists meetings_started_at_idx on public.meetings (started_at);
+create index if not exists meetings_summary_failed_idx on public.meetings (summary_at) where summary_state = 'failed';
+create index if not exists meeting_summary_sends_claimed_idx on public.meeting_summary_sends (claimed_at) where sent = false;
+
 create function public.admin_overview(p_now timestamptz default now())
 returns jsonb
 language sql stable security definer set search_path = ''
 as $$
   with
+  -- Only the last 30 days are ever asked about: every source is cut to that window first.
   activity as (
-    select u.last_sign_in_at as at, u.id as user_id from auth.users u where u.last_sign_in_at is not null
+    select u.last_sign_in_at as at, u.id as user_id from auth.users u
+    where u.last_sign_in_at > p_now - interval '30 days' and u.last_sign_in_at <= p_now
     union all
     -- refreshed_at exists on newer Auth versions only: read it through jsonb, fall back to updated_at.
-    select coalesce((to_jsonb(s) ->> 'refreshed_at')::timestamptz, s.updated_at, s.created_at), s.user_id
-    from auth.sessions s
+    select x.at, x.user_id from (
+      select coalesce((to_jsonb(s) ->> 'refreshed_at')::timestamptz, s.updated_at, s.created_at) as at, s.user_id
+      from auth.sessions s
+      where coalesce(s.updated_at, s.created_at) > p_now - interval '30 days'
+    ) x
+    where x.at > p_now - interval '30 days' and x.at <= p_now
     union all
-    select m.started_at, m.started_by from public.meetings m where m.started_by is not null
+    select m.started_at, m.started_by from public.meetings m
+    where m.started_by is not null and m.started_at > p_now - interval '30 days' and m.started_at <= p_now
   ),
   weeks as (
     select (date_trunc('week', (p_now at time zone 'Europe/Stockholm'))::date - (7 * g)) as week
     from generate_series(0, 11) as g
   ),
-  real_meetings as (
-    select m.org_id, m.started_at,
-           date_trunc('week', (m.started_at at time zone 'Europe/Stockholm'))::date as week
-    from public.meetings m
-    where not m.is_test and m.started_at <= p_now
+  -- The first instant of the oldest of the 12 weeks: the weekly series read nothing older.
+  since as (
+    select (min(w.week)::timestamp at time zone 'Europe/Stockholm') as at from weeks w
   ),
-  new_users as (
-    select date_trunc('week', (u.created_at at time zone 'Europe/Stockholm'))::date as week
-    from auth.users u
-    where u.created_at <= p_now
+  recent_meetings as (
+    select m.started_at, date_trunc('week', (m.started_at at time zone 'Europe/Stockholm'))::date as week
+    from public.meetings m, since
+    where not m.is_test and m.started_at >= since.at and m.started_at <= p_now
+  ),
+  weekly_meetings as (
+    select r.week, count(*) as n from recent_meetings r group by r.week
+  ),
+  weekly_users as (
+    select date_trunc('week', (u.created_at at time zone 'Europe/Stockholm'))::date as week, count(*) as n
+    from auth.users u, since
+    where u.created_at >= since.at and u.created_at <= p_now
+    group by 1
   )
   select jsonb_build_object(
     'users', (select count(*) from auth.users u where u.created_at <= p_now),
@@ -58,8 +78,8 @@ as $$
       'foretag', (select count(*) from public.orgs o where o.kind = 'foretag' and o.created_at <= p_now),
       'privat', (select count(*) from public.orgs o where o.kind = 'privat' and o.created_at <= p_now)
     ),
-    'meetings', (select count(*) from real_meetings),
-    'meetings7', (select count(*) from real_meetings r where r.started_at > p_now - interval '7 days'),
+    'meetings', (select count(*) from public.meetings m where not m.is_test and m.started_at <= p_now),
+    'meetings7', (select count(*) from recent_meetings r where r.started_at > p_now - interval '7 days'),
     'minutes30', (
       select coalesce(round(sum(u.seconds) / 60.0), 0)::bigint from public.usage_daily u
       where u.day > (p_now at time zone 'utc')::date - 30 and u.day <= (p_now at time zone 'utc')::date
@@ -67,8 +87,8 @@ as $$
     'weeks', (
       select jsonb_agg(jsonb_build_object(
         'week', w.week,
-        'meetings', (select count(*) from real_meetings r where r.week = w.week),
-        'users', (select count(*) from new_users n where n.week = w.week)
+        'meetings', coalesce((select wm.n from weekly_meetings wm where wm.week = w.week), 0),
+        'users', coalesce((select wu.n from weekly_users wu where wu.week = w.week), 0)
       ) order by w.week)
       from weeks w
     ),

@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Insikter: the internal dashboard for the Simon Says team (ADMIN_EMAILS). Linked from nowhere;
  * everyone else gets a 404 (the proxy answers it with the status; this page and its loader check
- * again). Counts and org names only, read with the service role (migration 0066).
+ * again). Counts and org names only, read with the service role (migration 0064).
  */
 export default async function AdminPage() {
   const db = await createSupabaseServerClient();

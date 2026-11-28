@@ -4,7 +4,7 @@ import { createOrg } from "@/lib/db/orgs";
 import { parseOrgRows, parseOverview, type AdminOverview } from "@/lib/admin/stats";
 import { adminClient, anonClient, createTestUser, hasLocalSupabase } from "@/test/local-supabase";
 
-// Migration 0066: admin_overview(p_now) and admin_org_stats(), the internal dashboard's aggregates.
+// Migration 0064: admin_overview(p_now) and admin_org_stats(), the internal dashboard's aggregates.
 // The stack is shared with the other DB files (they run one at a time), so totals are compared as
 // deltas around this file's own seed, with one fixed p_now for both reads.
 
