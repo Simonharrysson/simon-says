@@ -19,9 +19,9 @@ import {
 import { formatItem } from "@/lib/docs/notes";
 import { rolesFromSkeleton, skeletonBlocks } from "@/lib/formats/skeleton";
 import { STYRELSEPROTOKOLL } from "@/lib/formats/standard";
-import { SYSTEM_PROMPT, tailText } from "@/lib/notes/prompt";
+import { SYSTEM_PROMPT, SYSTEM_PROMPT_AGENT_TASKS, tailText } from "@/lib/notes/prompt";
 import { AGENDA_OPS_JSON_SCHEMA, OPS_JSON_SCHEMA, toAgendaOp, type NotesItem, type NotesOp } from "@/lib/notes/schema";
-import { AGENDA_SYSTEM_PROMPT, agendaTailText, PARAGRAPH_FORMAT_NOTE, type AgendaContext } from "@/lib/notes/agenda-prompt";
+import { AGENDA_SYSTEM_PROMPT, AGENDA_SYSTEM_PROMPT_AGENT_TASKS, agendaTailText, PARAGRAPH_FORMAT_NOTE, type AgendaContext } from "@/lib/notes/agenda-prompt";
 
 const items: NotesItem[] = [
   { id: "n1", section: "decision", text: "Hackathon 14 mars i Kårhuset" },
@@ -505,20 +505,61 @@ function agendaInput(over: Partial<UpdateNotesInput> = {}): UpdateNotesInput {
 }
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
-describe("agent tasks (0065): both prompts give Claude only what the meeting explicitly gives it", () => {
-  it("says owner Claude, only when explicit, never a person's task", () => {
-    for (const p of [SYSTEM_PROMPT, AGENDA_SYSTEM_PROMPT]) {
+describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
+  it("with the flag on, both prompts say owner Claude, only when explicit, never a person's task", () => {
+    for (const p of [SYSTEM_PROMPT_AGENT_TASKS, AGENDA_SYSTEM_PROMPT_AGENT_TASKS]) {
       expect(p).toContain('with owner "Claude"');
       expect(p).toContain("never give a task to Claude yourself, and never move a person's task to Claude");
     }
+    // Byte-identical to the 0065 prompts.
+    expect(sha(SYSTEM_PROMPT_AGENT_TASKS)).toBe("11a9922505d53ed6e5623834d7bd492055b47f6bc1216c2ba660db3ba132a2cd");
+    expect(sha(AGENDA_SYSTEM_PROMPT_AGENT_TASKS)).toBe("201f8b7a533cc7adaa452ff2a2f13a87d8f672dd86d5903401616c53da562e1f");
+  });
+
+  it("off by default: the request uses the prompts without the rule (byte-identical to before 0065)", () => {
+    for (const p of [SYSTEM_PROMPT, AGENDA_SYSTEM_PROMPT]) expect(p).not.toContain('owner "Claude"');
+    expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("39d11167bf8692d0b5e597c1830f03ae522c7d38f71dedfd6b61d68536b4baab");
+    expect(buildRequest(input()).system).toBe(SYSTEM_PROMPT);
+    expect(buildRequest(agendaInput()).system).toBe(AGENDA_SYSTEM_PROMPT);
+    expect(buildRequest(input({ agentTasks: true })).system).toBe(SYSTEM_PROMPT_AGENT_TASKS);
+    expect(buildRequest(agendaInput({ agentTasks: true })).system).toBe(AGENDA_SYSTEM_PROMPT_AGENT_TASKS);
+  });
+
+  it("off by default: an owner Claude writes anyway is dropped, so no task is marked Claude's", async () => {
+    const ops = [
+      { op: "add", id: "n9", section: "action", text: "Sammanställ offerterna", owner: "Claude" },
+      { op: "change", id: "n2", owner: "AI:n" },
+    ];
+    const off = await updateNotes(input(), { client: fakeClient(message({ text: JSON.stringify({ ops }) })).client });
+    const added = off.items.find((i) => i.text === "Sammanställ offerterna")!;
+    expect(added.owner).toBeUndefined();
+    expect(off.items.find((i) => i.id === "n2")!.owner).toBe("Erik Johansson");
+    const on = await updateNotes(input({ agentTasks: true }), { client: fakeClient(message({ text: JSON.stringify({ ops }) })).client });
+    expect(on.items.find((i) => i.text === "Sammanställ offerterna")!.owner).toBe("Claude");
+    expect(on.items.find((i) => i.id === "n2")!.owner).toBe("AI:n");
+  });
+
+  it("off: a real person called Claude keeps their task", async () => {
+    const ops = [{ op: "add", id: "n9", section: "action", text: "Boka bussen", owner: "Claude" }];
+    const named = input({ speakerNames: { "S1-speaker_0": "Claude Berg" } });
+    const r = await updateNotes(named, { client: fakeClient(message({ text: JSON.stringify({ ops }) })).client });
+    expect(r.items.find((i) => i.text === "Boka bussen")!.owner).toBe("Claude");
+  });
+
+  it("the env flag defaults to off", async () => {
+    const { parseEnv } = await import("@/lib/env");
+    const { testEnv } = await import("@/test/env");
+    expect(parseEnv({ ...testEnv }).AGENT_TASKS_ENABLED).toBe(false);
+    expect(parseEnv({ ...testEnv, AGENT_TASKS_ENABLED: "1" }).AGENT_TASKS_ENABLED).toBe(true);
   });
 });
 
 describe("v1 prompt and schema stay byte-identical", () => {
-  // Re-pinned for meeting titles (0048, top-level "title"), concrete tasks (0049, done_when) and
-  // tasks the meeting explicitly gives Claude (0065, owner "Claude").
+  // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when);
+  // agent tasks (0065) are parked, so the default prompt is the one from before 0065.
   it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
-    expect(sha(SYSTEM_PROMPT)).toBe("11a9922505d53ed6e5623834d7bd492055b47f6bc1216c2ba660db3ba132a2cd");
+    expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
     expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("5f3da687b5c8b3dd2872b65f15bd98f410b2f8539a652017aca532d18647149a");
   });
 
@@ -605,8 +646,8 @@ describe("agenda mode: §-numbered board minutes (C2)", () => {
   const formatBlock = (tail: string) => tail.slice(tail.indexOf("<format>"), tail.indexOf("</format>"));
 
   it("the system prompt is untouched: the board-minutes rule lives in the tail only", () => {
-    // Re-pinned for tasks the meeting explicitly gives Claude (0065, owner "Claude").
-    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("201f8b7a533cc7adaa452ff2a2f13a87d8f672dd86d5903401616c53da562e1f");
+    // Agent tasks (0065) are parked: the default agenda prompt is the one from before 0065.
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("39d11167bf8692d0b5e597c1830f03ae522c7d38f71dedfd6b61d68536b4baab");
     expect(AGENDA_SYSTEM_PROMPT).not.toContain("§-numbered");
   });
 

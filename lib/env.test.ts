@@ -12,6 +12,7 @@ describe("parseEnv", () => {
     expect(env.GLOBAL_DAILY_HOURS).toBe(30);
     expect(env.GLOBAL_DAILY_USD).toBe(25);
     expect(env.KILL_SWITCH).toBe(false);
+    expect(env.AGENT_TASKS_ENABLED).toBe(false);
     expect(env.TOKEN_ENC_KEY.length).toBe(32);
   });
 

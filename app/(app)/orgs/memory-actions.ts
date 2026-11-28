@@ -27,11 +27,17 @@ async function adminOf(orgId: string) {
   return { db, user, org: org as { id: string; name: string; kind: string } };
 }
 
+/** The admin's name from their Google profile, for "Tillagt av <admin>" (none: "Tillagt av en admin"). */
+function authorName(meta: Record<string, unknown> | undefined): string | null {
+  const raw = meta?.full_name ?? meta?.name;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
 export async function saveMemoryAction(orgId: string, edits: EditedLine[], seenIds: string[]): Promise<MemoryActionResult> {
   const t = await getTranslations("memory");
   const a = await adminOf(orgId);
   if (!a || !Array.isArray(edits) || !Array.isArray(seenIds)) return { ok: false, message: t("saveFailed") };
-  const saved = await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits, seenIds.map(String));
+  const saved = await saveMemoryEdits(a.db, supabaseAdmin(), orgId, a.user.id, edits, seenIds.map(String), authorName(a.user.user_metadata));
   if (!saved.ok) return { ok: false, message: saved.reason === "stale" ? t("stale") : t("saveFailed") };
   revalidatePath(`/orgs/${orgId}`);
   return { ok: true, message: t("saved") };

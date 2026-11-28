@@ -5,8 +5,9 @@ import type { ItemRole } from "@/lib/db/types";
 import { formatItem } from "@/lib/docs/notes";
 import { getEnv } from "@/lib/env";
 import { cleanMeetingTitle } from "@/lib/meetings/title";
-import { AGENDA_SYSTEM_PROMPT, agendaTailText, type AgendaContext } from "@/lib/notes/agenda-prompt";
-import { SYSTEM_PROMPT, tailText, transcriptBlockText } from "@/lib/notes/prompt";
+import { AGENDA_SYSTEM_PROMPT, AGENDA_SYSTEM_PROMPT_AGENT_TASKS, agendaTailText, type AgendaContext } from "@/lib/notes/agenda-prompt";
+import { isAgentOwner } from "@/lib/agent/tasks";
+import { SYSTEM_PROMPT, SYSTEM_PROMPT_AGENT_TASKS, tailText, transcriptBlockText } from "@/lib/notes/prompt";
 import {
   AGENDA_OPS_JSON_SCHEMA,
   AgendaOpsOutputSchema,
@@ -95,6 +96,12 @@ export interface UpdateNotesInput {
    * lines as human text (F3).
    */
   ownLines?: string[];
+  /**
+   * "Claude ska …" agent tasks (0065), parked behind AGENT_TASKS_ENABLED: only when true does the
+   * prompt tell Claude to give a task owner "Claude". Off (the default): the pre-0065 prompt, and
+   * an assistant owner Claude still writes is dropped, so no new agent task is marked.
+   */
+  agentTasks?: boolean;
 }
 
 export interface UpdateNotesResult {
@@ -260,7 +267,7 @@ export function buildRequest(input: UpdateNotesInput): BetaMessageStreamParams {
     betas: [FALLBACK_BETA],
     fallbacks: "default",
     output_config: { effort: "medium", format: { type: "json_schema", schema: agenda ? AGENDA_OPS_JSON_SCHEMA : OPS_JSON_SCHEMA } },
-    system: agenda ? AGENDA_SYSTEM_PROMPT : SYSTEM_PROMPT,
+    system: agenda ? (input.agentTasks ? AGENDA_SYSTEM_PROMPT_AGENT_TASKS : AGENDA_SYSTEM_PROMPT) : input.agentTasks ? SYSTEM_PROMPT_AGENT_TASKS : SYSTEM_PROMPT,
     messages: [{ role: "user", content: [...blocks, { type: "text", text: tail }] }],
   };
 }
@@ -376,6 +383,28 @@ export function applyOps(
     accepted.push({ ...op, id });
   }
   return { ops: accepted, items: work, dropped, nextId: `n${counter}`, ...(opts.agenda ? { ruled } : {}) };
+}
+
+/**
+ * Agent tasks parked (AGENT_TASKS_ENABLED off): an owner that means the assistant ("Claude", "AI:n",
+ * "Simon Says") is left out of an add and a change, so the row is never marked as Claude's task.
+ */
+export function withoutAgentOwners(ops: NotesOp[], people: string[] = []): NotesOp[] {
+  // A real person in the meeting called that (a member named Claude) keeps their task, as before 0065.
+  const norm = (s: string) => s.normalize("NFC").replace(/\s+/g, " ").trim().toLocaleLowerCase("sv");
+  const names = new Set(people.flatMap((p) => [norm(p), norm(p).split(" ")[0]]).filter(Boolean));
+  const assistant = (owner: string | undefined) => isAgentOwner(owner) && !names.has(norm(owner!).replace(/[.:!]+$/, ""));
+  return ops.map((op) => {
+    if (op.op === "add" && assistant(op.item.owner)) {
+      const { owner: _, ...item } = op.item;
+      return { ...op, item };
+    }
+    if (op.op === "change" && assistant(op.owner)) {
+      const { owner: _, ...rest } = op;
+      return rest;
+    }
+    return op;
+  });
 }
 
 /** An agenda-mode `add` is placed under a live agenda item or `notes`, never under checkin/followup. */
@@ -519,7 +548,7 @@ export async function updateNotes(
     return nothing("malformed");
   }
 
-  const applied = applyOps(items, parsed.ops, {
+  const applied = applyOps(items, input.agentTasks ? parsed.ops : withoutAgentOwners(parsed.ops, [...Object.values(input.speakerNames), ...(input.agenda?.people.map((p) => p.name) ?? [])]), {
     protectedIds: [...lockedIds, ...input.deletedIds],
     final: input.final,
     nextId,
