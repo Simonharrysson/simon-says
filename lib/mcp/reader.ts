@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AgentStatus, AgentStatusRow } from "@/lib/agent/tasks";
 import type { HandoffRow, HomeMeeting, HomeNoteRow, HomePerson, PrivatTaskRow } from "@/lib/home/tasks";
 
 // What the MCP tools read, for one user: the mcp_* functions of 0060, called with the service role
@@ -27,6 +28,21 @@ export interface McpReader {
   handoffs(orgIds: string[]): Promise<HandoffRow[]>;
   setHandoffDone(id: string, done: boolean): Promise<boolean>;
   setPrivatTaskDone(id: string, done: boolean): Promise<boolean>;
+  /** Claude's progress on agent tasks (0065, is_meeting_member). */
+  agentStatuses(meetingIds: string[]): Promise<AgentStatusRow[]>;
+  /** mcp_set_agent_task: the meeting seen, finished, and the user its assigner or an admin. */
+  setAgentTask(meetingId: string, itemId: string, status: AgentStatus, note: string | null): Promise<boolean>;
+  /** The org's "Vad Claude ska veta" (0065, is_org_member), or null when there is none. */
+  orgMemory(orgId: string): Promise<McpOrgMemory | null>;
+}
+
+export interface McpOrgMemory {
+  org_id: string;
+  lines: unknown;
+  generated_at: string | null;
+  sources_from: string | null;
+  sources_count: number | null;
+  updated_at: string | null;
 }
 
 export function dbReader(admin: SupabaseClient, userId: string): McpReader {
@@ -64,5 +80,10 @@ export function dbReader(admin: SupabaseClient, userId: string): McpReader {
     handoffs: async (orgIds) => (orgIds.length ? ((await rpc<HandoffRow[]>("mcp_handoffs", { p_org_ids: orgIds })) ?? []) : []),
     setHandoffDone: async (id, done) => (await rpc<boolean>("mcp_set_handoff_done", { p_id: id, p_done: done })) === true,
     setPrivatTaskDone: async (id, done) => (await rpc<boolean>("mcp_set_privat_task_done", { p_id: id, p_done: done })) === true,
+    agentStatuses: (ids) =>
+      ids.length ? chunks(ids, async (part) => (await rpc<AgentStatusRow[]>("mcp_agent_task_status", { p_meeting_ids: part })) ?? []) : Promise.resolve([]),
+    setAgentTask: async (meetingId, itemId, status, note) =>
+      (await rpc<boolean>("mcp_set_agent_task", { p_meeting: meetingId, p_item: itemId, p_status: status, p_note: note })) === true,
+    orgMemory: async (orgId) => ((await rpc<McpOrgMemory[]>("mcp_org_memory", { p_org: orgId })) ?? [])[0] ?? null,
   };
 }

@@ -11,6 +11,7 @@ import { CHECKIN_SYSTEM_PROMPT } from "@/lib/notes/checkin";
 import { SYSTEM_PROMPT } from "@/lib/notes/prompt";
 import { PRIVAT_SUMMARY_SYSTEM_PROMPT } from "@/lib/privat/summary";
 import { BOARD_SYSTEM_PROMPT } from "@/lib/website/board";
+import { MEMORY_SYSTEM_PROMPT } from "@/lib/memory/prompt";
 import { FAKE_BOARD } from "./website";
 import { readBody, send } from "./google";
 import { SCRIPTED } from "./scripted";
@@ -22,7 +23,7 @@ export { SCRIPTED };
 // test/meeting-sim.ts `scriptedClient` does, and answered with fixed, schema-valid JSON. An
 // unknown prompt is a 500 and lands in `problems`: a call nobody scripted never passes quietly.
 
-export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles" | "brief" | "website-board";
+export type ClaudeKind = "privat-summary" | "notes" | "agenda-notes" | "names" | "checkin" | "stadgar" | "stadgar-both" | "goals" | "extract" | "digest" | "roles" | "brief" | "website-board" | "memory";
 
 const KINDS: [string, ClaudeKind][] = [
   [PRIVAT_SUMMARY_SYSTEM_PROMPT, "privat-summary"],
@@ -37,6 +38,7 @@ const KINDS: [string, ClaudeKind][] = [
   [ROLES_SYSTEM_PROMPT, "roles"],
   [BRIEF_PICK_SYSTEM_PROMPT, "brief"],
   [BOARD_SYSTEM_PROMPT, "website-board"],
+  [MEMORY_SYSTEM_PROMPT, "memory"],
 ];
 
 export interface ClaudeCall {
@@ -164,6 +166,21 @@ function answer(kind: ClaudeKind, text: string): unknown {
     case "roles": {
       const keys = [...new Set(text.match(/ag-\d+/g) ?? [])];
       return { roles: keys.map((key) => ({ key, role: "topic" })) };
+    }
+    case "memory": {
+      // "Vad Claude ska veta" (0065): one line per scripted section, sourced from the newest meeting
+      // it was sent, and one from a meeting it was NOT sent (the app must drop that line).
+      const ids = [...text.matchAll(/<meeting id="([0-9a-f-]{36})"/g)].map((m) => m[1]);
+      const m = SCRIPTED.memory;
+      return {
+        lines: ids.length
+          ? [
+              { section: "customers", text: m.customer, sources: [ids[0]] },
+              { section: "glossary", text: m.glossary, sources: [ids[0]] },
+              { section: "priorities", text: m.foreign, sources: ["00000000-0000-4000-8000-000000000000"] },
+            ]
+          : [],
+      };
     }
     case "website-board":
       // The fake site's board, plus one name that is NOT on the site: the app must drop it.

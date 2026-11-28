@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import type { MeetingTask } from "@/lib/home/meeting";
 import { isOverdue } from "@/lib/home/tasks";
 import { cn } from "@/lib/utils";
+import { AgentStatus } from "./AgentStatus";
 import { postTick, RowStatus, useTicks, whenLabel, type SaveTick, type TickState } from "./MyTasks";
 
 /** The tasks of one meeting: who, when, klart när; a checkbox where the user may tick it. */
@@ -91,6 +92,7 @@ function Row({
             )}
           </p>
           {task.doneWhen && <p className="text-sm text-ink-2 wrap-anywhere">{t("doneWhen", { text: task.doneWhen })}</p>}
+          {task.agent && <AgentStatus agent={task.agent} />}
           <RowStatus state={state} docUrl={docUrl} onUndo={onUndo} />
         </div>
       </div>

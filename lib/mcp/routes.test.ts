@@ -68,7 +68,9 @@ describe("the SDK client against the route handlers", () => {
 
     const client = new Client({ name: "t", version: "1" });
     await client.connect(new StreamableHTTPClientTransport(new URL(MCP_URL), { authProvider: provider, fetch: routeFetch }));
-    expect((await client.listTools()).tools).toHaveLength(6);
+    expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(
+      ["complete_task", "get_meeting", "get_org_memory", "list_agent_tasks", "list_spaces", "my_tasks", "prepare_agenda", "search_meetings", "update_agent_task"],
+    );
     const r = resultOf(await client.callTool({ name: "complete_task", arguments: { task_id: "h:33333333-3333-4333-8333-333333333333" } }));
     expect(r.data).toMatchObject({ done: true });
     await client.close();

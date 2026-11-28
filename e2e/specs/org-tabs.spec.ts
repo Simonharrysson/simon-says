@@ -28,7 +28,7 @@ test("tabs: a member sees Möten and Översikt, an admin also Inställningar @ph
   await expect(tabs.getByRole("link", { name: "Inställningar" })).toHaveAttribute("aria-current", "page");
   // The sections' sub-nav; Föreningen opens first.
   const sections = page.getByRole("navigation", { name: "Inställningarnas delar" });
-  await expect(sections.getByRole("link")).toHaveText(["Föreningen", "Styrelsen och medlemmar", "Möten", "Efter mötet", "Radera"]);
+  await expect(sections.getByRole("link")).toHaveText(["Föreningen", "Styrelsen och medlemmar", "Möten", "Efter mötet", "Vad Claude ska veta", "Radera"]);
   await expect(sections.getByRole("link", { name: "Föreningen" })).toHaveAttribute("aria-current", "true");
   await expect(page.getByRole("heading", { name: "Namn, logga och om oss", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mötesformat", exact: true })).toHaveCount(0);

@@ -14,7 +14,7 @@ import { SettingsSections } from "./SettingsSections";
  * MeetingFolderSetting, FormatCard, VoicesSetting) and links here once a step is done.
  */
 export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record<string, ReactNode>; rotateInvite: ReactNode }) {
-  const { org, actions, boardList, memberControls, rotateInvite, detailsSettings, reopenKomIgang, formatCard, folderSettings, calendarSettings, voiceSettings, summarySettings, groupSettings } = props;
+  const { org, actions, boardList, memberControls, rotateInvite, detailsSettings, reopenKomIgang, formatCard, folderSettings, calendarSettings, voiceSettings, summarySettings, groupSettings, memorySettings } = props;
   const t = useTranslations("org");
   const tasks = useTranslations("tasks.settings");
   const s = useTranslations("org.settings");
@@ -78,6 +78,8 @@ export function OrgSettings(props: OrgDetailViewProps & { memberControls: Record
             </>
           ),
           "efter-motet": summarySettings ? <Panel>{summarySettings}</Panel> : null,
+          // Vad Claude ska veta (0065): what the members' Claude reads (get_org_memory).
+          claude: memorySettings ?? null,
           radera: (
             <Panel title={t("deleteOrgTitle")} titleId="danger-title" className="shadow-[0_0_0_1px_color-mix(in_srgb,var(--red)_40%,var(--line))]">
               <div className="flex flex-wrap items-center justify-between gap-4">

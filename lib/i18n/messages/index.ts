@@ -73,6 +73,10 @@ import enTasks from "./en/tasks.json";
 import enConnect from "./en/connect.json";
 import svConnect from "./sv/connect.json";
 import svTasks from "./sv/tasks.json";
+import enMemory from "./en/memory.json";
+import svMemory from "./sv/memory.json";
+import enAgent from "./en/agent.json";
+import svAgent from "./sv/agent.json";
 
 export const sv = {
   calendar: svCalendar,
@@ -108,6 +112,8 @@ export const sv = {
   mailPrefs: svMailPrefs,
   notices: svNotices,
   tasks: svTasks,
+  memory: svMemory,
+  agent: svAgent,
   connect: svConnect,
 };
 
@@ -147,6 +153,8 @@ export const en: Messages = {
   mailPrefs: enMailPrefs,
   notices: enNotices,
   tasks: enTasks,
+  memory: enMemory,
+  agent: enAgent,
   connect: enConnect,
 };
 

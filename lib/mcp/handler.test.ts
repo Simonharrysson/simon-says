@@ -60,7 +60,7 @@ describe("the SDK client through the whole connector flow", () => {
     const { d, m } = deps();
     const { client } = await connectAs(USER.id, d);
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["complete_task", "get_meeting", "list_spaces", "my_tasks", "prepare_agenda", "search_meetings"]);
+    expect(names).toEqual(["complete_task", "get_meeting", "get_org_memory", "list_agent_tasks", "list_spaces", "my_tasks", "prepare_agenda", "search_meetings", "update_agent_task"]);
 
     const open = resultOf(await client.callTool({ name: "my_tasks", arguments: {} }));
     expect(open.isError).toBe(false);

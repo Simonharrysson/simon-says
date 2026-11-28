@@ -1,5 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readAgentStatuses } from "@/lib/agent/status";
+import { agentState, isAgentTask, statusKey, type AgentStatusRow } from "@/lib/agent/tasks";
 import type { ItemRole } from "@/lib/db/types";
 import { isCopy, isDecision, isTask } from "@/lib/meetings/summary";
 import { docUrl } from "@/lib/ui/meetings";
@@ -38,9 +40,10 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
   if (e1 || e2 || e3) throw new Error(`loadOrgMeeting: ${(e1 ?? e2 ?? e3)!.message}`);
   if (!org || org.kind === "privat" || !meeting || !member) return null;
   const m = meeting as HomeMeeting & { notes_tab_id?: string | null; ended_at?: string | null };
-  const [{ data: rows, error: e4 }, { data: people, error: e5 }] = await Promise.all([
+  const [{ data: rows, error: e4 }, { data: people, error: e5 }, statuses] = await Promise.all([
     db.from("note_items").select("*").eq("meeting_id", meetingId).order("position"),
     db.from("people").select("id, org_id, name, role, member_user_id").eq("org_id", orgId),
+    readAgentStatuses(db, [meetingId]),
   ]);
   if (e4 || e5) throw new Error(`loadOrgMeeting: ${(e4 ?? e5)!.message}`);
   const page = buildOrgMeeting({
@@ -50,6 +53,7 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     role: member.role as string,
     rows: (rows ?? []) as HomeNoteRow[],
     people: (people ?? []) as HomePerson[],
+    statuses,
   });
   return { ...page, org: { ...page.org, kind: org.kind as string } };
 }
@@ -65,6 +69,8 @@ export function buildOrgMeeting(input: {
   role: string;
   rows: HomeNoteRow[];
   people: HomePerson[];
+  /** Claude's progress on the tasks this meeting gave it (agent_task_status, 0065). */
+  statuses?: AgentStatusRow[];
 }): OrgMeetingPage {
   const { userId, org, role } = input;
   const orgId = org.id;
@@ -82,11 +88,15 @@ export function buildOrgMeeting(input: {
   const me = myPersonIds(orgPeople, orgId, userId);
   const isAdmin = member.role === "admin";
   const open = countsMeeting(m);
+  const statuses = new Map((input.statuses ?? []).map((s) => [statusKey(s.meeting_id, s.item_id), s]));
   const tasks: MeetingTask[] = shown
     .filter((r) => isTask(chain(r)))
     .map((r) => {
       const mine = isMine(r, orgPeople, me);
       const done = Boolean(r.done) || doneCopies.has(r.id);
+      // A task the meeting gave Claude: its assigner (the runner) may tick it, like its owner.
+      const agent = isAgentTask(r, orgPeople) ? agentState(done, statuses.get(statusKey(meetingId, r.id))) : undefined;
+      const assigner = Boolean(agent) && m.started_by === userId;
       return {
         key: `n:${meetingId}:${r.id}`,
         kind: "note" as const,
@@ -105,7 +115,8 @@ export function buildOrgMeeting(input: {
         meetingAt: m.started_at,
         position: r.position,
         mine,
-        canTick: open && !done && canTick({ mine, isAdmin }),
+        canTick: open && !done && canTick({ mine: mine || assigner, isAdmin }),
+        ...(agent ? { agent } : {}),
       };
     });
   return {
