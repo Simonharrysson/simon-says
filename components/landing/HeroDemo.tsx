@@ -181,7 +181,7 @@ export function HeroDemo() {
             type="button"
             onClick={() => setPaused((p) => !p)}
             aria-pressed={paused}
-            className="press inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-xs font-medium text-ink-2 hover:bg-sunk hover:text-ink"
+            className="press inline-flex min-h-11 flex-none items-center gap-2 rounded-md px-3 text-xs font-medium whitespace-nowrap text-ink-2 hover:bg-sunk hover:text-ink"
           >
             {paused ? <IconPlay size={14} /> : <IconPause size={14} />}
             {paused ? t("play") : t("pause")}
