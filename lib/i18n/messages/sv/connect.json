@@ -100,7 +100,7 @@
     "cursor": {
       "1": "Klicka på <b>Lägg till i Cursor</b>. Cursor öppnas och frågar om du vill installera <b>simon-says</b>.",
       "2": "Installera, logga sedan in med Google när Cursor ber om det, och godkänn.",
-      "3": "Fungerar inte länken? Lägg in det här under <b>mcpServers</b> i Cursors <b>mcp.json</b>:"
+      "3": "Fungerar inte länken? Lägg in det här i Cursors <b>mcp.json</b>:"
     },
     "vscode": {
       "1": "Klicka på <b>Lägg till i VS Code</b> och välj <b>Install</b>.",

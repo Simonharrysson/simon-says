@@ -216,12 +216,12 @@ export function AddAnother({ children }: { children: ReactNode }) {
           <IconChevronDown size={16} className="text-ink-3 transition-[rotate] duration-(--dur-press) [transition-timing-function:var(--ease-press)] group-data-[state=open]/add:rotate-180" />
         </CollapsibleTrigger>
       </div>
-      <CollapsibleContent
-        forceMount
-        className="grid grid-rows-[0fr] invisible transition-[grid-template-rows,visibility] duration-(--dur-press) [transition-timing-function:var(--ease-press)] data-[state=open]:visible data-[state=open]:grid-rows-[1fr]"
-      >
-        <div className="min-h-0 overflow-hidden">
-          <div className="-m-1 p-1 pt-5">{children}</div>
+      {/* The animated grid is a child: Radix zeroes the content node's transition around a toggle. */}
+      <CollapsibleContent forceMount>
+        <div className="grid grid-rows-[0fr] invisible transition-[grid-template-rows,visibility] duration-(--dur-press) [transition-timing-function:var(--ease-press)] group-data-[state=open]/add:visible group-data-[state=open]/add:grid-rows-[1fr]">
+          <div className="min-h-0 overflow-hidden">
+            <div className="-m-1 p-1 pt-5">{children}</div>
+          </div>
         </div>
       </CollapsibleContent>
     </Collapsible>

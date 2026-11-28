@@ -126,6 +126,8 @@ export function AccountSection({
       <section
         id={id}
         data-account-section=""
+        // A card like Panel: the in-card styles and the client-navigation entrance (Enter.tsx) find it by this.
+        data-slot="card"
         aria-labelledby={titleId}
         suppressHydrationWarning
         className={cn(cardClass, "group/section scroll-mt-24")}
@@ -165,17 +167,19 @@ export function AccountSection({
             )}
           />
         </div>
-        <CollapsibleContent
-          forceMount
-          suppressHydrationWarning
-          className={cn(
-            "grid grid-rows-[0fr] invisible group-data-[state=open]/section:visible group-data-[state=open]/section:grid-rows-[1fr]",
-            "transition-[grid-template-rows,visibility] duration-(--dur-press) [transition-timing-function:var(--ease-press)]",
-          )}
-        >
-          <div className="min-h-0 overflow-hidden">
-            <div className="px-6 pt-1 pb-6 max-md:px-4">
-              <SummaryContext.Provider value={setSummary}>{children}</SummaryContext.Provider>
+        {/* Radix zeroes the content node's transition-duration around every open change, so the
+            animated grid is a child of it. */}
+        <CollapsibleContent forceMount suppressHydrationWarning>
+          <div
+            className={cn(
+              "grid grid-rows-[0fr] invisible group-data-[state=open]/section:visible group-data-[state=open]/section:grid-rows-[1fr]",
+              "transition-[grid-template-rows,visibility] duration-(--dur-press) [transition-timing-function:var(--ease-press)]",
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="px-6 pt-1 pb-6 max-md:px-4">
+                <SummaryContext.Provider value={setSummary}>{children}</SummaryContext.Provider>
+              </div>
             </div>
           </div>
         </CollapsibleContent>

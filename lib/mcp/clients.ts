@@ -1,6 +1,7 @@
 // Konto → Koppla till din AI: the AI tools the page shows, and how to add Simon Says to each.
-// Only tools whose OAuth flow works against our redirect allow-list (lib/mcp/oauth.ts
-// HOSTED_CALLBACKS and loopback; docs/mcp.md "Redirect URIs") are listed. Pure: the links and
+// Only tools whose documented OAuth redirect URIs are on our allow-list (lib/mcp/oauth.ts
+// HOSTED_CALLBACKS and loopback; docs/mcp.md "Redirect URIs") are listed. Claude and Claude Code
+// are used in production; the others are allow-listed from their docs, not yet tried live. Pure: the links and
 // commands are unit-tested (clients.test.ts).
 
 export const SERVER_NAME = "simon-says";

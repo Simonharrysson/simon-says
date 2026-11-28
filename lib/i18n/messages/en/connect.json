@@ -100,7 +100,7 @@
     "cursor": {
       "1": "Click <b>Add to Cursor</b>. Cursor opens and asks whether to install <b>simon-says</b>.",
       "2": "Install it, then sign in with Google when Cursor asks, and allow.",
-      "3": "Link not working? Add this under <b>mcpServers</b> in Cursor's <b>mcp.json</b>:"
+      "3": "Link not working? Add this to Cursor's <b>mcp.json</b>:"
     },
     "vscode": {
       "1": "Click <b>Add to VS Code</b> and choose <b>Install</b>.",
