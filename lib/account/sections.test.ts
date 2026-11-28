@@ -7,7 +7,7 @@ const none = { hash: null, forced: [] as SectionId[], stored: {} };
 
 describe("account sections: which are open", () => {
   it("all closed by default", () => {
-    for (const id of ["konto", "sprak", "mejl", "kalender", "ai", "foreningar", "integritet"] as const) expect(isOpen(id, none)).toBe(false);
+    for (const id of ["sprak", "mejl", "kalender", "ai", "foreningar", "integritet"] as const) expect(isOpen(id, none)).toBe(false);
   });
   it("a remembered section opens; a remembered close stays closed", () => {
     expect(isOpen("mejl", { ...none, stored: { mejl: true } })).toBe(true);
@@ -23,7 +23,7 @@ describe("account sections: which are open", () => {
     expect(isOpen("ai", { ...none, override: true })).toBe(true);
   });
   it("reads only known sections and booleans from storage; garbage is nothing", () => {
-    expect(parseStored('{"mejl":true,"ai":false,"x":true,"konto":"yes"}')).toEqual({ mejl: true, ai: false });
+    expect(parseStored('{"mejl":true,"ai":false,"x":true,"sprak":"yes","konto":true}')).toEqual({ mejl: true, ai: false });
     for (const raw of [null, "", "not json", "[]", "null", "42"]) expect(parseStored(raw)).toEqual({});
   });
   it("hash: #ai and #kalender, nothing else", () => {
@@ -66,7 +66,7 @@ describe("pre-paint script", () => {
   /** Runs the script against a tiny fake DOM with the page's sections. */
   function run(stored: string | null, hash: string, forced: SectionId[], throwing = false) {
     const els = new Map<string, { attrs: Record<string, string>; trigger: { attrs: Record<string, string> } }>();
-    for (const id of ["konto", "mejl", "kalender", "ai"]) els.set(id, { attrs: { "data-account-section": "" }, trigger: { attrs: {} } });
+    for (const id of ["sprak", "mejl", "kalender", "ai"]) els.set(id, { attrs: { "data-account-section": "" }, trigger: { attrs: {} } });
     const document = {
       getElementById: (id: string) => {
         const e = els.get(id);
@@ -88,12 +88,12 @@ describe("pre-paint script", () => {
     return (id: string) => els.get(id)!.attrs["data-state"] === "open" && els.get(id)!.trigger.attrs["aria-expanded"] === "true";
   }
   it("opens the same sections as isOpen (stored, hash, forced) and nothing else", () => {
-    const open = run('{"mejl":true,"konto":false}', "#ai", ["kalender"]);
-    expect(["konto", "mejl", "kalender", "ai"].filter(open)).toEqual(["mejl", "kalender", "ai"]);
+    const open = run('{"mejl":true,"sprak":false}', "#ai", ["kalender"]);
+    expect(["sprak", "mejl", "kalender", "ai"].filter(open)).toEqual(["mejl", "kalender", "ai"]);
   });
   it("blocked storage: only the hash and forced ones", () => {
     const open = run(null, "", ["kalender"], true);
-    expect(["konto", "mejl", "kalender", "ai"].filter(open)).toEqual(["kalender"]);
+    expect(["sprak", "mejl", "kalender", "ai"].filter(open)).toEqual(["kalender"]);
   });
   it("can't break out of the script tag", () => {
     expect(preOpenScript("</script><script>alert(1)//", [])).not.toContain("<");

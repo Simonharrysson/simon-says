@@ -52,7 +52,6 @@
   "newTab": "(öppnas i en ny flik)",
   "openClaude": "Öppna Claude",
   "openChatgpt": "Öppna ChatGPT",
-  "chatgptHelp": "OpenAIs instruktioner",
   "addToCursor": "Lägg till i Cursor",
   "addToVscode": "Lägg till i VS Code",
   "addToVscodeInsiders": "VS Code Insiders",
@@ -99,13 +98,13 @@
     },
     "cursor": {
       "1": "Klicka på <b>Lägg till i Cursor</b>. Cursor öppnas och frågar om du vill installera <b>simon-says</b>.",
-      "2": "Installera, logga sedan in med Google när Cursor ber om det, och godkänn.",
-      "3": "Fungerar inte länken? Lägg in det här i Cursors <b>mcp.json</b>:"
+      "2": "Installera och logga in med Google när Cursor ber om det, och godkänn. Servern syns sedan under <b>Customize</b> i Cursors sidomeny.",
+      "3": "Fungerar inte länken? Lägg in det här i <b>~/.cursor/mcp.json</b>:"
     },
     "vscode": {
       "1": "Klicka på <b>Lägg till i VS Code</b> och välj <b>Install</b>.",
-      "2": "Starta <b>simon-says</b> och tillåt inloggningen när VS Code frågar.",
-      "3": "Logga in med Google och godkänn. Fråga sedan i Copilot Chat, i agentläge."
+      "2": "Eller: kör <b>MCP: Add Server</b> i kommandopaletten, välj <b>HTTP</b> och klistra in adressen:",
+      "3": "Tillåt inloggningen när VS Code frågar, logga in med Google och godkänn. Fråga sedan i Copilot Chat, i agentläge."
     },
     "claude-code": {
       "1": "Kör i terminalen:",
@@ -122,5 +121,10 @@
       "2": "Eller klistra in det här i verktygets MCP-inställningar:",
       "3": "Verktyget behöver stödja MCP över HTTP med OAuth. Logga in med Google och godkänn."
     }
-  }
+  },
+  "pickHint": "Välj ett verktyg för att se hur du kopplar det.",
+  "officialGuide": "Officiell guide från {tool}",
+  "mcpGuide": "Om MCP (modelcontextprotocol.io)",
+  "appLocalShort": "App på din dator",
+  "registeredAs": "Kallar sig ”{client}”"
 }

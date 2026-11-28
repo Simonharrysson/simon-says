@@ -4,6 +4,7 @@ import { Banner } from "@/components/ui/Banner";
 import { ButtonLink } from "@/components/ui/button";
 import type { FormAction } from "@/components/ui/ConfirmAction";
 import { IconArrowRight } from "@/components/ui/icons";
+import { cardClass } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import type { EmailPrefs } from "@/lib/email/categories";
@@ -12,6 +13,7 @@ import { mailSummary } from "@/lib/account/summary";
 import { AccountSection, AccountSections, SummaryStatus } from "./AccountSection";
 import { EmailPrefsForm, type BriefForeningarPref, type SaveEmailPrefs } from "./EmailPrefsForm";
 import { LanguageSelect } from "./LanguageSelect";
+import { cn } from "@/lib/utils";
 
 const LANGUAGE_NAMES: Record<string, string> = { sv: "Svenska", en: "English" };
 
@@ -60,18 +62,24 @@ export function AccountView({
   const forced: SectionId[] = [...openSections, ...(localeFailed ? (["sprak"] as const) : [])];
   const mail = emailPrefs ? mailSummary(emailPrefs, briefForeningar?.initial) : null;
   return (
-    <div className="mx-auto w-full px-gutter max-w-[40rem] flex flex-col gap-6">
+    <div className="mx-auto w-full px-gutter max-w-[40rem] lg:max-w-[60rem] flex flex-col gap-6">
       <PageHeader title={t("title")} />
       <AccountSections userId={userId} forced={forced}>
         <div className="flex flex-col gap-3">
-          <AccountSection id="konto" title={t("signedInAs")} summary={<span className="truncate">{email}</span>}>
-            <dl className="flex flex-col gap-4 [&_dd]:mt-1 [&_dd]:flex [&_dd]:flex-col [&_dd]:gap-1 [&_dd]:wrap-anywhere [&_dt]:text-xs [&_dt]:font-semibold [&_dt]:text-ink-3">
-              <div>
-                <dt>{t("googleAccount")}</dt>
-                <dd>{email}</dd>
-              </div>
-            </dl>
-          </AccountSection>
+          {/* Who is signed in: a plain row, not a section (nothing to open), with Logga ut. */}
+          <section aria-labelledby="konto-title" data-slot="card" className={cn(cardClass, "flex flex-wrap items-center gap-x-4 gap-y-3 px-6 py-4 max-md:px-4")}>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <h2 id="konto-title" className="text-sm text-ink-3">
+                {t("signedInAs")}
+              </h2>
+              <p className="truncate font-medium" title={email}>
+                {email}
+              </p>
+            </div>
+            <form action={signOut}>
+              <SubmitButton pendingLabel={common("signingOut")}>{common("signOut")}</SubmitButton>
+            </form>
+          </section>
           <AccountSection id="sprak" title={t("languageTitle")} summary={LANGUAGE_NAMES[locale] ?? locale}>
             <form action={saveLocale} className="flex flex-col gap-4">
               <p className="text-ink-2 max-w-[68ch]">{t("languageIntro")}</p>
@@ -149,9 +157,6 @@ export function AccountView({
           </AccountSection>
         </div>
       </AccountSections>
-      <form action={signOut}>
-        <SubmitButton pendingLabel={common("signingOut")}>{common("signOut")}</SubmitButton>
-      </form>
     </div>
   );
 }

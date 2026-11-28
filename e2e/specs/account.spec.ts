@@ -46,8 +46,11 @@ test("Konto: sections start closed with a summary, open and are remembered, #ai 
   await expect(toggle(page, "Koppla till din AI")).toHaveAttribute("aria-expanded", "true");
   await expect(ai.getByText("Inget kopplat än.")).toBeVisible();
 
-  // Claude is chosen first: its steps, "Öppna Claude" in a new tab, and the address to copy.
-  await expect(ai.getByRole("tab", { name: "Claude", exact: true })).toHaveAttribute("aria-selected", "true");
+  // Claude is chosen first: its steps (under its row on a phone, beside the tiles on a desktop),
+  // "Öppna Claude" in a new tab, the official guide, and the address to copy.
+  const tile = (name: string) => ai.getByRole("button", { name, exact: true });
+  await expect(tile("Claude")).toHaveAttribute("aria-expanded", "true");
+  await expect(ai.getByRole("link", { name: /Officiell guide från Claude/ })).toHaveAttribute("href", "https://support.claude.com/en/articles/11175166");
   const open = ai.getByRole("link", { name: /Öppna Claude/ });
   await expect(open).toHaveAttribute("href", "https://claude.ai/customize/connectors");
   await expect(open).toHaveAttribute("target", "_blank");
@@ -55,15 +58,18 @@ test("Konto: sections start closed with a summary, open and are remembered, #ai 
   await expect(ai.getByRole("button", { name: /Kopierad/ })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${APP_URL}/api/mcp`);
 
-  // Arrow keys move between tools; Cursor and VS Code get one-click install links.
-  await ai.getByRole("tab", { name: "Claude", exact: true }).focus();
-  await page.keyboard.press("ArrowRight");
-  await expect(ai.getByRole("tab", { name: "ChatGPT" })).toHaveAttribute("aria-selected", "true");
-  await ai.getByRole("tab", { name: "Cursor" }).click();
+  // Keyboard: Tab to the next tile, Enter chooses it. Cursor and VS Code get one-click install links.
+  await tile("Claude").focus();
+  await page.keyboard.press("Tab");
+  await expect(tile("ChatGPT")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(tile("ChatGPT")).toHaveAttribute("aria-expanded", "true");
+  await expect(tile("Claude")).toHaveAttribute("aria-expanded", "false");
+  await tile("Cursor").click();
   await expect(ai.getByRole("link", { name: /Lägg till i Cursor/ })).toHaveAttribute("href", /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install\?name=simon-says&config=/);
-  await ai.getByRole("tab", { name: "VS Code" }).click();
+  await tile("VS Code").click();
   await expect(ai.getByRole("link", { name: /Lägg till i VS Code/ })).toHaveAttribute("href", /^vscode:mcp\/install\?/);
-  await ai.getByRole("tab", { name: "Claude Code" }).click();
+  await tile("Claude Code").click();
   await expect(ai.getByText(`claude mcp add --transport http simon-says ${APP_URL}/api/mcp`)).toBeVisible();
   await expectAccessible(page);
 
@@ -79,7 +85,12 @@ test("Konto: a connected assistant is listed with its summary, and Koppla från 
   const userId = await ensureUser(db, email);
   const clientId = `ssk_${randomBytes(12).toString("base64url")}`;
   expect((await db.from("mcp_clients").insert({ id: clientId, client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] })).error).toBeNull();
-  const { data: grant, error } = await db.from("mcp_grants").insert({ user_id: userId, client_id: clientId, client_name: "Claude", resource: `${APP_URL}/api/mcp` }).select("id").single();
+  // Named from the redirect URI it was approved for (0068), not from the name the client chose.
+  const { data: grant, error } = await db
+    .from("mcp_grants")
+    .insert({ user_id: userId, client_id: clientId, client_name: "Claude", resource: `${APP_URL}/api/mcp`, redirect_uri: "https://claude.ai/api/mcp/auth_callback" })
+    .select("id")
+    .single();
   expect(error).toBeNull();
 
   const { page } = await signedIn(email, "/installningar");
@@ -88,10 +99,11 @@ test("Konto: a connected assistant is listed with its summary, and Koppla från 
   await toggle(page, "Koppla till din AI").click();
   const row = ai.getByRole("list", { name: "Kopplat nu" }).getByRole("listitem").filter({ hasText: "Claude" });
   await expect(row).toContainText("inte använd än");
+  await expect(row).toContainText("Kallar sig ”Claude”");
   // Connected: the tiles wait behind "Koppla en till".
-  await expect(ai.getByRole("tab", { name: "Cursor" })).toBeHidden();
+  await expect(ai.getByRole("button", { name: "Cursor", exact: true })).toBeHidden();
   await ai.getByRole("button", { name: "Koppla en till" }).click();
-  await expect(ai.getByRole("tab", { name: "Cursor" })).toBeVisible();
+  await expect(ai.getByRole("button", { name: "Cursor", exact: true })).toBeVisible();
 
   await row.getByRole("button", { name: "Koppla från" }).click();
   const dialog = page.getByRole("dialog", { name: "Koppla från Claude?" });

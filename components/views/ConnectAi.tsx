@@ -1,20 +1,21 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useId, useRef, useState, type ReactNode } from "react";
+import { Fragment, useId, useRef, useState, type ReactNode } from "react";
+import { BrandLogo, type LogoId } from "@/components/ui/BrandLogo";
+import { Presence, PresenceDiv } from "@/components/motion/Presence";
 import { ButtonLink } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CopyCode } from "@/components/ui/CopyCode";
 import { IconChevronDown, IconExternal, IconPlus } from "@/components/ui/icons";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  CHATGPT_HELP_URL,
   CHATGPT_URL,
   CLAUDE_CONNECTORS_URL,
   claudeCodeCommand,
   cursorInstallLink,
   genericConfig,
   geminiCommand,
+  OFFICIAL_GUIDES,
   TOOL_NAMES,
   TOOLS,
   vscodeInstallLink,
@@ -22,33 +23,17 @@ import {
 } from "@/lib/mcp/clients";
 import { cn } from "@/lib/utils";
 
-// Konto → Koppla till din AI: a tile per AI tool (lib/mcp/clients.ts), and under the tiles the
-// chosen tool's steps: numbered, with the address or command to copy, a one-click install where
-// the tool has one, and a first question to try. Radix Tabs: arrow keys move between tiles.
+// Konto → Koppla till din AI: a tile per AI tool (lib/mcp/clients.ts) with its own mark. Choosing
+// one shows its steps right where the click was: on a phone (and below 1024 px) they open under
+// the chosen tile's row, on a wide screen in a panel beside the grid. Numbered steps, the
+// address or command to copy, a one-click install where the tool has one, the tool's official
+// guide and a first question to try. The tiles are disclosure buttons (aria-expanded).
 
-/** A neutral monogram per tool (no brand marks: their owners' rules don't cover this use). */
-const MONOGRAM: Record<ToolId, string> = {
-  claude: "Cl",
-  chatgpt: "Ch",
-  cursor: "Cu",
-  vscode: "VS",
-  "claude-code": ">_",
-  gemini: "Ge",
-  other: "{ }",
-};
-
-export function ToolMark({ tool, className }: { tool: ToolId | null; className?: string }) {
-  const mono = tool === "claude-code" || tool === "other" || tool === null;
+/** A tool's mark on a small surface tile. */
+export function ToolMark({ logo, className }: { logo: LogoId; className?: string }) {
   return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "grid size-9 shrink-0 place-items-center rounded-md bg-surface text-[0.8125rem] font-semibold tracking-tight text-ink",
-        mono && "font-mono font-medium",
-        className,
-      )}
-    >
-      {tool ? MONOGRAM[tool] : "AI"}
+    <span aria-hidden="true" className={cn("grid size-9 shrink-0 place-items-center rounded-md bg-surface", className)}>
+      <BrandLogo id={logo} size={20} />
     </span>
   );
 }
@@ -58,60 +43,89 @@ export function useToolName() {
   return (tool: ToolId) => (tool === "other" ? t("tools.other.name") : TOOL_NAMES[tool]);
 }
 
+const COLS = 2;
+const rowOf = (index: number) => Math.floor(index / COLS);
+/** The last tile of a row (the odd last tool has a row of its own). */
+const rowEnd = (row: number) => Math.min(row * COLS + COLS - 1, TOOLS.length - 1);
+
 /** The tiles and the chosen tool's steps. */
 export function ConnectPicker({ mcpUrl }: { mcpUrl: string }) {
   const t = useTranslations("connect");
   const name = useToolName();
-  const [tool, setTool] = useState<ToolId>("claude");
-  const panel = useRef<HTMLDivElement>(null);
+  const [tool, setTool] = useState<ToolId | null>("claude");
   const uid = useId();
+  const inline = useRef<HTMLDivElement>(null);
+  const selectedRow = tool ? rowOf(TOOLS.indexOf(tool)) : -1;
 
-  const choose = (next: string) => {
-    setTool(next as ToolId);
-    // On a phone the steps are below the tiles: bring them into view.
-    const el = panel.current;
-    if (el && window.matchMedia("(max-width: 47.99rem)").matches) {
+  const choose = (next: ToolId) => {
+    // Choosing the open one again closes it (on a phone that folds the steps away).
+    setTool((cur) => (cur === next ? null : next));
+    // Below 1024 px the steps open under the row: keep them in view once they have opened.
+    if (window.matchMedia("(max-width: 63.99rem)").matches) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      requestAnimationFrame(() => el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }));
+      setTimeout(() => inline.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" }), reduce ? 0 : 320);
     }
   };
 
   return (
-    <Tabs value={tool} onValueChange={choose} className="gap-5">
-      <TabsList aria-label={t("pickLabel")} className="grid grid-cols-2 gap-2">
-        {TOOLS.map((id) => (
-          <TabsTrigger
-            key={id}
-            value={id}
-            // Named by the tool alone ("Claude"); the line under it is its description.
-            aria-describedby={`${uid}-${id}-desc`}
-            className={cn(
-              "press group/tile flex min-h-16 min-w-0 cursor-pointer items-center gap-3 rounded-lg bg-sunk p-3 text-left",
-              // "Annat verktyg" (the odd one) takes the whole last row.
-              id === "other" && "col-span-2",
-              "transition-[background-color,color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--surface-sunk)_88%,var(--ink))]",
-              "data-[state=active]:bg-blue-wash",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-            )}
-          >
-            <ToolMark tool={id} />
-            <span className="flex min-w-0 flex-col">
-              <span className="font-medium leading-tight text-ink group-data-[state=active]/tile:text-blue">
-                {name(id)}
-              </span>
-              <span id={`${uid}-${id}-desc`} aria-hidden="true" className="truncate text-xs leading-snug text-ink-3 max-sm:hidden">{t(`tools.${id}.desc`)}</span>
-            </span>
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      <div ref={panel} className="scroll-mt-24">
-        {TOOLS.map((id) => (
-          <TabsContent key={id} value={id} className="animate-panel-in">
-            <ToolSteps tool={id} mcpUrl={mcpUrl} />
-          </TabsContent>
-        ))}
+    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-start lg:gap-6">
+      <div role="group" aria-label={t("pickLabel")} className="grid grid-cols-2 gap-2">
+        {TOOLS.map((id, i) => {
+          const selected = tool === id;
+          return (
+            <Fragment key={id}>
+              <button
+                type="button"
+                aria-expanded={selected}
+                aria-controls={`${uid}-inline ${uid}-side`}
+                aria-describedby={`${uid}-${id}-desc`}
+                onClick={() => choose(id)}
+                className={cn(
+                  "press group/tile flex min-h-16 min-w-0 cursor-pointer items-center gap-3 rounded-lg bg-sunk p-3 text-left",
+                  "transition-[background-color,outline-color] duration-150 ease-out hover:bg-[color-mix(in_srgb,var(--surface-sunk)_92%,var(--ink))]",
+                  // Selected: tinted, with a ring drawn inside the tile (an outline, so it never sits on a frame).
+                  "aria-expanded:bg-blue-wash aria-expanded:outline-2 aria-expanded:-outline-offset-2 aria-expanded:outline-blue",
+                  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                  id === "other" && "col-span-2",
+                )}
+              >
+                <ToolMark logo={id} />
+                <span className="flex min-w-0 flex-col">
+                  <span className="font-medium leading-tight text-ink">{name(id)}</span>
+                  <span id={`${uid}-${id}-desc`} aria-hidden="true" className="line-clamp-2 text-xs leading-snug text-ink-2 max-sm:hidden">
+                    {t(`tools.${id}.desc`)}
+                  </span>
+                </span>
+              </button>
+              {/* Below 1024 px: the steps open under the chosen tile's row. */}
+              {i === rowEnd(rowOf(i)) && (
+                <Presence>
+                  {tool && selectedRow === rowOf(i) && (
+                    <PresenceDiv key={`row-${rowOf(i)}`} className="col-span-2 lg:hidden">
+                      <div ref={inline} id={`${uid}-inline`} className="scroll-mt-24 pt-2 pb-3">
+                        <div key={tool} className="animate-panel-in">
+                          <ToolSteps tool={tool} mcpUrl={mcpUrl} />
+                        </div>
+                      </div>
+                    </PresenceDiv>
+                  )}
+                </Presence>
+              )}
+            </Fragment>
+          );
+        })}
       </div>
-    </Tabs>
+      {/* 1024 px and up: beside the grid, staying in view while the tiles are used. */}
+      <div id={`${uid}-side`} className="hidden lg:sticky lg:top-24 lg:block">
+        {tool ? (
+          <div key={tool} className="animate-panel-in">
+            <ToolSteps tool={tool} mcpUrl={mcpUrl} />
+          </div>
+        ) : (
+          <p className="rounded-lg bg-sunk px-4 py-6 text-sm text-ink-3">{t("pickHint")}</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -123,30 +137,26 @@ function ToolSteps({ tool, mcpUrl }: { tool: ToolId; mcpUrl: string }) {
   const step = (key: "1" | "2" | "3" | "4" | "5") => <p>{t.rich(`steps.${tool}.${key}` as Parameters<typeof t.rich>[0], b)}</p>;
   const address = <CopyCode value={mcpUrl} label={t("addressLabel")} />;
 
-  let steps: ReactNode[];
+  // A step is its text, and maybe something to copy (wider than the text on a phone).
+  let steps: (ReactNode | [ReactNode, ReactNode])[];
   let actions: ReactNode = null;
   let note: ReactNode = null;
   switch (tool) {
     case "claude":
-      steps = [step("1"), step("2"), <>{step("3")}{address}</>, step("4")];
+      steps = [step("1"), step("2"), [step("3"), address], step("4")];
       actions = <External href={CLAUDE_CONNECTORS_URL} primary>{t("openClaude")}</External>;
       break;
     case "chatgpt":
       note = t("steps.chatgpt.note");
-      steps = [step("1"), step("2"), <>{step("3")}{address}</>, step("4"), step("5")];
-      actions = (
-        <>
-          <External href={CHATGPT_URL} primary>{t("openChatgpt")}</External>
-          <External href={CHATGPT_HELP_URL}>{t("chatgptHelp")}</External>
-        </>
-      );
+      steps = [step("1"), step("2"), [step("3"), address], step("4"), step("5")];
+      actions = <External href={CHATGPT_URL} primary>{t("openChatgpt")}</External>;
       break;
     case "cursor":
-      steps = [step("1"), step("2"), <>{step("3")}<CopyCode value={genericConfig(mcpUrl)} label={t("configLabel")} block /></>];
+      steps = [step("1"), step("2"), [step("3"), <CopyCode value={genericConfig(mcpUrl)} label={t("configLabel")} block />]];
       actions = <External href={cursorInstallLink(mcpUrl)} primary app>{t("addToCursor")}</External>;
       break;
     case "vscode":
-      steps = [step("1"), step("2"), step("3")];
+      steps = [step("1"), [step("2"), address], step("3")];
       actions = (
         <>
           <External href={vscodeInstallLink(mcpUrl)} primary app>{t("addToVscode")}</External>
@@ -155,13 +165,13 @@ function ToolSteps({ tool, mcpUrl }: { tool: ToolId; mcpUrl: string }) {
       );
       break;
     case "claude-code":
-      steps = [<>{step("1")}<CopyCode value={claudeCodeCommand(mcpUrl)} label={t("commandLabel")} /></>, step("2"), step("3")];
+      steps = [[step("1"), <CopyCode value={claudeCodeCommand(mcpUrl)} label={t("commandLabel")} />], step("2"), step("3")];
       break;
     case "gemini":
-      steps = [<>{step("1")}<CopyCode value={geminiCommand(mcpUrl)} label={t("commandLabel")} /></>, step("2"), step("3")];
+      steps = [[step("1"), <CopyCode value={geminiCommand(mcpUrl)} label={t("commandLabel")} />], step("2"), step("3")];
       break;
     case "other":
-      steps = [<>{step("1")}{address}</>, <>{step("2")}<CopyCode value={genericConfig(mcpUrl)} label={t("configLabel")} block /></>, step("3")];
+      steps = [[step("1"), address], [step("2"), <CopyCode value={genericConfig(mcpUrl)} label={t("configLabel")} block />], step("3")];
       break;
   }
 
@@ -173,16 +183,27 @@ function ToolSteps({ tool, mcpUrl }: { tool: ToolId; mcpUrl: string }) {
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       <ol className="flex flex-col gap-3">
-        {steps.map((s, i) => (
-          <li key={i} className="grid grid-cols-[1.5rem_1fr] gap-x-3">
-            <span aria-hidden="true" className="grid size-6 place-items-center rounded-full bg-sunk text-xs font-semibold tabular-nums text-ink-2">
-              {i + 1}
-            </span>
-            <div className="flex min-w-0 flex-col gap-2 pt-0.5 text-ink-2">{s}</div>
-          </li>
-        ))}
+        {steps.map((entry, i) => {
+          const [text, extra] = Array.isArray(entry) ? entry : [entry, null];
+          return (
+            <li key={i} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-3 gap-y-2">
+              <span aria-hidden="true" className="grid size-6 place-items-center rounded-full bg-sunk text-xs font-semibold tabular-nums text-ink-2">
+                {i + 1}
+              </span>
+              <div className="pt-0.5 text-ink-2">{text}</div>
+              {extra && <div className="col-start-2 min-w-0 max-sm:col-span-2 max-sm:col-start-1">{extra}</div>}
+            </li>
+          );
+        })}
       </ol>
       <p className="rounded-md bg-blue-wash px-3 py-2 text-sm text-ink">{t.rich("tryIt", b)}</p>
+      {OFFICIAL_GUIDES[tool] && (
+        <a href={OFFICIAL_GUIDES[tool]} target="_blank" rel="noopener noreferrer" className="self-start text-sm">
+          {tool === "other" ? t("mcpGuide") : t("officialGuide", { tool: name(tool) })}
+          <span aria-hidden="true"> ↗</span>
+          <span className="sr-only"> {t("newTab")}</span>
+        </a>
+      )}
     </section>
   );
 }

@@ -5,7 +5,7 @@
 // that and is remembered. Pure, so the rules are unit-tested (sections.test.ts) and the same rules
 // run in the pre-paint script below.
 
-export const SECTION_IDS = ["konto", "sprak", "mejl", "kalender", "ai", "foreningar", "integritet"] as const;
+export const SECTION_IDS = ["sprak", "mejl", "kalender", "ai", "foreningar", "integritet"] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 export type Stored = Partial<Record<SectionId, boolean>>;
 

@@ -24,8 +24,17 @@ export const TOOL_NAMES: Record<Exclude<ToolId, "other">, string> = {
 /** Where Claude's connectors are (support.claude.com/en/articles/11175166: Customize → Connectors). */
 export const CLAUDE_CONNECTORS_URL = "https://claude.ai/customize/connectors";
 export const CHATGPT_URL = "https://chatgpt.com";
-/** OpenAI's own steps ("Connecting custom MCP servers in ChatGPT"). */
-export const CHATGPT_HELP_URL = "https://help.openai.com/en/articles/12584461";
+
+/** Each tool's own guide to adding a remote MCP server (checked 2026-11-28), linked under its steps. */
+export const OFFICIAL_GUIDES: Partial<Record<ToolId, string>> = {
+  claude: "https://support.claude.com/en/articles/11175166",
+  chatgpt: "https://help.openai.com/en/articles/12584461",
+  cursor: "https://cursor.com/docs/context/mcp",
+  vscode: "https://code.visualstudio.com/docs/copilot/customization/mcp-servers",
+  "claude-code": "https://code.claude.com/docs/en/mcp",
+  gemini: "https://geminicli.com/docs/tools/mcp-server/",
+  other: "https://modelcontextprotocol.io/docs/learn/client-concepts",
+};
 
 /** UTF-8 safe base64 (btoa only takes Latin-1). */
 function base64(text: string): string {
@@ -51,19 +60,3 @@ export const geminiCommand = (mcpUrl: string) => `gemini mcp add --transport htt
 
 /** The common `mcpServers` shape most MCP clients read. */
 export const genericConfig = (mcpUrl: string) => JSON.stringify({ mcpServers: { [SERVER_NAME]: { url: mcpUrl } } }, null, 2);
-
-/**
- * The tool a connection most likely is, from the name the client registered with. Only for the
- * logo and name in the list: that name is chosen by the client, so it never decides anything
- * (the consent page names the app from the redirect URI).
- */
-export function toolForClientName(name: string): Exclude<ToolId, "other"> | null {
-  const n = name.toLowerCase();
-  if (/\bclaude[\s-]code\b/.test(n)) return "claude-code";
-  if (/\bclaude\b/.test(n)) return "claude";
-  if (/\b(chatgpt|openai)\b/.test(n)) return "chatgpt";
-  if (/\bcursor\b/.test(n)) return "cursor";
-  if (/\b(visual studio code|vs ?code)\b/.test(n)) return "vscode";
-  if (/\bgemini\b/.test(n)) return "gemini";
-  return null;
-}

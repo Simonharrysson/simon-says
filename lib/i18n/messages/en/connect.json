@@ -52,7 +52,6 @@
   "newTab": "(opens in a new tab)",
   "openClaude": "Open Claude",
   "openChatgpt": "Open ChatGPT",
-  "chatgptHelp": "OpenAI's instructions",
   "addToCursor": "Add to Cursor",
   "addToVscode": "Add to VS Code",
   "addToVscodeInsiders": "VS Code Insiders",
@@ -99,13 +98,13 @@
     },
     "cursor": {
       "1": "Click <b>Add to Cursor</b>. Cursor opens and asks whether to install <b>simon-says</b>.",
-      "2": "Install it, then sign in with Google when Cursor asks, and allow.",
-      "3": "Link not working? Add this to Cursor's <b>mcp.json</b>:"
+      "2": "Install it, sign in with Google when Cursor asks, and allow. The server then shows under <b>Customize</b> in Cursor's sidebar.",
+      "3": "Link not working? Add this to <b>~/.cursor/mcp.json</b>:"
     },
     "vscode": {
       "1": "Click <b>Add to VS Code</b> and choose <b>Install</b>.",
-      "2": "Start <b>simon-says</b> and allow the sign-in when VS Code asks.",
-      "3": "Sign in with Google and allow. Then ask in Copilot Chat, in agent mode."
+      "2": "Or: run <b>MCP: Add Server</b> from the Command Palette, choose <b>HTTP</b> and paste the address:",
+      "3": "Allow the sign-in when VS Code asks, sign in with Google and allow. Then ask in Copilot Chat, in agent mode."
     },
     "claude-code": {
       "1": "Run in the terminal:",
@@ -122,5 +121,10 @@
       "2": "Or paste this into the tool's MCP settings:",
       "3": "The tool needs MCP over HTTP with OAuth. Sign in with Google and allow."
     }
-  }
+  },
+  "pickHint": "Choose a tool to see how to connect it.",
+  "officialGuide": "Official guide from {tool}",
+  "mcpGuide": "About MCP (modelcontextprotocol.io)",
+  "appLocalShort": "App on your computer",
+  "registeredAs": "Calls itself “{client}”"
 }
