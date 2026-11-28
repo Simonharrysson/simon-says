@@ -110,6 +110,8 @@ describe.skipIf(!hasLocalSupabase)("MCP tools as the user (0060)", () => {
     const get = await call(client, "get_meeting", { meeting_id: devMeeting });
     expect(get.isError).toBe(false);
     expect(get.data).toMatchObject({ title: "Sprintmöte", org_kind: "foretag", decisions: ["Vi lanserar hemligprojektet"] });
+    // 0069: decisions stay strings (backward compatible); the moments come alongside.
+    expect((get.data as { decision_moments: unknown }).decision_moments).toEqual([{ text: "Vi lanserar hemligprojektet", said_at: null, excerpt: null }]);
     // Never a hit from a deleted line or a Må-runda row (the app's own visible() rule).
     expect((await call(client, "search_meetings", { query: "dolkstöt" })).data).toMatchObject({ meetings: [] });
     const spaces = await call(client, "list_spaces");

@@ -81,7 +81,16 @@
     "guestRevoke": "Remove access",
     "guestRestore": "Give access again",
     "guestRevokeLabel": "Remove {name}'s access to the meeting",
-    "guestRestoreLabel": "Give {name} access to the meeting again"
+    "guestRestoreLabel": "Give {name} access to the meeting again",
+    "momentLink": "Show where it was said in the transcript, {time}",
+    "momentTitle": "Said at {time}",
+    "momentNoAudio": "No audio is stored. This is the transcript.",
+    "momentLoading": "Loading the transcript…",
+    "momentError": "The transcript couldn't be loaded right now.",
+    "momentRetry": "Try again",
+    "momentClose": "Close",
+    "momentUnknownSpeaker": "Unknown speaker",
+    "momentSourceLine": "Said here"
   },
   "openCount": "{count, plural, one {# open task} other {# open tasks}}",
   "overdueCount": "{count} overdue",

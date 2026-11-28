@@ -40,6 +40,7 @@ import { extractNames } from "@/lib/names/extract";
 import { pendingNameRounds, runNameRound, type ExtractFn } from "@/lib/names/round";
 import { autoEndStatus, lastSeenMs, presence, PRESENCE_GRACE_SEC } from "@/lib/meetings/presence";
 import { resolveSpeaker, type SpeakerMapRow } from "@/lib/segments/resolve";
+import { addToIndex, segmentKey, type SegmentSource, type SourceIndex } from "@/lib/notes/sources";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { sendPendingSummaries, trySendMeetingSummaries } from "@/lib/summaries/send";
 import { applyTaskAnswers, markPlaceholders, parseTaskAnswers, taskMode, withDueDates, type TaskAnswer } from "@/lib/notes/tasks";
@@ -232,9 +233,11 @@ export function buildTranscript(
   sessions: SessionRead[],
   speakers: SpeakerRead[],
   window?: CheckinWindow | null,
-): { blocks: string[]; speakerNames: Record<string, string> } {
+): { blocks: string[]; speakerNames: Record<string, string>; sources: SegmentSource[][] } {
   const r = resolver(sessions, speakers);
   const byTick = new Map<number, string[]>();
+  // 0069: the real lines of each block (never a Må-runda placeholder), the moments Claude may cite.
+  const srcByTick = new Map<number, SegmentSource[]>();
   const speakerNames: Record<string, string> = {};
   const sorted = sortSegments(segments, r.numbers);
   for (const s of window ? maskedSegments(sorted, window, r.numbers) : sorted) {
@@ -249,11 +252,12 @@ export function buildTranscript(
     const lines = byTick.get(s.tick_no) ?? [];
     lines.push(`[${formatTimestamp(s.start_ms)}] ${label}: ${oneLine(s.text)}`);
     byTick.set(s.tick_no, lines);
+    srcByTick.set(s.tick_no, [...(srcByTick.get(s.tick_no) ?? []), { key: segmentKey(s), startMs: s.start_ms }]);
     const resolved = r.resolve(s.el_session_id, s.speaker);
     if (resolved.displayName !== resolved.label) speakerNames[label] = resolved.displayName;
   }
   const ticks = [...byTick.keys()].sort((a, b) => a - b);
-  return { blocks: ticks.map((t) => byTick.get(t)!.join("\n")), speakerNames };
+  return { blocks: ticks.map((t) => byTick.get(t)!.join("\n")), speakerNames, sources: ticks.map((t) => srcByTick.get(t) ?? []) };
 }
 
 /** Doc transcript lines for assigned segments not written yet: display name if known, else `S<n>-<label>`. */
@@ -659,11 +663,17 @@ async function loadContext(meeting: MeetingRow) {
     // "*": taskMode also reads the space kind once there is one (orgs.kind, Privat).
     db().from("orgs").select("*").eq("id", meeting.org_id).maybeSingle(),
   ]);
+  const o = must("tick: org", org) as { share_transcript?: boolean; kind?: string } | null;
+  // 0069: moments only where the org shares its transcript (the ▶ link's rule): otherwise no new
+  // citation is resolved and no " (41:52)" is rendered in the Doc (the segment ids are kept).
+  const shareTranscript = Boolean(o) && o!.share_transcript !== false && o!.kind !== "privat";
+  const noteRows = must("tick: note items", rows) as NoteItemRow[];
   return {
     segments,
     sessions: must("tick: sessions", sessions) as SessionRead[],
     speakers: must("tick: speakers", speakers) as SpeakerRead[],
-    rows: must("tick: note items", rows) as NoteItemRow[],
+    rows: shareTranscript ? noteRows : noteRows.map((r) => (r.said_at_ms == null ? r : { ...r, said_at_ms: null })),
+    shareTranscript,
     orgName: (must("tick: org", org) as { name: string } | null)?.name ?? "Föreningen",
     taskMode: taskMode(must("tick: org", org) as { require_task_fields?: boolean; kind?: string } | null),
   };
@@ -929,7 +939,7 @@ export async function runTick(
       fmt = { profile, people, tab, agenda, fresh, window: step.window, hold: step.hold, proxied: new Set(), text: hidden.text };
     }
 
-    const { blocks, speakerNames } = fmt
+    const { blocks, speakerNames, sources } = fmt
       ? buildTranscript(ctx.segments, ctx.sessions, ctx.speakers, fmt.window)
       : buildTranscript(ctx.segments, ctx.sessions, ctx.speakers);
     const timeLeft = left();
@@ -954,6 +964,10 @@ export async function runTick(
     let out: UpdateNotesResult | null = null;
     let claudeFailed = false;
     const send = blocksForCall(blocks, sentTick);
+    // 0069: Claude may cite only the lines it is sent in this call.
+    const sourceIndex = ctx.shareTranscript
+      ? sources.slice(0, send.length).reduce<SourceIndex>((index, lines) => addToIndex(index, lines), new Map())
+      : undefined;
     // Claude only with something new to read (or the final pass over a non-empty transcript).
     if (claudeAllowed && send.length > 0 && (final || send.length > sentTick)) {
       out = await deps.updateNotes(
@@ -969,6 +983,7 @@ export async function runTick(
               final,
               nextId: meeting.notes_next_id ?? undefined,
               agenda: fmt.agenda,
+              sources: sourceIndex,
               // F3: our own lines as rendered ("– " prefix and all) are not human text.
               ownLines: first.diff.rows
                 .filter((r) => !r.locked && !r.deleted_by_human && r.last_rendered_text)
@@ -985,6 +1000,7 @@ export async function runTick(
         deletedIds: first.diff.deletedIds,
         final,
         nextId: meeting.notes_next_id ?? undefined,
+        sources: sourceIndex,
         },
         Number.isFinite(timeLeft) ? { timeoutMs: Math.min(CLAUDE_TIMEOUT_MS, timeLeft - 20_000) } : undefined,
       );

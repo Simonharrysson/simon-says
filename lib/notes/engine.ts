@@ -18,6 +18,7 @@ import {
   type NotesItem,
   type NotesOp,
 } from "@/lib/notes/schema";
+import { resolveSources, type SourceIndex } from "@/lib/notes/sources";
 
 // The notes engine: transcript blocks + current notes → Claude → validated operations.
 // Settings are fixed by the plan's global constraints (model, adaptive thinking by default,
@@ -102,6 +103,12 @@ export interface UpdateNotesInput {
    * an assistant owner Claude still writes is dropped, so no new agent task is marked.
    */
   agentTasks?: boolean;
+  /**
+   * 0069: the transcript lines of `transcriptBlocks` by bracket time (buildTranscript's `sources`,
+   * for exactly the blocks sent). Claude's cited times are resolved against it; without it every
+   * citation is dropped (no link, never a wrong one).
+   */
+  sources?: SourceIndex;
 }
 
 export interface UpdateNotesResult {
@@ -295,8 +302,10 @@ export function applyOps(
     final?: boolean;
     nextId?: string;
     agenda?: { anchors: Map<string, ItemRole | "notes"> };
+    /** 0069: cited bracket times → segments; see `UpdateNotesInput.sources`. */
+    sources?: SourceIndex;
   } = {},
-): { ops: NotesOp[]; items: NotesItem[]; dropped: number; nextId: string; ruled?: number } {
+): { ops: NotesOp[]; items: NotesItem[]; dropped: number; nextId: string; ruled?: number; ignored: number } {
   const blocked = new Set(opts.protectedIds ?? []);
   const final = opts.final ?? false;
   let counter = Math.max(idNumber(opts.nextId), idNumber(nextItemId([...blocked, ...items.map((i) => i.id)])));
@@ -308,6 +317,8 @@ export function applyOps(
   let ruled = 0;
   let removals = 0;
   let rewrites = 0;
+  /** Citation-only changes that changed nothing (0069): neither accepted nor a rejection. */
+  let ignored = 0;
 
   for (const op of ops) {
     if (op.op === "add" && opts.agenda && !agendaAddAllowed(op.item, opts.agenda.anchors)) {
@@ -331,7 +342,10 @@ export function applyOps(
       }
       const id = `n${counter++}`;
       assigned.set(op.item.id, id);
-      const item = { ...op.item, id };
+      // Sources only from the server's resolution of the cited times (0069), never from the op.
+      const { sources: _s, saidAtMs: _a, ...fields } = op.item;
+      const src = sourced(fields.section) ? resolveSources(op.src, opts.sources) : null;
+      const item: NotesItem = { ...fields, id, ...(src ? { sources: src.ids, saidAtMs: src.saidAtMs } : {}) };
       work.push(item);
       accepted.push({ op: "add", item: { ...item } });
       continue;
@@ -352,38 +366,52 @@ export function applyOps(
       accepted.push({ op: "remove", id });
       continue;
     }
-    const moves = op.anchor !== undefined && op.anchor !== target.anchor;
-    const edits = op.text !== undefined || op.owner !== undefined || op.due !== undefined || op.doneWhen !== undefined;
+    const { src: cited, ...change } = op;
+    const moves = change.anchor !== undefined && change.anchor !== target.anchor;
+    const edits = change.text !== undefined || change.owner !== undefined || change.due !== undefined || change.doneWhen !== undefined;
     // done only on tasks; a carried task only ever takes done: true (never re-opened by Claude).
-    const badDone = op.done !== undefined && (target.section !== "action" || (target.carried && op.done !== true));
+    const badDone = change.done !== undefined && (target.section !== "action" || (target.carried && change.done !== true));
     if (moves || badDone || (target.carried && edits)) {
       dropped++;
       continue;
     }
-    const rewrite = op.text !== undefined && op.text !== target.text && target.section !== "now";
+    const rewrite = change.text !== undefined && change.text !== target.text && target.section !== "now";
     if (rewrite && !final && rewrites >= MAX_REWRITES_PER_TICK) {
       dropped++;
       continue;
     }
     const before = JSON.stringify(target);
-    if (op.text !== undefined) target.text = op.text;
+    if (change.text !== undefined) target.text = change.text;
     for (const key of ["owner", "due", "doneWhen"] as const) {
-      const value = op[key];
+      const value = change[key];
       if (value === undefined) continue;
       if (value) target[key] = value;
       else delete target[key];
     }
-    if (op.done === true) target.done = true;
-    else if (op.done === false) delete target.done;
+    if (change.done === true) target.done = true;
+    else if (change.done === false) delete target.done;
+    // 0069: a cited moment is set where none is yet, or with a text the meeting changed; never on
+    // a carried task (its moment is in another meeting).
+    const src = cited && !target.carried && sourced(target.section) && (!target.sources?.length || rewrite) ? resolveSources(cited, opts.sources) : null;
+    if (src) {
+      target.sources = src.ids;
+      target.saidAtMs = src.saidAtMs;
+    }
     if (JSON.stringify(target) === before) {
-      dropped++;
+      // A citation alone on an item that already has its moment is a quiet no-op, not a rejection.
+      const onlyCited = cited && !edits && change.done === undefined && change.anchor === undefined;
+      if (onlyCited) ignored++;
+      else dropped++;
       continue;
     }
     if (rewrite) rewrites++;
-    accepted.push({ ...op, id });
+    accepted.push({ ...change, id });
   }
-  return { ops: accepted, items: work, dropped, nextId: `n${counter}`, ...(opts.agenda ? { ruled } : {}) };
+  return { ops: accepted, items: work, dropped, nextId: `n${counter}`, ignored, ...(opts.agenda ? { ruled } : {}) };
 }
+
+/** Decisions and tasks carry a moment (0069); attendees, "now" and notes don't. */
+const sourced = (section: NotesItem["section"]) => section === "decision" || section === "action";
 
 /**
  * Agent tasks parked (AGENT_TASKS_ENABLED off): an owner that means the assistant ("Claude", "AI:n",
@@ -553,6 +581,7 @@ export async function updateNotes(
     final: input.final,
     nextId,
     ...(input.agenda ? { agenda: { anchors: anchorRoles(input.agenda) } } : {}),
+    ...(input.sources ? { sources: input.sources } : {}),
   });
   const dropped = parsed.invalid + applied.dropped;
   if (dropped) console.warn(`notes engine: dropped ${dropped} of ${parsed.count} ops`);
@@ -561,7 +590,7 @@ export async function updateNotes(
   // Adds only under the Må-runda / "Från förra veckan" items (dropped by rule, R2-M3) are a quiet
   // tick too, not a failure.
   const onlyRuled = parsed.invalid === 0 && applied.dropped > 0 && applied.dropped === (applied.ruled ?? 0);
-  const failure = parsed.count > 0 && applied.ops.length === 0 && !onlyRuled ? "all_dropped" : null;
+  const failure = parsed.count - applied.ignored > 0 && applied.ops.length === 0 && !onlyRuled ? "all_dropped" : null;
   // The title is only asked for in the final pass; a stray one on a live tick is ignored.
   const title = input.final ? cleanMeetingTitle(parsed.title) : null;
   return { ops: applied.ops, items: applied.items, usage, stopReason: message.stop_reason, dropped, nextId: applied.nextId, failure, ...(title ? { title } : {}) };

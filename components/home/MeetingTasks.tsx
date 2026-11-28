@@ -7,6 +7,7 @@ import type { MeetingTask } from "@/lib/home/meeting";
 import { isOverdue } from "@/lib/home/tasks";
 import { cn } from "@/lib/utils";
 import { AgentStatus } from "./AgentStatus";
+import { MomentLink } from "./Moments";
 import { postTick, RowStatus, useTicks, whenLabel, type SaveTick, type TickState } from "./MyTasks";
 
 /** The tasks of one meeting: who, when, klart när; a checkbox where the user may tick it. */
@@ -89,6 +90,12 @@ function Row({
               <span className="font-medium text-green">{t("done")}</span>
             ) : (
               <span className={cn(overdue ? "font-medium text-red" : !task.dueDate && !task.due && "text-ink-3")}>{when}</span>
+            )}
+            {typeof task.saidAtMs === "number" && (
+              <>
+                <span aria-hidden="true">·</span>
+                <MomentLink itemId={task.itemId} saidAtMs={task.saidAtMs} className="-my-0.5 -ml-1.5" />
+              </>
             )}
           </p>
           {task.doneWhen && <p className="text-sm text-ink-2 wrap-anywhere">{t("doneWhen", { text: task.doneWhen })}</p>}

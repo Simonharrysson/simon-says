@@ -81,7 +81,16 @@
     "guestRevoke": "Ta bort åtkomst",
     "guestRestore": "Ge åtkomst igen",
     "guestRevokeLabel": "Ta bort {name}s åtkomst till mötet",
-    "guestRestoreLabel": "Ge {name} åtkomst till mötet igen"
+    "guestRestoreLabel": "Ge {name} åtkomst till mötet igen",
+    "momentLink": "Visa var det sades i transkriptionen, {time}",
+    "momentTitle": "Sagt vid {time}",
+    "momentNoAudio": "Ingen ljudinspelning sparas. Det här är transkriptionen.",
+    "momentLoading": "Hämtar transkriptionen…",
+    "momentError": "Transkriptionen gick inte att hämta just nu.",
+    "momentRetry": "Försök igen",
+    "momentClose": "Stäng",
+    "momentUnknownSpeaker": "Okänd talare",
+    "momentSourceLine": "Här sades det"
   },
   "openCount": "{count, plural, one {# öppen uppgift} other {# öppna uppgifter}}",
   "overdueCount": "{count, plural, one {# försenad} other {# försenade}}",

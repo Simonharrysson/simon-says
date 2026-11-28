@@ -1,3 +1,4 @@
+import { saidAtSuffix } from "@/lib/notes/sources";
 import { anchoredStarts, itemAt, normLabel, scanAgenda, type AgendaScan } from "@/lib/agenda/scan";
 import type { MeetingRow, NoteItemRow } from "@/lib/db/types";
 import type { FormatProfile } from "@/lib/formats/schema";
@@ -76,7 +77,7 @@ export function sentence(s: string): string {
  */
 export function formatLine(
   item: Pick<NotesItem, "section" | "text"> &
-    Partial<Pick<NotesItem, "id" | "owner" | "due" | "anchor" | "done" | "doneWhen" | "placeholders" | "carried" | "dueDate">>,
+    Partial<Pick<NotesItem, "id" | "owner" | "due" | "anchor" | "done" | "doneWhen" | "placeholders" | "carried" | "dueDate" | "saidAtMs">>,
   ctx: LineCtx,
 ): string {
   const raw = clean(item.text);
@@ -85,7 +86,7 @@ export function formatLine(
   const text = raw.replace(/^[–•-]\s+/, "");
   switch (item.section) {
     case "decision":
-      return `${clean(ctx.profile.decisionPrefix)} ${sentence(text)}`;
+      return `${clean(ctx.profile.decisionPrefix)} ${sentence(text)}${saidAtSuffix(item.saidAtMs)}`;
     case "action": {
       const ask = item.placeholders === true && !item.done && !item.carried;
       const owner = item.owner ? clean(ctx.ownerLabel(clean(item.owner))) : ask ? PLACEHOLDER.owner : "";
@@ -97,6 +98,8 @@ export function formatLine(
       if (due) line += ` ${due}`;
       if (doneWhen) line += ` – ${doneWhen}`;
       if (due || doneWhen || !/[!?]$/.test(body)) line += ".";
+      // 0069: where it was said, after the sentence; never on a carried task (another meeting's).
+      if (!item.carried) line += saidAtSuffix(item.saidAtMs);
       if (item.done) line += " ✓ klart";
       return line;
     }

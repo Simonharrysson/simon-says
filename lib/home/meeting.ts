@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { readAgentStatuses } from "@/lib/agent/status";
 import { agentState, isAgentTask, statusKey, type AgentStatusRow } from "@/lib/agent/tasks";
 import type { ItemRole } from "@/lib/db/types";
+import { firstSourceMs, readMoments, type MomentLine } from "@/lib/meetings/moments";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isCopy, isDecision, isTask } from "@/lib/meetings/summary";
 import { docUrl } from "@/lib/ui/meetings";
@@ -16,6 +17,15 @@ export interface MeetingTask extends MyTask {
   owner: string | null;
   canTick: boolean;
   mine: boolean;
+  /** 0069: where in the meeting it was said (meeting-relative ms), only when the viewer may read that transcript. */
+  saidAtMs?: number | null;
+}
+
+/** A decision with its moment (0069): `saidAtMs` only when the viewer may read that transcript. */
+export interface MeetingDecision {
+  itemId: string;
+  text: string;
+  saidAtMs: number | null;
 }
 
 export interface OrgMeetingPage {
@@ -23,6 +33,8 @@ export interface OrgMeetingPage {
   org: { id: string; name: string; kind?: string };
   meeting: { id: string; startedAt: string; status: string; title: string | null; isTest: boolean; endedAt?: string | null };
   decisions: string[];
+  /** The same decisions with their item ids and moments (0069), in the same order. */
+  decisionItems?: MeetingDecision[];
   /** The Närvarande rows (as written: one name or a typed list each). */
   attendees?: string[];
   tasks: MeetingTask[];
@@ -62,7 +74,9 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     readAgentStatuses(db, [meetingId]),
   ]);
   if (e4 || e5) throw new Error(`loadOrgMeeting: ${(e4 ?? e5)!.message}`);
+  const moments = await meetingMoments(userId, meetingId, (rows ?? []) as HomeNoteRow[]);
   const page = buildOrgMeeting({
+    moments,
     userId,
     org: { id: org.id, name: org.name },
     meeting: m,
@@ -84,6 +98,22 @@ export async function loadOrgMeeting(db: SupabaseClient, userId: string, orgId: 
     }));
   }
   return { ...page, org: { ...page.org, kind: org.kind as string }, ...(guests?.length ? { guests } : {}) };
+}
+
+/**
+ * The moments of a meeting's decisions and tasks the viewer may follow (0069): rows with sources,
+ * checked by transcript_moment_lines() (the visibility rule, and that the segments exist). A failed
+ * read shows no links rather than failing the page.
+ */
+export async function meetingMoments(userId: string, meetingId: string, rows: HomeNoteRow[]): Promise<Map<string, MomentLine[]>> {
+  const ids = rows.filter((r) => !r.deleted_by_human && (r.section === "decision" || r.section === "action") && r.source_segment_ids?.length).map((r) => r.id);
+  if (!ids.length) return new Map();
+  try {
+    return await readMoments(supabaseAdmin(), userId, meetingId, ids, 0);
+  } catch (err) {
+    console.error(`loadOrgMeeting: moments: ${(err as Error).message}`);
+    return new Map();
+  }
 }
 
 /**
@@ -123,7 +153,10 @@ export function buildOrgMeeting(input: {
   people: HomePerson[];
   /** Claude's progress on the tasks this meeting gave it (agent_task_status, 0065). */
   statuses?: AgentStatusRow[];
+  /** 0069: the moments the viewer may follow (`meetingMoments`); none = no links. */
+  moments?: Map<string, MomentLine[]>;
 }): OrgMeetingPage {
+  const saidAt = (id: string) => firstSourceMs(input.moments?.get(id));
   const { userId, org, role } = input;
   const orgId = org.id;
   const m = input.meeting;
@@ -168,6 +201,7 @@ export function buildOrgMeeting(input: {
         position: r.position,
         mine,
         canTick: open && !done && canTick({ mine: mine || assigner, isAdmin }),
+        saidAtMs: saidAt(r.id),
         ...(agent ? { agent } : {}),
       };
     });
@@ -182,6 +216,7 @@ export function buildOrgMeeting(input: {
       endedAt: m.ended_at ?? null,
     },
     decisions: shown.filter((r) => isDecision(chain(r))).map((r) => text(r.text)!),
+    decisionItems: shown.filter((r) => isDecision(chain(r))).map((r) => ({ itemId: r.id, text: text(r.text)!, saidAtMs: saidAt(r.id) })),
     attendees: shown.filter((r) => r.section === "attendees").map((r) => text(r.text)!),
     tasks,
     isAdmin,

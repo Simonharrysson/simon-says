@@ -511,15 +511,15 @@ describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
       expect(p).toContain('with owner "Claude"');
       expect(p).toContain("never give a task to Claude yourself, and never move a person's task to Claude");
     }
-    // Byte-identical to the 0065 prompts.
-    expect(sha(SYSTEM_PROMPT_AGENT_TASKS)).toBe("11a9922505d53ed6e5623834d7bd492055b47f6bc1216c2ba660db3ba132a2cd");
-    expect(sha(AGENDA_SYSTEM_PROMPT_AGENT_TASKS)).toBe("201f8b7a533cc7adaa452ff2a2f13a87d8f672dd86d5903401616c53da562e1f");
+    // The 0065 prompts, re-pinned for source moments (0069, "src").
+    expect(sha(SYSTEM_PROMPT_AGENT_TASKS)).toBe("e2f575792b79dd4dd1c6381a3de746ee5800bd262f5918cc4e9336c634929a4a");
+    expect(sha(AGENDA_SYSTEM_PROMPT_AGENT_TASKS)).toBe("22822f680b2b54227685b56c26e80521b33051c5f604aad297355fe9a7c697e8");
   });
 
   it("off by default: the request uses the prompts without the rule (byte-identical to before 0065)", () => {
     for (const p of [SYSTEM_PROMPT, AGENDA_SYSTEM_PROMPT]) expect(p).not.toContain('owner "Claude"');
-    expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
-    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("39d11167bf8692d0b5e597c1830f03ae522c7d38f71dedfd6b61d68536b4baab");
+    expect(sha(SYSTEM_PROMPT)).toBe("77cd0d53057cfd1fec691a08bcbebc3287e66fbf8e69504ef294bf2c332855f0");
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("2e514b630b7a7a8c96712ffbf8aad20abb8aa34c362e9ed0e68ac249fc5ca53d");
     expect(buildRequest(input()).system).toBe(SYSTEM_PROMPT);
     expect(buildRequest(agendaInput()).system).toBe(AGENDA_SYSTEM_PROMPT);
     expect(buildRequest(input({ agentTasks: true })).system).toBe(SYSTEM_PROMPT_AGENT_TASKS);
@@ -555,12 +555,38 @@ describe("agent tasks (0065), parked behind AGENT_TASKS_ENABLED", () => {
   });
 });
 
+describe("source moments (0069) through updateNotes", () => {
+  const sources = () => new Map([["00:00:05", [{ key: "el-1:3:0", startMs: 5200 }]]]);
+  it("v1: a cited time becomes the item's moment; an unknown one is dropped silently", async () => {
+    const ops = [
+      { op: "add", id: "n9", section: "decision", text: "Budgeten antas", src: ["00:00:05"] },
+      { op: "add", id: "n10", section: "decision", text: "Vi byter bank", src: ["09:09:09"] },
+    ];
+    const r = await updateNotes(input({ sources: sources() }), { client: fakeClient(message({ text: JSON.stringify({ ops }) })).client });
+    expect(r.failure).toBeNull();
+    expect(r.items.find((i) => i.text === "Budgeten antas")).toMatchObject({ sources: ["el-1:3:0"], saidAtMs: 5200 });
+    expect(r.items.find((i) => i.text === "Vi byter bank")!.sources).toBeUndefined();
+  });
+
+  it("agenda: the same; a lone citation on an item that has its moment is a quiet tick, not all_dropped", async () => {
+    const add = [{ op: "add", id: "n9", kind: "task", anchor: "ag-4", text: "Boka bussen", owner: "Anna Berg", src: ["00:00:05"] }];
+    const r = await updateNotes(agendaInput({ sources: sources() }), { client: fakeClient(message({ text: JSON.stringify({ ops: add }) })).client });
+    const added = r.items.find((i) => i.text === "Boka bussen")!;
+    expect(added).toMatchObject({ sources: ["el-1:3:0"], saidAtMs: 5200 });
+    const again = [{ op: "change", id: added.id, src: ["00:00:05"] }];
+    const q = await updateNotes(agendaInput({ items: r.items, sources: sources() }), { client: fakeClient(message({ text: JSON.stringify({ ops: again }) })).client });
+    expect(q.failure).toBeNull();
+    expect(q.ops).toEqual([]);
+  });
+});
+
 describe("v1 prompt and schema stay byte-identical", () => {
   // Re-pinned for meeting titles (0048, top-level "title") and concrete tasks (0049, done_when);
-  // agent tasks (0065) are parked, so the default prompt is the one from before 0065.
+  // agent tasks (0065) are parked, so the default prompt is the one from before 0065; re-pinned
+  // for source moments (0069: the "src" field and its paragraph).
   it("SYSTEM_PROMPT and OPS_JSON_SCHEMA hash as pinned", () => {
-    expect(sha(SYSTEM_PROMPT)).toBe("7251bc7bee3408e1c17f441f7a4e0a7776cd67887189962d6f03db0ad5360608");
-    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("5f3da687b5c8b3dd2872b65f15bd98f410b2f8539a652017aca532d18647149a");
+    expect(sha(SYSTEM_PROMPT)).toBe("77cd0d53057cfd1fec691a08bcbebc3287e66fbf8e69504ef294bf2c332855f0");
+    expect(sha(JSON.stringify(OPS_JSON_SCHEMA))).toBe("25e9bace40b9a668e75bbc579d01aac78252f540c8ce64f3bab384ec6f78aef6");
   });
 
   it("a v1 input still uses them", () => {
@@ -647,7 +673,7 @@ describe("agenda mode: §-numbered board minutes (C2)", () => {
 
   it("the system prompt is untouched: the board-minutes rule lives in the tail only", () => {
     // Agent tasks (0065) are parked: the default agenda prompt is the one from before 0065.
-    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("39d11167bf8692d0b5e597c1830f03ae522c7d38f71dedfd6b61d68536b4baab");
+    expect(sha(AGENDA_SYSTEM_PROMPT)).toBe("2e514b630b7a7a8c96712ffbf8aad20abb8aa34c362e9ed0e68ac249fc5ca53d");
     expect(AGENDA_SYSTEM_PROMPT).not.toContain("§-numbered");
   });
 

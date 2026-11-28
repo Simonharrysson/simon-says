@@ -27,13 +27,20 @@ export interface NotesItem {
   dueDate?: string;
   /** Render missing Vem/När/Klart när as visible placeholders (the space requires them, lib/notes/tasks.ts). Never stored. */
   placeholders?: boolean;
+  /** 0069: the transcript segments it was said in (segment keys, lib/notes/sources.ts). Decisions and tasks only. */
+  sources?: string[];
+  /** 0069: the first source's meeting-relative start; rendered as " (41:52)". */
+  saidAtMs?: number;
 }
 
 export type NotesOp =
-  | { op: "add"; item: NotesItem }
+  /** `src`: the bracket times Claude cited (0069); `applyOps` resolves them into `item.sources`. */
+  | { op: "add"; item: NotesItem; src?: string[] }
   | {
       op: "change";
       id: string;
+      /** The bracket times Claude cited (0069); resolved by `applyOps`, never kept on the op. */
+      src?: string[];
       text?: string;
       owner?: string;
       due?: string;
@@ -60,6 +67,7 @@ export const RawOpSchema = z.object({
   owner: z.string().optional(),
   due: z.string().optional(),
   done_when: z.string().optional(),
+  src: z.array(z.string()).optional(),
 });
 export type RawOp = z.infer<typeof RawOpSchema>;
 
@@ -81,6 +89,8 @@ export const OPS_JSON_SCHEMA = {
           owner: { type: "string" },
           due: { type: "string" },
           done_when: { type: "string" },
+          // 0069: bracket times of the transcript lines it was said in.
+          src: { type: "array", items: { type: "string" } },
         },
         required: ["op", "id"],
         additionalProperties: false,
@@ -92,6 +102,12 @@ export const OPS_JSON_SCHEMA = {
   required: ["ops"],
   additionalProperties: false,
 } as const;
+
+/** Cited times, trimmed and non-empty (0069), or undefined. */
+const refs = (src: string[] | undefined) => {
+  const out = (src ?? []).map((r) => r.trim()).filter(Boolean);
+  return out.length ? out : undefined;
+};
 
 /** RawOp → NotesOp, or null when a field the op needs is missing. Empty owner/due/done_when on `change` clears them. */
 export function toNotesOp(raw: RawOp): NotesOp | null {
@@ -110,6 +126,7 @@ export function toNotesOp(raw: RawOp): NotesOp | null {
         ...(raw.due?.trim() ? { due: raw.due.trim() } : {}),
         ...(raw.done_when?.trim() ? { doneWhen: raw.done_when.trim() } : {}),
       },
+      ...(refs(raw.src) ? { src: refs(raw.src) } : {}),
     };
   }
   const change: Extract<NotesOp, { op: "change" }> = { op: "change", id };
@@ -120,7 +137,8 @@ export function toNotesOp(raw: RawOp): NotesOp | null {
   if (raw.owner !== undefined) change.owner = raw.owner.trim();
   if (raw.due !== undefined) change.due = raw.due.trim();
   if (raw.done_when !== undefined) change.doneWhen = raw.done_when.trim();
-  if ([change.text, change.owner, change.due, change.doneWhen].every((v) => v === undefined)) return null;
+  if (refs(raw.src)) change.src = refs(raw.src);
+  if ([change.text, change.owner, change.due, change.doneWhen, change.src].every((v) => v === undefined)) return null;
   return change;
 }
 
@@ -140,6 +158,7 @@ export const RawAgendaOpSchema = z.object({
   due: z.string().optional(),
   done_when: z.string().optional(),
   done: z.boolean().optional(),
+  src: z.array(z.string()).optional(),
 });
 export type RawAgendaOp = z.infer<typeof RawAgendaOpSchema>;
 
@@ -163,6 +182,8 @@ export const AGENDA_OPS_JSON_SCHEMA = {
           due: { type: "string" },
           done_when: { type: "string" },
           done: { type: "boolean" },
+          // 0069: bracket times of the transcript lines it was said in.
+          src: { type: "array", items: { type: "string" } },
         },
         required: ["op", "id"],
         additionalProperties: false,
@@ -199,6 +220,7 @@ export function toAgendaOp(raw: RawAgendaOp): NotesOp | null {
         ...(raw.done_when?.trim() ? { doneWhen: raw.done_when.trim() } : {}),
         ...(anchor ? { anchor } : {}),
       },
+      ...(refs(raw.src) ? { src: refs(raw.src) } : {}),
     };
   }
   const change: Extract<NotesOp, { op: "change" }> = { op: "change", id };
@@ -211,6 +233,7 @@ export function toAgendaOp(raw: RawAgendaOp): NotesOp | null {
   if (raw.done_when !== undefined) change.doneWhen = raw.done_when.trim();
   if (raw.done !== undefined) change.done = raw.done;
   if (anchor) change.anchor = anchor;
-  const changes = [change.text, change.owner, change.due, change.doneWhen, change.done, change.anchor].some((v) => v !== undefined);
+  if (refs(raw.src)) change.src = refs(raw.src);
+  const changes = [change.text, change.owner, change.due, change.doneWhen, change.done, change.anchor, change.src].some((v) => v !== undefined);
   return changes ? change : null;
 }

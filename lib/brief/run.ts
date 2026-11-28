@@ -58,6 +58,8 @@ export interface BriefHistory {
   rows: HomeNoteRow[];
   people: HomePerson[];
   agenda: BriefAgenda | null;
+  /** 0069: the meetings whose transcript the user may read (transcript_visible_ids): their decisions show "▶ 41:52". */
+  transcriptMeetings?: string[];
 }
 
 export type BriefState = "sent" | "skipped" | "opted_out" | "failed" | "uncertain";
@@ -191,6 +193,7 @@ async function buildAndSend(user: BriefUser, email: string, c: Candidate, deps: 
     rows: history.rows,
     people: history.people,
     agenda: history.agenda,
+    transcriptMeetings: history.transcriptMeetings,
     today: stockholmDateTime(deps.now().toISOString()).date,
     meetingHref: (id) => `${deps.origin}/orgs/${orgId}/mote/${id}`,
   });

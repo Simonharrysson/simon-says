@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgentStatus, AgentStatusRow } from "@/lib/agent/tasks";
 import type { HandoffRow, HomeMeeting, HomeNoteRow, HomePerson, PrivatTaskRow } from "@/lib/home/tasks";
+import { readMoments, type MomentLine } from "@/lib/meetings/moments";
 
 // What the MCP tools read, for one user: the mcp_* functions of 0060, called with the service role
 // for an explicit p_user. Each one asks the same predicate as the table's RLS policy, acting as
@@ -34,6 +35,11 @@ export interface McpReader {
   setAgentTask(meetingId: string, itemId: string, status: AgentStatus, note: string | null): Promise<boolean>;
   /** The org's "Vad Claude ska veta" (0065, is_org_member), or null when there is none. */
   orgMemory(orgId: string): Promise<McpOrgMemory | null>;
+  /**
+   * 0069: the source lines of some items of one meeting, only when the user may read its transcript
+   * (transcript_moment_lines: the same rule as the meeting page's ▶ link).
+   */
+  moments?(meetingId: string, itemIds: string[]): Promise<Map<string, MomentLine[]>>;
 }
 
 export interface McpOrgMemory {
@@ -85,5 +91,6 @@ export function dbReader(admin: SupabaseClient, userId: string): McpReader {
     setAgentTask: async (meetingId, itemId, status, note) =>
       (await rpc<boolean>("mcp_set_agent_task", { p_meeting: meetingId, p_item: itemId, p_status: status, p_note: note })) === true,
     orgMemory: async (orgId) => ((await rpc<McpOrgMemory[]>("mcp_org_memory", { p_org: orgId })) ?? [])[0] ?? null,
+    moments: (meetingId, itemIds) => readMoments(admin, userId, meetingId, itemIds, 0),
   };
 }

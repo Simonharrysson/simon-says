@@ -17,10 +17,11 @@ The notes document has four sections:
 - "now": exactly ONE item, a short line (max ~12 words) about the topic being discussed right now. Change it when the topic changes; leave it alone while the same topic continues.
 
 Operations (the only output):
-- {"op":"add","id":"<new id>","section":...,"text":...,"owner"?:...,"due"?:...,"done_when"?:...}
-- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done_when"?:...}  (only the fields that change; "" clears owner, due or done_when)
+- {"op":"add","id":"<new id>","section":...,"text":...,"owner"?:...,"due"?:...,"done_when"?:...,"src"?:[...]}
+- {"op":"change","id":"<existing id>","text"?:...,"owner"?:...,"due"?:...,"done_when"?:...,"src"?:[...]}  (only the fields that change; "" clears owner, due or done_when)
 - {"op":"remove","id":"<existing id>"}
 Return {"ops":[]} when nothing needs to change. That is the normal answer for many ticks.
+"src" says where in the meeting a decision or action was said: the times of the 1 to 3 transcript lines where it was decided or taken on, copied exactly from the start of those lines (e.g. ["00:41:52"]). Give it with every "add" of a decision or action, and with a "change" only when the meeting changed the item in a later line (then cite that line). Leave it out for "attendees" and "now", and when you are not sure which line it was.
 
 Rules:
 1. Write in the meeting's main language (the language most of the transcript is in), even if some people speak another language. Keep names, dates and amounts exactly as said.
