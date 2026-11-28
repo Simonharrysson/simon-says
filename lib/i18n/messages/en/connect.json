@@ -2,11 +2,11 @@
   "metaTitle": "Connect Claude to Simon Says",
   "title": "Give {app} access to your meetings in Simon Says",
   "signedInAs": "You are signed in as {email}.",
-  "canTitle": "Claude will be able to",
+  "canTitle": "{app} will be able to",
   "canSearch": "search and read the meetings and recordings you can see in Simon Says, your private ones included",
   "canTasks": "see your tasks and tick them off, as when you tick them in the app",
   "canAgenda": "add points to the next agenda in a förening, and prepare it if needed",
-  "cannotTitle": "Claude will not be able to",
+  "cannotTitle": "{app} will not be able to",
   "cannotEdit": "change or delete notes and minutes",
   "cannotMore": "see more than you see in Simon Says",
   "revokeHint": "You can revoke access at any time under Account → Connected AI assistants.",
@@ -39,5 +39,8 @@
   "appLocal": "an app on your computer",
   "appUnknown": "Unknown app",
   "localWarning": "Access goes to a program on this computer (for example Claude Code). Only allow it if you just started the connection yourself.",
-  "unknownWarning": "Simon Says does not recognise where the access would go, so it can't be allowed."
+  "unknownWarning": "Simon Says does not recognise where the access would go, so it can't be allowed.",
+  "appChatgpt": "ChatGPT",
+  "appCursor": "Cursor",
+  "appVscode": "VS Code"
 }

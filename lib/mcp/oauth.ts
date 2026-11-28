@@ -25,7 +25,7 @@ export function protectedResourceMetadata(origin: string): OAuthProtectedResourc
   };
 }
 
-export function authorizationServerMetadata(origin: string): OAuthMetadata {
+export function authorizationServerMetadata(origin: string): OAuthMetadata & { authorization_response_iss_parameter_supported: true } {
   return {
     issuer: origin,
     authorization_endpoint: `${origin}/oauth/authorize`,
@@ -38,6 +38,9 @@ export function authorizationServerMetadata(origin: string): OAuthMetadata {
     token_endpoint_auth_methods_supported: ["none"],
     revocation_endpoint_auth_methods_supported: ["none"],
     code_challenge_methods_supported: ["S256"],
+    // RFC 9207: every redirect back (code or error) carries `iss` = `issuer` (redirectWith). ChatGPT
+    // uses its one stable callback only when this is advertised.
+    authorization_response_iss_parameter_supported: true,
   };
 }
 
@@ -93,28 +96,47 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/**
- * The hosted Claude apps' callback (claude.ai on the web, Desktop, mobile, Cowork:
- * claude.com/docs/connectors/building/authentication.md "Callback URLs"), and its claude.com twin.
- * Nothing else on https may be registered: a look-alike app can't get a consent page that ends
- * at its own server (consent phishing).
- */
-export const CLAUDE_CALLBACKS = new Set(["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback"]);
+/** Who the access goes to, as the consent page names it. */
+export type Audience = "claude" | "chatgpt" | "cursor" | "vscode" | "local" | "unknown";
 
-/** May a client register this redirect URI? Claude's hosted callback exactly, or http on loopback (Claude Code: any port); no fragment, no credentials. */
+/**
+ * The hosted apps' OAuth callbacks, each copied from that client's own documentation or source
+ * (docs/mcp.md "Redirect URIs" lists the sources). Matched as exact strings: no prefixes, no
+ * patterns, no query. Nothing else on https may be registered, so a look-alike app can't get a
+ * consent page that ends at its own server (consent phishing). Custom schemes (cursor://, …) are
+ * never registrable: none is documented by its vendor.
+ */
+export const HOSTED_CALLBACKS: ReadonlyMap<string, Exclude<Audience, "local" | "unknown">> = new Map([
+  // Claude on the web, Desktop, mobile, Cowork (claude.com/docs/connectors/building/authentication).
+  ["https://claude.ai/api/mcp/auth_callback", "claude"],
+  ["https://claude.com/api/mcp/auth_callback", "claude"],
+  // ChatGPT's stable connector callback, used because we advertise RFC 9207 `iss` (developers.openai.com/apps-sdk/build/auth).
+  ["https://chatgpt.com/connector_platform_oauth_redirect", "chatgpt"],
+  // Cursor on the web and Cursor's cloud agents (cursor.com/docs/context/mcp "OAuth"); the desktop app uses loopback.
+  ["https://www.cursor.com/agents/mcp/oauth/callback", "cursor"],
+  // VS Code's web redirects (microsoft/vscode src/vs/base/common/oauth.ts, fetchDynamicRegistration); the desktop app uses loopback.
+  ["https://vscode.dev/redirect", "vscode"],
+  ["https://insiders.vscode.dev/redirect", "vscode"],
+]);
+
+/**
+ * May a client register this redirect URI? One of HOSTED_CALLBACKS exactly, or http on loopback
+ * (Claude Code, Cursor and VS Code on the desktop, Gemini CLI: any port); no fragment, no credentials.
+ */
 export function registrableRedirect(uri: string): boolean {
   if (typeof uri !== "string" || uri.length > 500 || !URL.canParse(uri)) return false;
   const u = new URL(uri);
   if (u.hash || uri.includes("#") || u.username || u.password) return false;
-  if (u.protocol === "https:") return CLAUDE_CALLBACKS.has(`${u.origin}${u.pathname}`) && !u.search;
+  if (u.protocol === "https:") return HOSTED_CALLBACKS.has(uri);
   return u.protocol === "http:" && LOOPBACK.has(u.hostname);
 }
 
 /** Who the consent page says the access goes to, from the redirect URI (never from the client's own name). */
-export function redirectAudience(uri: string): { kind: "claude" | "local" | "unknown"; host: string } {
+export function redirectAudience(uri: string): { kind: Audience; host: string } {
   if (!URL.canParse(uri)) return { kind: "unknown", host: "?" };
   const u = new URL(uri);
-  if (u.protocol === "https:" && CLAUDE_CALLBACKS.has(`${u.origin}${u.pathname}`)) return { kind: "claude", host: u.host };
+  const hosted = u.protocol === "https:" ? HOSTED_CALLBACKS.get(uri) : undefined;
+  if (hosted) return { kind: hosted, host: u.host };
   if (u.protocol === "http:" && LOOPBACK.has(u.hostname)) return { kind: "local", host: u.host };
   return { kind: "unknown", host: u.host };
 }
@@ -166,8 +188,13 @@ export function parseRegistration(body: unknown): RegistrationResult {
   if (!Array.isArray(uris) || uris.length < 1 || uris.length > 5 || !uris.every((u) => typeof u === "string")) {
     return { ok: false, error: "invalid_redirect_uri", description: "redirect_uris: 1 to 5 URIs." };
   }
-  if (!uris.every((u) => registrableRedirect(u as string))) {
-    return { ok: false, error: "invalid_redirect_uri", description: "Only Claude's callback (https://claude.ai/api/mcp/auth_callback) or a loopback http URI." };
+  // RFC 7591 §2 lets the server replace requested metadata: URIs outside the allow-list are left
+  // out rather than failing the whole registration (Cursor and VS Code send their web callback,
+  // their loopback one and possibly more in one list). Only allowed ones are ever stored, and
+  // the response says which; with none left, it is refused.
+  const allowed = (uris as string[]).filter((u) => registrableRedirect(u));
+  if (allowed.length === 0) {
+    return { ok: false, error: "invalid_redirect_uri", description: "No allowed redirect URI: only the documented callbacks of Claude, ChatGPT, Cursor and VS Code, or a loopback http URI." };
   }
   const method = b.token_endpoint_auth_method;
   if (method !== undefined && method !== "none") {
@@ -185,7 +212,7 @@ export function parseRegistration(body: unknown): RegistrationResult {
   const rawName = typeof b.client_name === "string" ? b.client_name : "";
   // A name is shown on the consent page and in Konto: one plain line.
   const name = rawName.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100) || "AI-assistent";
-  return { ok: true, value: { client_name: name, redirect_uris: [...new Set(uris as string[])] } };
+  return { ok: true, value: { client_name: name, redirect_uris: [...new Set(allowed)] } };
 }
 
 // ---------------------------------------------------------------------------------------------

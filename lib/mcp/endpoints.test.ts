@@ -28,6 +28,14 @@ async function setup() {
 }
 
 describe("authorize", () => {
+  it("returns iss (RFC 9207) with the code too, equal to the issuer", async () => {
+    const { m, params } = await setup();
+    const out = await authorize(params(), m.store, O);
+    if (out.kind !== "consent") throw new Error(out.kind);
+    const url = new URL((await approve(out.requestId, USER, m.store, O))!);
+    expect(url.searchParams.get("iss")).toBe(O);
+    expect(url.searchParams.get("code")).toBeTruthy();
+  });
   it("never redirects to an unknown client or an unregistered redirect URI", async () => {
     const { m, params } = await setup();
     expect(await authorize(params({ client_id: "ssk_" + "x".repeat(43) }), m.store, O)).toEqual({ kind: "error_page", reason: "unknown_client" });
@@ -112,10 +120,24 @@ describe("token", () => {
 });
 
 describe("redirect allow-list", () => {
-  it("refuses registering any https host but Claude's callback", async () => {
+  it("refuses registering any https host but the documented callbacks", async () => {
     const m = memoryStore();
     expect((await register({ redirect_uris: ["https://evil.example/api/mcp/auth_callback"] }, m.store)).body).toMatchObject({ error: "invalid_redirect_uri" });
     expect((await register({ redirect_uris: ["http://127.0.0.1:5000/callback"] }, m.store)).status).toBe(201);
+  });
+  it("registers only the allowed URIs of a list, and authorize refuses the dropped ones", async () => {
+    const m = memoryStore();
+    const reg = await register(
+      { redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback", "https://www.cursor.com/agents/mcp/oauth/callback"], client_name: "Cursor" },
+      m.store,
+    );
+    expect(reg.status).toBe(201);
+    expect(reg.body.redirect_uris).toEqual(["https://www.cursor.com/agents/mcp/oauth/callback"]);
+    const base = { client_id: reg.body.client_id as string, response_type: "code", code_challenge: "x".repeat(43), code_challenge_method: "S256" };
+    expect(await authorize(new URLSearchParams({ ...base, redirect_uri: "cursor://anysphere.cursor-mcp/oauth/callback" }), m.store, O)).toEqual({
+      kind: "error_page",
+      reason: "bad_redirect",
+    });
   });
   it("never redirects for a client stored with a non-allow-listed URI (registered before the rule)", async () => {
     const m = memoryStore();

@@ -2,11 +2,11 @@
   "metaTitle": "Koppla Claude till Simon Says",
   "title": "Ge {app} tillgång till dina möten i Simon Says",
   "signedInAs": "Du är inloggad som {email}.",
-  "canTitle": "Claude kommer att kunna",
+  "canTitle": "{app} kommer att kunna",
   "canSearch": "söka i och läsa de möten och inspelningar du själv kan se i Simon Says, även dina privata",
   "canTasks": "se dina uppgifter och bocka av dem, som när du bockar av i appen",
   "canAgenda": "lägga till punkter på nästa dagordning i en förening, och förbereda den om det behövs",
-  "cannotTitle": "Claude kommer inte att kunna",
+  "cannotTitle": "{app} kommer inte att kunna",
   "cannotEdit": "ändra eller radera anteckningar och protokoll",
   "cannotMore": "se mer än du själv ser i Simon Says",
   "revokeHint": "Du kan återkalla åtkomsten när som helst under Konto → Kopplade AI-assistenter.",
@@ -39,5 +39,8 @@
   "appLocal": "en app på din dator",
   "appUnknown": "Okänd app",
   "localWarning": "Åtkomsten går till ett program på den här datorn (till exempel Claude Code). Godkänn bara om du själv just startade kopplingen.",
-  "unknownWarning": "Simon Says känner inte igen vart åtkomsten skulle gå, så den kan inte godkännas."
+  "unknownWarning": "Simon Says känner inte igen vart åtkomsten skulle gå, så den kan inte godkännas.",
+  "appChatgpt": "ChatGPT",
+  "appCursor": "Cursor",
+  "appVscode": "VS Code"
 }

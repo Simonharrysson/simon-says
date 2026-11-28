@@ -68,7 +68,16 @@ Design: `docs/superpowers/specs/2026-11-28-claude-tasks-memory-design.md`.
   - `/api/mcp`
 - **Tokens:** access tokens live 1 h and refresh tokens 30 days. Refresh tokens rotate, and reusing one revokes the connection. Only SHA-256 hashes are stored.
 - **Limits:** 60 calls a minute per user (all their connections together). Per IP, per 10 minutes: 20 registrations, 30 authorizations and 60 token requests.
-- **Redirect URIs:** only `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback` and loopback `http://localhost|127.0.0.1:<any port>/…` (Claude Code). Anything else is refused at registration and at authorize. The consent page names the app from the redirect host, never from the name the client registered, and warns for loopback.
+- **Redirect URIs** (`lib/mcp/oauth.ts` `HOSTED_CALLBACKS`, exact strings, no patterns). Anything else is left out at registration (RFC 7591 §2: a list with Cursor's undocumented `cursor://` URI keeps only its allowed ones; a list with none allowed is refused) and refused at authorize. The consent page names the app from the redirect URI, never from the name the client registered, and warns for loopback.
+  | Client | Redirect URI | Source |
+  | --- | --- | --- |
+  | Claude (web, Desktop, mobile, Cowork) | `https://claude.ai/api/mcp/auth_callback`, `https://claude.com/api/mcp/auth_callback` | claude.com/docs/connectors/building/authentication |
+  | ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` (its stable callback, used because the metadata says `authorization_response_iss_parameter_supported` and every redirect carries `iss`; the per-connector `/connector/oauth/{id}` is not allowed) | developers.openai.com/apps-sdk/build/auth |
+  | Cursor (web, cloud agents) | `https://www.cursor.com/agents/mcp/oauth/callback` | cursor.com/docs/context/mcp ("Cursor uses fixed OAuth redirect URLs") |
+  | VS Code (vscode.dev, Insiders) | `https://vscode.dev/redirect`, `https://insiders.vscode.dev/redirect` | github.com/microsoft/vscode `src/vs/base/common/oauth.ts` (`fetchDynamicRegistration`) |
+  | Loopback: Claude Code, Cursor desktop (`localhost:8787/callback`), VS Code desktop (`127.0.0.1/`, `127.0.0.1:33418/`), Gemini CLI (`localhost:<port>/oauth/callback`) | `http://localhost\|127.0.0.1\|[::1]:<any port>/…` | code.claude.com/docs/en/mcp, the Cursor and VS Code sources above, geminicli.com/docs/tools/mcp-server |
+
+  Left out (checked 2026-11-28): Windsurf (no documented redirect URI), Cursor's `cursor://anysphere.cursor-mcp/oauth/callback` (only a forum post, not Cursor's docs), and every custom scheme. The MCP endpoint's `Origin` check is unchanged (`allowedOrigin`: the app, claude.ai, claude.com; server-to-server and desktop clients send none).
 - **Cleanup (daily cron):** audit rows after 90 days, pending authorizations after 15 minutes, and registered clients that never got a grant after 24 hours.
 - **Banned or deleted accounts** get 401, whatever their tokens.
 - **Tests:**
