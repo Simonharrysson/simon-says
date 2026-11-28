@@ -1,18 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { AnimatePresence, useReducedMotion } from "motion/react";
 import * as m from "motion/react-m";
 import { CountUp } from "@/components/motion/CountUp";
-import { Lazy } from "@/components/motion/Lazy";
+import { Lazy, motionReady } from "@/components/motion/Lazy";
 import { PresenceDiv, PresenceLi } from "@/components/motion/Presence";
 import { useFlip } from "@/components/motion/useFlip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { dueDayLabel, isOverdue, meetingDayLabel, nextDay, type MyTask } from "@/lib/home/tasks";
-import { SPRING_EXIT } from "@/lib/motion";
+import { SPRING, SPRING_EXIT } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { AgentStatus } from "./AgentStatus";
 
@@ -113,8 +113,6 @@ export function MyTasks({
     (box ?? document.getElementById("my-tasks-title"))?.focus();
   });
   const switchId = useId();
-  // The list fades out when the empty state takes its place (instant under reduced motion).
-  const fade = useReducedMotion() ? { duration: 0 } : SPRING_EXIT;
 
   // Ticked here: shown as done (until saving failed). Done from the server: only with "Visa klara".
   const doneHere = (task: MyTask) => {
@@ -147,19 +145,33 @@ export function MyTasks({
 
   useFlip(listRef, visible.map((x) => x.key));
 
-  // The empty state waits until the last row has closed (the rows' AnimatePresence says when), so
-  // the last row closes like any other, and only then does the empty state open in its place.
+  // The last row closes like any other: the empty state waits until it is gone (the rows'
+  // AnimatePresence says when), then fades in. Meanwhile the box keeps the list's height, so what
+  // is below doesn't move up a row and back down; once the empty state is in, the box glides from
+  // that height to the empty state's own. Reduced motion: all at once.
+  const reduce = useReducedMotion();
   const [drained, setDrained] = useState(visible.length === 0);
+  const [hold, setHold] = useState<number | null>(null);
   if (visible.length > 0 && drained) setDrained(false);
+  if (visible.length > 0 && hold !== null) setHold(null);
   const empty = visible.length === 0 && drained;
+  const boxRef = useRef<HTMLDivElement>(null);
   const visibleCount = useRef(visible.length);
   visibleCount.current = visible.length;
+  const lastRowLeaving = visible.length === 0 && !drained;
+  useLayoutEffect(() => {
+    // Before the first frame of the close, while the closing row still has its full height.
+    if (lastRowLeaving && boxRef.current && !reduce) setHold(boxRef.current.offsetHeight);
+  }, [lastRowLeaving, reduce]);
   const onRowsGone = () => {
     if (visibleCount.current === 0) setDrained(true);
   };
+  const releasing = empty && hold !== null;
 
   const shownOpen = openTasks.filter(inFilter);
   const overdueCount = shownOpen.filter((x) => isOverdue(x, today) && !doneHere(x)).length;
+  // The list and its empty state crossfade (instant under reduced motion).
+  const fade = reduce ? { duration: 0 } : SPRING_EXIT;
 
   return (
     <Lazy>
@@ -225,12 +237,27 @@ export function MyTasks({
             )}
           </p>
         )}
-        <AnimatePresence initial={false} mode="popLayout">
-          {empty ? (
-            // Opens to its height as it fades in (the box with its dashed border sits inside the
-            // opening wrapper), so whatever is below moves down smoothly instead of jumping.
-            <PresenceDiv key="empty" data-enter-item>
-              <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2">
+        <m.div
+          ref={boxRef}
+          initial={false}
+          animate={{ height: hold !== null && !empty ? hold : "auto" }}
+          transition={releasing ? SPRING : { duration: 0 }}
+          onAnimationComplete={() => {
+            if (releasing) setHold(null);
+          }}
+          style={{ overflow: releasing ? "hidden" : undefined }}
+        >
+          <AnimatePresence initial={false} mode="popLayout">
+            {empty ? (
+              <m.div
+                key="empty"
+                initial={motionReady() ? { opacity: 0 } : false}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={fade}
+                data-enter-item
+                className="flex flex-col items-start gap-2 rounded-lg border border-dashed border-rail px-6 py-8 text-ink-2"
+              >
                 {filter !== "all" ? (
                   <p className="text-base font-semibold text-ink">{t("filterEmpty", { name: filterName })}</p>
                 ) : (
@@ -239,29 +266,29 @@ export function MyTasks({
                     <p className="max-w-[34rem] text-sm">{hasDone ? t("allDoneText") : t("emptyText")}</p>
                   </>
                 )}
-              </div>
-            </PresenceDiv>
-          ) : (
-            <m.ul key="list" ref={listRef} onFocus={onListFocus} onBlur={onListBlur} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
-              <AnimatePresence initial={false} onExitComplete={onRowsGone}>
-                {visible.map((task) => (
-                  <TaskRow
-                    key={task.key}
-                    task={task}
-                    state={states[task.key]}
-                    checked={task.done || doneHere(task)}
-                    today={today}
-                    locale={locale}
-                    docUrl={docs[task.meetingId] ?? null}
-                    meetingHref={meetingHrefs[task.meetingId] ?? null}
-                    onTick={() => tick(task)}
-                    onUndo={() => undo(task)}
-                  />
-                ))}
-              </AnimatePresence>
-            </m.ul>
-          )}
-        </AnimatePresence>
+              </m.div>
+            ) : (
+              <m.ul key="list" ref={listRef} onFocus={onListFocus} onBlur={onListBlur} exit={{ opacity: 0 }} transition={fade} aria-label={t("listLabel")} className="flex flex-col rounded-lg bg-surface shadow-panel">
+                <AnimatePresence initial={false} onExitComplete={onRowsGone}>
+                  {visible.map((task) => (
+                    <TaskRow
+                      key={task.key}
+                      task={task}
+                      state={states[task.key]}
+                      checked={task.done || doneHere(task)}
+                      today={today}
+                      locale={locale}
+                      docUrl={docs[task.meetingId] ?? null}
+                      meetingHref={meetingHrefs[task.meetingId] ?? null}
+                      onTick={() => tick(task)}
+                      onUndo={() => undo(task)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </m.ul>
+            )}
+          </AnimatePresence>
+        </m.div>
       </div>
     </Lazy>
   );
